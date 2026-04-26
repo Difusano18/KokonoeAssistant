@@ -1,0 +1,31 @@
+# Build artifacts
+bin/
+obj/
+publish/
+
+# Logs
+build.log
+build_errors.txt
+build_output.txt
+*.log
+
+# Claude local settings
+.claude/
+
+# Personal runtime data
+kokonoe-data/
+*.db
+*.db-shm
+*.db-wal
+
+# VS user files
+*.user
+*.suo
+.vs/
+
+# Secrets / local config overrides
+appsettings.local.json
+appsettings.Development.json
+
+# Avatar sketches (personal)
+Avatar/ескізи аватара/

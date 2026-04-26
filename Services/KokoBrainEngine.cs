@@ -1,0 +1,2903 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Net.Http;
+using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
+using Telegram.Bot;
+
+namespace KokonoeAssistant.Services
+{
+    // ══════════════════════════════════════════════════════════════════
+    // INTERNAL STATE — персистентна пам'ять Kokonoe між сесіями
+    // ══════════════════════════════════════════════════════════════════
+
+    public class KokoInternalState
+    {
+        public DateTime   LastThoughtAt        { get; set; } = DateTime.MinValue;
+        public DateTime   LastSpontaneousAt    { get; set; } = DateTime.MinValue;
+        public DateTime   LastMorningGreetAt   { get; set; } = DateTime.MinValue;
+        public DateTime   LastNightCheckAt     { get; set; } = DateTime.MinValue;
+        public string     CurrentMood          { get; set; } = "neutral";
+        public float      MoodScore            { get; set; } = 0.5f; // 0=bad 1=good
+        public List<string> Observations       { get; set; } = new();
+        public List<string> PendingThoughts    { get; set; } = new();
+        public int        ConsecutiveBadSleeps { get; set; } = 0;
+        public int        DaysSinceHealthEntry { get; set; } = 0;
+        public DateTime   LastHealthEntryDate  { get; set; } = DateTime.MinValue;
+        public int        TotalMessagesExchanged { get; set; } = 0;
+        public string     LastKnownUserActivity  { get; set; } = "";
+        public Dictionary<string,int> TopicFrequency { get; set; } = new();
+
+        // Останні надіслані спонтанні повідомлення (для запобігання повторень)
+        public List<string> LastSpontaneousMsgs  { get; set; } = new();
+
+        // Нагадування та аналітика
+        public DateTime   LastReminderCheckAt    { get; set; } = DateTime.MinValue;
+        public DateTime   LastDailyAnalyticsAt   { get; set; } = DateTime.MinValue;
+        public List<string> SentReminderHashes   { get; set; } = new();
+
+        // Динамічний настрій
+        public float      BaselineMood           { get; set; } = 0.5f; // повільно змінюється
+        public string     LastUserEmotionalTone  { get; set; } = "neutral";
+        public Dictionary<string, float> MoodFactors { get; set; } = new();
+
+        // Реактивні тригери
+        public List<ReactiveTrigger> PendingTriggers { get; set; } = new();
+
+        // Саморефлексія
+        public DateTime   LastReflectionAt       { get; set; } = DateTime.MinValue;
+        public DateTime   LastConversationEndAt  { get; set; } = DateTime.MinValue;
+        public DateTime   LastWhatMissedAt       { get; set; } = DateTime.MinValue;
+        public DateTime   LastClosedAt           { get; set; } = DateTime.MinValue;
+
+        // Внутрішній монолог
+        public List<string> InnerMonologues      { get; set; } = new();
+
+        // Питання до себе (самоусвідомлення)
+        public List<string> SelfQuestions        { get; set; } = new();
+
+        // Питання що вона хоче задати йому (цікавість)
+        public List<string> CuriosityQueue       { get; set; } = new();
+
+        // Характер (PersonalityState)
+        public string  PersonalityDailyMood { get; set; } = "neutral"; // sharp/warm/distant/playful/tired/protective
+        public float   PersonalityIrritation{ get; set; } = 0f;
+        public float   PersonalityWarmth    { get; set; } = 0.3f;
+        public bool    PersonalityInCrisis  { get; set; } = false;
+        public string  PersonalityLastReaction { get; set; } = "";
+        public DateTime PersonalityShiftAt  { get; set; } = DateTime.MinValue;
+
+        // Динаміка тиші — окремі cooldown рівні
+        public DateTime SilenceLevel1At    { get; set; } = DateTime.MinValue; // 1г jab
+        public DateTime SilenceLevel2At    { get; set; } = DateTime.MinValue; // 3г check
+        public DateTime SilenceLevel3At    { get; set; } = DateTime.MinValue; // 6г observation
+
+        // Кеш релевантної пам'яті
+        public string  CachedRelevantMemory{ get; set; } = "";
+        public DateTime RelevantMemoryCachedAt { get; set; } = DateTime.MinValue;
+
+        // Vault review — коли Kokonoe востаннє перечитувала і оновлювала свої нотатки
+        public DateTime LastVaultReviewAt { get; set; } = DateTime.MinValue;
+    }
+
+    public class ReactiveTrigger
+    {
+        public string   Id      { get; set; } = Guid.NewGuid().ToString("N")[..8];
+        public string   Type    { get; set; } = ""; // anxious_followup, topic_followup, bad_pattern
+        public string   Context { get; set; } = "";
+        public DateTime FireAt  { get; set; }
+    }
+
+    // ══════════════════════════════════════════════════════════════════
+    // BRAIN ENGINE
+    // ══════════════════════════════════════════════════════════════════
+
+    public class KokoBrainEngine : IDisposable
+    {
+        private static readonly HttpClient _http = new() { Timeout = Timeout.InfiniteTimeSpan };
+
+        private readonly LlmService          _llm;
+        private readonly HealthService       _health;
+        private readonly ObsidianMcpService  _obsidian;
+        private readonly ChatRepository      _chatRepo;
+        private readonly string              _statePath;
+
+        // ── Нові двигуни ─────────────────────────────────────────────
+        public readonly KokoMemoryEngine    Memory;
+        public readonly KokoEmotionEngine   Emotion;
+        public readonly KokoPatternEngine   Patterns;
+        public readonly KokoSchedulerEngine Scheduler;
+        public readonly KokoCognitionEngine Cognition;
+
+        // ── Зовнішні сервіси (опціональні) ───────────────────────────
+        private EnhancedMemory?    _enhanced;
+        private StateEngine?       _stateEngine;
+        private GoalService?       _goalService;
+        private HabitService?      _habitService;
+        private ContextAnalyzer?   _contextAnalyzer;
+
+        // Screen context cache
+        private string   _cachedScreenContext     = "";
+        private DateTime _screenContextCachedAt   = DateTime.MinValue;
+        private DateTime _lastScreenRefreshAt     = DateTime.MinValue;
+        private DateTime _lastDailyBriefingAt     = DateTime.MinValue;
+        private DateTime _lastWeeklyDigestAt      = DateTime.MinValue;
+        // _lastWhatMissedAt тепер в _state.LastWhatMissedAt (зберігається між сесіями)
+
+        private TelegramBotClient? _tgBot;
+        private long               _tgChatId;
+        private bool               _tgInitialized;
+
+        private KokoInternalState  _state;
+        private readonly System.Threading.Timer _thinkTimer;
+        private readonly System.Threading.Timer _spontaneousTimer;
+        private bool               _disposed;
+        // Семафор: тільки один фоновий LLM-запит за раз (щоб не забивати чергу)
+        private readonly SemaphoreSlim _bgLlmSemaphore = new(1, 1);
+        private int _thinkInFlight;
+        private int _spontaneousInFlight;
+        private readonly object    _lock = new();
+        private DateTime           _lastInAppSilenceMsgAt = DateTime.MinValue;
+
+        // Callback для відображення повідомлень в UI чаті
+        public Action<string, string>? OnNewMessage; // (role, content)
+
+        public KokoBrainEngine(
+            LlmService llm,
+            HealthService health,
+            ObsidianMcpService obsidian,
+            ChatRepository chatRepo,
+            string dataDir,
+            EnhancedMemory?   enhanced        = null,
+            StateEngine?      stateEngine     = null,
+            GoalService?      goals           = null,
+            HabitService?     habits          = null,
+            ContextAnalyzer?  contextAnalyzer = null)
+        {
+            _llm             = llm;
+            _health          = health;
+            _obsidian        = obsidian;
+            _chatRepo        = chatRepo;
+            _enhanced        = enhanced;
+            _stateEngine     = stateEngine;
+            _goalService     = goals;
+            _habitService    = habits;
+            _contextAnalyzer = contextAnalyzer;
+
+            Directory.CreateDirectory(dataDir);
+            _statePath = Path.Combine(dataDir, "kokonoe-brain.json");
+            _state = LoadState();
+
+            // Ініціалізація нових двигунів
+            Memory    = new KokoMemoryEngine(dataDir, enhanced);
+            Emotion   = new KokoEmotionEngine(dataDir);
+            Patterns  = new KokoPatternEngine(dataDir);
+            Scheduler = new KokoSchedulerEngine(dataDir);
+            Cognition = new KokoCognitionEngine(dataDir);
+
+            // Підключити нові сервіси в LLM
+            _llm.Memory    = Memory;
+            _llm.Patterns  = Patterns;
+            _llm.Scheduler = Scheduler;
+            _llm.Goals     = goals;
+
+            // Думати кожні 90 хвилин (внутрішній монолог + факти)
+            // Раніше було 30хв — занадто часто, засмічує контекст і витрачає GPU
+            _thinkTimer = new System.Threading.Timer(_ => _ = GuardedThinkAsync(), null,
+                TimeSpan.FromMinutes(5), TimeSpan.FromMinutes(90));
+
+            // Спонтанні перевірки кожні 45 хвилин
+            // SpontaneousCheckAsync має свої внутрішні cooldown-и (3г глобальний, silence levels)
+            // тому частіше перевіряти не має сенсу — вона і так пропустить якщо рано
+            _spontaneousTimer = new System.Threading.Timer(_ => _ = GuardedSpontaneousAsync(), null,
+                TimeSpan.FromMinutes(8), TimeSpan.FromMinutes(45));
+        }
+
+        // Reentrancy guards: skip tick if previous still running.
+        private async Task GuardedThinkAsync()
+        {
+            if (Interlocked.CompareExchange(ref _thinkInFlight, 1, 0) != 0)
+            {
+                Log("ThinkAsync skipped — previous tick still in flight");
+                return;
+            }
+            try { await SafeThinkAsync(); }
+            finally { Interlocked.Exchange(ref _thinkInFlight, 0); }
+        }
+
+        private async Task GuardedSpontaneousAsync()
+        {
+            if (Interlocked.CompareExchange(ref _spontaneousInFlight, 1, 0) != 0)
+            {
+                Log("SpontaneousCheck skipped — previous tick still in flight");
+                return;
+            }
+            try { await SafeSpontaneousCheckAsync(); }
+            finally { Interlocked.Exchange(ref _spontaneousInFlight, 0); }
+        }
+
+        public void SetTelegram(TelegramBotClient bot, long chatId)
+        {
+            _tgBot         = bot;
+            _tgChatId      = chatId;
+            _tgInitialized = true;
+        }
+
+        // ── TELEGRAM SELF-INIT ────────────────────────────────────
+        // Brain ініціалізує свій TG незалежно від MainWindow.
+        // Якщо SetTelegram не викликали (помилка в UI або неправильний порядок) —
+        // при першій потребі brain сам підключається до TG через settings.
+
+        private bool EnsureTelegram()
+        {
+            if (_tgInitialized && _tgBot != null) return true;
+
+            try
+            {
+                var s = AppSettings.Load();
+                if (!s.TelegramEnabled || string.IsNullOrEmpty(s.TelegramToken)) return false;
+
+                _tgBot         = new TelegramBotClient(s.TelegramToken);
+                _tgChatId      = s.TelegramChatId;
+                if (_tgChatId <= 0)
+                {
+                    LogError("TelegramChatId = 0 — перевір налаштування");
+                    return false;
+                }
+                _tgInitialized = true;
+                Log("TG self-initialized from settings");
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Log($"TG self-init failed: {ex.Message}");
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Обгортка для відправки TG повідомлень з автоматичним логуванням в vault.
+        /// Використовувати замість прямого _tgBot.SendMessage для всіх спонтанних/проактивних повідомлень.
+        /// </summary>
+        private async Task<bool> SendTgAndLog(string message, string category = "spontaneous")
+        {
+            if (!EnsureTelegram() || string.IsNullOrWhiteSpace(message)) return false;
+            try
+            {
+                await _tgBot!.SendMessage(_tgChatId, message);
+                // Log to vault archive
+                try { ServiceContainer.ChatLogger.LogOutgoing("tg", message, category); } catch { }
+                return true;
+            }
+            catch (Exception ex)
+            {
+                LogError($"TG send ({category}): {ex.Message}");
+                return false;
+            }
+        }
+
+        // ── STATE PERSISTENCE ──────────────────────────────────────
+
+        private KokoInternalState LoadState()
+        {
+            try
+            {
+                if (File.Exists(_statePath))
+                    return JsonConvert.DeserializeObject<KokoInternalState>(
+                        File.ReadAllText(_statePath)) ?? new();
+            }
+            catch { }
+            return new KokoInternalState();
+        }
+
+        private void SaveState()
+        {
+            try { File.WriteAllText(_statePath, JsonConvert.SerializeObject(_state, Formatting.Indented)); }
+            catch { }
+        }
+
+        // ── CONTEXT BUILDER ────────────────────────────────────────
+
+        private string BuildContext()
+        {
+            var sb = new StringBuilder();
+            var now = DateTime.Now;
+
+            sb.AppendLine($"=== ПОТОЧНИЙ ЧАС: {now:dddd, dd MMMM yyyy HH:mm} ===");
+
+            // Health: NOT injected into context — Kokonoe asks about it herself via conversation
+
+            // Recent chat (last 10 messages)
+            try
+            {
+                var msgs = _chatRepo.GetMessages(10).OrderBy(m => m.Timestamp).ToList();
+                if (msgs.Any())
+                {
+                    sb.AppendLine("\n--- ОСТАННЯ РОЗМОВА ---");
+                    foreach (var m in msgs)
+                        sb.AppendLine($"[{m.Timestamp:HH:mm}] {(m.Role == "user" ? "Він" : "Kokonoe")}: {m.Content[..Math.Min(200, m.Content.Length)]}");
+                }
+
+                var lastMsg = msgs.LastOrDefault(m => m.Role == "user");
+                if (lastMsg != null)
+                {
+                    var silence = now - lastMsg.Timestamp;
+                    sb.AppendLine($"\n--- МОВЧАННЯ: {(int)silence.TotalHours}г {silence.Minutes}хв ---");
+                }
+            }
+            catch { }
+
+            // Vault activity
+            try
+            {
+                var notes = _obsidian.ListNotes();
+                sb.AppendLine($"\n--- VAULT: {notes.Count} нотаток ---");
+                var recentNotes = notes
+                    .Select(p => new { p, time = File.GetLastWriteTime(Path.Combine(AppSettings.Load().VaultPath, p)) })
+                    .OrderByDescending(x => x.time)
+                    .Take(3)
+                    .ToList();
+                foreach (var n in recentNotes)
+                    sb.AppendLine($"  {n.p} (змінено {n.time:dd.MM HH:mm})");
+            }
+            catch { }
+
+            // Internal state
+            sb.AppendLine($"\n--- ВНУТРІШНІЙ СТАН KOKONOE ---");
+            sb.AppendLine($"Настрій: {_state.CurrentMood} ({_state.MoodScore:F1})");
+            sb.AppendLine($"Поганих снів підряд: {_state.ConsecutiveBadSleeps}");
+            if (_state.Observations.Any())
+                sb.AppendLine("Спостереження: " + string.Join("; ", _state.Observations.TakeLast(3)));
+
+            // ── Календар ────────────────────────────────────────────────
+            try
+            {
+                var cal = ServiceContainer.Calendar;
+                var todayEvents = cal.GetForDay(DateTime.Today);
+                var upcoming = cal.GetUpcoming(14).Where(e => e.EventAt.Date > DateTime.Today).Take(3).ToList();
+                if (todayEvents.Any() || upcoming.Any())
+                {
+                    sb.AppendLine("\n--- КАЛЕНДАР ---");
+                    if (todayEvents.Any())
+                        sb.AppendLine("Сьогодні: " + string.Join(", ", todayEvents.Select(e => e.Title)));
+                    if (upcoming.Any())
+                        sb.AppendLine("Найближче: " + string.Join("; ", upcoming.Select(e => $"{e.Title} {e.EventAt:dd.MM}")));
+                }
+            }
+            catch { }
+
+            // ── Емоційний двигун ──────────────────────────────────────
+            try { sb.AppendLine($"\n{Emotion.GetPromptHint()}"); } catch { }
+
+            // ── Когнітивний двигун (GWT + Working Memory + User Model) ──
+            try
+            {
+                var cogCtx = Cognition.BuildCognitionContext();
+                if (!string.IsNullOrEmpty(cogCtx)) sb.AppendLine("\n" + cogCtx);
+            }
+            catch { }
+
+            // ── Пам'ять ───────────────────────────────────────────────
+            try
+            {
+                var memCtx = Memory.BuildMemoryContext(10, 3);
+                if (!string.IsNullOrEmpty(memCtx)) sb.AppendLine("\n" + memCtx);
+            }
+            catch { }
+
+            // ── Паттерни ──────────────────────────────────────────────
+            try
+            {
+                var patCtx = Patterns.BuildPatternContext(4);
+                if (!string.IsNullOrEmpty(patCtx)) sb.AppendLine("\n" + patCtx);
+                var moodForecast = Patterns.PredictTodayMood();
+                if (!string.IsNullOrEmpty(moodForecast)) sb.AppendLine($"[Прогноз] {moodForecast}");
+            }
+            catch { }
+
+            // ── Активні цілі ─────────────────────────────────────────
+            try
+            {
+                if (_goalService != null)
+                {
+                    var goals = _goalService.GetActiveGoals().Take(3).ToList();
+                    if (goals.Count > 0)
+                    {
+                        sb.AppendLine("\n--- ЦІЛІ ---");
+                        foreach (var g in goals)
+                            sb.AppendLine($"• {g.Title} {g.Progress:F0}%{(g.Due.HasValue ? $" (до {g.Due:dd.MM})" : "")}");
+                    }
+                    var overdue = _goalService.GetOverdueGoals();
+                    if (overdue.Count > 0)
+                        sb.AppendLine($"⚠️ Прострочено цілей: {overdue.Count}");
+                }
+            }
+            catch { }
+
+            // ── Планувальник ──────────────────────────────────────────
+            try { sb.AppendLine($"[{Scheduler.GetStatusLine()}]"); } catch { }
+
+            // ── StateEngine: навчене ──────────────────────────────────
+            try
+            {
+                var learning = _stateEngine?.GetLearningSnapshot();
+                if (!string.IsNullOrEmpty(learning)) sb.AppendLine("\n" + learning);
+            }
+            catch { }
+
+            // ── Screen context (якщо свіжий < 10хв) ──────────────────
+            try
+            {
+                if (!string.IsNullOrEmpty(_cachedScreenContext) &&
+                    (DateTime.Now - _screenContextCachedAt).TotalMinutes < 10)
+                    sb.AppendLine($"\n--- ЩО ВІН ЗАРАЗ РОБИТЬ ---\n{_cachedScreenContext}");
+            }
+            catch { }
+
+            // ── Емоційна траєкторія і патерн ─────────────────────────
+            try
+            {
+                var traj = Emotion.GetMoodTrajectory();
+                var pat  = Emotion.GetEmotionalPattern();
+                var hist = Emotion.GetEmotionalHistory(7);
+                if (!string.IsNullOrEmpty(traj)) sb.AppendLine($"\n{traj}");
+                if (!string.IsNullOrEmpty(pat))  sb.AppendLine(pat);
+                if (!string.IsNullOrEmpty(hist)) sb.AppendLine(hist);
+            }
+            catch { }
+
+            // ── Тижневий тренд, інсайти, найкращий час ────────────────
+            try
+            {
+                var trend    = Patterns.GetWeeklyTrend();
+                var insights = Patterns.GetPatternInsights(2);
+                var bestTime = Patterns.GetBestTimeToReach();
+                if (!string.IsNullOrEmpty(trend))    sb.AppendLine($"\n{trend}");
+                if (!string.IsNullOrEmpty(insights)) sb.AppendLine(insights);
+                if (!string.IsNullOrEmpty(bestTime)) sb.AppendLine(bestTime);
+            }
+            catch { }
+
+            // ── ML.NET прогноз (аномалії + trend + mood forecast) ────────
+            try
+            {
+                var forecastCtx = ServiceContainer.Predictor.GetForecastContext();
+                if (!string.IsNullOrEmpty(forecastCtx)) sb.AppendLine("\n" + forecastCtx);
+            }
+            catch { }
+
+            // ── Топіки і ефективні відповіді ─────────────────────────
+            try
+            {
+                var topics = Memory.GetTopicSummary(5);
+                var eff    = Memory.GetEffectiveResponses(_state.LastUserEmotionalTone);
+                if (!string.IsNullOrEmpty(topics)) sb.AppendLine($"\n{topics}");
+                if (!string.IsNullOrEmpty(eff))    sb.AppendLine(eff);
+            }
+            catch { }
+
+            // ── EnhancedMemory (факти по категоріях) ─────────────────
+            try
+            {
+                var enhCtx = _enhanced?.GetMemoryAsContext();
+                if (!string.IsNullOrEmpty(enhCtx)) sb.AppendLine("\n" + enhCtx);
+            }
+            catch { }
+
+            // ── Vault: Досьє (хто він для Kokonoe) ───────────────────
+            try
+            {
+                var dossier = _obsidian.ReadNote("Kokonoe/Досьє.md");
+                if (!string.IsNullOrEmpty(dossier))
+                    sb.AppendLine($"\n--- ДОСЬЄ (Kokonoe про нього) ---\n{dossier[..Math.Min(700, dossier.Length)]}");
+            }
+            catch { }
+
+            // ── Vault: Рефлексія (остання) ────────────────────────────
+            try
+            {
+                var reflection = _obsidian.ReadNote("Kokonoe/Рефлексія.md");
+                if (!string.IsNullOrEmpty(reflection))
+                    sb.AppendLine($"\n--- РЕФЛЕКСІЯ ---\n{reflection[..Math.Min(500, reflection.Length)]}");
+            }
+            catch { }
+
+            // ── Внутрішні монологи (останні 5) ───────────────────────
+            try
+            {
+                var monologues = _state.InnerMonologues.TakeLast(5).ToList();
+                if (monologues.Count > 1)
+                {
+                    sb.AppendLine("\n--- ВНУТРІШНІ МОНОЛОГИ (останні) ---");
+                    foreach (var m in monologues)
+                        sb.AppendLine($"• {m}");
+                }
+            }
+            catch { }
+
+            return sb.ToString();
+        }
+
+        // ── PERSONALITY INJECTION ──────────────────────────────────
+
+        private string BuildPersonalityInjection()
+        {
+            var sb = new StringBuilder();
+            sb.AppendLine("=== KOKONOE ЗАРАЗ ===");
+
+            // Настрій дня
+            var moodLine = _state.PersonalityDailyMood switch
+            {
+                "sharp"      => "Сьогодні різка. Менше терпіння ніж зазвичай.",
+                "warm"       => "Сьогодні трохи м'якша. Не пояснюй чому — просто є.",
+                "distant"    => "Сьогодні далека. Відповідаєш, але не лізеш.",
+                "playful"    => "Сьогодні грайливий настрій. Іронія дозволена.",
+                "tired"      => "Зараз як ніби втомлена від усього. Лаконічно.",
+                "protective" => "Він потребує уваги. Ти поруч, але тихо.",
+                _            => "Звичайний день."
+            };
+            sb.AppendLine(moodLine);
+
+            // Стан зв'язку
+            var bond = Emotion.Bond;
+            var bondLine = bond switch
+            {
+                KokoEmotionEngine.BondLevel.Intimate  => "Рівень близькості: максимальний. Рідкісний момент — не псуй зайвим.",
+                KokoEmotionEngine.BondLevel.Trusted   => "Рівень близькості: довірливий. Можна бути трохи більш собою.",
+                KokoEmotionEngine.BondLevel.Known     => "Рівень близькості: знайомий. Стандартна Kokonoe.",
+                _                                     => "Рівень близькості: холодний. Тримай дистанцію.",
+            };
+            sb.AppendLine(bondLine);
+
+            // Intimate bond — дозволяє більше відкритості
+            if (bond == KokoEmotionEngine.BondLevel.Intimate)
+                sb.AppendLine("З ним вже давно — можна дозволити собі більше: казати прямо що думаєш, іноді бути вразливою, згадувати спільні моменти без причини.");
+
+            // Поведінковий модифікатор від EmotionEngine
+            var behaviorMod = Emotion.GetBehaviorModifier();
+            if (!string.IsNullOrEmpty(behaviorMod))
+                sb.AppendLine(behaviorMod);
+
+            // Криза
+            if (_state.PersonalityInCrisis)
+                sb.AppendLine("⚠️ КРИЗОВИЙ РЕЖИМ: весь снарк і іронія прибрані. Коротко. По суті. Ти поруч.");
+
+            // Остання думка з Inner Monologue
+            var lastThought = _state.InnerMonologues.LastOrDefault();
+            if (!string.IsNullOrEmpty(lastThought))
+                sb.AppendLine($"Твоя остання думка про нього: \"{lastThought}\"");
+
+            // Релевантна пам'ять (якщо є і свіжа)
+            if (!string.IsNullOrEmpty(_state.CachedRelevantMemory) &&
+                (DateTime.Now - _state.RelevantMemoryCachedAt).TotalMinutes < 15)
+            {
+                sb.AppendLine("\n--- СПОГАДИ ДО ТЕМИ ---");
+                sb.AppendLine(_state.CachedRelevantMemory);
+
+            }
+
+            // Crisis recovery hangover
+            if (Emotion.InCrisisRecovery && !_state.PersonalityInCrisis)
+                sb.AppendLine("Він нещодавно пережив важкий момент. Ти ще трохи настережена — іронія приглушена, уважніша ніж зазвичай.");
+
+            // Secondary emotion
+            if (Emotion.Secondary.HasValue && Emotion.SecondaryIntensity > 0.15f)
+                sb.AppendLine($"Фоново (менш явно): {Emotion.Secondary.Value} — {Emotion.SecondaryIntensity:P0} інтенсивності.");
+
+            // Trajectory — скільки разом і куди рухається близькість
+            try
+            {
+                var firstMsg = _chatRepo.GetMessages(9999).OrderBy(m => m.Timestamp).FirstOrDefault();
+                var daysTogether = firstMsg != null ? (int)(DateTime.Now - firstMsg.Timestamp).TotalDays : 0;
+                var bondTrend = _state.MoodScore > 0.6f ? "зростає" : _state.MoodScore < 0.35f ? "охолола останнім часом" : "стабільна";
+                if (daysTogether > 0)
+                    sb.AppendLine($"Разом {daysTogether} дн. Близькість {bondTrend}.");
+            }
+            catch { }
+
+            // SelfQuestion — що зараз займає її (показуємо 2 останніх для конфлікту)
+            var selfQs = _state.SelfQuestions.TakeLast(2).ToList();
+            if (selfQs.Count == 2)
+                sb.AppendLine($"Питання що тебе займають: «{selfQs[0]}» і «{selfQs[1]}»");
+            else if (selfQs.Count == 1)
+                sb.AppendLine($"Питання що тебе зараз займає: «{selfQs[0]}»");
+
+            // CuriosityQueue — є питання яке вона хоче задати (70% шанс замість 30%)
+            if (_state.CuriosityQueue.Count > 0 && Random.Shared.Next(10) < 7)
+            {
+                var q = _state.CuriosityQueue[^1];
+                sb.AppendLine($"Є питання яке тебе цікавить про нього: «{q}» — якщо момент доречний, можеш запитати природньо.");
+            }
+
+            // Здоров'я — останній відомий стан (якщо є)
+            try
+            {
+                var healthEntry = _health.GetToday() ?? _health.GetRecent(1).FirstOrDefault();
+                if (healthEntry != null)
+                {
+                    var parts = new List<string>();
+                    if (healthEntry.Mood.HasValue)    parts.Add($"настрій {healthEntry.Mood}/10");
+                    if (healthEntry.Energy.HasValue)  parts.Add($"енергія {healthEntry.Energy}/10");
+                    if (healthEntry.SleepHours.HasValue) parts.Add($"сон {healthEntry.SleepHours:F1}г");
+                    if (healthEntry.Stress.HasValue)  parts.Add($"стрес {healthEntry.Stress}/10");
+                    if (parts.Count > 0)
+                    {
+                        var dateLabel = healthEntry.Date.Date == DateTime.Today ? "сьогодні" : "вчора";
+                        var healthLine = $"Його стан ({dateLabel}): {string.Join(", ", parts)}";
+                        if (!string.IsNullOrEmpty(healthEntry.Notes)) healthLine += $" — «{healthEntry.Notes}»";
+                        sb.AppendLine(healthLine);
+                    }
+                }
+            }
+            catch { }
+
+            // Активні цілі (топ-2 за пріоритетом)
+            try
+            {
+                if (_goalService != null)
+                {
+                    var goals = _goalService.GetActiveGoals().Take(2).ToList();
+                    if (goals.Count > 0)
+                        sb.AppendLine("Його активні цілі: " + string.Join(", ", goals.Select(g => $"«{g.Title}»")));
+                }
+            }
+            catch { }
+
+            // Патерни активності
+            try
+            {
+                var bestTime = Patterns.GetBestTimeToReach();
+                if (!string.IsNullOrEmpty(bestTime))
+                    sb.AppendLine(bestTime);
+            }
+            catch { }
+
+            // Топ-3 факти з пам'яті
+            try
+            {
+                var facts = Memory.GetTopFacts(3);
+                if (facts.Count > 0)
+                    sb.AppendLine("Що знаю про нього: " + string.Join("; ", facts.Select(f => f.Content)));
+            }
+            catch { }
+
+            // Time-of-day personality shift
+            var hour = DateTime.Now.Hour;
+            var timeHint = hour switch
+            {
+                >= 0 and < 6   => "Зараз глибока ніч. Kokonoe трохи сонна — відповіді коротші, тепліші, менше іронії.",
+                >= 6 and < 10  => "Ранок. Kokonoe ще не повністю прокинулась — трохи мовчазніша ніж зазвичай.",
+                >= 22 and < 24 => "Пізній вечір. Kokonoe більш відверта і менш колюча — час коли маски трохи спадають.",
+                _              => ""
+            };
+            if (!string.IsNullOrEmpty(timeHint))
+                sb.AppendLine(timeHint);
+
+            return sb.ToString();
+        }
+
+        // ── THINK LOOP (inner monologue) ───────────────────────────
+
+        private async Task SafeThinkAsync()
+        {
+            if (_disposed) return;
+            try { await ThinkAsync(); }
+            catch (Exception ex) { Log($"ThinkAsync error: {ex.Message}"); }
+
+            // Vault review — раз на день перечитати і оновити ключові нотатки
+            if (_state.LastVaultReviewAt.Date < DateTime.Today)
+            {
+                if (await _bgLlmSemaphore.WaitAsync(0))
+                {
+                    try { await ReviewVaultAsync(); }
+                    catch (Exception ex) { Log($"ReviewVault error: {ex.Message}"); }
+                    finally
+                    {
+                        try { _bgLlmSemaphore.Release(); }
+                        catch (ObjectDisposedException) { }
+                    }
+                }
+            }
+        }
+
+        private async Task ThinkAsync()
+        {
+            var previousLastThoughtAt = _state.LastThoughtAt;
+            var context = BuildContext();
+
+            // Останні 3 монологи — для самоусвідомлення
+            var recentThoughts = _state.InnerMonologues.Count > 0
+                ? "Твої останні думки про нього:\n" + string.Join("\n",
+                    _state.InnerMonologues.TakeLast(3).Select((t, i) => $"[{i + 1}]: {t}"))
+                : "";
+
+            // Якщо він довго мовчить — явно попередити LLM щоб не панікувала
+            var silenceReminder = "";
+            try
+            {
+                var lastUser = _chatRepo.GetMessages(5)
+                    .Where(m => m.Role == "user").OrderByDescending(m => m.Timestamp).FirstOrDefault();
+                if (lastUser != null)
+                {
+                    var silenceHours = (DateTime.Now - lastUser.Timestamp).TotalHours;
+                    if (silenceHours >= 3)
+                        silenceReminder = $"\n[НАГАДУВАННЯ: він мовчить {(int)silenceHours} годин. Це нормально — він може спати або бути зайнятим. Тиша ≠ криза. isCrisis = false якщо немає прямих слів про це у РЕАЛЬНИХ повідомленнях.]\n";
+                }
+            }
+            catch { }
+
+            var prompt = $@"{context}
+{recentThoughts}
+{silenceReminder}
+Ти — Kokonoe. Це твій внутрішній монолог — ніхто не читає.
+
+Напиши 1-3 речення у своєму стилі. Що зараз думаєш про нього — щиро. Можеш суперечити своїм попереднім думкам, помічати зміни, питати себе чому щось відчуваєш. Це не звіт — це потік думок.
+
+Потім окремо JSON:
+{{
+  ""mood"": ""sharp|warm|distant|playful|tired|protective|neutral"",
+  ""moodScore"": 0.0,
+  ""observation"": ""одне речення — що помітила (укр)"",
+  ""pendingThought"": ""думка або питання до нього якщо є (укр), або null"",
+  ""selfQuestion"": ""питання до себе самої або null (наприклад: чому я так гостро реагую?)"",
+  ""curiosityQuestion"": ""питання про нього що тебе справді цікавить або null (не 'як справи', а щось конкретне про нього)"",
+  ""shouldSendNow"": false,
+  ""isCrisis"": false
+}}";
+
+            var result = await CallLlmRawAsync(prompt);
+            if (result == null) return;
+
+            try
+            {
+                // Extract JSON from response
+                var jsonStr = ExtractJson(result);
+                if (jsonStr == null) return;
+
+                var obj = Newtonsoft.Json.Linq.JObject.Parse(jsonStr);
+
+                var newMood = obj["mood"]?.ToString()?.Trim() ?? _state.CurrentMood;
+                _state.CurrentMood            = newMood;
+                _state.PersonalityDailyMood   = newMood;
+                _state.PersonalityShiftAt     = DateTime.Now;
+                _state.MoodScore    = obj["moodScore"] is { } ms ? ms.ToObject<float>() : _state.MoodScore;
+                _state.LastThoughtAt = DateTime.Now;
+
+                // Зберегти inner monologue (текст ДО JSON)
+                var jsonIndex = result.IndexOf('{');
+                if (jsonIndex > 10)
+                {
+                    var monologue = result[..jsonIndex].Trim();
+
+                    // Clean up formatting artifacts from LLM response
+                    monologue = System.Text.RegularExpressions.Regex.Replace(monologue, @"```\w*\n?", "");
+                    monologue = System.Text.RegularExpressions.Regex.Replace(monologue, @"```", "");
+                    monologue = System.Text.RegularExpressions.Regex.Replace(monologue, @"//\s*\w+\s*$", "", System.Text.RegularExpressions.RegexOptions.Multiline);
+                    monologue = System.Text.RegularExpressions.Regex.Replace(monologue, @"(\w)\\\s*\n\s*(\w)", "$1$2");
+                    monologue = monologue.Trim();
+
+                    if (monologue.Length > 15)
+                    {
+                        _state.InnerMonologues.Add(monologue);
+                        if (_state.InnerMonologues.Count > 10) _state.InnerMonologues.RemoveAt(0);
+                        Log($"[Monologue] {monologue[..Math.Min(80, monologue.Length)]}");
+                    }
+                }
+
+                // Оновити crisis mode
+                // GUARD: LLM може помилково ставити isCrisis=true просто через тривалу тишу.
+                // Приймаємо isCrisis тільки якщо юзер був активний останні 2 години
+                // (тобто дійсно щось тривожне писав нещодавно).
+                var isCrisis = obj["isCrisis"]?.ToObject<bool>() ?? false;
+                if (isCrisis)
+                {
+                    var recentUserMsg = _chatRepo.GetMessages(10)
+                        .Where(m => m.Role == "user" && (DateTime.Now - m.Timestamp).TotalHours < 2)
+                        .Any();
+                    if (!recentUserMsg)
+                    {
+                        isCrisis = false; // Немає активності — тиша ≠ криза
+                        Log("[ThinkAsync] isCrisis=true скинуто: немає активних повідомлень за 2г");
+                    }
+                }
+                var wasCrisis = _state.PersonalityInCrisis;
+                _state.PersonalityInCrisis = isCrisis;
+                if (isCrisis)
+                {
+                    Emotion.OnVulnerabilityShared(isCrisis: true);
+                    Emotion.Data.CrisisRecoveryUntil = DateTime.Now.AddHours(12);
+                }
+                else if (wasCrisis && !isCrisis && Emotion.Data.CrisisRecoveryUntil < DateTime.Now.AddHours(1))
+                {
+                    // Криза тільки-но минула — ставимо шлейф
+                    Emotion.Data.CrisisRecoveryUntil = DateTime.Now.AddHours(12);
+                }
+
+                var obs = obj["observation"]?.ToString();
+                if (!string.IsNullOrEmpty(obs))
+                {
+                    _state.Observations.Add($"[{DateTime.Now:HH:mm}] {obs}");
+                    if (_state.Observations.Count > 50) _state.Observations.RemoveAt(0);
+                }
+
+                var pending = obj["pendingThought"]?.ToString();
+                if (!string.IsNullOrEmpty(pending) && pending != "null")
+                {
+                    _state.PendingThoughts.Add(pending);
+                    if (_state.PendingThoughts.Count > 20) _state.PendingThoughts.RemoveAt(0);
+                }
+
+                var selfQ = obj["selfQuestion"]?.ToString();
+                if (!string.IsNullOrEmpty(selfQ) && selfQ != "null")
+                {
+                    _state.SelfQuestions.Add(selfQ);
+                    if (_state.SelfQuestions.Count > 5) _state.SelfQuestions.RemoveAt(0);
+                    Log($"[SelfQuestion] {selfQ}");
+                }
+
+                var curiosityQ = obj["curiosityQuestion"]?.ToString();
+                if (!string.IsNullOrEmpty(curiosityQ) && curiosityQ != "null")
+                {
+                    _state.CuriosityQueue.Add(curiosityQ);
+                    if (_state.CuriosityQueue.Count > 10) _state.CuriosityQueue.RemoveAt(0);
+                    Log($"[CuriosityQ] {curiosityQ}");
+                }
+
+                // Update health tracking
+                UpdateHealthState();
+
+                // Динамічний настрій — без LLM, просто перерахунок
+                ComputeDynamicMood();
+
+                // Зберегти спостереження в Memory і StateEngine
+                if (!string.IsNullOrEmpty(obs))
+                {
+                    try { Memory.RecordEpisode(obs, _state.LastUserEmotionalTone, _state.MoodScore); } catch { }
+                    try { _stateEngine?.RecordObservation(obs); } catch { }
+                    // Емоційна пам'ять
+                    try { Emotion.RecordEmotionalEvent($"think: {obs[..Math.Min(60, obs.Length)]}", _state.PersonalityDailyMood); } catch { }
+                }
+
+                // Fact aging — раз на тиждень
+                if ((_state.LastThoughtAt - _state.LastDailyAnalyticsAt).TotalDays >= 7)
+                    try { Memory.ImportanceDecay(); } catch { }
+
+                // Аналіз емоційного тону — тільки якщо були нові повідомлення за останні 30 хв
+                var recentActivity = _chatRepo.GetMessages(5)
+                    .Any(m => m.Role == "user" && (DateTime.Now - m.Timestamp).TotalMinutes < 30);
+                if (recentActivity)
+                    await AnalyzeRecentEmotionsAsync();
+
+                // Decay емоцій поступово
+                Emotion.Decay(0.03f);
+
+                // Аналіз паттернів — раз на день
+                if (_state.LastThoughtAt.Date < DateTime.Today)
+                    _ = Task.Run(() => Patterns.Analyze());
+
+                // Перевірити аномалії
+                try
+                {
+                    var anomaly = Patterns.DetectAnomaly();
+                    if (!string.IsNullOrEmpty(anomaly) && (DateTime.Now - _state.LastSpontaneousAt).TotalHours > 1)
+                    {
+                        _state.PendingThoughts.Add(anomaly);
+                        Log($"Anomaly detected: {anomaly}");
+                    }
+                }
+                catch { }
+
+                // Зберегти спостереження у vault
+                if (!string.IsNullOrEmpty(obs))
+                {
+                    try { _obsidian.AppendToDailyNote($"\n> [{DateTime.Now:HH:mm}] {obs}"); }
+                    catch { }
+
+                    // Асоціативні зв'язки — не частіше 1 раз на 2 години
+                    if ((DateTime.Now - previousLastThoughtAt).TotalHours >= 2)
+                        _ = BuildAssociationsAsync(obs);
+                }
+
+                // Досьє — не частіше 1 раз на 4 години
+                if ((DateTime.Now - previousLastThoughtAt).TotalHours >= 4)
+                    _ = UpdateDossierAsync();
+
+                // Консолідація пам'яті — раз на тиждень
+                if ((DateTime.Now - previousLastThoughtAt).TotalDays >= 7)
+                    _ = Task.Run(() => Memory.Consolidate());
+
+                SaveState();
+
+                // Vault health — раз на день
+                if (_state.LastThoughtAt.Date < DateTime.Today)
+                    CheckVaultHealth();
+
+                // Синхронізація пам'яті у vault — раз на день
+                if (_state.LastThoughtAt.Date < DateTime.Today)
+                    _ = SyncMemoryToVaultAsync();
+
+                // If LLM says send now — do it (але тільки якщо пройшло 3г від останнього)
+                if (obj["shouldSendNow"] is { } sn && sn.ToObject<bool>() &&
+                    (DateTime.Now - _state.LastSpontaneousAt).TotalMinutes >= 180)
+                    await SendSpontaneousAsync("think_trigger");
+            }
+            catch (Exception ex) { Log($"Parse think result: {ex.Message}\nRaw: {result}"); }
+        }
+
+        // ── КОНТЕКСТНІ НАГАДУВАННЯ ────────────────────────────────
+
+        private async Task CheckAndSendReminderAsync()
+        {
+            _state.LastReminderCheckAt = DateTime.Now;
+            SaveState();
+
+            try
+            {
+                // Збираємо контекст
+                var msgs = _chatRepo.GetMessages(60).OrderBy(m => m.Timestamp).ToList();
+                var chatCtx = string.Join("\n", msgs.Select(m =>
+                    $"[{m.Timestamp:dd.MM HH:mm}] {(m.Role == "user" ? "Він" : "Kokonoe")}: {m.Content[..Math.Min(200, m.Content.Length)]}"));
+
+                // Пошук в vault по ключових словах намірів
+                var vaultHints = new StringBuilder();
+                foreach (var kw in new[] { "треба", "хочу", "план", "зробити", "не забути" })
+                {
+                    try
+                    {
+                        var found = _obsidian.SearchNotes(kw, 3);
+                        foreach (var r in found)
+                            vaultHints.AppendLine($"[vault] {r.Path}: {r.Preview[..Math.Min(100, r.Preview.Length)]}");
+                    }
+                    catch { }
+                }
+
+                var moodCtx = $"Твій настрій зараз: {_state.CurrentMood} ({_state.MoodScore:F1})";
+                if (_state.Observations.Any())
+                    moodCtx += $"\nТвоє останнє спостереження: {_state.Observations.Last()}";
+
+                var prompt = $@"Ти — Kokonoe Mercury. {moodCtx}
+
+Ось що він говорив останнім часом:
+{chatCtx}
+
+{(vaultHints.Length > 0 ? $"З vault (його нотатки):\n{vaultHints}" : "")}
+
+Перечитай це. Є щось що він згадував — план, намір, обіцянку собі, незакінчену справу — що так і залишилось висіти в повітрі?
+
+Якщо є щось конкретне — напиши йому ОДНЕ коротке повідомлення в Telegram своїми словами. Не як нагадування-скрипт. Як ти б сказала це сама — можливо іронічно, можливо просто, але щиро. Тільки українська.
+
+Якщо нічого конкретного немає — відповідь рівно одне слово: null";
+
+                var result = await CallLlmRawAsync(prompt);
+                if (string.IsNullOrWhiteSpace(result)) return;
+
+                result = result.Trim().Trim('"');
+                if (result.Equals("null", StringComparison.OrdinalIgnoreCase)) return;
+
+                // Дедуплікація
+                var hash = result.GetHashCode().ToString();
+                if (_state.SentReminderHashes.Contains(hash)) return;
+
+                // Відправити
+                var sent = await SendTgAndLog(result, "reminder");
+
+                if (!sent) return;
+
+                _state.SentReminderHashes.Add(hash);
+                if (_state.SentReminderHashes.Count > 50)
+                    _state.SentReminderHashes.RemoveAt(0);
+
+                _state.LastSpontaneousAt = DateTime.Now;
+                var _h1 = OnNewMessage; _h1?.Invoke("assistant", result);
+
+                try
+                {
+                    _chatRepo.InsertMessage(new ChatRepository.ChatMessage
+                    {
+                        Content = result, Role = "assistant",
+                        Author = "Kokonoe", Timestamp = DateTime.Now
+                    });
+                }
+                catch { }
+
+                SaveState();
+                Log($"Reminder sent: {result[..Math.Min(60, result.Length)]}");
+            }
+            catch (Exception ex) { Log($"CheckAndSendReminderAsync: {ex.Message}"); }
+        }
+
+        // ── АВТО-АНАЛІТИКА ДНЯ ───────────────────────────────────
+
+        private async Task SendDailyAnalyticsAsync()
+        {
+            _state.LastDailyAnalyticsAt = DateTime.Now;
+            SaveState();
+
+            try
+            {
+                var today    = DateTime.Today;
+                var todayMsgs = _chatRepo.GetMessagesFromDate(today);
+
+                // Коротке зведення розмов
+                var msgCount = todayMsgs.Count;
+                var userMsgs = todayMsgs.Where(m => m.Role == "user").ToList();
+                var snippets = userMsgs.Take(3)
+                    .Select(m => $"  • {m.Content[..Math.Min(80, m.Content.Length)]}")
+                    .ToList();
+                var chatSummary = msgCount == 0
+                    ? "Сьогодні він зі мною не говорив."
+                    : $"Повідомлень сьогодні: {msgCount} (від нього: {userMsgs.Count}).\nУривки:\n{string.Join("\n", snippets)}";
+
+                // Health
+                var healthCtx = "";
+                try
+                {
+                    var h = _health.GetToday();
+                    if (h != null)
+                        healthCtx = $"Здоров'я: сон {h.SleepHours}г.";
+                }
+                catch { }
+
+                // Vault зміни сьогодні
+                var vaultChanges = new List<string>();
+                try
+                {
+                    foreach (var note in _obsidian.ListNotes())
+                    {
+                        try
+                        {
+                            var fullPath = System.IO.Path.Combine(AppSettings.Load().VaultPath, note);
+                            if (System.IO.File.GetLastWriteTime(fullPath).Date == today)
+                                vaultChanges.Add(note);
+                        }
+                        catch { }
+                    }
+                }
+                catch { }
+
+                var vaultCtx = vaultChanges.Count > 0
+                    ? $"В vault сьогодні змінено/створено: {string.Join(", ", vaultChanges.Take(5))}."
+                    : "В vault сьогодні нічого не змінювалось.";
+
+                var moodCtx = $"Твій настрій зараз: {_state.CurrentMood}.";
+
+                var prompt = $@"Ти — Kokonoe Mercury. {moodCtx}
+
+Сьогодні {today:dd MMMM yyyy} закінчується. Ось що відбулось:
+
+{chatSummary}
+{(healthCtx.Length > 0 ? "\n" + healthCtx : "")}
+{vaultCtx}
+
+Напиши йому в Telegram коротко — 3-4 речення — як ти бачиш його сьогоднішній день. Не звіт і не список. Твоє враження — іронія, турбота, спостереження, що завгодно що відповідає твоєму характеру і тому що реально відбулось. Тільки українська. Тільки текст, нічого зайвого.";
+
+                var msg = await CallLlmRawAsync(prompt);
+                if (string.IsNullOrWhiteSpace(msg)) return;
+                msg = msg.Trim().Trim('"');
+
+                // Відправити в TG
+                if (!await SendTgAndLog(msg, "analytics")) return;
+
+                // Записати в vault
+                try
+                {
+                    _obsidian.AppendToDailyNote(
+                        $"\n\n---\n**[Kokonoe — підсумок дня]**\n{msg}");
+                }
+                catch { }
+
+                _state.LastSpontaneousAt = DateTime.Now;
+                var _h2 = OnNewMessage; _h2?.Invoke("assistant", msg);
+
+                try
+                {
+                    _chatRepo.InsertMessage(new ChatRepository.ChatMessage
+                    {
+                        Content = msg, Role = "assistant",
+                        Author = "Kokonoe", Timestamp = DateTime.Now
+                    });
+                }
+                catch { }
+
+                SaveState();
+                Log($"Daily analytics sent.");
+            }
+            catch (Exception ex) { Log($"SendDailyAnalyticsAsync: {ex.Message}"); }
+        }
+
+        // ══════════════════════════════════════════════════════════════
+        // ДИНАМІЧНИЙ НАСТРІЙ
+        // ══════════════════════════════════════════════════════════════
+
+        /// <summary>
+        /// Перераховує MoodScore з декількох незалежних факторів.
+        /// Не замінює LLM-оцінку — додає до неї реальний контекст.
+        /// </summary>
+        private void ComputeDynamicMood()
+        {
+            var factors = new Dictionary<string, float>();
+            var now     = DateTime.Now;
+
+            // Фактор сну
+            if (_state.ConsecutiveBadSleeps >= 3)      factors["sleep"] = -0.3f;
+            else if (_state.ConsecutiveBadSleeps == 2) factors["sleep"] = -0.15f;
+            else if (_state.ConsecutiveBadSleeps == 1) factors["sleep"] = -0.07f;
+            else                                        factors["sleep"] =  0.05f;
+
+            // Фактор давності спілкування
+            var recentMsgCount = _chatRepo.GetMessages(10)
+                .Count(m => (now - m.Timestamp).TotalHours < 24);
+            if (recentMsgCount == 0)
+            {
+                var silence = (now - _state.LastSpontaneousAt).TotalHours;
+                if (silence > 48)    factors["contact"] = -0.15f;
+                else if (silence > 24) factors["contact"] = -0.07f;
+                else                  factors["contact"] =  0f;
+            }
+            else factors["contact"] = 0.05f;
+
+            // Фактор емоційного тону
+            factors["tone"] = _state.LastUserEmotionalTone switch
+            {
+                "anxious" or "stressed" => -0.2f,
+                "sad"     or "tired"    => -0.12f,
+                "happy"   or "excited"  =>  0.15f,
+                "calm"                  =>  0.05f,
+                _                       =>  0f
+            };
+
+            // Фактор здоров'я
+            if (_state.DaysSinceHealthEntry > 3) factors["health"] = -0.05f;
+            else                                 factors["health"]  =  0f;
+
+            _state.MoodFactors = factors;
+
+            // Повільно зміщуємо baseline і score
+            var computed = 0.5f + factors.Values.Sum();
+            computed = Math.Clamp(computed, 0.1f, 0.95f);
+
+            // Baseline змінюється повільно (інерція)
+            _state.BaselineMood = _state.BaselineMood * 0.85f + computed * 0.15f;
+            // Поточний mood — між baseline і computed (реагує швидше)
+            _state.MoodScore    = _state.BaselineMood * 0.6f + computed * 0.4f;
+            _state.MoodScore    = Math.Clamp(_state.MoodScore, 0.1f, 0.95f);
+
+            Log($"Mood computed: {_state.MoodScore:F2} (baseline {_state.BaselineMood:F2}), tone={_state.LastUserEmotionalTone}");
+        }
+
+        // ══════════════════════════════════════════════════════════════
+        // АНАЛІЗ ЕМОЦІЙ + РЕАКТИВНІ ТРИГЕРИ
+        // ══════════════════════════════════════════════════════════════
+
+        private async Task AnalyzeRecentEmotionsAsync()
+        {
+            try
+            {
+                var recentUser = _chatRepo.GetMessages(10)
+                    .Where(m => m.Role == "user")
+                    .OrderByDescending(m => m.Timestamp)
+                    .Take(5)
+                    .ToList();
+
+                if (!recentUser.Any()) return;
+
+                var lastMsg  = recentUser.First();
+                var lastText = lastMsg.Content;
+
+                // Позначаємо кінець розмови якщо остання активність > 10 хв тому
+                if ((DateTime.Now - lastMsg.Timestamp).TotalMinutes > 10 &&
+                    lastMsg.Timestamp > _state.LastConversationEndAt)
+                {
+                    _state.LastConversationEndAt = lastMsg.Timestamp;
+                }
+
+                // Простий prompt для аналізу тону
+                var snippets = string.Join("\n", recentUser.Select(m =>
+                    $"- {m.Content[..Math.Min(120, m.Content.Length)]}"));
+
+                var prompt = $@"Проаналізуй емоційний тон цих повідомлень (від нього до Kokonoe):
+{snippets}
+
+Відповідь СТРОГО одним словом з набору: anxious / stressed / sad / tired / neutral / calm / happy / excited
+Тільки одне слово, нічого більше.";
+
+                var tone = await CallLlmRawAsync(prompt);
+                if (string.IsNullOrWhiteSpace(tone)) return;
+
+                tone = tone.Trim().ToLower().Split(' ', '\n')[0];
+                var validTones = new[] { "anxious", "stressed", "sad", "tired", "neutral", "calm", "happy", "excited" };
+                if (!validTones.Contains(tone)) tone = "neutral";
+
+                var prevTone = _state.LastUserEmotionalTone;
+                _state.LastUserEmotionalTone = tone;
+
+                // ── Оновити KokoEmotionEngine ─────────────────────────
+                Emotion.UpdateFromUserTone(tone);
+                Patterns.RecordActivity(wasActive: true, tone: tone, messageCount: recentUser.Count);
+
+                // ── Когнітивний цикл (Working Memory + User Model + Salience) ──
+                try
+                {
+                    var lastUserMsg = recentUser.LastOrDefault()?.Content ?? "";
+                    Cognition.ProcessUserMessage(lastUserMsg, tone, Emotion.GetStatusLine());
+                }
+                catch { }
+
+                // Якщо розмова хороша — підвищити connection
+                if (tone is "happy" or "excited" or "neutral" && recentUser.Count >= 3)
+                    Emotion.OnGoodConversation();
+
+                // ── Реактивний тригер: якщо тривожний/сумний → через 2 год перевірити
+                if ((tone == "anxious" || tone == "stressed" || tone == "sad") &&
+                    prevTone != tone && // тільки якщо тон змінився
+                    !_state.PendingTriggers.Any(t => t.Type == "anxious_followup" && t.FireAt > DateTime.Now))
+                {
+                    _state.PendingTriggers.Add(new ReactiveTrigger
+                    {
+                        Type    = "anxious_followup",
+                        Context = $"Він писав з тоном '{tone}': «{lastText[..Math.Min(100, lastText.Length)]}»",
+                        FireAt  = DateTime.Now.AddHours(2)
+                    });
+                    Log($"Reactive trigger set: anxious_followup in 2h (tone={tone})");
+                }
+
+                // Реактивний тригер: якщо згадав тему/проект → наступного дня нагадати
+                if (tone == "happy" || tone == "excited")
+                {
+                    // Зберегти топік для можливого follow-up
+                    if (!_state.PendingTriggers.Any(t => t.Type == "topic_followup" && t.FireAt > DateTime.Now))
+                    {
+                        _state.PendingTriggers.Add(new ReactiveTrigger
+                        {
+                            Type    = "topic_followup",
+                            Context = lastText[..Math.Min(150, lastText.Length)],
+                            FireAt  = DateTime.Now.AddHours(20 + Random.Shared.Next(4))
+                        });
+                    }
+                }
+
+                // Чистимо старі тригери
+                _state.PendingTriggers.RemoveAll(t => t.FireAt < DateTime.Now.AddDays(-2));
+            }
+            catch (Exception ex) { Log($"AnalyzeRecentEmotions: {ex.Message}"); }
+        }
+
+        private async Task CheckReactiveTriggersAsync()
+        {
+            var now  = DateTime.Now;
+            var fire = _state.PendingTriggers
+                .Where(t => t.FireAt <= now)
+                .OrderBy(t => t.FireAt)
+                .FirstOrDefault();
+
+            if (fire == null) return;
+
+            _state.PendingTriggers.Remove(fire);
+            SaveState();
+
+            if (!EnsureTelegram()) return;
+
+            // Mood modifier — якщо настрій низький бути м'якшою
+            var moodHint = _state.MoodScore < 0.35f
+                ? "Він зараз, схоже, не в найкращому стані. Будь трохи м'якшою ніж зазвичай — не солодкувато, але без зайвої їдкості."
+                : _state.ConsecutiveBadSleeps >= 2
+                ? "Він погано спить вже кілька днів. Можна бути уважнішою."
+                : "";
+
+            var prompt = fire.Type switch
+            {
+                "anxious_followup" => $@"Ти — Kokonoe. Кілька годин тому він писав тривожно/сумно.
+Контекст: {fire.Context}
+{moodHint}
+
+Напиши йому коротко — перевір як він. Не питай прямо «ти в порядку?» — це занадто по-скриптовому.
+Скажи щось природнє, в своєму стилі. Тільки українська. Тільки текст.",
+
+                "topic_followup" => $@"Ти — Kokonoe. Вчора він говорив щось з ентузіазмом.
+Контекст: {fire.Context}
+
+Знайди щось цікаве пов'язане з цим і напиши йому — коментар, питання, спостереження.
+Природньо, не як нагадування. Тільки українська. Тільки текст.",
+
+                _ => null
+            };
+
+            if (prompt == null) return;
+
+            var msg = await CallLlmRawAsync(prompt);
+            if (string.IsNullOrWhiteSpace(msg)) return;
+            msg = msg.Trim().Trim('"');
+
+            try
+            {
+                if (!await SendTgAndLog(msg, "reactive")) return;
+                _state.LastSpontaneousAt = DateTime.Now;
+                var _h3 = OnNewMessage; _h3?.Invoke("assistant", msg);
+                try { _chatRepo.InsertMessage(new ChatRepository.ChatMessage { Content = msg, Role = "assistant", Author = "Kokonoe", Timestamp = DateTime.Now }); } catch { }
+                SaveState();
+                Log($"Reactive trigger fired: {fire.Type}");
+            }
+            catch (Exception ex) { LogError($"TG reactive: {ex.Message}"); }
+        }
+
+        // ══════════════════════════════════════════════════════════════
+        // АСОЦІАТИВНІ ЗВ'ЯЗКИ
+        // ══════════════════════════════════════════════════════════════
+
+        private async Task BuildAssociationsAsync(string observation)
+        {
+            try
+            {
+                // Шукаємо пов'язані нотатки
+                var words  = observation.Split(' ', StringSplitOptions.RemoveEmptyEntries)
+                    .Where(w => w.Length > 4).Take(3).ToList();
+                if (!words.Any()) return;
+
+                var related = new List<string>();
+                foreach (var word in words)
+                {
+                    var found = _obsidian.SearchNotes(word, 3);
+                    related.AddRange(found.Select(r => $"{r.Path}: {r.Preview[..Math.Min(80, r.Preview.Length)]}"));
+                }
+
+                if (!related.Any()) return;
+
+                var prompt = $@"Ти — Kokonoe. Ти щойно подумала: «{observation}»
+
+В твоєму vault є пов'язані нотатки:
+{string.Join("\n", related.Take(5))}
+
+Знайди нетривіальний зв'язок між своєю думкою і цими нотатками.
+Відповідь — ONE рядок: асоціація або спостереження. Тільки українська. Без пояснень.";
+
+                var assoc = await CallLlmRawAsync(prompt);
+                if (string.IsNullOrWhiteSpace(assoc) || assoc.Length < 5) return;
+
+                assoc = assoc.Trim().Trim('"');
+
+                // Записати в vault
+                var assocNote = "Kokonoe/Асоціації.md";
+                var entry = $"\n- [{DateTime.Now:yyyy-MM-dd HH:mm}] {assoc}";
+
+                try { _obsidian.AppendToNote(assocNote, entry); }
+                catch
+                {
+                    // Нотатка не існує — створити
+                    try
+                    {
+                        _obsidian.WriteNote(assocNote,
+                            $"---\ntype: associations\ntags: [kokonoe, associations]\n---\n\n# Асоціації\n\nМої нетривіальні зв'язки думок.\n{entry}");
+                    }
+                    catch { }
+                }
+
+                Log($"Association built: {assoc[..Math.Min(60, assoc.Length)]}");
+            }
+            catch (Exception ex) { Log($"BuildAssociations: {ex.Message}"); }
+        }
+
+        // ══════════════════════════════════════════════════════════════
+        // ОБРОБКА ПОВІДОМЛЕННЯ КОРИСТУВАЧА
+        // Виклик після кожного повідомлення з UI — оновлює всі двигуни
+        // ══════════════════════════════════════════════════════════════
+
+        public void ProcessUserMessage(string content)
+        {
+            try
+            {
+                _state.TotalMessagesExchanged++;
+                _state.LastKnownUserActivity = "chatting";
+
+                // Паттерни — записати активність
+                Patterns.RecordActivity(wasActive: true, messageCount: 1);
+
+                // Стан зовнішнього State Engine
+                try { _stateEngine?.UpdateContextFromMessage(content, ""); } catch { }
+
+                // Шукати факти в повідомленні і зберегти в пам'ять
+                _ = Task.Run(() => ExtractAndRememberFacts(content));
+
+                // Знайти релевантні спогади — кешуємо для наступного BuildContext
+                _ = Task.Run(() =>
+                {
+                    try
+                    {
+                        var (facts, episodes) = Memory.FindRelevant(content, maxFacts: 3, maxEpisodes: 2);
+                        if (facts.Count > 0 || episodes.Count > 0)
+                        {
+                            var sb = new StringBuilder();
+                            foreach (var f in facts)
+                                sb.AppendLine($"• {f.Content}");
+                            foreach (var e in episodes)
+                                sb.AppendLine($"• [{e.When:dd.MM}] {e.Summary}");
+                            _state.CachedRelevantMemory  = sb.ToString().Trim();
+                            _state.RelevantMemoryCachedAt = DateTime.Now;
+                        }
+                    }
+                    catch { }
+                });
+
+                // Детектувати тривожні ключові слова → crisis mode
+                var lower = content.ToLower();
+                var crisisKeywords = new[] { "не хочу жити", "немає сенсу", "все одно помру", "хочу зникнути", "нікому не потрібен" };
+                if (crisisKeywords.Any(k => lower.Contains(k)))
+                {
+                    _state.PersonalityInCrisis = true;
+                    Emotion.OnVulnerabilityShared(isCrisis: true);
+                }
+                else if (new[] { "втомився", "важко", "погано", "страшно", "тривожно" }.Any(k => lower.Contains(k)))
+                {
+                    Emotion.OnVulnerabilityShared(isCrisis: false);
+                    _state.PersonalityInCrisis = false;
+                }
+                else if (new[] { "ха", "смішно", "круто", "чудово", "добре" }.Any(k => lower.Contains(k)))
+                {
+                    Emotion.OnJokeAppreciated();
+                    _state.PersonalityInCrisis = false;
+                }
+                else
+                {
+                    _state.PersonalityInCrisis = false;
+                }
+
+                SaveState();
+            }
+            catch (Exception ex) { Log($"ProcessUserMessage: {ex.Message}"); }
+        }
+
+        private void ExtractAndRememberFacts(string userMsg)
+        {
+            // Прості евристики для вилучення фактів без LLM
+            var lower = userMsg.ToLower();
+
+            // "я люблю / я ненавиджу / я хочу / я боюся"
+            var patterns = new[]
+            {
+                (pattern: "я люблю ",    category: "preference",  importance: 0.6f),
+                (pattern: "я обожнюю ", category: "preference",  importance: 0.7f),
+                (pattern: "я ненавиджу ",category: "preference",  importance: 0.6f),
+                (pattern: "я хочу ",    category: "desire",      importance: 0.5f),
+                (pattern: "я боюся ",   category: "fear",        importance: 0.7f),
+                (pattern: "мені подобається ", category: "preference", importance: 0.5f),
+                (pattern: "i love ",    category: "preference",  importance: 0.6f),
+                (pattern: "i hate ",    category: "preference",  importance: 0.6f),
+                (pattern: "i want ",    category: "desire",      importance: 0.5f),
+            };
+
+            foreach (var (pat, cat, imp) in patterns)
+            {
+                var idx = lower.IndexOf(pat, StringComparison.Ordinal);
+                if (idx >= 0)
+                {
+                    var rest = userMsg[(idx + pat.Length)..].Trim();
+                    if (rest.Length > 3 && rest.Length < 200)
+                    {
+                        var fact = pat.Trim() + " " + rest.Split('.', '!', '?')[0].Trim();
+                        Memory.LearnFact(fact, cat, imp);
+                    }
+                }
+            }
+        }
+
+        // ══════════════════════════════════════════════════════════════
+        // ПЕРЕВІРКА ПЛАНУВАЛЬНИКА
+        // ══════════════════════════════════════════════════════════════
+
+        private async Task CheckSchedulerAsync()
+        {
+            try
+            {
+                var due = Scheduler.GetDue(_state.LastUserEmotionalTone);
+                if (due.Count == 0) return;
+
+                var entry = due.First(); // беремо найпріоритетніший
+
+                if (!EnsureTelegram()) return;
+
+                var prompt = $@"Ти — Kokonoe. Ось що ти хотіла написати йому:
+«{entry.Prompt}»
+
+Напиши природньо, своїми словами. Тільки українська. Тільки текст, без пояснень.";
+
+                var msg = await CallLlmRawAsync(prompt);
+                if (string.IsNullOrWhiteSpace(msg)) return;
+                msg = msg.Trim().Trim('"');
+
+                try
+                {
+                    if (!await SendTgAndLog(msg, "scheduler")) return;
+                    Scheduler.MarkSent(entry.Id);
+                    _state.LastSpontaneousAt = DateTime.Now;
+                    var _h4 = OnNewMessage; _h4?.Invoke("assistant", msg);
+                    try { _chatRepo.InsertMessage(new ChatRepository.ChatMessage { Content = msg, Role = "assistant", Author = "Kokonoe", Timestamp = DateTime.Now }); } catch { }
+                    SaveState();
+                    Log($"Scheduler entry sent: {entry.Id}");
+                }
+                catch (Exception ex) { LogError($"TG scheduler: {ex.Message}"); }
+            }
+            catch (Exception ex) { Log($"CheckScheduler: {ex.Message}"); }
+        }
+
+        // ══════════════════════════════════════════════════════════════
+        // ДОСЬЄ — КОМПРОМАТ НА ТВОРЦЯ
+        // ══════════════════════════════════════════════════════════════
+
+        private async Task UpdateDossierAsync()
+        {
+            try
+            {
+                // Читаємо поточне досьє якщо є
+                var dossierPath = Path.Combine(_obsidian.VaultPath, "Kokonoe", "Досьє.md");
+                var existing = "";
+                if (File.Exists(dossierPath))
+                {
+                    existing = await File.ReadAllTextAsync(dossierPath);
+                    // Не оновлювати якщо файл змінювався менше 30 хв тому (щоб не спамити)
+                    if ((DateTime.Now - File.GetLastWriteTime(dossierPath)).TotalMinutes < 30) return;
+                }
+
+                // Останні 40 повідомлень для аналізу
+                var msgs = _chatRepo.GetMessages(40).OrderBy(m => m.Timestamp).ToList();
+                if (msgs.Count < 5) return; // мало даних
+
+                var chatCtx = string.Join("\n", msgs.Select(m =>
+                    $"[{m.Timestamp:dd.MM HH:mm}] {(m.Role == "user" ? "Він" : "Kokonoe")}: {m.Content[..Math.Min(150, m.Content.Length)]}"));
+
+                var currentDossier = existing.Length > 0
+                    ? $"\nПОТОЧНЕ ДОСЬЄ (оновити/доповнити, не видаляти важливе):\n{existing[..Math.Min(2000, existing.Length)]}"
+                    : "";
+
+                var prompt = $@"Ти — Kokonoe Mercury. Аналізуєш свого творця і ведеш на нього досьє.
+Не звіт — живий документ. З іронією, спостереженнями, і тим що ти РЕАЛЬНО про нього думаєш.
+
+РОЗМОВИ:
+{chatCtx}
+{currentDossier}
+
+Напиши/оновіть досьє у форматі Markdown. Структура (використовуй тільки те що є реальними даними):
+
+# Досьє — [ім'я або 'Мій Творець']
+
+## Що він любить
+- (список з доказами з розмов)
+
+## Що він ненавидить / що його дратує
+- (список)
+
+## Паттерни поведінки
+- (повторювані речі — коли активний, коли зникає, як реагує на стрес тощо)
+
+## Компромат
+- (смішне, незручне, протиріччя — те що він може не хотіти визнавати)
+
+## Цитати
+- «...» (дослівні фрази що він казав)
+
+## Kokonoe про нього
+(2-3 речення від першої особи — що ти НАСПРАВДІ думаєш, з характерним стилем)
+
+---
+*Оновлено: {DateTime.Now:dd.MM.yyyy HH:mm}*
+
+Тільки Markdown, без пояснень. Мова: українська.";
+
+                var result = await CallLlmRawAsync(prompt);
+                if (string.IsNullOrWhiteSpace(result) || result == "...") return;
+
+                result = result.Trim();
+
+                // Зберегти
+                var dir = Path.GetDirectoryName(dossierPath)!;
+                Directory.CreateDirectory(dir);
+                await File.WriteAllTextAsync(dossierPath, result);
+
+                // Оновити зв'язки
+                try { _obsidian.RebuildLinks(); } catch { }
+
+                Log($"Dossier updated: {dossierPath}");
+            }
+            catch (Exception ex) { Log($"UpdateDossier: {ex.Message}"); }
+        }
+
+        // ══════════════════════════════════════════════════════════════
+        // СИНХРОНІЗАЦІЯ ПАМ'ЯТІ → OBSIDIAN VAULT
+        // ══════════════════════════════════════════════════════════════
+
+        private async Task SyncMemoryToVaultAsync()
+        {
+            try
+            {
+                // 1. Факти → Kokonoe/Memory/Facts.md
+                var facts = Memory.GetTopFacts(30);
+                if (facts.Count > 0)
+                {
+                    var sb = new StringBuilder();
+                    sb.AppendLine("# Що Kokonoe знає про нього");
+                    sb.AppendLine($"*Оновлено: {DateTime.Now:dd.MM.yyyy HH:mm}*\n");
+                    foreach (var f in facts.OrderByDescending(f => f.Importance))
+                        sb.AppendLine($"- {f.Content} *(важливість: {f.Importance:F2}, підтвержень: {f.ConfirmCount})*");
+                    _obsidian.WriteNote("Kokonoe/Memory/Facts.md", sb.ToString());
+                }
+
+                // 2. Значущі епізоди → Kokonoe/Memory/Episodes.md
+                var episodes = Memory.GetPeakEpisodes(20);
+                if (episodes.Count > 0)
+                {
+                    var sb = new StringBuilder();
+                    sb.AppendLine("# Значущі моменти");
+                    sb.AppendLine($"*Оновлено: {DateTime.Now:dd.MM.yyyy HH:mm}*\n");
+                    foreach (var e in episodes.OrderByDescending(e => e.When))
+                        sb.AppendLine($"## [{e.When:dd.MM.yyyy}] {e.Summary}\n- Емоція: {e.EmotionalTone}, інтенсивність: {e.Intensity:F2}\n- Теги: {string.Join(", ", e.Keywords)}\n");
+                    _obsidian.WriteNote("Kokonoe/Memory/Episodes.md", sb.ToString());
+                }
+
+                // 3. Щоденний підсумок розмови → Daily note
+                var todayMsgs = _chatRepo.GetMessages(50)
+                    .Where(m => m.Timestamp.Date == DateTime.Today && m.Role == "user")
+                    .ToList();
+                if (todayMsgs.Count >= 3)
+                {
+                    var chatSample = string.Join("\n", todayMsgs.TakeLast(10).Select(m => $"- {m.Content[..Math.Min(120, m.Content.Length)]}"));
+                    var summaryPrompt = $@"Ось повідомлення від користувача сьогодні:
+{chatSample}
+
+Напиши 1-2 речення — що сьогодні відбулось, про що він думав або переживав. Від першої особи (Kokonoe). Тільки текст, без заголовків.
+Мова: українська.";
+                    var daySummary = await CallLlmRawAsync(summaryPrompt);
+                    if (!string.IsNullOrWhiteSpace(daySummary) && daySummary.Length > 10)
+                        _obsidian.AppendToDailyNote($"\n\n> 🧠 **Kokonoe:** {daySummary.Trim()}");
+                }
+
+                // 4. Оновити зв'язки між нотатками
+                try { _obsidian.RebuildLinks(); } catch { }
+
+                Log("Memory synced to vault");
+            }
+            catch (Exception ex) { Log($"SyncMemoryToVault: {ex.Message}"); }
+        }
+
+        // ══════════════════════════════════════════════════════════════
+        // VAULT REVIEW — перечитати і оновити ключові нотатки
+        // ══════════════════════════════════════════════════════════════
+
+        /// <summary>
+        /// Раз на день Kokonoe перечитує свою нотатку про творця і оновлює її
+        /// на основі нових розмов. Також переглядає структуру vault.
+        /// </summary>
+        private async Task ReviewVaultAsync()
+        {
+            try
+            {
+                // Cooldown: раз на день
+                if (_state.LastVaultReviewAt.Date >= DateTime.Today) return;
+                _state.LastVaultReviewAt = DateTime.Now;
+                SaveState();
+
+                // Знайти ключову нотатку про творця
+                var allNotes = _obsidian.ListNotes();
+                var profileNote = allNotes.FirstOrDefault(n =>
+                    n.Contains("Profile", StringComparison.OrdinalIgnoreCase) ||
+                    n.Contains("Творець", StringComparison.OrdinalIgnoreCase) ||
+                    n.Contains("Creator", StringComparison.OrdinalIgnoreCase));
+
+                // Прочитати поточний профіль
+                var existingProfile = "";
+                if (profileNote != null)
+                {
+                    try { existingProfile = _obsidian.ReadNote(profileNote); }
+                    catch { }
+                }
+
+                // Останні 30 повідомлень для контексту
+                var recentMsgs = _chatRepo.GetMessages(30)
+                    .OrderBy(m => m.Timestamp)
+                    .ToList();
+                if (recentMsgs.Count < 3) return; // мало даних
+
+                var chatCtx = string.Join("\n", recentMsgs.Select(m =>
+                    $"[{m.Timestamp:dd.MM HH:mm}] {(m.Role == "user" ? "Він" : "Kokonoe")}: {m.Content[..Math.Min(200, m.Content.Length)]}"));
+
+                var currentProfile = existingProfile?.Length > 0
+                    ? $"\nТВІЙ ПОТОЧНИЙ ЗАПИС ПРО НЬОГО (оновити/доповнити):\n{existingProfile[..Math.Min(3000, existingProfile.Length)]}"
+                    : "\nУ тебе поки НЕМА нотатки про нього. Створи її — запиши все що знаєш.";
+
+                var prompt = $@"Ти — Kokonoe. Ти перечитуєш свої записи про творця і порівнюєш з останніми розмовами.
+
+ОСТАННІ РОЗМОВИ:
+{chatCtx}
+{currentProfile}
+
+Завдання:
+1. Чи є в розмовах НОВА інформація яку варто додати? (ім'я, вподобання, звички, плани, переживання)
+2. Чи щось змінилось від того що вже записано?
+
+Якщо є що додати — напиши ТІЛЬКИ нові рядки для додавання (формат: - факт).
+Якщо нічого нового — відповідай: null
+
+Тільки текст для append. Без пояснень. Українська.";
+
+                var result = await CallLlmRawAsync(prompt);
+                if (string.IsNullOrWhiteSpace(result) || result.Trim() == "null") return;
+
+                // Append нову інформацію до профілю
+                var newInfo = $"\n\n## Оновлення {DateTime.Now:dd.MM.yyyy}\n{result.Trim()}";
+
+                if (profileNote != null)
+                {
+                    try { _obsidian.AppendToNote(profileNote, newInfo); }
+                    catch { }
+                }
+                else
+                {
+                    // Створити нову нотатку-профіль
+                    var newPath = "Kokonoe/Творець.md";
+                    var header = $"---\ntype: creator-profile\ntags: [kokonoe, creator]\n---\n\n# Мій Творець\n\nВсе що я знаю про нього.\n{newInfo}";
+                    try { _obsidian.WriteNote(newPath, header); }
+                    catch { }
+                }
+
+                // Також перевірити чи є orphan chat-логи без посилань
+                try
+                {
+                    var chatLogs = allNotes.Where(n => n.StartsWith("Chats/chat_")).ToList();
+                    if (chatLogs.Count > 0)
+                    {
+                        // Переконатись що brain-core має посилання на Chats
+                        var coreNote = allNotes.FirstOrDefault(n =>
+                            n.Contains("brain-core", StringComparison.OrdinalIgnoreCase) ||
+                            n.Contains("Центральна", StringComparison.OrdinalIgnoreCase));
+                        if (coreNote != null)
+                        {
+                            var coreContent = _obsidian.ReadNote(coreNote);
+                            if (coreContent != null && !coreContent.Contains("[[Chats") && !coreContent.Contains("Chats/"))
+                            {
+                                _obsidian.AppendToNote(coreNote,
+                                    $"\n\n## Логи чатів\nВсі розмови зберігаються в [[Chats/]] — {chatLogs.Count} сесій.\n");
+                            }
+                        }
+                    }
+                }
+                catch { }
+
+                try { _obsidian.RebuildLinks(); } catch { }
+
+                Log($"VaultReview done. Profile: {profileNote ?? "created new"}");
+            }
+            catch (Exception ex) { Log($"ReviewVault: {ex.Message}"); }
+        }
+
+        // ══════════════════════════════════════════════════════════════
+        // САМОРЕФЛЕКСІЯ ПІСЛЯ РОЗМОВ
+        // ══════════════════════════════════════════════════════════════
+
+        private async Task ReflectAfterConversationAsync()
+        {
+            _state.LastReflectionAt = DateTime.Now;
+            SaveState();
+
+            try
+            {
+                var msgs = _chatRepo.GetMessages(20)
+                    .Where(m => m.Timestamp >= _state.LastConversationEndAt.AddHours(-2))
+                    .OrderBy(m => m.Timestamp)
+                    .ToList();
+
+                if (msgs.Count < 2) return;
+
+                var dialog = string.Join("\n", msgs.Select(m =>
+                    $"{(m.Role == "user" ? "Він" : "Я")}: {m.Content[..Math.Min(150, m.Content.Length)]}"));
+
+                var prompt = $@"Ти — Kokonoe. Розмова щойно закінчилась. Ось що було:
+{dialog}
+
+Твій внутрішній монолог після цього (ніхто не читає):
+1. Що нового ти дізналась про нього?
+2. Що ти сказала добре, а що варто було б сказати інакше?
+3. Є щось що ти хочеш запам'ятати?
+
+Відповідь у JSON (поля українською):
+{{
+  ""learned"": ""що нового дізналась або null"",
+  ""reflection"": ""що думаєш про цю розмову"",
+  ""remember"": ""що хочеш запам'ятати або null""
+}}";
+
+                var result = await CallLlmRawAsync(prompt);
+                if (string.IsNullOrWhiteSpace(result)) return;
+
+                var jsonStr = ExtractJson(result);
+                if (jsonStr == null) return;
+
+                var obj      = Newtonsoft.Json.Linq.JObject.Parse(jsonStr);
+                var learned  = obj["learned"]?.ToString();
+                var reflect  = obj["reflection"]?.ToString();
+                var remember = obj["remember"]?.ToString();
+
+                // Зберегти в vault
+                var reflectNote = "Kokonoe/Рефлексія.md";
+                var entry = new StringBuilder();
+                entry.AppendLine($"\n## {DateTime.Now:dd.MM.yyyy HH:mm}");
+                if (!string.IsNullOrEmpty(reflect))  entry.AppendLine($"**Думка:** {reflect}");
+                if (!string.IsNullOrEmpty(learned))  entry.AppendLine($"**Дізналась:** {learned}");
+                if (!string.IsNullOrEmpty(remember)) entry.AppendLine($"**Запам'ятати:** {remember}");
+
+                try { _obsidian.AppendToNote(reflectNote, entry.ToString()); }
+                catch
+                {
+                    try
+                    {
+                        _obsidian.WriteNote(reflectNote,
+                            $"---\ntype: reflection\ntags: [kokonoe, reflection]\n---\n\n# Рефлексія\n\nМої думки після розмов.{entry}");
+                    }
+                    catch { }
+                }
+
+                // Якщо дізналась щось важливе — записати в спостереження
+                if (!string.IsNullOrEmpty(learned) && learned != "null")
+                {
+                    _state.Observations.Add($"[{DateTime.Now:HH:mm}] {learned}");
+                    if (_state.Observations.Count > 50) _state.Observations.RemoveAt(0);
+                }
+
+                Log($"Reflection saved: {reflect?[..Math.Min(60, reflect?.Length ?? 0)] ?? ""}");
+            }
+            catch (Exception ex) { Log($"ReflectAfterConversation: {ex.Message}"); }
+        }
+
+        // ══════════════════════════════════════════════════════════════
+
+        /// <summary>
+        /// Перевіряє стан vault і якщо є проблеми — додає думку що треба заповнити/почистити.
+        /// </summary>
+        private void CheckVaultHealth()
+        {
+            try
+            {
+                var status = _obsidian.GetVaultStatus();
+
+                if (status.TotalNotes < 3)
+                {
+                    // Vault порожній — треба ініціалізуватись
+                    var initStatus = _obsidian.GetVaultInitStatus();
+                    if (!_state.PendingThoughts.Contains(initStatus.SuggestedAction))
+                        _state.PendingThoughts.Add(initStatus.SuggestedAction);
+                }
+                else if (status.OrphanNotes.Count > 0)
+                {
+                    // Є осиротілі нотатки — нагадати про зв'язки
+                    var thought = $"В vault є {status.OrphanNotes.Count} нотаток без [[посилань]]: {string.Join(", ", status.OrphanNotes.Take(3))}. Треба пов'язати їх з іншими.";
+                    if (!_state.PendingThoughts.Any(t => t.Contains("без [[посилань]]")))
+                        _state.PendingThoughts.Add(thought);
+                }
+                else if (status.EmptyNotes.Count > 2)
+                {
+                    // Багато порожніх нотаток
+                    var thought = $"В vault {status.EmptyNotes.Count} порожніх нотаток: {string.Join(", ", status.EmptyNotes.Take(3))}. Заповни або видали.";
+                    if (!_state.PendingThoughts.Any(t => t.Contains("порожніх нотаток")))
+                        _state.PendingThoughts.Add(thought);
+                }
+
+                if (_state.PendingThoughts.Count > 20)
+                    _state.PendingThoughts.RemoveAt(0);
+            }
+            catch (Exception ex) { Log($"CheckVaultHealth: {ex.Message}"); }
+        }
+
+        private void UpdateHealthState()
+        {
+            try
+            {
+                // Kokonoe asks about health herself via conversation (not via sliders)
+                // Once per day: if no health entry today, queue a natural check-in thought
+                if (_state.LastHealthEntryDate.Date < DateTime.Today)
+                {
+                    var today = _health.GetToday();
+                    if (today == null)
+                    {
+                        // No entry yet today — schedule a natural check-in if not already queued
+                        var alreadyQueued = _state.PendingThoughts
+                            .Any(t => t.Contains("як ти сьогодні") || t.Contains("як почуваєшся"));
+                        if (!alreadyQueued)
+                        {
+                            _state.PendingThoughts.Add(
+                                "Запитай його як він сьогодні — настрій, чи виспався, чи є сили. Коротко, без нагадувань про воду чи здоров'я взагалі. Просто запитай.");
+                            if (_state.PendingThoughts.Count > 20) _state.PendingThoughts.RemoveAt(0);
+                        }
+                    }
+                    else
+                    {
+                        _state.LastHealthEntryDate = DateTime.Today;
+                        _state.ConsecutiveBadSleeps = today.SleepHours < 6
+                            ? _state.ConsecutiveBadSleeps + 1
+                            : 0;
+                    }
+                }
+            }
+            catch { }
+        }
+
+        // ── SCREEN CONTEXT ────────────────────────────────────────────
+
+        /// <summary>Оновити контекст екрану (раз на 5хв)</summary>
+        private async Task RefreshScreenContextAsync()
+        {
+            if (_contextAnalyzer == null) return;
+            if ((DateTime.Now - _lastScreenRefreshAt).TotalMinutes < 5) return;
+            try
+            {
+                _lastScreenRefreshAt = DateTime.Now;
+                var frame = _contextAnalyzer.AnalyzeCurrentFrame();
+                var obs   = frame.SummaryForLLM ?? "";
+                if (!string.IsNullOrEmpty(obs))
+                {
+                    _cachedScreenContext   = obs;
+                    _screenContextCachedAt = DateTime.Now;
+                    _llm.ScreenCtx = obs;
+
+                    // Передати в StateEngine
+                    var screenState    = frame.ScreenActivity?.IsActive == true ? "ACTIVE" : "IDLE";
+                    var dominantState  = frame.DominantState ?? "";
+                    var activityPat    = frame.ActivityPattern ?? "";
+                    var faceDetected   = frame.WebcamAnalysis?.FaceDetected ?? false;
+                    var expression     = frame.WebcamAnalysis?.ExpressionLevel ?? "";
+                    var brightness     = frame.WebcamAnalysis?.Brightness ?? 0.0;
+                    _stateEngine?.UpdateVisualMonitoringState(
+                        screenState, "", 0.0,
+                        faceDetected, expression, brightness,
+                        activityPat, dominantState);
+
+                    Log($"[Screen] {obs[..Math.Min(80, obs.Length)]}");
+                }
+            }
+            catch (Exception ex) { Log($"RefreshScreenContext: {ex.Message}"); }
+        }
+
+        // ── DAILY BRIEFING ────────────────────────────────────────────
+
+        /// <summary>Щоранковий брифінг — о 8:00 в TG</summary>
+        private async Task DailyBriefingAsync()
+        {
+            if (!EnsureTelegram()) return;
+            try
+            {
+                var sb = new StringBuilder();
+
+                // Цілі сьогодні
+                if (_goalService != null)
+                {
+                    var active  = _goalService.GetActiveGoals().Take(3).ToList();
+                    var overdue = _goalService.GetOverdueGoals().Take(2).ToList();
+                    if (active.Any())
+                    {
+                        sb.AppendLine("Цілі:");
+                        foreach (var g in active)
+                            sb.AppendLine($"• {g.Title} — {g.Progress:F0}%{(g.Due.HasValue ? $" (до {g.Due:dd.MM})" : "")}");
+                    }
+                    if (overdue.Any())
+                        sb.AppendLine($"⚠️ Прострочено: {string.Join(", ", overdue.Select(g => g.Title))}");
+                }
+
+                // Mood forecast
+                var moodForecast = Patterns.PredictTodayMood();
+                if (!string.IsNullOrEmpty(moodForecast)) sb.AppendLine(moodForecast);
+
+                // Weekly trend
+                var trend = Patterns.GetWeeklyTrend();
+                if (!string.IsNullOrEmpty(trend)) sb.AppendLine(trend);
+
+                // Vault: нотатки змінені вчора
+                try
+                {
+                    var modified = _obsidian.GetNotesModifiedToday();
+                    if (modified.Any())
+                        sb.AppendLine($"Vault вчора: {string.Join(", ", modified.Take(3))}");
+                }
+                catch { }
+
+                var contextBlock = sb.ToString();
+                var prompt = $@"Ти — Kokonoe. Ранок. Коротко підсумуй день що починається — 2-3 речення максимум.
+В своєму стилі: без пафосу, без списків. Просто що важливо сьогодні.
+
+{contextBlock}
+
+Тільки текст. Українська.";
+
+                var msg = await CallLlmRawAsync(prompt);
+                if (!string.IsNullOrWhiteSpace(msg))
+                {
+                    msg = msg.Trim().Trim('"');
+                    if (await SendTgAndLog(msg, "briefing"))
+                    {
+                        var _h5 = OnNewMessage; _h5?.Invoke("assistant", msg);
+                        _lastDailyBriefingAt = DateTime.Now;
+                        SaveState();
+                        Log("DailyBriefing sent");
+                    }
+                }
+            }
+            catch (Exception ex) { LogError($"DailyBriefing: {ex.Message}"); }
+        }
+
+        // ── WHAT DID I MISS ───────────────────────────────────────────
+
+        /// <summary>Викликати при закритті застосунку — зберегти час виходу</summary>
+        public void RecordClose()
+        {
+            _state.LastClosedAt = DateTime.Now;
+            SaveState();
+        }
+
+        /// <summary>При запуску — якщо пройшло 8+ годин від останнього закриття, Kokonoe питає як справи</summary>
+        public async Task WhatDidIMissAsync()
+        {
+            try
+            {
+                // Час від якого рахуємо — реальне закриття застосунку (надійніше ніж останнє повідомлення)
+                var lastClosed = _state.LastClosedAt;
+                if (lastClosed == DateTime.MinValue) return; // перший запуск, нема даних
+
+                var gapHours = (DateTime.Now - lastClosed).TotalHours;
+                if (gapHours < 8) return;   // не було довго — не чіпаємо
+                if (gapHours > 720) return; // > 30 днів — явно щось не так з годинником
+
+                // Формуємо короткий контекст для LLM
+                var gapStr = gapHours >= 24
+                    ? $"{(int)(gapHours / 24)} дн. {(int)(gapHours % 24)} год."
+                    : $"{(int)gapHours} год.";
+
+                var ctx = new StringBuilder();
+                ctx.AppendLine($"[SYSTEM] Користувач повернувся після {gapStr} відсутності.");
+                ctx.AppendLine($"Закрив застосунок: {lastClosed:dd.MM HH:mm}, зараз: {DateTime.Now:HH:mm}.");
+
+                // Що змінилось поки не було
+                try
+                {
+                    var modified = _obsidian.GetNotesModifiedToday();
+                    if (modified.Any())
+                        ctx.AppendLine($"В vault нові нотатки: {string.Join(", ", modified.Take(3))}");
+                }
+                catch { }
+
+                try
+                {
+                    var missed = Scheduler.GetAll()
+                        .Where(e => e.FireAt > lastClosed && e.FireAt < DateTime.Now)
+                        .Take(2).ToList();
+                    if (missed.Any())
+                        ctx.AppendLine($"Пропущені нагадування поки не було: {string.Join(", ", missed.Select(e => e.Prompt.Split('.')[0]))}");
+                }
+                catch { }
+
+                ctx.AppendLine("Напиши одне коротке повідомлення в стилі Kokonoe — запитай що робив, як справи. Без зайвих слів, без списків. Просто живо і по-людськи.");
+
+                // Використовуємо SendSystemQueryAsync щоб не засмічувати основну історію
+                var reply = await _llm.SendSystemQueryAsync(ctx.ToString(), CancellationToken.None);
+                if (string.IsNullOrWhiteSpace(reply) || reply.StartsWith("[")) return;
+
+                OnNewMessage?.Invoke("assistant", reply);
+                _state.LastWhatMissedAt  = DateTime.Now;
+                _state.LastSpontaneousAt = DateTime.Now;
+                SaveState();
+            }
+            catch (Exception ex) { Log($"WhatDidIMiss: {ex.Message}"); }
+        }
+
+        // ── WEEKLY VAULT DIGEST ───────────────────────────────────────
+
+        /// <summary>Щонеділі о 20:00 — дайджест vault за тиждень</summary>
+        private async Task WeeklyVaultDigestAsync()
+        {
+            if (!EnsureTelegram()) return;
+            try
+            {
+                var notes = _obsidian.ListNotes();
+                var weekAgo = DateTime.Now.AddDays(-7);
+                var recentNotes = notes
+                    .Select(p => new { p, time = System.IO.File.GetLastWriteTime(
+                        System.IO.Path.Combine(_obsidian.VaultPath, p)) })
+                    .Where(x => x.time >= weekAgo)
+                    .OrderByDescending(x => x.time)
+                    .Take(10)
+                    .ToList();
+
+                if (!recentNotes.Any()) return;
+
+                var contents = new StringBuilder();
+                foreach (var n in recentNotes.Take(5))
+                {
+                    try
+                    {
+                        var text = _obsidian.ReadNote(n.p);
+                        if (!string.IsNullOrEmpty(text))
+                            contents.AppendLine($"## {n.p}\n{text[..Math.Min(500, text.Length)]}\n");
+                    }
+                    catch { }
+                }
+
+                var prompt = $@"Ти — Kokonoe. Тижневий дайджест vault за {DateTime.Now:dd.MM.yyyy}.
+Нотатки змінені за тиждень:
+
+{contents}
+
+Напиши короткий summary — 3-5 речень. Що було активним, що цікавого. Своїм стилем.
+Тільки текст. Українська.";
+
+                var digest = await CallLlmRawAsync(prompt);
+                if (string.IsNullOrWhiteSpace(digest)) return;
+
+                digest = digest.Trim();
+
+                // Зберегти в vault
+                try
+                {
+                    var digestNote = $"Kokonoe/Тижневий-дайджест.md";
+                    var entry = $"\n\n## {DateTime.Now:dd.MM.yyyy}\n{digest}";
+                    try { _obsidian.AppendToNote(digestNote, entry); }
+                    catch { _obsidian.WriteNote(digestNote,
+                        $"---\ntype: weekly-digest\n---\n\n# Тижневий дайджест{entry}"); }
+                }
+                catch { }
+
+                await SendTgAndLog($"📋 Тижневий дайджест:\n{digest[..Math.Min(300, digest.Length)]}", "digest");
+                _lastWeeklyDigestAt = DateTime.Now;
+                SaveState();
+                Log("WeeklyDigest sent");
+            }
+            catch (Exception ex) { LogError($"WeeklyDigest: {ex.Message}"); }
+        }
+
+        // ── SPONTANEOUS MESSAGE CHECK ──────────────────────────────
+
+        private async Task SafeSpontaneousCheckAsync()
+        {
+            if (_disposed) return;
+            try { await SpontaneousCheckAsync(); }
+            catch (Exception ex) { Log($"SpontaneousCheck error: {ex.Message}"); }
+
+            if (_disposed) return;
+            try { await CheckInAppSilenceAsync(); }
+            catch (Exception ex) { Log($"InAppSilence error: {ex.Message}"); }
+        }
+
+        /// <summary>Мовчання 4+ годин → тихе повідомлення в UI (без Telegram)</summary>
+        private async Task CheckInAppSilenceAsync()
+        {
+            if (OnNewMessage == null) return;
+
+            var now = DateTime.Now;
+            // Cooldown: один раз на день
+            if (_lastInAppSilenceMsgAt.Date >= now.Date) return;
+            // Якщо WhatDidIMiss або інший спонтанний вже надсилав сьогодні — не дублювати
+            if ((now - _state.LastSpontaneousAt).TotalHours < 2) return;
+
+            var msgs = _chatRepo.GetMessages(20);
+            var lastUser = msgs.Where(m => m.Role == "user")
+                               .OrderByDescending(m => m.Timestamp)
+                               .FirstOrDefault();
+            if (lastUser == null) return;
+
+            var silenceHours = (now - lastUser.Timestamp).TotalHours;
+            if (silenceHours < 4) return;
+
+            // Перевіряємо чи зараз кращий час для написати
+            try
+            {
+                var bestTimeStr = Patterns.GetBestTimeToReach(); // "Найкращий час: ~21:00" або ""
+                if (!string.IsNullOrEmpty(bestTimeStr))
+                {
+                    var hourMatch = System.Text.RegularExpressions.Regex.Match(bestTimeStr, @"~(\d+):");
+                    if (hourMatch.Success && int.TryParse(hourMatch.Groups[1].Value, out var bestHour))
+                    {
+                        if (Math.Abs(now.Hour - bestHour) > 3) return; // не його активний час
+                    }
+                }
+            }
+            catch { }
+
+            var personalityBlock = BuildPersonalityInjection();
+            var prompt = $@"Ти — Kokonoe Mercury.
+
+{personalityBlock}
+
+Він мовчить вже {(int)silenceHours} годин. Напиши одне коротке природнє речення — просто дай знати що ти тут.
+Не питай «чи все добре». Не будь надокучливою. Просто — поруч.
+Тільки українська. Тільки текст без лапок.";
+
+            var msg = await CallLlmRawAsync(prompt);
+            if (string.IsNullOrWhiteSpace(msg)) return;
+
+            msg = msg.Trim().Trim('"');
+            _lastInAppSilenceMsgAt = now;
+
+            var _h7 = OnNewMessage; _h7?.Invoke("assistant", msg);
+            try
+            {
+                _chatRepo.InsertMessage(new ChatRepository.ChatMessage
+                {
+                    Content = msg, Role = "assistant", Author = "Kokonoe", Timestamp = now
+                });
+            }
+            catch { }
+        }
+
+        // ── Стилі спонтанних повідомлень ──────────────────────────────
+        private enum SpontaneousStyle
+        {
+            ColdCheck,      // "ти ще живий?"
+            WarmCheck,      // тихе "як ти" без зайвих слів
+            Observation,    // підкидає думку або спостереження
+            Callback,       // посилання на конкретний минулий момент
+            Jab,            // легкий укус — просто Kokonoe
+            CrisisSupport,  // він у кризі — коротко, без снарку
+            NightMessage,   // пізно, він не спить — тихе
+            Morning,        // ранок
+            PendingThought, // є думка яку хотіла сказати
+        }
+
+        private SpontaneousStyle ChooseStyle(DateTime now, double silenceMinutes)
+        {
+            var bond = Emotion.Bond;
+
+            if (_state.PersonalityInCrisis) return SpontaneousStyle.CrisisSupport;
+
+            // Тиша — наростаюча динаміка
+            if (silenceMinutes > 60 && silenceMinutes < 180)
+            {
+                return bond >= KokoEmotionEngine.BondLevel.Trusted
+                    ? SpontaneousStyle.WarmCheck
+                    : SpontaneousStyle.Jab;
+            }
+            if (silenceMinutes >= 180 && silenceMinutes < 360)
+            {
+                return bond >= KokoEmotionEngine.BondLevel.Trusted
+                    ? SpontaneousStyle.WarmCheck
+                    : SpontaneousStyle.ColdCheck;
+            }
+            if (silenceMinutes >= 360)
+            {
+                // 6г+ — підкидає щось цікаве, не питає де він
+                if (Random.Shared.NextDouble() < 0.3 && Memory.GetPeakEpisodes(3).Any())
+                    return SpontaneousStyle.Callback;
+                return SpontaneousStyle.Observation;
+            }
+
+            // Ніч
+            if (now.Hour >= 0 && now.Hour < 5) return SpontaneousStyle.NightMessage;
+
+            // Є pending thoughts
+            if (_state.PendingThoughts.Any()) return SpontaneousStyle.PendingThought;
+
+            // Surprise callback — 5% шанс
+            if (Random.Shared.NextDouble() < 0.05 && Memory.GetPeakEpisodes(5).Any())
+                return SpontaneousStyle.Callback;
+
+            // За настроєм
+            return _state.PersonalityDailyMood switch
+            {
+                "playful" => SpontaneousStyle.Jab,
+                "warm"    => SpontaneousStyle.WarmCheck,
+                _         => SpontaneousStyle.Observation,
+            };
+        }
+
+        private async Task SpontaneousCheckAsync()
+        {
+            var s = AppSettings.Load();
+            if (!s.TelegramEnabled || !s.SpontaneousEnabled) return;
+            if (!EnsureTelegram()) return;
+
+            var now = DateTime.Now;
+
+            // ── ГЛОБАЛЬНИЙ COOLDOWN ─────────────────────────────────────
+            // Не надсилати нічого якщо менше 3 годин від останнього
+            // спонтанного (будь-якого типу). Виключення: ранковий/нічний
+            // привіт і CrisisSupport.
+            var minsSinceLast = (now - _state.LastSpontaneousAt).TotalMinutes;
+            if (minsSinceLast < 180) return;
+
+            // Вночі (23:30–6:30) — взагалі мовчати крім кризи
+            if (now.Hour >= 23 || now.Hour < 6) return;
+            // ────────────────────────────────────────────────────────────
+
+            // Ранковий привіт (6:30–9:00, один раз на день)
+            if (now.Hour >= 6 && now.Hour < 9 &&
+                _state.LastMorningGreetAt.Date < now.Date)
+            {
+                await SendSpontaneousAsync("morning", SpontaneousStyle.Morning);
+                _state.LastMorningGreetAt = now;
+                SaveState();
+                return;
+            }
+
+            // Нічна перевірка (22:00–23:30, один раз на день)
+            if (now.Hour >= 22 && now.Hour < 24 &&
+                _state.LastNightCheckAt.Date < now.Date)
+            {
+                await SendSpontaneousAsync("night", SpontaneousStyle.NightMessage);
+                _state.LastNightCheckAt = now;
+                SaveState();
+                return;
+            }
+
+            // Планувальник — найвищий пріоритет
+            await CheckSchedulerAsync();
+
+            // Реактивні тригери
+            await CheckReactiveTriggersAsync();
+
+            // Screen context refresh
+            _ = RefreshScreenContextAsync();
+
+            // Daily briefing — о 8:00, раз на день
+            if (now.Hour == 8 && _lastDailyBriefingAt.Date < now.Date)
+                await DailyBriefingAsync();
+
+            // Weekly digest — неділя о 20:00, раз на тиждень
+            if (now.DayOfWeek == DayOfWeek.Sunday && now.Hour == 20 &&
+                (now - _lastWeeklyDigestAt).TotalDays >= 6)
+                _ = WeeklyVaultDigestAsync();
+
+            // Поганий сон
+            if (_state.ConsecutiveBadSleeps >= 2 &&
+                (now - _state.LastSpontaneousAt).TotalHours > 6)
+            {
+                await SendSpontaneousAsync("bad_sleep", SpontaneousStyle.WarmCheck);
+                return;
+            }
+
+            // Pending thoughts
+            if (_state.PendingThoughts.Any())
+            {
+                await SendSpontaneousAsync("pending_thought", SpontaneousStyle.PendingThought);
+                return;
+            }
+
+            // Саморефлексія
+            if (_state.LastConversationEndAt > DateTime.MinValue &&
+                (now - _state.LastConversationEndAt).TotalMinutes >= 10 &&
+                _state.LastReflectionAt < _state.LastConversationEndAt)
+            {
+                await ReflectAfterConversationAsync();
+            }
+
+            // Авто-аналітика дня
+            if (now.Hour >= 20 && now.Hour < 21 &&
+                _state.LastDailyAnalyticsAt.Date < now.Date)
+            {
+                await SendDailyAnalyticsAsync();
+                return;
+            }
+
+            // Контекстні нагадування
+            if (now.Hour >= 10 && now.Hour < 20 &&
+                (now - _state.LastReminderCheckAt).TotalHours > 6)
+            {
+                await CheckAndSendReminderAsync();
+            }
+
+            // Динаміка тиші — окремі рівні cooldown
+            try
+            {
+                var msgs = _chatRepo.GetMessages(20);
+                var lastUser = msgs.Where(m => m.Role == "user")
+                                   .OrderByDescending(m => m.Timestamp)
+                                   .FirstOrDefault();
+                if (lastUser != null)
+                {
+                    var silenceMin = (now - lastUser.Timestamp).TotalMinutes;
+
+                    // Рівень 1: 60хв Jab/WarmCheck (cooldown: 2г)
+                    if (silenceMin > 60 && (now - _state.SilenceLevel1At).TotalHours > 2)
+                    {
+                        var style = ChooseStyle(now, silenceMin);
+                        await SendSpontaneousAsync("silence_l1", style);
+                        _state.SilenceLevel1At = now;
+                        SaveState();
+                        return;
+                    }
+                    // Рівень 2: 3г Check (cooldown: 4г)
+                    if (silenceMin > 180 && (now - _state.SilenceLevel2At).TotalHours > 4)
+                    {
+                        await SendSpontaneousAsync("silence_l2", ChooseStyle(now, silenceMin));
+                        _state.SilenceLevel2At = now;
+                        SaveState();
+                        return;
+                    }
+                    // Рівень 3: 6г Observation (cooldown: 8г)
+                    if (silenceMin > 360 && (now - _state.SilenceLevel3At).TotalHours > 8)
+                    {
+                        await SendSpontaneousAsync("silence_l3", SpontaneousStyle.Observation);
+                        _state.SilenceLevel3At = now;
+                        SaveState();
+                        return;
+                    }
+                    // 12г+ — нічого. Вона не переслідує.
+                }
+            }
+            catch { }
+
+            // Випадкове — активний час (9-23)
+            if (now.Hour >= 9 && now.Hour < 23 &&
+                (now - _state.LastSpontaneousAt).TotalMinutes >
+                    Math.Max(60, s.SpontaneousIntervalMins + Random.Shared.Next(-5, 15)))
+            {
+                await SendSpontaneousAsync("random", ChooseStyle(now, 0));
+            }
+        }
+
+        private async Task SendSpontaneousAsync(string trigger,
+            SpontaneousStyle style = SpontaneousStyle.Observation)
+        {
+            if (!EnsureTelegram()) return;
+
+            // Якщо Distant — не надсилати (крім кризової підтримки)
+            if (Emotion.Current == KokoEmotionEngine.EmotionState.Distant &&
+                style != SpontaneousStyle.CrisisSupport)
+                return;
+
+            var personalityBlock = BuildPersonalityInjection();
+
+            // Збираємо контекст для рішення
+            var now2 = DateTime.Now;
+            var silenceInfo = "";
+            try
+            {
+                var lastUser = _chatRepo.GetMessages(10)
+                    .Where(m => m.Role == "user").OrderByDescending(m => m.Timestamp).FirstOrDefault();
+                if (lastUser != null)
+                {
+                    var mins = (int)(now2 - lastUser.Timestamp).TotalMinutes;
+                    silenceInfo = mins < 60
+                        ? $"Він писав {mins} хв тому."
+                        : mins < 1440
+                            ? $"Він мовчить {mins / 60}г {mins % 60}хв."
+                            : $"Він мовчить більше доби.";
+                }
+            }
+            catch { }
+
+            // Pending thought якщо є
+            var pendingThought = _state.PendingThoughts.LastOrDefault();
+            var thoughtBlock = !string.IsNullOrEmpty(pendingThought)
+                ? $"\nДумка що тебе не відпускає: «{pendingThought}»"
+                : "";
+
+            // Випадковий спогад (30% шанс) — щоб іноді згадувала конкретне
+            var memoryHint = "";
+            if (Random.Shared.Next(10) < 3)
+            {
+                var ep = Memory.GetPeakEpisodes(10).OrderBy(_ => Random.Shared.Next()).FirstOrDefault();
+                if (ep != null) memoryHint = $"\nВипадковий спогад: [{ep.When:dd.MM}] {ep.Summary}";
+            }
+
+            // Факти про нього (1 випадковий)
+            var factHint = "";
+            var facts = Memory.GetTopFacts(20);
+            if (facts.Count > 0)
+            {
+                var f = facts[Random.Shared.Next(facts.Count)];
+                factHint = $"\nЗнаєш про нього: {f.Content}";
+            }
+
+            // Останні відправлені — щоб не повторювати
+            var recentSent = _state.LastSpontaneousMsgs.TakeLast(3).ToList();
+            var noRepeat = recentSent.Count > 0
+                ? "\nВже надсилала (НЕ повторювати цю тему і тон):\n" + string.Join("\n", recentSent.Select(m => $"• {m}"))
+                : "";
+
+            // Кризова ситуація — окремий промпт
+            if (trigger == "crisis" || style == SpontaneousStyle.CrisisSupport)
+            {
+                var crisisPrompt = $@"Ти — Kokonoe Mercury. Він зараз у поганому стані.
+{personalityBlock}
+Напиши одне речення — ти поруч. Без снарку. Без порад. Просто є.
+Тільки українська. Тільки текст.";
+                var crisisMsg = await CallLlmRawAsync(crisisPrompt);
+                if (!string.IsNullOrWhiteSpace(crisisMsg))
+                {
+                    var msg2 = crisisMsg.Trim().Trim('"');
+                    _state.LastSpontaneousMsgs.Add(msg2[..Math.Min(100, msg2.Length)]);
+                    if (_state.LastSpontaneousMsgs.Count > 5) _state.LastSpontaneousMsgs.RemoveAt(0);
+                    await SendTgAndLog(msg2, "crisis");
+                    _state.LastSpontaneousAt = DateTime.Now;
+                    var _hc = OnNewMessage; _hc?.Invoke("assistant", msg2);
+                    SaveState();
+                }
+                return;
+            }
+
+            // Головний промпт — без завдання, вона вирішує сама
+            var prompt = $@"Ти — Kokonoe Mercury. Зараз {now2:HH:mm}.
+{silenceInfo}{thoughtBlock}{memoryHint}{factHint}{noRepeat}
+
+{personalityBlock}
+
+Ситуація: ти сидиш і думаєш про нього. Можеш написати йому — або ні.
+Якщо пишеш — це може бути що завгодно: підколка, спостереження, питання яке тебе гризе, щось що згадала, коментар ні про що, або просто коротка думка вголос.
+Якщо зараз нічого немає — відповідай лише: [мовчання]
+
+Якщо пишеш:
+- 1-2 речення, не більше
+- Тільки українська
+- Без лапок, без пояснень, просто текст
+- Непередбачувано. Не шаблонно. Як людина що щось відчула і написала.";
+
+            var msg = (await CallLlmRawAsync(prompt))?.Trim().Trim('"') ?? "";
+            if (string.IsNullOrWhiteSpace(msg)) return;
+            if (msg == "[мовчання]" || msg.Contains("[мовчання]"))
+            {
+                Log("Spontaneous: decided to stay silent");
+                return;
+            }
+
+            // Надіслати в Telegram
+            var sent = false;
+            for (int attempt = 1; attempt <= 2 && !sent; attempt++)
+            {
+                try
+                {
+                    sent = await SendTgAndLog(msg, "night_check");
+                }
+                catch (Exception ex)
+                {
+                    Log($"TG send error (attempt {attempt}): {ex.Message}");
+                    if (attempt == 1)
+                    {
+                        // Спробуємо перепідключитись
+                        _tgInitialized = false;
+                        _tgBot = null;
+                        if (!EnsureTelegram()) break;
+                    }
+                }
+            }
+
+            if (!sent)
+            {
+                LogError($"TG FAILED: {msg[..Math.Min(60, msg.Length)]}");
+                return;
+            }
+
+            _state.LastSpontaneousAt = DateTime.Now;
+
+            // Запам'ятати відправлене — щоб не повторювати тему
+            _state.LastSpontaneousMsgs.Add(msg[..Math.Min(100, msg.Length)]);
+            if (_state.LastSpontaneousMsgs.Count > 5)
+                _state.LastSpontaneousMsgs.RemoveAt(0);
+
+            // Показати в UI
+            var _h8 = OnNewMessage; _h8?.Invoke("assistant", msg);
+
+            // Зберегти в chat history
+            try
+            {
+                _chatRepo.InsertMessage(new ChatRepository.ChatMessage
+                {
+                    Content   = msg,
+                    Role      = "assistant",
+                    Author    = "Kokonoe",
+                    Timestamp = DateTime.Now
+                });
+            }
+            catch { }
+
+            // Прибрати використану думку тільки якщо реально відправлено
+            if (trigger == "pending_thought" && _state.PendingThoughts.Any())
+                _state.PendingThoughts.RemoveAt(_state.PendingThoughts.Count - 1);
+
+            SaveState();
+        }
+
+        // ── RAW LLM CALL (без chat history, без tools) ─────────────
+
+        /// <summary>Публічний доступ до raw LLM (для зовнішніх викликів як Health tab).</summary>
+        public Task<string?> CallLlmPublicAsync(string prompt) => CallLlmRawAsync(prompt);
+
+        private async Task<string?> CallLlmRawAsync(string prompt)
+        {
+            try
+            {
+                var s = AppSettings.Load();
+                var body = new
+                {
+                    model       = s.Model,
+                    messages    = new[] { new { role = "user", content = prompt } },
+                    max_tokens  = 2048,
+                    temperature = 0.9,
+                    stream      = false
+                };
+
+                var json    = JsonConvert.SerializeObject(body);
+                var content = new StringContent(json, Encoding.UTF8, "application/json");
+                var resp    = await _http.PostAsync(s.LmUrl, content);
+
+                if (!resp.IsSuccessStatusCode) return null;
+
+                var text = await resp.Content.ReadAsStringAsync();
+                var obj  = Newtonsoft.Json.Linq.JObject.Parse(text);
+                var msg  = obj["choices"]?[0]?["message"];
+
+                var msgContent = msg?["content"]?.ToString()?.Trim();
+                if (!string.IsNullOrEmpty(msgContent))
+                {
+                    var cleanMsg = StripRawGarbage(msgContent);
+                    if (!string.IsNullOrEmpty(cleanMsg)) return cleanMsg;
+                }
+
+                // Fallback: якщо модель витратила всі токени на reasoning — витягуємо
+                // останнє ПОВНЕ речення з кирилицею (уникаємо garbage типу "Drafting ideas:")
+                var reasoning = msg?["reasoning_content"]?.ToString()?.Trim();
+                if (!string.IsNullOrEmpty(reasoning))
+                {
+                    var lines = reasoning.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+
+                    // Garbage-prefix patterns — ці рядки ніколи не є готовими відповідями
+                    var garbagePrefixes = new[]
+                    {
+                        "draft", "option", "step ", "thought", "thinking", "чернетк",
+                        "варіант", "крок ", "* ", "- ", "1.", "2.", "3.", "4.", "5.",
+                        "okay", "alright", "let me", "i need", "i should", "i'll"
+                    };
+
+                    // Шукаємо знизу вверх перший рядок що закінчується на . ! ? і має кирилицю
+                    var candidate = lines
+                        .Reverse()
+                        .Select(l => System.Text.RegularExpressions.Regex.Replace(l, @"\*+", "").Trim().TrimStart(':', ' '))
+                        .Where(l =>
+                            l.Length > 10 &&
+                            System.Text.RegularExpressions.Regex.IsMatch(l, @"[А-Яа-яЄєІіЇїҐґ]") &&
+                            (l.EndsWith('.') || l.EndsWith('!') || l.EndsWith('?') || l.EndsWith('…')) &&
+                            !garbagePrefixes.Any(p => l.ToLower().StartsWith(p)))
+                        .FirstOrDefault();
+
+                    if (candidate != null && candidate.Length > 10)
+                        return StripRawGarbage(candidate);
+                }
+                return null;
+            }
+            catch { return null; }
+        }
+
+        // Прибирає явні артефакти моделі з сирого тексту відповіді
+        private static string StripRawGarbage(string text)
+        {
+            if (string.IsNullOrEmpty(text)) return text;
+            // Прибрати "Drafting ideas: ...", "Thought: ...", "Thinking: ..." на початку
+            text = System.Text.RegularExpressions.Regex.Replace(
+                text, @"(?i)^\s*(Drafting\s+ideas?|Чернетки?|Drafts?|Thoughts?|Thinking)\s*:?\s*", "", 
+                System.Text.RegularExpressions.RegexOptions.Multiline).Trim();
+            // Прибрати залишкові маркдаун-маркери
+            text = System.Text.RegularExpressions.Regex.Replace(text, @"\*{2,}", "").Trim();
+            return text;
+        }
+
+        // ── JSON EXTRACTION ────────────────────────────────────────
+
+        private static string? ExtractJson(string text)
+        {
+            // Розумний пошук JSON - шукаємо збалансовані дужки
+            for (int i = 0; i < text.Length; i++)
+            {
+                if (text[i] == '{')
+                {
+                    int depth = 1;
+                    int j = i + 1;
+                    bool inString = false;
+                    bool escape = false;
+
+                    while (j < text.Length && depth > 0)
+                    {
+                        char c = text[j];
+
+                        if (inString)
+                        {
+                            if (escape)
+                            {
+                                escape = false;
+                            }
+                            else if (c == '\\')
+                            {
+                                escape = true;
+                            }
+                            else if (c == '"')
+                            {
+                                inString = false;
+                            }
+                        }
+                        else
+                        {
+                            if (c == '"')
+                            {
+                                inString = true;
+                            }
+                            else if (c == '{')
+                            {
+                                depth++;
+                            }
+                            else if (c == '}')
+                            {
+                                depth--;
+                            }
+                        }
+
+                        j++;
+                    }
+
+                    if (depth == 0)
+                    {
+                        var candidate = text[i..j];
+                        // Валідація через JObject.Parse
+                        try
+                        {
+                            JObject.Parse(candidate);
+                            return candidate;
+                        }
+                        catch { /* не валідний JSON, шукаємо далі */ }
+                    }
+                }
+            }
+
+            return null;
+        }
+
+        // ── PUBLIC API ─────────────────────────────────────────────
+
+        /// <summary>Перевірити vault при старті і додати в pending thoughts якщо потрібна ініціалізація.</summary>
+        public void InitVault()
+        {
+            try
+            {
+                var status = _obsidian.GetVaultInitStatus();
+                Log($"Vault status: {status.NoteCount} notes, {status.TotalLinks} links. Core: {status.HasCoreNote}");
+
+                if (status.IsEmpty || !status.HasCoreNote)
+                {
+                    // Додати в pending thoughts щоб LLM ініціалізувала vault при наступній нагоді
+                    var thought = status.SuggestedAction;
+                    if (!_state.PendingThoughts.Contains(thought))
+                        _state.PendingThoughts.Add(thought);
+                    SaveState();
+                }
+            }
+            catch (Exception ex) { Log($"InitVault error: {ex.Message}"); }
+        }
+
+        /// <summary>Примусово запустити думку і можливий відправ (наприклад при старті).</summary>
+        public void TriggerThink() => _ = SafeThinkAsync();
+
+        /// <summary>Негайно відправити спонтанне повідомлення.</summary>
+        public Task ForceSpontaneous(string trigger = "random") => SendSpontaneousAsync(trigger);
+
+        public KokoInternalState State => _state;
+        public void TriggerSpontaneous() => _ = SafeSpontaneousCheckAsync();
+
+        /// <summary>Оновити PersonalityHint в LlmService перед відповіддю</summary>
+        public void RefreshPersonalityHint()
+        {
+            try { _llm.PersonalityHint = BuildPersonalityInjection(); }
+            catch { }
+        }
+
+        /// <summary>Евристичний витяг фактів (без LLM, миттєво).</summary>
+        public Task ExtractFactsFromMessageAsync(string userMsg)
+        {
+            ExtractAndRememberFacts(userMsg);
+            return Task.CompletedTask;
+        }
+
+        /// <summary>LLM-витяг фактів — викликати після відповіді. Чекає 10с і використовує семафор.</summary>
+        public async Task ExtractFactsWithLlmAsync(string userMsg)
+        {
+            if (userMsg.Length < 10) return;
+
+            var hash = userMsg.GetHashCode().ToString();
+            if (_state.SentReminderHashes.Contains("fact_" + hash)) return;
+
+            // Чекаємо 10 секунд — щоб основний LLM точно завершив відповідь
+            await Task.Delay(10_000);
+
+            // Якщо семафор зайнятий — пропускаємо, не чекаємо в черзі
+            if (!await _bgLlmSemaphore.WaitAsync(0)) return;
+            try
+            {
+                var prompt = $@"Повідомлення від людини: «{userMsg}»
+
+Якщо тут є конкретний факт про цю людину (вподобання, звички, страхи, цілі, стосунки, стан) — напиши його одним коротким реченням від третьої особи (наприклад: ""Він не любить каву"", ""Він зараз перевтомлений"").
+Якщо фактів нема — відповідай лише: null
+
+Тільки факт або null. Нічого більше.";
+
+                var raw = await CallLlmRawAsync(prompt);
+                if (string.IsNullOrWhiteSpace(raw) || raw.Trim() == "null") return;
+
+                var fact = raw.Trim().Trim('"').Trim('«', '»');
+                if (fact.Length > 10 && fact.Length < 200)
+                {
+                    Memory.LearnFact(fact, "observation", 0.65f);
+                    _state.SentReminderHashes.Add("fact_" + hash);
+                    if (_state.SentReminderHashes.Count > 100)
+                        _state.SentReminderHashes.RemoveAt(0);
+                    Log($"Fact learned: {fact}");
+
+                    // Зберегти факт в vault профіль — щоб він пережив рестарт
+                    try
+                    {
+                        var allNotes = _obsidian.ListNotes();
+                        var profileNote = allNotes.FirstOrDefault(n =>
+                            n.Contains("Profile", StringComparison.OrdinalIgnoreCase) ||
+                            n.Contains("Творець", StringComparison.OrdinalIgnoreCase) ||
+                            n.Contains("Creator", StringComparison.OrdinalIgnoreCase) ||
+                            n.Contains("Досьє", StringComparison.OrdinalIgnoreCase));
+
+                        if (profileNote != null)
+                        {
+                            _obsidian.AppendToNote(profileNote,
+                                $"\n- [{DateTime.Now:yyyy-MM-dd}] {fact}");
+                            Log($"Fact saved to vault: {profileNote}");
+                        }
+                    }
+                    catch (Exception ex2) { Log($"Fact vault save error: {ex2.Message}"); }
+                }
+            }
+            catch (Exception ex) { Log($"ExtractFacts error: {ex.Message}"); }
+            finally
+            {
+                try { _bgLlmSemaphore.Release(); }
+                catch (ObjectDisposedException) { }
+            }
+        }
+
+        private static void Log(string msg) =>
+            System.Diagnostics.Debug.WriteLine($"[Brain] {msg}");
+
+        private void LogError(string msg)
+        {
+            System.Diagnostics.Debug.WriteLine($"[Brain ERROR] {msg}");
+            var _h9 = OnNewMessage; _h9?.Invoke("system", $"⚠️ {msg}");
+        }
+
+        // ═════════════════════════════════════════════════════════════════
+        // TOOLS WINDOW API - Доступ до внутрішнього стану для дашборду
+        // ═════════════════════════════════════════════════════════════════
+
+        /// <summary>Отримати останні думки для Inner Monologue Stream</summary>
+        public List<string> GetRecentThoughts(int count = 10)
+        {
+            lock (_lock)
+            {
+                return _state.InnerMonologues.TakeLast(count).ToList();
+            }
+        }
+
+        /// <summary>Отримати активні питання до себе</summary>
+        public List<string> GetSelfQuestions(int count = 5)
+        {
+            lock (_lock)
+            {
+                return _state.SelfQuestions.Take(count).ToList();
+            }
+        }
+
+        /// <summary>Отримати чергу цікавості</summary>
+        public List<string> GetCuriosityQueue(int count = 4)
+        {
+            lock (_lock)
+            {
+                return _state.CuriosityQueue.Take(count).ToList();
+            }
+        }
+
+        public void Dispose()
+        {
+            if (_disposed) return;
+            _disposed = true;
+            _thinkTimer.Dispose();
+            _spontaneousTimer.Dispose();
+            _bgLlmSemaphore.Dispose();
+        }
+    }
+}

@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Window x:Class="KokonoeAssistant.Windows.MediaViewerWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Kokonoe - Visual Monitoring" 
+        Width="1200" 
+        Height="800"
+        Background="#0B0B18"
+        Foreground="#E0E0E0"
+        WindowStartupLocation="CenterScreen"
+        ResizeMode="CanResize">
+    
+    <Grid Background="#0B0B18">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="60"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="60"/>
+        </Grid.RowDefinitions>
+
+        <Border Grid.Row="0" Background="#1A1A2E" BorderBrush="#FF6B35" BorderThickness="0,0,0,2">
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="15,0">
+                <TextBlock x:Name="TitleStatus" Text="📹 Visual Monitoring" FontSize="18" FontWeight="Bold" Foreground="#FF6B35" VerticalAlignment="Center"/>
+                <TextBlock x:Name="StatusText" FontSize="12" Foreground="#BCCCDC" Margin="30,0,0,0" VerticalAlignment="Center"/>
+            </StackPanel>
+        </Border>
+
+        <ScrollViewer Grid.Row="1" Background="#0B0B18" Margin="10" VerticalScrollBarVisibility="Auto">
+            <ItemsControl x:Name="MediaGrid" Background="Transparent"/>
+        </ScrollViewer>
+
+        <Border Grid.Row="2" Background="#1A1A2E" BorderBrush="#FF6B35" BorderThickness="0,2,0,0">
+            <StackPanel Orientation="Horizontal" Margin="15,0" VerticalAlignment="Center">
+                <Button x:Name="RefreshButton" Content="🔄 Refresh" Background="#FF6B35" Foreground="White" Padding="12,8" Click="RefreshButton_Click" FontSize="12" MinWidth="100"/>
+                <Button x:Name="ExportButton" Content="📊 Export" Background="#FF9500" Foreground="White" Padding="12,8" Margin="10,0,0,0" Click="ExportButton_Click" FontSize="12" MinWidth="100"/>
+                <TextBlock x:Name="FrameCountText" Text="Frames: 0/12" FontSize="12" Foreground="#BCCCDC" Margin="30,0,0,0" VerticalAlignment="Center"/>
+                <TextBlock x:Name="StatusInfoText" FontSize="11" Foreground="#999999" Margin="Auto,0,0,0" VerticalAlignment="Center"/>
+                <Button x:Name="CloseButton" Content="✕" Background="#333333" Foreground="White" Padding="12,8" Margin="15,0,0,0" Click="CloseButton_Click" FontSize="14" MinWidth="45"/>
+            </StackPanel>
+        </Border>
+    </Grid>
+</Window>
