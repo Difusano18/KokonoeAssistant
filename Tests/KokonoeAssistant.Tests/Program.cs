@@ -18,6 +18,7 @@ internal static class Program
             Run("Self regulation protects vulnerable tone", SelfRegulationProtectsVulnerableTone);
             Run("Initiative respects low-power silence", InitiativeRespectsLowPowerSilence);
             Run("Initiative reacts to protective override", InitiativeReactsToProtectiveOverride);
+            Run("Inspector renders state report", InspectorRendersStateReport);
 
             Console.WriteLine($"PASS {_passed} tests");
             return 0;
@@ -152,6 +153,62 @@ internal static class Program
 
         AssertTrue(decision.ShouldAct, "protective override should create initiative");
         AssertEqual("self_regulation_protect", decision.Trigger, "protect trigger should win");
+    }
+
+    private static void InspectorRendersStateReport()
+    {
+        using var ctx = TestContext.Create();
+        ctx.Memory.LearnFact("User builds Kokonoe as a personal assistant", "project", 0.8f);
+        ctx.Memory.RecordEpisode("Somatic layer was added", "focused", 0.7f);
+
+        var internalState = new KokoInternalState
+        {
+            PersonalityDailyMood = "focused",
+            MoodScore = 0.64f,
+            LastUserEmotionalTone = "seeking",
+            LastInitiativeDecision = "act:self_regulation_protect"
+        };
+        internalState.CuriosityQueue.Add("What should I optimize next?");
+        internalState.InnerMonologues.Add("[somatic/focus] Signal is clean. Work mode.");
+
+        var somatic = new KokoSomaticSnapshot
+        {
+            State = "focused",
+            Label = "active baseline",
+            BehaviorHint = "task-first",
+            Bpm = 72,
+            BaselineBpm = 64,
+            BpmDelta = 8,
+            Strain = 0.42,
+            Calm = 0.55,
+            Volatility = 0.20
+        };
+        var selfReg = new KokoSelfRegulationFrame
+        {
+            Reaction = "clean_focus",
+            Regulation = "focus",
+            PrivateThought = "Signal is clean. Work mode.",
+            BehaviorDirective = "structured, decisive"
+        };
+
+        var inspector = new KokoStateInspectorService();
+        var snapshot = inspector.Capture(
+            internalState,
+            ctx.Emotion,
+            ctx.Relationship,
+            ctx.Memory,
+            somatic,
+            selfReg,
+            new[] { "act:self_regulation_protect" },
+            new[] { "clean_focus/focus: Signal is clean." });
+
+        var markdown = inspector.ToMarkdown(snapshot);
+        var json = inspector.ToJson(snapshot);
+
+        AssertTrue(markdown.Contains("Kokonoe State Inspector"), "markdown should have inspector title");
+        AssertTrue(markdown.Contains("## Somatic"), "markdown should include somatic section");
+        AssertTrue(markdown.Contains("## Top Facts"), "markdown should include facts");
+        AssertTrue(json.Contains("\"Somatic\""), "json should include somatic object");
     }
 
     private static void Run(string name, Action test)

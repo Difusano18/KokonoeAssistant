@@ -5,10 +5,6 @@ VisualStudioVersion = 17.5.2.0
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "KokonoeAssistant", "KokonoeAssistant.csproj", "{1418BA35-541C-2036-EFF0-F188E21AC09C}"
 EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Tests", "Tests", "{0AB3BF05-4346-4AA6-1389-037BE0695223}"
-EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "KokonoeAssistant.Tests", "Tests\KokonoeAssistant.Tests\KokonoeAssistant.Tests.csproj", "{7410F444-FA59-49D2-B9A6-C65EF21CD75F}"
-EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -31,24 +27,9 @@ Global
 		{1418BA35-541C-2036-EFF0-F188E21AC09C}.Release|x64.Build.0 = Release|Any CPU
 		{1418BA35-541C-2036-EFF0-F188E21AC09C}.Release|x86.ActiveCfg = Release|Any CPU
 		{1418BA35-541C-2036-EFF0-F188E21AC09C}.Release|x86.Build.0 = Release|Any CPU
-		{7410F444-FA59-49D2-B9A6-C65EF21CD75F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{7410F444-FA59-49D2-B9A6-C65EF21CD75F}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{7410F444-FA59-49D2-B9A6-C65EF21CD75F}.Debug|x64.ActiveCfg = Debug|Any CPU
-		{7410F444-FA59-49D2-B9A6-C65EF21CD75F}.Debug|x64.Build.0 = Debug|Any CPU
-		{7410F444-FA59-49D2-B9A6-C65EF21CD75F}.Debug|x86.ActiveCfg = Debug|Any CPU
-		{7410F444-FA59-49D2-B9A6-C65EF21CD75F}.Debug|x86.Build.0 = Debug|Any CPU
-		{7410F444-FA59-49D2-B9A6-C65EF21CD75F}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{7410F444-FA59-49D2-B9A6-C65EF21CD75F}.Release|Any CPU.Build.0 = Release|Any CPU
-		{7410F444-FA59-49D2-B9A6-C65EF21CD75F}.Release|x64.ActiveCfg = Release|Any CPU
-		{7410F444-FA59-49D2-B9A6-C65EF21CD75F}.Release|x64.Build.0 = Release|Any CPU
-		{7410F444-FA59-49D2-B9A6-C65EF21CD75F}.Release|x86.ActiveCfg = Release|Any CPU
-		{7410F444-FA59-49D2-B9A6-C65EF21CD75F}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
-	EndGlobalSection
-	GlobalSection(NestedProjects) = preSolution
-		{7410F444-FA59-49D2-B9A6-C65EF21CD75F} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {F1D1DD08-F087-4768-839A-BE7A13544F37}

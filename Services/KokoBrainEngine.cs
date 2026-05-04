@@ -134,6 +134,7 @@ namespace KokonoeAssistant.Services
         public readonly KokoInitiativeEngine Initiative;
         public readonly KokoSomaticEngine Somatic;
         public readonly KokoSomaticSelfRegulationEngine SelfRegulator;
+        public readonly KokoStateInspectorService Inspector;
 
         // ── Зовнішні сервіси (опціональні) ───────────────────────────
         private EnhancedMemory?    _enhanced;
@@ -206,6 +207,7 @@ namespace KokonoeAssistant.Services
             Initiative = new KokoInitiativeEngine();
             Somatic = new KokoSomaticEngine();
             SelfRegulator = new KokoSomaticSelfRegulationEngine();
+            Inspector = new KokoStateInspectorService();
 
             // Підключити нові сервіси в LLM
             _llm.Memory    = Memory;
@@ -3618,6 +3620,38 @@ namespace KokonoeAssistant.Services
             {
                 return SelfRegulator.GetRecentLines(_state.SelfRegulation, count).ToList();
             }
+        }
+
+        public KokoStateInspectorSnapshot CaptureInspectorSnapshot()
+        {
+            lock (_lock)
+            {
+                var somatic = GetSomaticSnapshot();
+                var selfRegulation = GetSelfRegulationFrame(somatic);
+                return Inspector.Capture(
+                    _state,
+                    Emotion,
+                    Relationship,
+                    Memory,
+                    somatic,
+                    selfRegulation,
+                    GetInitiativeReasonLog(10).ToArray(),
+                    GetSelfRegulationLog(10).ToArray());
+            }
+        }
+
+        public string BuildInspectorMarkdown() => Inspector.ToMarkdown(CaptureInspectorSnapshot());
+        public string BuildInspectorJson() => Inspector.ToJson(CaptureInspectorSnapshot());
+
+        public void ExportInspectorToVault()
+        {
+            try
+            {
+                var snapshot = CaptureInspectorSnapshot();
+                _obsidian.WriteNote("Kokonoe/Inspector.md", Inspector.ToMarkdown(snapshot));
+                _obsidian.WriteNote("Kokonoe/Inspector.json", Inspector.ToJson(snapshot));
+            }
+            catch (Exception ex) { Log($"ExportInspectorToVault: {ex.Message}"); }
         }
 
         public void Dispose()

@@ -3680,6 +3680,8 @@ namespace KokonoeAssistant
                     });
                 }
 
+                try { brain.ExportInspectorToVault(); } catch { }
+
                 // 2. Recent observations from today's vault daily note
                 try
                 {
