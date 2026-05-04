@@ -219,6 +219,12 @@ namespace KokonoeAssistant
         private readonly Queue<double> _heartRR = new(); // last RR intervals (ms)
         private DateTime _lastBeatTime = DateTime.MinValue;
 
+        // ECG real-time animation
+        private System.Windows.Threading.DispatcherTimer? _ecgAnimTimer;
+        private double[] _ecgBuffer = Array.Empty<double>();
+        private double _ecgPhase; // 0..1 within current beat
+        private double _ecgLastBpm = 60;
+
         private void SetupHeartUI()
         {
             try
@@ -242,9 +248,12 @@ namespace KokonoeAssistant
                 heart.BpmChanged += bpm => Dispatcher.InvokeAsync(() =>
                 {
                     HeartBpmText.Text = $"{bpm:0} bpm";
+                    _ecgLastBpm = bpm;
                     PushHeartSample(bpm);
                     DrawHeartBpmGraph();
                     UpdateHeartStats(bpm);
+                    if (PulseTab.Visibility == Visibility.Visible)
+                        UpdatePulseTabNumbers();
                 });
                 heart.Beat += bpm => Dispatcher.InvokeAsync(() =>
                 {
@@ -605,34 +614,62 @@ namespace KokonoeAssistant
             try
             {
                 var now = DateTime.Now;
-                var timeOfDay = now.Hour switch
+
+                // Беремо останні повідомлення З timestamp
+                var recent = new List<Services.ChatRepository.ChatMessage>();
+                try { recent = ServiceContainer.ChatRepository.GetMessages(10).OrderBy(x => x.Timestamp).TakeLast(6).ToList(); }
+                catch { }
+
+                // Розраховуємо gap від останнього повідомлення
+                var lastMsgAt = recent.Count > 0 ? recent[^1].Timestamp : (DateTime?)null;
+                var gapMinutes = lastMsgAt.HasValue ? (now - lastMsgAt.Value).TotalMinutes : (double?)null;
+
+                var gapDesc = gapMinutes switch
                 {
-                    >= 5  and < 9  => "ранок",
-                    >= 9  and < 12 => "першу половину дня",
-                    >= 12 and < 17 => "день",
-                    >= 17 and < 21 => "вечір",
-                    _              => "ніч"
+                    null                => "невідомо коли було закрито",
+                    < 5                 => "щойно закрив і одразу відкрив",
+                    < 30                => $"{(int)gapMinutes.Value} хвилин тому",
+                    < 90                => $"~{(int)(gapMinutes.Value / 60)} годину тому",
+                    < 60 * 6            => $"~{(int)(gapMinutes.Value / 60)} години тому",
+                    < 60 * 16           => $"~{(int)(gapMinutes.Value / 60)} годин тому (скоріш за все спав)",
+                    _                   => $"~{(int)(gapMinutes.Value / 60)} годин тому (давно)"
                 };
+
+                var recentCtx = "";
+                if (recent.Count > 0)
+                {
+                    var lines = recent.Select(m =>
+                        $"[{m.Timestamp:HH:mm}] {(m.Role == "user" ? "Він" : "Ти")}: {(m.Content.Length > 150 ? m.Content[..150] + "…" : m.Content)}");
+                    recentCtx = $"Остання сесія (з часовими мітками):\n{string.Join("\n", lines)}\n";
+                }
 
                 var brainObs = "";
                 try
                 {
                     var st = ServiceContainer.BrainEngine.State;
                     if (st.Observations.Any())
-                        brainObs = st.Observations.TakeLast(2).Last();
+                        brainObs = $"Твоє останнє спостереження: {st.Observations.TakeLast(2).Last()}\n";
                 }
                 catch { }
 
-                var prompt = $@"Зараз {now:HH:mm}, {timeOfDay}. Дата: {now:dd MMMM yyyy}.
+                // Підказка залежно від gap
+                var gapHint = gapMinutes switch
+                {
+                    null   => "Немає попередньої сесії. Перший запуск або чистий старт.",
+                    < 5    => "Він тільки-но перезапустив — скоріш за все технічна причина. Одне коротке речення, без привітань.",
+                    < 60   => "Він відкрив через короткий час. Якщо в кінці сесії було щось незавершене — прокоментуй. Без 'привіт'.",
+                    < 60*8 => "Пройшло кілька годин. Можливо він займався справами. НЕ питай чи спав — він явно не спав. Відповідай на останній контекст розмови, якщо він є.",
+                    _      => "Пройшло багато часу — він спав або був далеко. Якщо є незавершена тема з останньої сесії — підніми її. Не кажи банальних 'привіт' і не питай 'ти спав?'."
+                };
 
-{(string.IsNullOrEmpty(brainObs) ? "" : $"Твоє останнє спостереження: {brainObs}\n")}
+                var prompt = $@"Зараз {now:HH:mm}, {now:dd MMMM yyyy}.
+Додаток був закритий: {gapDesc}.
 
-Ти — Kokonoe Mercury. Твій творець щойно відкрив додаток.
-Напиши коротке вітальне повідомлення — 1-2 речення. Природньо, в своєму стилі.
-Без ""Привіт"" як перше слово. Враховуй час доби.
-Тільки текст, без лапок.";
+{recentCtx}{brainObs}
+ІНСТРУКЦІЯ: {gapHint}
+Напиши 1-2 речення в своєму стилі. Тільки текст, без лапок.";
 
-                return await _llm.SendAsync(prompt, ct: CancellationToken.None) ?? "";
+                return await _llm.SendSystemQueryAsync(prompt, CancellationToken.None) ?? "";
             }
             catch { return ""; }
         }
@@ -651,6 +688,11 @@ namespace KokonoeAssistant
             HealthTab.Visibility   = Visibility.Collapsed;
             ToolsTab.Visibility    = Visibility.Collapsed;
             TelegramTab.Visibility = Visibility.Collapsed;
+            MemoryTab.Visibility   = Visibility.Collapsed;
+            PulseTab.Visibility    = Visibility.Collapsed;
+            VoiceTab.Visibility    = Visibility.Collapsed;
+            SandboxTab.Visibility  = Visibility.Collapsed;
+            StopEcgAnimation();
 
             // Reset tab styles
             TabBtnChat.Style     = (Style)FindResource("BtnTab");
@@ -658,6 +700,10 @@ namespace KokonoeAssistant
             TabBtnHealth.Style   = (Style)FindResource("BtnTab");
             TabBtnTools.Style    = (Style)FindResource("BtnTab");
             TabBtnTelegram.Style = (Style)FindResource("BtnTab");
+            TabBtnMemory.Style   = (Style)FindResource("BtnTab");
+            TabBtnPulse.Style    = (Style)FindResource("BtnTab");
+            TabBtnVoice.Style    = (Style)FindResource("BtnTab");
+            TabBtnSandbox.Style  = (Style)FindResource("BtnTab");
 
             var active = (Style)FindResource("BtnTabActive");
 
@@ -697,7 +743,335 @@ namespace KokonoeAssistant
                     TabBtnTelegram.Style = active;
                     _activeTab = "Telegram";
                     break;
+                case "TabBtnMemory":
+                    MemoryTab.Visibility = Visibility.Visible;
+                    TabBtnMemory.Style = active;
+                    _activeTab = "Memory";
+                    MemTabRefreshData();
+                    break;
+                case "TabBtnPulse":
+                    PulseTab.Visibility = Visibility.Visible;
+                    TabBtnPulse.Style = active;
+                    _activeTab = "Pulse";
+                    Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Loaded, () => UpdatePulseTab());
+                    break;
+                case "TabBtnVoice":
+                    VoiceTab.Visibility = Visibility.Visible;
+                    TabBtnVoice.Style = active;
+                    _activeTab = "Voice";
+                    break;
+                case "TabBtnSandbox":
+                    SandboxTab.Visibility = Visibility.Visible;
+                    TabBtnSandbox.Style = active;
+                    _activeTab = "Sandbox";
+                    break;
             }
+
+            RightPanel.Visibility = _activeTab == "Tools" ? Visibility.Visible : Visibility.Collapsed;
+        }
+
+        // ══════════════════════════════════════════════════════════
+        // MEMORY TAB
+        // ══════════════════════════════════════════════════════════
+
+        private void MemTabRefresh_Click(object sender, RoutedEventArgs e) => MemTabRefreshData();
+
+        private void MemTabRefreshData()
+        {
+            try
+            {
+                var mem = ServiceContainer.KokoMemory;
+                if (mem == null) return;
+                var all = mem.Facts;
+                var facts = all.OrderByDescending(f => f.Importance).Take(60).ToList();
+                MemTabTotalText.Text     = all.Count.ToString();
+                MemTabConfirmedText.Text = all.Count(f => f.ConfirmCount > 1).ToString();
+                MemTabHighImpText.Text   = all.Count(f => f.Importance >= 0.7f).ToString();
+                MemTabCatCountText.Text  = all.Select(f => f.Category).Distinct().Count().ToString();
+                MemTabFactsList.ItemsSource = facts.Select(f => new
+                {
+                    Text           = f.Content,
+                    Category       = f.Category ?? "general",
+                    ImportanceLabel = $"imp {f.Importance:F2}",
+                    ConfirmLabel   = $"×{f.ConfirmCount}",
+                }).ToList();
+            }
+            catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[MemTab] {ex.Message}"); }
+        }
+
+        // ══════════════════════════════════════════════════════════
+        // PULSE TAB
+        // ══════════════════════════════════════════════════════════
+
+        private void PulseTab_SizeChanged(object sender, SizeChangedEventArgs e)
+        {
+            // Resize: reinitialise buffer to match new canvas width
+            var canvas = PulseEcgCanvas;
+            if (canvas == null) return;
+            int newSize = Math.Max(2, (int)(canvas.ActualWidth));
+            if (newSize != _ecgBuffer.Length)
+                _ecgBuffer = new double[newSize];
+        }
+
+        private void UpdatePulseTab()
+        {
+            StartEcgAnimation();
+            UpdatePulseTabNumbers();
+        }
+
+        private void UpdatePulseTabNumbers()
+        {
+            try
+            {
+                var heart = ServiceContainer.Heart;
+                if (heart == null) return;
+                var cur = heart.CurrentBpm;
+                PulseTabBpmBig.Text   = cur > 0 ? $"{cur:0}" : "—";
+                PulseTabCurText.Text  = cur > 0 ? $"{cur:0.0}" : "—";
+                PulseTabBaseText.Text = $"{heart.BaselineBpm:0.0}";
+
+                if (_heartRR.Count >= 4)
+                {
+                    var arr = _heartRR.ToArray();
+                    double sumSq = 0; int n = 0;
+                    for (int i = 1; i < arr.Length; i++) { var d = arr[i] - arr[i-1]; sumSq += d*d; n++; }
+                    PulseTabHrvText.Text = $"{Math.Sqrt(sumSq / Math.Max(1, n)):0.0}";
+                }
+
+                if (_heartHistory.Count > 0)
+                {
+                    double mn = double.MaxValue, mx = double.MinValue;
+                    foreach (var (_, b) in _heartHistory) { if (b < mn) mn = b; if (b > mx) mx = b; }
+                    PulseTabMinMaxText.Text = $"{mn:0} / {mx:0}";
+                }
+
+                PulseVitalLog.ItemsSource = _heartHistory.ToArray().Reverse().Take(30)
+                    .Select(h => new { TimeStr = h.t.ToString("HH:mm:ss"), BpmStr = $"{h.bpm:0} bpm" })
+                    .ToList();
+            }
+            catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[PulseTab] {ex.Message}"); }
+        }
+
+        // ── ECG REAL-TIME ANIMATION ─────────────────────────────────
+        private const double EcgFps       = 40.0;  // frames per second
+        private const double EcgScrollPps = 120.0; // pixels per second scroll speed
+
+        private void StartEcgAnimation()
+        {
+            if (_ecgAnimTimer != null) return;
+
+            var canvas = PulseEcgCanvas;
+            if (canvas == null) return;
+            int bufSize = Math.Max(2, (int)canvas.ActualWidth);
+            if (_ecgBuffer.Length != bufSize)
+                _ecgBuffer = new double[bufSize];
+
+            _ecgAnimTimer = new System.Windows.Threading.DispatcherTimer
+            {
+                Interval = TimeSpan.FromMilliseconds(1000.0 / EcgFps)
+            };
+            _ecgAnimTimer.Tick += EcgAnimTimer_Tick;
+            _ecgAnimTimer.Start();
+        }
+
+        private void StopEcgAnimation()
+        {
+            if (_ecgAnimTimer == null) return;
+            _ecgAnimTimer.Stop();
+            _ecgAnimTimer.Tick -= EcgAnimTimer_Tick;
+            _ecgAnimTimer = null;
+        }
+
+        private void EcgAnimTimer_Tick(object? sender, EventArgs e)
+        {
+            var canvas = PulseEcgCanvas;
+            if (canvas == null || canvas.ActualWidth < 2) return;
+
+            int bufSize = (int)canvas.ActualWidth;
+            if (_ecgBuffer.Length != bufSize)
+                _ecgBuffer = new double[bufSize];
+
+            double bpm = Math.Max(30, _ecgLastBpm);
+
+            // How many pixels to scroll this frame
+            double pixelsThisFrame = EcgScrollPps / EcgFps;
+            // How much of a beat cycle per pixel
+            double phasePerPixel = (bpm / 60.0) / EcgScrollPps;
+
+            int steps = Math.Max(1, (int)Math.Round(pixelsThisFrame));
+            for (int s = 0; s < steps; s++)
+            {
+                // Shift buffer left by 1
+                Array.Copy(_ecgBuffer, 1, _ecgBuffer, 0, _ecgBuffer.Length - 1);
+                // Advance phase
+                _ecgPhase = (_ecgPhase + phasePerPixel) % 1.0;
+                // Generate ECG sample for this phase
+                _ecgBuffer[_ecgBuffer.Length - 1] = EcgSample(_ecgPhase);
+            }
+
+            DrawEcgBuffer(canvas, bpm);
+        }
+
+        private static double EcgSample(double p)
+        {
+            // p: 0..1 normalised position within one heartbeat
+            // Returns value in [-0.15, 1.0]
+            if (p < 0.10) // P wave
+                return 0.15 * Math.Sin(p / 0.10 * Math.PI);
+            if (p < 0.17) // PR segment
+                return 0;
+            if (p < 0.20) // Q dip
+                return -0.15 * Math.Sin((p - 0.17) / 0.03 * Math.PI);
+            if (p < 0.25) // R spike up
+                return Math.Sin((p - 0.20) / 0.05 * Math.PI);
+            if (p < 0.30) // S dip
+                return -0.20 * Math.Sin((p - 0.25) / 0.05 * Math.PI);
+            if (p < 0.45) // ST segment
+                return 0;
+            if (p < 0.65) // T wave
+                return 0.30 * Math.Sin((p - 0.45) / 0.20 * Math.PI);
+            return 0; // rest (diastole)
+        }
+
+        private void DrawEcgBuffer(Canvas canvas, double bpm)
+        {
+            canvas.Children.Clear();
+            double w = canvas.ActualWidth, h = canvas.ActualHeight;
+            if (w < 2 || h < 2) return;
+
+            // Grid line at centre
+            canvas.Children.Add(new System.Windows.Shapes.Line
+            {
+                X1 = 0, X2 = w, Y1 = h * 0.5, Y2 = h * 0.5,
+                Stroke = new SolidColorBrush(MediaColor.FromArgb(25, 255, 77, 109)),
+                StrokeThickness = 0.5,
+                StrokeDashArray = new DoubleCollection { 4, 6 }
+            });
+
+            var poly = new System.Windows.Shapes.Polyline
+            {
+                Stroke = new SolidColorBrush(MediaColor.FromRgb(0xFF, 0x4D, 0x6D)),
+                StrokeThickness = 1.8,
+                Effect = new System.Windows.Media.Effects.DropShadowEffect
+                {
+                    Color = MediaColor.FromRgb(0xFF, 0x4D, 0x6D),
+                    ShadowDepth = 0, BlurRadius = 8, Opacity = 0.55
+                }
+            };
+
+            // Map [-0.20, 1.0] → [h*0.90, h*0.05]
+            const double ampLo = -0.25, ampHi = 1.05;
+            double ampRng = ampHi - ampLo;
+            double mid = h * 0.5;
+
+            for (int i = 0; i < _ecgBuffer.Length; i++)
+            {
+                double norm = (_ecgBuffer[i] - ampLo) / ampRng; // 0..1
+                double y = h - norm * h * 0.85 - h * 0.075;    // padded
+                poly.Points.Add(new System.Windows.Point(i, y));
+            }
+            canvas.Children.Add(poly);
+
+            // Glowing head dot at the right edge
+            var lastY = h - ((_ecgBuffer[^1] - ampLo) / ampRng) * h * 0.85 - h * 0.075;
+            var dot = new System.Windows.Shapes.Ellipse
+            {
+                Width = 6, Height = 6,
+                Fill = new SolidColorBrush(MediaColor.FromRgb(0xFF, 0x4D, 0x6D)),
+                Effect = new System.Windows.Media.Effects.DropShadowEffect
+                {
+                    Color = MediaColor.FromRgb(0xFF, 0x4D, 0x6D),
+                    ShadowDepth = 0, BlurRadius = 12, Opacity = 0.9
+                }
+            };
+            Canvas.SetLeft(dot, w - 7);
+            Canvas.SetTop(dot, lastY - 3);
+            canvas.Children.Add(dot);
+        }
+
+        private void DrawPulseEcg()
+        {
+            // Legacy: only called if animation isn't running
+            if (_ecgAnimTimer?.IsEnabled == true) return;
+            var canvas = PulseEcgCanvas;
+            if (canvas == null || _ecgBuffer.Length < 2) return;
+            DrawEcgBuffer(canvas, _ecgLastBpm);
+        }
+
+        // ══════════════════════════════════════════════════════════
+        // SANDBOX TAB
+        // ══════════════════════════════════════════════════════════
+
+        private async void SandboxRun_Click(object sender, RoutedEventArgs e)
+        {
+            var prompt = SandboxInput.Text.Trim();
+            if (string.IsNullOrEmpty(prompt)) return;
+            SandboxOutput.Text = "// running...";
+            try
+            {
+                var result = await _llm.SendAsync(prompt, ct: CancellationToken.None);
+                SandboxOutput.Text = result ?? "(empty response)";
+            }
+            catch (Exception ex) { SandboxOutput.Text = $"// error: {ex.Message}"; }
+        }
+
+        private void SandboxClear_Click(object sender, RoutedEventArgs e)
+        {
+            SandboxInput.Clear();
+            SandboxOutput.Text = "—";
+        }
+
+        // ══════════════════════════════════════════════════════════
+        // MCP ENHANCED CATALOG
+        // ══════════════════════════════════════════════════════════
+
+        private void McpSyncNotes_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var recent = _obsidian.GetNotesModifiedToday();
+                McpOutput.Text = recent.Count == 0
+                    ? "No notes modified today."
+                    : $"Modified today ({recent.Count}):\n" + string.Join("\n", recent);
+            }
+            catch (Exception ex) { McpOutput.Text = $"Error: {ex.Message}"; }
+        }
+
+        private void McpRecentNotes_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var notes = _obsidian.ListNotes();
+                var recent = notes.Take(20).ToList();
+                McpOutput.Text = $"Recent notes ({recent.Count}):\n" + string.Join("\n", recent);
+            }
+            catch (Exception ex) { McpOutput.Text = $"Error: {ex.Message}"; }
+        }
+
+        private void McpBacklinks_Click(object sender, RoutedEventArgs e)
+        {
+            var path = Microsoft.VisualBasic.Interaction.InputBox("Note path for backlinks:", "Backlinks", "");
+            if (string.IsNullOrWhiteSpace(path)) return;
+            try
+            {
+                var links = _obsidian.GetBacklinks(path);
+                McpOutput.Text = links.Count == 0
+                    ? "No backlinks found."
+                    : $"Backlinks ({links.Count}):\n" + string.Join("\n", links);
+            }
+            catch (Exception ex) { McpOutput.Text = $"Error: {ex.Message}"; }
+        }
+
+        private void McpIsolated_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var isolated = _obsidian.GetIsolatedNotes();
+                McpOutput.Text = isolated.Count == 0
+                    ? "No isolated notes."
+                    : $"Isolated ({isolated.Count}):\n" + string.Join("\n", isolated.Take(30));
+            }
+            catch (Exception ex) { McpOutput.Text = $"Error: {ex.Message}"; }
         }
 
         // ══════════════════════════════════════════════════════════
@@ -955,12 +1329,33 @@ namespace KokonoeAssistant
             }
             catch { }
 
+            // 1.5 Емоційний стан — безпосередньо впливає на тон відповіді
+            try
+            {
+                var emotHint = ServiceContainer.BrainEngine?.Emotion?.GetPromptHint();
+                if (!string.IsNullOrEmpty(emotHint))
+                    parts.Add((emotHint, 2));
+            }
+            catch { }
+
             // 2. Стан (емоції, здоров'я, scheduler) — важливо але менше
             try
             {
                 var stateCtx = ServiceContainer.StateEngine.GetStateAsContext();
                 if (!string.IsNullOrEmpty(stateCtx))
-                    parts.Add((stateCtx, 2));
+                    parts.Add((stateCtx, 3));
+            }
+            catch { }
+
+            // 2.1 Пульс — завжди в контексті щоб Kokonoe реагувала на зміни
+            try
+            {
+                var heart = ServiceContainer.Heart;
+                var bpm = heart.CurrentBpm;
+                var baseline = heart.BaselineBpm;
+                var diff = bpm - baseline;
+                var bpmNote = diff > 15 ? " ↑ підвищений" : diff < -10 ? " ↓ нижче базового" : "";
+                parts.Add(($"=== ПУЛЬС ===\nПоточний: {bpm:0.0} bpm{bpmNote} | Базовий: {baseline:0.0} bpm", 2));
             }
             catch { }
 
@@ -983,7 +1378,54 @@ namespace KokonoeAssistant
             }
             catch { }
 
-            // 3. Vault — найменш пріоритетне, тільки ключові нотатки
+            // 3. Здоров'я — агреговані показники за тиждень
+            try
+            {
+                var healthCtx = ServiceContainer.HealthService.GetHealthContext();
+                if (!string.IsNullOrWhiteSpace(healthCtx) && !healthCtx.StartsWith("No health data"))
+                    parts.Add((healthCtx.Trim(), 4));
+            }
+            catch { }
+
+            // 3.1 Цілі та активні звички
+            try
+            {
+                var goals = ServiceContainer.GoalService.GetActiveGoals();
+                var habits = ServiceContainer.HabitService.GetActiveHabits();
+                if (goals.Count > 0 || habits.Count > 0)
+                {
+                    var ghLines = new System.Collections.Generic.List<string>();
+                    if (goals.Count > 0)
+                        ghLines.Add("Цілі: " + string.Join(", ", goals.Take(4).Select(g => $"{g.Title} ({g.Progress:0}%)")));
+                    if (habits.Count > 0)
+                        ghLines.Add("Звички: " + string.Join(", ", habits.Take(5).Select(h => h.Name)));
+                    parts.Add(("=== ЦІЛІ/ЗВИЧКИ ===\n" + string.Join("\n", ghLines), 5));
+                }
+            }
+            catch { }
+
+            // 3.2 Когнітивний контекст
+            try
+            {
+                var cogCtx = ServiceContainer.BrainEngine?.Cognition?.BuildCognitionContext();
+                if (!string.IsNullOrEmpty(cogCtx))
+                    parts.Add((cogCtx, 5));
+            }
+            catch { }
+
+            // 3.3 EnhancedMemory — структуровані факти про користувача
+            try
+            {
+                var enhMem = ServiceContainer.EnhancedMemory.GetMemoryAsContext();
+                if (!string.IsNullOrWhiteSpace(enhMem))
+                {
+                    if (enhMem.Length > 800) enhMem = enhMem[..800];
+                    parts.Add((enhMem.Trim(), 6));
+                }
+            }
+            catch { }
+
+            // 4. Vault — ключові нотатки
             try
             {
                 var allNotes = _obsidian.ListNotes();
@@ -1004,7 +1446,16 @@ namespace KokonoeAssistant
                     vaultLines.Add("Daily: є");
 
                 if (vaultLines.Count > 0)
-                    parts.Add(("=== VAULT ===\n" + string.Join(" | ", vaultLines), 3));
+                    parts.Add(("=== VAULT ===\n" + string.Join(" | ", vaultLines), 7));
+            }
+            catch { }
+
+            // 5. Прогноз (ML.NET) — настрій/енергія на завтра
+            try
+            {
+                var forecast = ServiceContainer.Predictor.GetForecastContext();
+                if (!string.IsNullOrEmpty(forecast))
+                    parts.Add((forecast.Trim(), 8));
             }
             catch { }
 
@@ -1761,12 +2212,8 @@ namespace KokonoeAssistant
                 var bmp = WClipboard.GetImage();
                 if (bmp == null) return;
 
-                using var ms = new MemoryStream();
-                var encoder = new PngBitmapEncoder();
-                encoder.Frames.Add(BitmapFrame.Create(bmp));
-                encoder.Save(ms);
-                _imgBytes = ms.ToArray();
-                _imgMime  = "image/png";
+                _imgBytes = CompressImageSourceForLlm(bmp);
+                _imgMime  = "image/jpeg";
 
                 var bi = new BitmapImage();
                 bi.BeginInit();
@@ -1801,8 +2248,8 @@ namespace KokonoeAssistant
         {
             try
             {
-                _imgBytes = File.ReadAllBytes(path);
-                _imgMime  = Path.GetExtension(path).ToLower() == ".png" ? "image/png" : "image/jpeg";
+                _imgBytes = CompressImageForLlm(File.ReadAllBytes(path));
+                _imgMime  = "image/jpeg";
 
                 var bi = new BitmapImage();
                 bi.BeginInit();
@@ -1819,6 +2266,47 @@ namespace KokonoeAssistant
             {
                 WMsgBox.Show($"Не вдалося завантажити зображення: {ex.Message}");
             }
+        }
+
+        // Стискає зображення до maxPx і конвертує в JPEG — зменшує base64 payload для LLM
+        private static byte[] CompressImageForLlm(byte[] raw, int maxPx = 1024, int jpegQuality = 78)
+        {
+            try
+            {
+                using var input = new MemoryStream(raw);
+                var src = BitmapFrame.Create(input, BitmapCreateOptions.None, BitmapCacheOption.OnLoad);
+                BitmapSource resized = src;
+                if (src.PixelWidth > maxPx || src.PixelHeight > maxPx)
+                {
+                    double scale = Math.Min((double)maxPx / src.PixelWidth, (double)maxPx / src.PixelHeight);
+                    resized = new TransformedBitmap(src, new ScaleTransform(scale, scale));
+                }
+                using var output = new MemoryStream();
+                var enc = new JpegBitmapEncoder { QualityLevel = jpegQuality };
+                enc.Frames.Add(BitmapFrame.Create(resized));
+                enc.Save(output);
+                return output.ToArray();
+            }
+            catch { return raw; }
+        }
+
+        private static byte[] CompressImageSourceForLlm(BitmapSource src, int maxPx = 1024, int jpegQuality = 78)
+        {
+            try
+            {
+                BitmapSource resized = src;
+                if (src.PixelWidth > maxPx || src.PixelHeight > maxPx)
+                {
+                    double scale = Math.Min((double)maxPx / src.PixelWidth, (double)maxPx / src.PixelHeight);
+                    resized = new TransformedBitmap(src, new ScaleTransform(scale, scale));
+                }
+                using var output = new MemoryStream();
+                var enc = new JpegBitmapEncoder { QualityLevel = jpegQuality };
+                enc.Frames.Add(BitmapFrame.Create(resized));
+                enc.Save(output);
+                return output.ToArray();
+            }
+            catch { return Array.Empty<byte>(); }
         }
 
         private void ShowImagePreview(string label)
@@ -2388,9 +2876,26 @@ namespace KokonoeAssistant
 
         private void DashUpdateClock()
         {
-            DashClockText.Text = DateTime.Now.ToString("HH:mm");
-            var days = (int)(DateTime.Now - new DateTime(2024, 4, 6)).TotalDays;
+            var now = DateTime.Now;
+            DashClockText.Text = now.ToString("HH:mm");
+            var days = (int)(now - new DateTime(2024, 4, 6)).TotalDays;
             DashDateText.Text = $"день {days} цього експерименту";
+
+            // Status bar timestamp
+            StatusTimestamp.Text = now.ToString("yyyy-MM-dd HH:mm:ss");
+
+            // Sidebar footer
+            try
+            {
+                var proc = System.Diagnostics.Process.GetCurrentProcess();
+                var ramMb = proc.WorkingSet64 / 1024 / 1024;
+                SideFootRam.Text = $"{ramMb} MB";
+                var uptime = now - proc.StartTime;
+                SideFootUptime.Text = uptime.TotalHours >= 1
+                    ? $"{(int)uptime.TotalHours}h {uptime.Minutes}m"
+                    : $"{uptime.Minutes}m {uptime.Seconds}s";
+            }
+            catch { }
         }
 
         private void DashRefreshLive()
@@ -4099,7 +4604,7 @@ tags: [kokonoe, dashboard, live]
                         var fileInfo  = await bot.GetFile(bestPhoto.FileId, ct);
                         using var ms  = new System.IO.MemoryStream();
                         await bot.DownloadFile(fileInfo.FilePath!, ms, ct);
-                        var imgBytes = ms.ToArray();
+                        var imgBytes = CompressImageForLlm(ms.ToArray());
 
                         var prompt = string.IsNullOrWhiteSpace(caption)
                             ? "Що на цьому зображенні? Прокоментуй коротко."
@@ -4712,6 +5217,17 @@ tags: [kokonoe, dashboard, live]
                 return;
             }
 
+            // Dispose old client first — він тримає tg_session.dat відкритим
+            var oldSvc = ServiceContainer.TelegramUser;
+            if (oldSvc != null)
+            {
+                ServiceContainer.TelegramUser = null;
+                try { oldSvc.Dispose(); } catch { }
+                _tgUserCts.Cancel();
+                _tgUserCts = new CancellationTokenSource();
+                await Task.Delay(300); // даємо WTelegramClient відпустити файл
+            }
+
             try
             {
                 var dataDir = System.IO.Path.Combine(
@@ -4936,6 +5452,7 @@ tags: [kokonoe, dashboard, live]
                     SP_UrlHint.Text   = "Локальна Ollama. Дефолт: http://localhost:11434/v1/chat/completions";
                     SP_ModelBox.Text  = string.IsNullOrWhiteSpace(s.Model) ? "llama3.2" : s.Model;
                     SP_ModelHint.Text = "Назва локальної моделі (напр. llama3.2, qwen2.5, mistral). Має бути запущена в `ollama serve`.";
+                    SP_VisionModelBox.Text = s.VisionModel;
                     break;
 
                 case "ollama-cloud":
@@ -4951,6 +5468,7 @@ tags: [kokonoe, dashboard, live]
 
                     SP_ModelBox.Text  = string.IsNullOrWhiteSpace(s.OllamaModel) ? "gpt-oss:120b-cloud" : s.OllamaModel;
                     SP_ModelHint.Text = "Хмарна модель — обов'язково з суфіксом :cloud. Напр. gpt-oss:120b-cloud, qwen3-coder:480b-cloud, deepseek-v3.1:671b-cloud.";
+                    SP_VisionModelBox.Text = s.VisionModel;
 
                     StartPoolRefreshTimer();
                     break;
@@ -4963,6 +5481,7 @@ tags: [kokonoe, dashboard, live]
                     SP_ApiKeyHint.Text   = "Отримай ключ на https://console.anthropic.com/settings/keys.";
                     SP_ModelBox.Text     = string.IsNullOrWhiteSpace(s.ClaudeModel) ? "claude-sonnet-4-20250514" : s.ClaudeModel;
                     SP_ModelHint.Text    = "Напр. claude-sonnet-4-20250514, claude-opus-4-20250514, claude-3-5-sonnet-20241022.";
+                    SP_VisionModelBox.Text = s.VisionModel;
                     HighlightApiKey();
                     break;
 
@@ -4974,6 +5493,7 @@ tags: [kokonoe, dashboard, live]
                     SP_UrlHint.Text   = "LM Studio. Дефолт: http://localhost:1234/v1/chat/completions";
                     SP_ModelBox.Text  = string.IsNullOrWhiteSpace(s.Model) ? "google/gemma-4-26b-a4b" : s.Model;
                     SP_ModelHint.Text = "Точна назва моделі з LM Studio (вкладка Local Server → Loaded Model).";
+                    SP_VisionModelBox.Text = s.VisionModel;
                     break;
             }
         }
@@ -5140,6 +5660,7 @@ tags: [kokonoe, dashboard, live]
                     _panelSettings.ClaudeModel  = SP_ModelBox.Text.Trim();
                     break;
             }
+            _panelSettings.VisionModel = SP_VisionModelBox.Text.Trim();
         }
 
         private void SP_ApiKey_TextChanged(object sender, System.Windows.Controls.TextChangedEventArgs e)
@@ -5192,6 +5713,7 @@ tags: [kokonoe, dashboard, live]
                 s.OllamaPoolRotateAt     = _panelSettings.OllamaPoolRotateAt;
                 s.OllamaPoolCooldownMins = _panelSettings.OllamaPoolCooldownMins;
                 s.OllamaActiveKeyIndex   = _panelSettings.OllamaActiveKeyIndex;
+                s.VisionModel            = _panelSettings.VisionModel;
             }
             s.LlmProvider = provider;
 
@@ -5306,6 +5828,7 @@ tags: [kokonoe, dashboard, live]
         {
             try
             {
+                StopEcgAnimation();
                 _llmCts?.Cancel();
                 _tgCts?.Cancel();
                 _tgUserCts?.Cancel();

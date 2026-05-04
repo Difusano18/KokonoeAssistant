@@ -48,183 +48,7 @@
             </Setter>
         </Style>
 
-        <!-- ─── BUTTON: Primary ────────────────────────────────── -->
-        <Style x:Key="BtnPrimary" TargetType="Button">
-            <Setter Property="Background"      Value="{DynamicResource AccentPrimary}"/>
-            <Setter Property="Foreground"      Value="{DynamicResource Brush_030B05}"/>
-            <Setter Property="BorderThickness" Value="0"/>
-            <Setter Property="FontSize"        Value="12"/>
-            <Setter Property="FontWeight"      Value="Bold"/>
-            <Setter Property="Cursor"          Value="Hand"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="Button">
-                        <Border x:Name="bd" Background="{TemplateBinding Background}"
-                                CornerRadius="8" Padding="{TemplateBinding Padding}">
-                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="bd" Property="Background" Value="{DynamicResource AccentBase}"/>
-                            </Trigger>
-                            <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="bd" Property="Background" Value="{DynamicResource AccentDark}"/>
-                            </Trigger>
-                            <Trigger Property="IsEnabled" Value="False">
-                                <Setter TargetName="bd" Property="Background" Value="{DynamicResource Brush_142018}"/>
-                                <Setter Property="Foreground" Value="{DynamicResource Brush_2A4030}"/>
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
-
-        <!-- ─── BUTTON: Ghost ──────────────────────────────────── -->
-        <Style x:Key="BtnGhost" TargetType="Button">
-            <Setter Property="Background"      Value="Transparent"/>
-            <Setter Property="Foreground"      Value="{DynamicResource AccentMuted}"/>
-            <Setter Property="BorderBrush"     Value="{DynamicResource Brush_163025}"/>
-            <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="FontSize"        Value="11"/>
-            <Setter Property="Cursor"          Value="Hand"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="Button">
-                        <Border x:Name="bd"
-                                Background="{TemplateBinding Background}"
-                                BorderBrush="{TemplateBinding BorderBrush}"
-                                BorderThickness="{TemplateBinding BorderThickness}"
-                                CornerRadius="6" Padding="{TemplateBinding Padding}">
-                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="bd" Property="Background" Value="{DynamicResource AccentNavBg}"/>
-                                <Setter TargetName="bd" Property="BorderBrush" Value="{DynamicResource AccentBase}"/>
-                                <Setter Property="Foreground" Value="{DynamicResource AccentTextLight}"/>
-                            </Trigger>
-                            <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="bd" Property="Background" Value="{DynamicResource Brush_071008}"/>
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
-
-        <!-- ─── BUTTON: Nav (left sidebar) ───────────────────── -->
-        <Style x:Key="BtnNav" TargetType="Button">
-            <Setter Property="Background"      Value="Transparent"/>
-            <Setter Property="Foreground"      Value="#5A5A6E"/>
-            <Setter Property="BorderThickness" Value="0"/>
-            <Setter Property="Cursor"          Value="Hand"/>
-            <Setter Property="HorizontalContentAlignment" Value="Left"/>
-            <Setter Property="Height"          Value="40"/>
-            <Setter Property="Padding"         Value="0"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="Button">
-                        <Border x:Name="bd" Background="{TemplateBinding Background}"
-                                CornerRadius="6" Margin="8,2">
-                            <ContentPresenter HorizontalAlignment="Left" VerticalAlignment="Center"
-                                              Margin="12,0,0,0"/>
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="bd" Property="Background" Value="#1A1A22"/>
-                                <Setter Property="Foreground" Value="#9090A8"/>
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
-
-        <Style x:Key="BtnNavActive" TargetType="Button">
-            <Setter Property="Background"      Value="#1E1E3F"/>
-            <Setter Property="Foreground"      Value="{DynamicResource AccentBase}"/>
-            <Setter Property="BorderThickness" Value="0"/>
-            <Setter Property="Cursor"          Value="Hand"/>
-            <Setter Property="HorizontalContentAlignment" Value="Left"/>
-            <Setter Property="Height"          Value="40"/>
-            <Setter Property="Padding"         Value="0"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="Button">
-                        <Grid>
-                            <Border x:Name="bd" Background="#1E1E3F" CornerRadius="6" Margin="8,2">
-                                <ContentPresenter HorizontalAlignment="Left" VerticalAlignment="Center"
-                                                  Margin="12,0,0,0"/>
-                            </Border>
-                            <Rectangle Width="3" HorizontalAlignment="Left" RadiusX="2" RadiusY="2"
-                                       Fill="{DynamicResource AccentBase}" Margin="8,8,0,8"/>
-                        </Grid>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
-
-        <!-- Aliases for code-behind compatibility -->
-        <Style x:Key="BtnTab"       TargetType="Button" BasedOn="{StaticResource BtnNav}"/>
-        <Style x:Key="BtnTabActive" TargetType="Button" BasedOn="{StaticResource BtnNavActive}"/>
-
-        <!-- ─── BUTTON: Chrome ─────────────────────────────────── -->
-        <Style x:Key="ChromeBtn" TargetType="Button">
-            <Setter Property="Background"      Value="Transparent"/>
-            <Setter Property="Foreground"      Value="{DynamicResource Brush_2A4232}"/>
-            <Setter Property="BorderThickness" Value="0"/>
-            <Setter Property="Width"           Value="30"/>
-            <Setter Property="Height"          Value="30"/>
-            <Setter Property="Cursor"          Value="Hand"/>
-            <Setter Property="FontSize"        Value="13"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="Button">
-                        <Border x:Name="bd" Background="{TemplateBinding Background}" CornerRadius="6">
-                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="bd" Property="Background" Value="{DynamicResource AccentNavBg}"/>
-                                <Setter Property="Foreground" Value="{DynamicResource AccentMuted}"/>
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
-
-        <!-- ─── TEXTBOX ───────────────────────────────────────── -->
-        <Style x:Key="InputBox" TargetType="TextBox">
-            <Setter Property="Background"      Value="{DynamicResource AccentBgInput}"/>
-            <Setter Property="Foreground"      Value="{DynamicResource AccentTextLight}"/>
-            <Setter Property="CaretBrush"      Value="{DynamicResource AccentBase}"/>
-            <Setter Property="BorderBrush"     Value="{DynamicResource AccentAsstBorder}"/>
-            <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="FontSize"        Value="13"/>
-            <Setter Property="FontFamily"      Value="Segoe UI"/>
-            <Setter Property="Padding"         Value="12,10"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="TextBox">
-                        <Border x:Name="bd"
-                                Background="{TemplateBinding Background}"
-                                BorderBrush="{TemplateBinding BorderBrush}"
-                                BorderThickness="{TemplateBinding BorderThickness}"
-                                CornerRadius="8">
-                            <ScrollViewer x:Name="PART_ContentHost" Margin="{TemplateBinding Padding}"/>
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsFocused" Value="True">
-                                <Setter TargetName="bd" Property="BorderBrush" Value="{DynamicResource AccentBase}"/>
-                                <Setter TargetName="bd" Property="Background"  Value="{DynamicResource Brush_0A1A0D}"/>
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
+        <!-- Button/Input/Nav styles → App.xaml (amber theme) -->
 
         <!-- ─── LISTBOX ───────────────────────────────────────── -->
         <Style x:Key="CleanListBox" TargetType="ListBox">
@@ -308,8 +132,9 @@
 
         <Grid>
             <Grid.RowDefinitions>
-                <RowDefinition Height="42"/>
+                <RowDefinition Height="36"/>
                 <RowDefinition Height="*"/>
+                <RowDefinition Height="22"/>
             </Grid.RowDefinitions>
 
             <!-- ══════════════ TITLE BAR ══════════════ -->
@@ -325,12 +150,19 @@
 
                     <!-- Logo -->
                     <StackPanel Grid.Column="0" Orientation="Horizontal"
-                                VerticalAlignment="Center" Margin="16,0,0,0">
-                        <Ellipse x:Name="EmotionDot" Width="8" Height="8" Margin="0,0,10,0"
-                                 VerticalAlignment="Center" Fill="{DynamicResource AccentBase}"/>
-                        <TextBlock Text="Kokonoe" FontSize="13" FontWeight="SemiBold"
-                                   Foreground="#A0A0B8" FontFamily="Segoe UI Variable, Segoe UI"
+                                VerticalAlignment="Center" Margin="14,0,0,0">
+                        <Ellipse x:Name="EmotionDot" Width="7" Height="7" Margin="0,0,9,0"
+                                 VerticalAlignment="Center" Fill="{DynamicResource AccentBase}">
+                            <Ellipse.Effect>
+                                <DropShadowEffect Color="#FFB020" BlurRadius="8" ShadowDepth="0" Opacity="0.9"/>
+                            </Ellipse.Effect>
+                        </Ellipse>
+                        <TextBlock Text="KOKONOE" FontSize="12" FontWeight="Bold"
+                                   Foreground="{DynamicResource AccentTextLight}" FontFamily="Consolas"
                                    VerticalAlignment="Center"/>
+                        <TextBlock Text=" // mercury · v0.7.4" FontSize="10"
+                                   Foreground="{DynamicResource AccentDim}" FontFamily="Consolas"
+                                   VerticalAlignment="Center" Margin="4,0,0,0"/>
                     </StackPanel>
 
                     <!-- drag area (middle — intentionally empty) -->
@@ -384,13 +216,14 @@
             <!-- ══════════════ BODY ══════════════ -->
             <Grid Grid.Row="1">
                 <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="200"/>
-                    <ColumnDefinition Width="1"/>
+                    <ColumnDefinition Width="220"/>
                     <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
 
                 <!-- ─── LEFT NAV ─────────────────────────────────── -->
-                <Border Grid.Column="0" Background="{DynamicResource AccentBgDarker}">
+                <Border Grid.Column="0" Background="{DynamicResource AccentBgDarker}"
+                        BorderBrush="{DynamicResource AccentBgBorder2}" BorderThickness="0,0,1,0">
                     <Grid>
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto"/>
@@ -399,63 +232,157 @@
                         </Grid.RowDefinitions>
 
                         <!-- Sidebar header -->
-                        <Border Grid.Row="0" Padding="20,14,16,10"
+                        <Border Grid.Row="0" Padding="16,12,16,8"
                                 BorderBrush="{DynamicResource AccentBgBorder2}" BorderThickness="0,0,0,1">
-                            <TextBlock Text="Workspace" FontSize="11" FontWeight="SemiBold"
-                                       Foreground="#3A3A4E" FontFamily="Segoe UI Variable, Segoe UI"/>
+                            <TextBlock Text="WORKSPACE" FontSize="9" FontFamily="Consolas"
+                                       Foreground="{DynamicResource AccentDim}"/>
                         </Border>
 
                         <!-- Nav items -->
-                        <StackPanel Grid.Row="1" Margin="0,8,0,0">
+                        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Hidden">
+                          <StackPanel Margin="8,6,8,0">
 
                             <Button x:Name="TabBtnChat" Style="{StaticResource BtnNavActive}" Click="Tab_Click">
                                 <StackPanel Orientation="Horizontal">
-                                    <TextBlock Text="💬" FontSize="15" VerticalAlignment="Center" Width="20"/>
-                                    <TextBlock Text="Chat" FontSize="12" VerticalAlignment="Center"
-                                               FontFamily="Segoe UI Variable, Segoe UI" Margin="10,0,0,0"/>
+                                    <TextBlock Text="💬" FontSize="13" VerticalAlignment="Center" Width="18"/>
+                                    <TextBlock Text="Chat" FontSize="11" VerticalAlignment="Center"
+                                               FontFamily="Segoe UI Variable, Segoe UI" Margin="8,0,0,0"/>
                                 </StackPanel>
                             </Button>
 
                             <Button x:Name="TabBtnVault" Style="{StaticResource BtnNav}" Click="Tab_Click">
                                 <StackPanel Orientation="Horizontal">
-                                    <TextBlock Text="📁" FontSize="15" VerticalAlignment="Center" Width="20"/>
-                                    <TextBlock Text="Vault" FontSize="12" VerticalAlignment="Center"
-                                               FontFamily="Segoe UI Variable, Segoe UI" Margin="10,0,0,0"/>
+                                    <TextBlock Text="📁" FontSize="13" VerticalAlignment="Center" Width="18"/>
+                                    <TextBlock Text="Vault" FontSize="11" VerticalAlignment="Center"
+                                               FontFamily="Segoe UI Variable, Segoe UI" Margin="8,0,0,0"/>
                                 </StackPanel>
                             </Button>
 
                             <Button x:Name="TabBtnHealth" Style="{StaticResource BtnNav}" Click="Tab_Click">
                                 <StackPanel Orientation="Horizontal">
-                                    <TextBlock Text="📅" FontSize="15" VerticalAlignment="Center" Width="20"/>
-                                    <TextBlock Text="Calendar" FontSize="12" VerticalAlignment="Center"
-                                               FontFamily="Segoe UI Variable, Segoe UI" Margin="10,0,0,0"/>
+                                    <TextBlock Text="📅" FontSize="13" VerticalAlignment="Center" Width="18"/>
+                                    <TextBlock Text="Calendar" FontSize="11" VerticalAlignment="Center"
+                                               FontFamily="Segoe UI Variable, Segoe UI" Margin="8,0,0,0"/>
                                 </StackPanel>
                             </Button>
 
                             <Button x:Name="TabBtnTools" Style="{StaticResource BtnNav}" Click="Tab_Click">
                                 <StackPanel Orientation="Horizontal">
-                                    <TextBlock Text="◈" FontSize="15" VerticalAlignment="Center" Width="20"/>
-                                    <TextBlock Text="Dashboard" FontSize="12" VerticalAlignment="Center"
-                                               FontFamily="Segoe UI Variable, Segoe UI" Margin="10,0,0,0"/>
+                                    <TextBlock Text="◈" FontSize="13" VerticalAlignment="Center" Width="18"/>
+                                    <TextBlock Text="Dashboard" FontSize="11" VerticalAlignment="Center"
+                                               FontFamily="Segoe UI Variable, Segoe UI" Margin="8,0,0,0"/>
+                                </StackPanel>
+                            </Button>
+
+                            <Button x:Name="TabBtnMemory" Style="{StaticResource BtnNav}" Click="Tab_Click">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="🧠" FontSize="13" VerticalAlignment="Center" Width="18"/>
+                                    <TextBlock Text="Memory" FontSize="11" VerticalAlignment="Center"
+                                               FontFamily="Segoe UI Variable, Segoe UI" Margin="8,0,0,0"/>
+                                </StackPanel>
+                            </Button>
+
+                            <Button x:Name="TabBtnPulse" Style="{StaticResource BtnNav}" Click="Tab_Click">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="♥" FontSize="13" VerticalAlignment="Center" Width="18"
+                                               Foreground="#FF4D6D"/>
+                                    <TextBlock Text="Pulse" FontSize="11" VerticalAlignment="Center"
+                                               FontFamily="Segoe UI Variable, Segoe UI" Margin="8,0,0,0"/>
+                                </StackPanel>
+                            </Button>
+
+                            <Button x:Name="TabBtnVoice" Style="{StaticResource BtnNav}" Click="Tab_Click">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="🎤" FontSize="13" VerticalAlignment="Center" Width="18"/>
+                                    <TextBlock Text="Voice" FontSize="11" VerticalAlignment="Center"
+                                               FontFamily="Segoe UI Variable, Segoe UI" Margin="8,0,0,0"/>
+                                </StackPanel>
+                            </Button>
+
+                            <Button x:Name="TabBtnSandbox" Style="{StaticResource BtnNav}" Click="Tab_Click">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="⬡" FontSize="13" VerticalAlignment="Center" Width="18"/>
+                                    <TextBlock Text="Sandbox" FontSize="11" VerticalAlignment="Center"
+                                               FontFamily="Segoe UI Variable, Segoe UI" Margin="8,0,0,0"/>
                                 </StackPanel>
                             </Button>
 
                             <Button x:Name="TabBtnTelegram" Style="{StaticResource BtnNav}" Click="Tab_Click">
                                 <StackPanel Orientation="Horizontal">
-                                    <TextBlock Text="✈" FontSize="15" VerticalAlignment="Center" Width="20"/>
-                                    <TextBlock Text="Telegram" FontSize="12" VerticalAlignment="Center"
-                                               FontFamily="Segoe UI Variable, Segoe UI" Margin="10,0,0,0"/>
+                                    <TextBlock Text="✈" FontSize="13" VerticalAlignment="Center" Width="18"/>
+                                    <TextBlock Text="Telegram" FontSize="11" VerticalAlignment="Center"
+                                               FontFamily="Segoe UI Variable, Segoe UI" Margin="8,0,0,0"/>
                                 </StackPanel>
                             </Button>
 
-                        </StackPanel>
+                            <!-- DIAGNOSTICS section -->
+                            <Border Margin="0,14,0,6" BorderBrush="{DynamicResource AccentBgBorder2}" BorderThickness="0,1,0,0" Padding="0,8,0,0">
+                                <TextBlock Text="DIAGNOSTICS" FontSize="9" FontFamily="Consolas"
+                                           Foreground="{DynamicResource AccentDim}"/>
+                            </Border>
+
+                            <StackPanel Margin="4,0,0,4">
+                                <Grid Margin="0,3">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="12"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <Ellipse x:Name="DiagCoreDot" Width="6" Height="6" Fill="{DynamicResource Brush_Ok}"
+                                             VerticalAlignment="Center"/>
+                                    <TextBlock Grid.Column="1" Text="core.online" FontSize="9" FontFamily="Consolas"
+                                               Foreground="{DynamicResource AccentDim}" VerticalAlignment="Center" Margin="4,0,0,0"/>
+                                </Grid>
+                                <Grid Margin="0,3">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="12"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <Ellipse x:Name="DiagTgDot" Width="6" Height="6" Fill="{DynamicResource AccentDim}"
+                                             VerticalAlignment="Center"/>
+                                    <TextBlock Grid.Column="1" Text="mtproto" FontSize="9" FontFamily="Consolas"
+                                               Foreground="{DynamicResource AccentDim}" VerticalAlignment="Center" Margin="4,0,0,0"/>
+                                </Grid>
+                                <Grid Margin="0,3">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="12"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <Ellipse x:Name="DiagObsidianDot" Width="6" Height="6" Fill="{DynamicResource AccentDim}"
+                                             VerticalAlignment="Center"/>
+                                    <TextBlock Grid.Column="1" Text="obsidian" FontSize="9" FontFamily="Consolas"
+                                               Foreground="{DynamicResource AccentDim}" VerticalAlignment="Center" Margin="4,0,0,0"/>
+                                </Grid>
+                            </StackPanel>
+
+                          </StackPanel>
+                        </ScrollViewer>
+
+                        <!-- Sidebar footer -->
+                        <Border Grid.Row="2" BorderBrush="{DynamicResource AccentBgBorder2}" BorderThickness="0,1,0,0"
+                                Padding="16,8,16,10">
+                            <StackPanel>
+                                <Grid>
+                                    <TextBlock Text="RAM" FontSize="8" FontFamily="Consolas" Foreground="{DynamicResource AccentDim}"/>
+                                    <TextBlock x:Name="SideFootRam" Text="—" HorizontalAlignment="Right"
+                                               FontSize="8" FontFamily="Consolas" Foreground="{DynamicResource AccentMuted}"/>
+                                </Grid>
+                                <Grid Margin="0,2,0,0">
+                                    <TextBlock Text="UPTIME" FontSize="8" FontFamily="Consolas" Foreground="{DynamicResource AccentDim}"/>
+                                    <TextBlock x:Name="SideFootUptime" Text="—" HorizontalAlignment="Right"
+                                               FontSize="8" FontFamily="Consolas" Foreground="{DynamicResource AccentMuted}"/>
+                                </Grid>
+                                <Grid Margin="0,2,0,0">
+                                    <TextBlock Text="BUILD" FontSize="8" FontFamily="Consolas" Foreground="{DynamicResource AccentDim}"/>
+                                    <TextBlock Text="2026.04" HorizontalAlignment="Right"
+                                               FontSize="8" FontFamily="Consolas" Foreground="{DynamicResource AccentDim}"/>
+                                </Grid>
+                            </StackPanel>
+                        </Border>
                     </Grid>
                 </Border>
 
-                <Border Grid.Column="1" Background="{DynamicResource AccentBgBorder2}"/>
-
                 <!-- ─── MAIN CONTENT ──────────────────────────────── -->
-                <Grid Grid.Column="2">
+                <Grid Grid.Column="1">
 
                     <!-- ╔══════════ CHAT TAB ══════════╗ -->
                     <Grid x:Name="ChatTab" Background="Transparent">
@@ -896,38 +823,38 @@
                             <SolidColorBrush x:Key="KokoRed"     Color="#EF4444"/>
                             <SolidColorBrush x:Key="KokoOrange"  Color="#F97316"/>
                             <SolidColorBrush x:Key="KokoGreen"   Color="#22C55E"/>
-                            <SolidColorBrush x:Key="DashPanelBg"     Color="#131318"/>
-                            <SolidColorBrush x:Key="DashPanelBorder" Color="#2A2A35"/>
-                            <SolidColorBrush x:Key="DashMuted"       Color="#6B6B80"/>
-                            <SolidColorBrush x:Key="DashVeryMuted"   Color="#3A3A4E"/>
+                            <SolidColorBrush x:Key="DashPanelBg"     Color="#141923"/>
+                            <SolidColorBrush x:Key="DashPanelBorder" Color="#FFFFFF14"/>
+                            <SolidColorBrush x:Key="DashMuted"       Color="#585548"/>
+                            <SolidColorBrush x:Key="DashVeryMuted"   Color="#3A382F"/>
                             <Style x:Key="DashSecHdr" TargetType="TextBlock">
-                                <Setter Property="FontSize"   Value="10"/>
-                                <Setter Property="FontWeight" Value="SemiBold"/>
-                                <Setter Property="Foreground" Value="#6B6B80"/>
-                                <Setter Property="Margin"     Value="0,0,0,8"/>
-                            </Style>
+                                <Setter Property="FontSize"          Value="9"/>
+                                <Setter Property="FontFamily"        Value="Consolas"/>
+                                <Setter Property="Foreground"        Value="#585548"/>
+                                <Setter Property="Margin"            Value="0,0,0,8"/>
+                                            </Style>
                             <Style x:Key="DashPanel" TargetType="Border">
                                 <Setter Property="Background"      Value="{StaticResource DashPanelBg}"/>
                                 <Setter Property="BorderBrush"     Value="{StaticResource DashPanelBorder}"/>
                                 <Setter Property="BorderThickness" Value="1"/>
                                 <Setter Property="CornerRadius"    Value="8"/>
-                                <Setter Property="Padding"         Value="16,14"/>
+                                <Setter Property="Padding"         Value="14,12"/>
                             </Style>
                             <Style x:Key="DashSmallLabel" TargetType="TextBlock">
                                 <Setter Property="FontSize"   Value="9"/>
-                                <Setter Property="Foreground" Value="#6B6B80"/>
+                                <Setter Property="Foreground" Value="#585548"/>
                             </Style>
                             <Style x:Key="DashTabBtn" TargetType="Border">
-                                <Setter Property="Padding"      Value="16,6"/>
+                                <Setter Property="Padding"      Value="14,5"/>
                                 <Setter Property="CornerRadius" Value="6"/>
                                 <Setter Property="Cursor"       Value="Hand"/>
                                 <Setter Property="Background"   Value="Transparent"/>
                             </Style>
                             <Style x:Key="DashTabText" TargetType="TextBlock">
-                                <Setter Property="FontSize"          Value="11"/>
-                                <Setter Property="FontWeight"        Value="SemiBold"/>
+                                <Setter Property="FontSize"          Value="10"/>
+                                <Setter Property="FontFamily"        Value="Consolas"/>
                                 <Setter Property="VerticalAlignment" Value="Center"/>
-                                <Setter Property="Foreground"        Value="#6B6B80"/>
+                                <Setter Property="Foreground"        Value="#585548"/>
                             </Style>
                         </Grid.Resources>
 
@@ -948,9 +875,9 @@
                                 </Grid.ColumnDefinitions>
                                 <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
                                     <StackPanel VerticalAlignment="Center">
-                                        <TextBlock Text="Dashboard" FontSize="16" FontWeight="SemiBold"
-                                                   Foreground="#E0E0EE"/>
-                                        <TextBlock Text="Cognitive workspace" FontSize="10"
+                                        <TextBlock Text="Dashboard" FontSize="15" FontWeight="SemiBold"
+                                                   Foreground="{DynamicResource AccentTextLight}"/>
+                                        <TextBlock Text="Cognitive workspace" FontSize="10" FontFamily="Consolas"
                                                    Foreground="{StaticResource DashMuted}" Margin="0,2,0,0"/>
                                     </StackPanel>
                                 </StackPanel>
@@ -989,7 +916,7 @@
                             <!-- TAB SELECTOR -->
                             <Grid Grid.Row="1" VerticalAlignment="Center">
                                 <Border HorizontalAlignment="Left" VerticalAlignment="Center"
-                                        Background="#0E0E18" BorderBrush="#1E1E2E" BorderThickness="1"
+                                        Background="{DynamicResource AccentBgPanel}" BorderBrush="{DynamicResource AccentBgBorder2}" BorderThickness="1"
                                         CornerRadius="8" Padding="3">
                                     <StackPanel Orientation="Horizontal">
                                         <Border x:Name="DashTabNeuroBtn" Style="{StaticResource DashTabBtn}"
@@ -1017,14 +944,9 @@
 
                             <!-- BODY -->
                             <Grid Grid.Row="2" Margin="0,0,0,8">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="3*"/>
-                                    <ColumnDefinition Width="5"/>
-                                    <ColumnDefinition Width="*"/>
-                                </Grid.ColumnDefinitions>
 
                                 <!-- NEURO PANEL -->
-                                <Grid x:Name="DashNeuroPanel" Grid.Column="0" Visibility="Visible">
+                                <Grid x:Name="DashNeuroPanel" Visibility="Visible">
                                     <Grid.RowDefinitions>
                                         <RowDefinition Height="220"/>
                                         <RowDefinition Height="8"/>
@@ -1427,7 +1349,7 @@
                                 </Grid>
 
                                 <!-- DEV PANEL -->
-                                <Grid x:Name="DashDevPanel" Grid.Column="0" Visibility="Collapsed">
+                                <Grid x:Name="DashDevPanel" Visibility="Collapsed">
                                     <Grid.RowDefinitions>
                                         <RowDefinition Height="220"/>
                                         <RowDefinition Height="8"/>
@@ -1621,7 +1543,7 @@
                                 </Grid>
 
                                 <!-- MEMORY PANEL -->
-                                <Grid x:Name="DashMemoryPanel" Grid.Column="0" Visibility="Collapsed">
+                                <Grid x:Name="DashMemoryPanel" Visibility="Collapsed">
                                     <Border Style="{StaticResource DashPanel}">
                                         <Grid>
                                             <Grid.RowDefinitions>
@@ -1671,7 +1593,7 @@
                                 </Grid>
 
                                 <!-- SYSTEM PANEL -->
-                                <Grid x:Name="DashSystemPanel" Grid.Column="0" Visibility="Collapsed">
+                                <Grid x:Name="DashSystemPanel" Visibility="Collapsed">
                                     <Border Style="{StaticResource DashPanel}">
                                         <Grid>
                                             <Grid.RowDefinitions>
@@ -1740,84 +1662,7 @@
                                     </Border>
                                 </Grid>
 
-                                <!-- RIGHT SIDEBAR: Monologue (always visible) -->
-                                <Border Grid.Column="2" Style="{StaticResource DashPanel}">
-                                    <Grid>
-                                        <Grid.RowDefinitions>
-                                            <RowDefinition Height="Auto"/>
-                                            <RowDefinition Height="*"/>
-                                            <RowDefinition Height="Auto"/>
-                                            <RowDefinition Height="Auto"/>
-                                        </Grid.RowDefinitions>
-                                        <TextBlock Grid.Row="0" Text="INTERNAL MONOLOGUE"
-                                                   Style="{StaticResource DashSecHdr}"/>
-                                        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto"
-                                                      HorizontalScrollBarVisibility="Disabled">
-                                            <ItemsControl x:Name="DashThoughtStream">
-                                                <ItemsControl.ItemTemplate>
-                                                    <DataTemplate>
-                                                        <Grid Margin="0,0,0,7">
-                                                            <Grid.ColumnDefinitions>
-                                                                <ColumnDefinition Width="36"/>
-                                                                <ColumnDefinition Width="*"/>
-                                                            </Grid.ColumnDefinitions>
-                                                            <TextBlock Grid.Column="0" Text="{Binding Time}"
-                                                                       FontSize="7" Foreground="#3A2F4E"
-                                                                       VerticalAlignment="Top" Margin="0,2,4,0"/>
-                                                            <StackPanel Grid.Column="1">
-                                                                <TextBlock Text="{Binding Thought}"
-                                                                           Foreground="#B8A8D0" FontSize="9" TextWrapping="Wrap"/>
-                                                                <TextBlock Text="{Binding MoodTag}"
-                                                                           FontSize="7" Foreground="#3A2F4E"
-                                                                           FontStyle="Italic" Margin="0,1,0,0"/>
-                                                            </StackPanel>
-                                                        </Grid>
-                                                    </DataTemplate>
-                                                </ItemsControl.ItemTemplate>
-                                            </ItemsControl>
-                                        </ScrollViewer>
-                                        <Border Grid.Row="2" BorderBrush="#1A1230"
-                                                BorderThickness="0,1,0,0" Margin="0,8,0,0" Padding="0,8,0,0">
-                                            <StackPanel>
-                                                <TextBlock Text="INTERESTS" FontSize="9" FontWeight="SemiBold"
-                                                           Foreground="#3A3A4E" Margin="0,0,0,5"/>
-                                                <ItemsControl x:Name="DashCuriosityList">
-                                                    <ItemsControl.ItemTemplate>
-                                                        <DataTemplate>
-                                                            <TextBlock Text="{Binding}" Foreground="#FFD700"
-                                                                       FontSize="8" TextWrapping="Wrap" Margin="0,0,0,4">
-                                                                <TextBlock.Effect>
-                                                                    <DropShadowEffect Color="#FFD700" ShadowDepth="0" BlurRadius="4" Opacity="0.2"/>
-                                                                </TextBlock.Effect>
-                                                            </TextBlock>
-                                                        </DataTemplate>
-                                                    </ItemsControl.ItemTemplate>
-                                                </ItemsControl>
-                                            </StackPanel>
-                                        </Border>
-                                        <Border Grid.Row="3" BorderBrush="#1A1230"
-                                                BorderThickness="0,1,0,0" Margin="0,8,0,0" Padding="0,8,0,0">
-                                            <Grid>
-                                                <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="*"/>
-                                                    <ColumnDefinition Width="Auto"/>
-                                                </Grid.ColumnDefinitions>
-                                                <StackPanel Grid.Column="0">
-                                                    <TextBlock Text="bond" FontSize="8" Foreground="#3A2F4E"/>
-                                                    <TextBlock x:Name="DashSideBondLabel" Text="KNOWN"
-                                                               FontSize="11" FontWeight="Bold"
-                                                               Foreground="{StaticResource KokoPink}"/>
-                                                </StackPanel>
-                                                <StackPanel Grid.Column="1" HorizontalAlignment="Right">
-                                                    <TextBlock Text="connection" FontSize="8" Foreground="#3A2F4E" HorizontalAlignment="Right"/>
-                                                    <TextBlock x:Name="DashSideConnValue" Text="50%"
-                                                               FontSize="18" FontWeight="Bold"
-                                                               Foreground="{StaticResource KokoPink}" HorizontalAlignment="Right"/>
-                                                </StackPanel>
-                                            </Grid>
-                                        </Border>
-                                    </Grid>
-                                </Border>
+                                <!-- Right panel moved to persistent Col 2 outside ToolsTab -->
                             </Grid>
 
                             <!-- FOOTER -->
@@ -1835,26 +1680,351 @@
                             </Grid>
                         </Grid>
 
-                        <!-- MCP Tools overlay (bottom strip) -->
-                        <Border VerticalAlignment="Bottom" HorizontalAlignment="Right" Margin="14,0,14,30"
-                                Background="#131318" BorderBrush="#2A2A35" BorderThickness="1" CornerRadius="8" Padding="12,8">
+                    </Grid>
+
+                    <!-- ╔══════════ MEMORY TAB ══════════╗ -->
+                    <Grid x:Name="MemoryTab" Visibility="Collapsed" Background="Transparent">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
+
+                        <!-- Header -->
+                        <Border Grid.Row="0" Background="{DynamicResource AccentBgDarker}"
+                                BorderBrush="{DynamicResource AccentBgBorder2}" BorderThickness="0,0,0,1" Padding="20,12">
+                            <Grid>
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                    <TextBlock Text="// MEMORY" FontSize="12" FontFamily="Consolas" FontWeight="Bold"
+                                               Foreground="{DynamicResource AccentBase}" VerticalAlignment="Center"/>
+                                    <TextBlock Text=" · Enhanced Fact Storage" FontSize="10" FontFamily="Consolas"
+                                               Foreground="{DynamicResource AccentDim}" VerticalAlignment="Center" Margin="6,0,0,0"/>
+                                </StackPanel>
+                                <Button Content="↻ Refresh" Style="{StaticResource BtnGhost}"
+                                        Padding="8,3" HorizontalAlignment="Right"
+                                        Click="MemTabRefresh_Click"/>
+                            </Grid>
+                        </Border>
+
+                        <!-- Stats row -->
+                        <Grid Grid.Row="1" Margin="20,12,20,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <Border Grid.Column="0" Background="{DynamicResource AccentBgCard}"
+                                    BorderBrush="{DynamicResource AccentBgBorder2}" BorderThickness="1" CornerRadius="8"
+                                    Padding="12,10" Margin="0,0,6,0">
+                                <StackPanel>
+                                    <TextBlock Text="TOTAL" FontSize="8" FontFamily="Consolas" Foreground="{DynamicResource AccentDim}"/>
+                                    <TextBlock x:Name="MemTabTotalText" Text="—" FontSize="22" FontWeight="Bold"
+                                               Foreground="{DynamicResource AccentBase}"/>
+                                    <TextBlock Text="facts" FontSize="8" Foreground="{DynamicResource AccentDim}"/>
+                                </StackPanel>
+                            </Border>
+                            <Border Grid.Column="1" Background="{DynamicResource AccentBgCard}"
+                                    BorderBrush="{DynamicResource AccentBgBorder2}" BorderThickness="1" CornerRadius="8"
+                                    Padding="12,10" Margin="0,0,6,0">
+                                <StackPanel>
+                                    <TextBlock Text="CONFIRMED" FontSize="8" FontFamily="Consolas" Foreground="{DynamicResource AccentDim}"/>
+                                    <TextBlock x:Name="MemTabConfirmedText" Text="—" FontSize="22" FontWeight="Bold"
+                                               Foreground="{DynamicResource Brush_Ok}"/>
+                                    <TextBlock Text="verified" FontSize="8" Foreground="{DynamicResource AccentDim}"/>
+                                </StackPanel>
+                            </Border>
+                            <Border Grid.Column="2" Background="{DynamicResource AccentBgCard}"
+                                    BorderBrush="{DynamicResource AccentBgBorder2}" BorderThickness="1" CornerRadius="8"
+                                    Padding="12,10" Margin="0,0,6,0">
+                                <StackPanel>
+                                    <TextBlock Text="HIGH IMP" FontSize="8" FontFamily="Consolas" Foreground="{DynamicResource AccentDim}"/>
+                                    <TextBlock x:Name="MemTabHighImpText" Text="—" FontSize="22" FontWeight="Bold"
+                                               Foreground="{DynamicResource Brush_Info}"/>
+                                    <TextBlock Text="priority" FontSize="8" Foreground="{DynamicResource AccentDim}"/>
+                                </StackPanel>
+                            </Border>
+                            <Border Grid.Column="3" Background="{DynamicResource AccentBgCard}"
+                                    BorderBrush="{DynamicResource AccentBgBorder2}" BorderThickness="1" CornerRadius="8"
+                                    Padding="12,10">
+                                <StackPanel>
+                                    <TextBlock Text="CATEGORIES" FontSize="8" FontFamily="Consolas" Foreground="{DynamicResource AccentDim}"/>
+                                    <TextBlock x:Name="MemTabCatCountText" Text="—" FontSize="22" FontWeight="Bold"
+                                               Foreground="{DynamicResource AccentPrimary}"/>
+                                    <TextBlock Text="types" FontSize="8" Foreground="{DynamicResource AccentDim}"/>
+                                </StackPanel>
+                            </Border>
+                        </Grid>
+
+                        <!-- Fact list -->
+                        <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto" Margin="20,12,20,12">
+                            <ItemsControl x:Name="MemTabFactsList">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border Background="{DynamicResource AccentBgCard}"
+                                                BorderBrush="{DynamicResource AccentBgBorder2}"
+                                                BorderThickness="1" CornerRadius="6"
+                                                Padding="12,9" Margin="0,0,0,6">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+                                                <StackPanel>
+                                                    <TextBlock Text="{Binding Text}"
+                                                               Foreground="{DynamicResource AccentText}"
+                                                               FontSize="11" TextWrapping="Wrap"/>
+                                                    <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                                                        <TextBlock Text="{Binding Category}"
+                                                                   FontSize="9" FontFamily="Consolas"
+                                                                   Foreground="{DynamicResource AccentDim}" Margin="0,0,10,0"/>
+                                                        <TextBlock Text="{Binding ImportanceLabel}"
+                                                                   FontSize="9" FontFamily="Consolas"
+                                                                   Foreground="{DynamicResource AccentBase}"/>
+                                                    </StackPanel>
+                                                </StackPanel>
+                                                <Border Grid.Column="1" Background="{DynamicResource AccentNavBg}"
+                                                        CornerRadius="4" Padding="6,2" Margin="8,0,0,0"
+                                                        VerticalAlignment="Top">
+                                                    <TextBlock Text="{Binding ConfirmLabel}"
+                                                               FontSize="8" FontFamily="Consolas"
+                                                               Foreground="{DynamicResource AccentBase}"/>
+                                                </Border>
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </ScrollViewer>
+                    </Grid>
+
+                    <!-- ╔══════════ PULSE TAB ══════════╗ -->
+                    <Grid x:Name="PulseTab" Visibility="Collapsed" Background="Transparent"
+                          SizeChanged="PulseTab_SizeChanged">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="180"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
+
+                        <!-- Header -->
+                        <Border Grid.Row="0" Background="{DynamicResource AccentBgDarker}"
+                                BorderBrush="{DynamicResource AccentBgBorder2}" BorderThickness="0,0,0,1" Padding="20,12">
+                            <Grid>
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                    <TextBlock Text="// CARDIAC TELEMETRY" FontSize="12" FontFamily="Consolas" FontWeight="Bold"
+                                               Foreground="#FF4D6D" VerticalAlignment="Center"/>
+                                    <TextBlock Text=" · CARDIAC · NEURAL · INTERFACE" FontSize="9" FontFamily="Consolas"
+                                               Foreground="{DynamicResource AccentDim}" VerticalAlignment="Center" Margin="8,0,0,0"/>
+                                </StackPanel>
+                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                                    <TextBlock x:Name="PulseTabBpmBig" Text="—"
+                                               FontSize="28" FontWeight="Bold" FontFamily="Consolas"
+                                               Foreground="#FF4D6D" VerticalAlignment="Center">
+                                        <TextBlock.Effect>
+                                            <DropShadowEffect Color="#FF4D6D" BlurRadius="12" ShadowDepth="0" Opacity="0.6"/>
+                                        </TextBlock.Effect>
+                                    </TextBlock>
+                                    <StackPanel VerticalAlignment="Center" Margin="6,0,0,0">
+                                        <TextBlock Text="BPM · LIVE" FontSize="9" FontFamily="Consolas"
+                                                   Foreground="{DynamicResource AccentDim}"/>
+                                        <TextBlock x:Name="PulseTabStateLabel" Text="MONITORING"
+                                                   FontSize="8" FontFamily="Consolas" Foreground="#FF4D6D"/>
+                                    </StackPanel>
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+
+                        <!-- ECG Canvas -->
+                        <Border Grid.Row="1" Background="{DynamicResource AccentBgPanel}"
+                                BorderBrush="{DynamicResource AccentBgBorder2}" BorderThickness="0,0,0,1" Padding="20,10">
+                            <Grid>
+                                <TextBlock Text="ECG" FontSize="8" FontFamily="Consolas" Foreground="#FF4D6D"
+                                           VerticalAlignment="Top" HorizontalAlignment="Left" Opacity="0.6"/>
+                                <Canvas x:Name="PulseEcgCanvas" ClipToBounds="True"/>
+                            </Grid>
+                        </Border>
+
+                        <!-- Status row -->
+                        <Grid Grid.Row="2" Margin="20,12,20,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <Border Grid.Column="0" Background="{DynamicResource AccentBgCard}"
+                                    BorderBrush="{DynamicResource AccentBgBorder2}" BorderThickness="1" CornerRadius="8"
+                                    Padding="12,10" Margin="0,0,6,0">
+                                <StackPanel>
+                                    <TextBlock Text="CURRENT" FontSize="8" FontFamily="Consolas" Foreground="{DynamicResource AccentDim}"/>
+                                    <TextBlock x:Name="PulseTabCurText" Text="—" FontSize="20" FontWeight="Bold"
+                                               Foreground="#FF4D6D"/>
+                                    <TextBlock Text="bpm" FontSize="8" Foreground="{DynamicResource AccentDim}"/>
+                                </StackPanel>
+                            </Border>
+                            <Border Grid.Column="1" Background="{DynamicResource AccentBgCard}"
+                                    BorderBrush="{DynamicResource AccentBgBorder2}" BorderThickness="1" CornerRadius="8"
+                                    Padding="12,10" Margin="0,0,6,0">
+                                <StackPanel>
+                                    <TextBlock Text="BASELINE" FontSize="8" FontFamily="Consolas" Foreground="{DynamicResource AccentDim}"/>
+                                    <TextBlock x:Name="PulseTabBaseText" Text="—" FontSize="20" FontWeight="Bold"
+                                               Foreground="{DynamicResource Brush_Info}"/>
+                                    <TextBlock Text="bpm" FontSize="8" Foreground="{DynamicResource AccentDim}"/>
+                                </StackPanel>
+                            </Border>
+                            <Border Grid.Column="2" Background="{DynamicResource AccentBgCard}"
+                                    BorderBrush="{DynamicResource AccentBgBorder2}" BorderThickness="1" CornerRadius="8"
+                                    Padding="12,10" Margin="0,0,6,0">
+                                <StackPanel>
+                                    <TextBlock Text="HRV RMSSD" FontSize="8" FontFamily="Consolas" Foreground="{DynamicResource AccentDim}"/>
+                                    <TextBlock x:Name="PulseTabHrvText" Text="—" FontSize="20" FontWeight="Bold"
+                                               Foreground="{DynamicResource AccentBase}"/>
+                                    <TextBlock Text="ms" FontSize="8" Foreground="{DynamicResource AccentDim}"/>
+                                </StackPanel>
+                            </Border>
+                            <Border Grid.Column="3" Background="{DynamicResource AccentBgCard}"
+                                    BorderBrush="{DynamicResource AccentBgBorder2}" BorderThickness="1" CornerRadius="8"
+                                    Padding="12,10">
+                                <StackPanel>
+                                    <TextBlock Text="MIN / MAX" FontSize="8" FontFamily="Consolas" Foreground="{DynamicResource AccentDim}"/>
+                                    <TextBlock x:Name="PulseTabMinMaxText" Text="— / —" FontSize="16" FontWeight="Bold"
+                                               Foreground="{DynamicResource AccentText}"/>
+                                    <TextBlock Text="5 min range" FontSize="8" Foreground="{DynamicResource AccentDim}"/>
+                                </StackPanel>
+                            </Border>
+                        </Grid>
+
+                        <!-- Vital log -->
+                        <Grid Grid.Row="3" Margin="20,12,20,12">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="*"/>
+                            </Grid.RowDefinitions>
+                            <Border Grid.Row="0" Padding="0,0,0,8">
+                                <TextBlock Text="VITAL.LOG" FontSize="9" FontFamily="Consolas"
+                                           Foreground="{DynamicResource AccentDim}"/>
+                            </Border>
+                            <Border Grid.Row="1" Background="{DynamicResource AccentBgCard}"
+                                    BorderBrush="{DynamicResource AccentBgBorder2}" BorderThickness="1" CornerRadius="8"
+                                    Padding="12">
+                                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                    <ItemsControl x:Name="PulseVitalLog">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <Grid Margin="0,2">
+                                                    <TextBlock Text="{Binding TimeStr}" FontSize="10" FontFamily="Consolas"
+                                                               Foreground="{DynamicResource AccentDim}"/>
+                                                    <TextBlock Text="{Binding BpmStr}" FontSize="10" FontFamily="Consolas"
+                                                               Foreground="#FF4D6D" HorizontalAlignment="Right"/>
+                                                </Grid>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </ScrollViewer>
+                            </Border>
+                        </Grid>
+                    </Grid>
+
+                    <!-- ╔══════════ VOICE TAB ══════════╗ -->
+                    <Grid x:Name="VoiceTab" Visibility="Collapsed" Background="Transparent">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+
+                        <Border Grid.Row="0" Background="{DynamicResource AccentBgDarker}"
+                                BorderBrush="{DynamicResource AccentBgBorder2}" BorderThickness="0,0,0,1" Padding="20,12">
+                            <TextBlock Text="// VOICE" FontSize="12" FontFamily="Consolas" FontWeight="Bold"
+                                       Foreground="{DynamicResource AccentBase}"/>
+                        </Border>
+
+                        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Padding="20,14">
                             <StackPanel>
-                                <TextBlock Text="OBSIDIAN MCP" FontSize="9" FontWeight="SemiBold"
-                                           Foreground="{DynamicResource AccentBase}" Margin="0,0,0,8"/>
-                                <WrapPanel>
-                                    <Button Content="List"       Style="{StaticResource BtnGhost}" Padding="8,4" Margin="0,0,4,4" Click="McpListNotes_Click"/>
-                                    <Button Content="Search"     Style="{StaticResource BtnGhost}" Padding="8,4" Margin="0,0,4,4" Click="McpSearch_Click"/>
-                                    <Button Content="Daily"      Style="{StaticResource BtnGhost}" Padding="8,4" Margin="0,0,4,4" Click="McpDailyNote_Click"/>
-                                    <Button Content="New note"   Style="{StaticResource BtnGhost}" Padding="8,4" Margin="0,0,4,4" Click="McpNewNote_Click"/>
-                                    <Button Content="Graph"      Style="{StaticResource BtnGhost}" Padding="8,4" Margin="0,0,4,4" Click="McpBuildGraph_Click"/>
-                                    <Button Content="Visualize"  Style="{StaticResource BtnGhost}" Padding="8,4" Margin="0,0,4,4" Click="OpenKnowledgeGraph_Click"/>
-                                </WrapPanel>
-                                <Border Background="#0C0C10" CornerRadius="4" Margin="0,6,0,0" Padding="8" MinHeight="40">
-                                    <TextBlock x:Name="McpOutput" Foreground="#5A5A6E"
-                                               FontSize="10" FontFamily="Cascadia Code, Consolas" TextWrapping="Wrap"/>
+                                <Border Background="{DynamicResource AccentBgCard}"
+                                        BorderBrush="{DynamicResource AccentBgBorder2}" BorderThickness="1" CornerRadius="8"
+                                        Padding="16,14" Margin="0,0,0,14">
+                                    <StackPanel>
+                                        <TextBlock Text="WHISPER ASR" FontSize="9" FontFamily="Consolas"
+                                                   Foreground="{DynamicResource AccentDim}" Margin="0,0,0,8"/>
+                                        <Button x:Name="VoiceRecordBtn" Content="● REC"
+                                                Style="{StaticResource BtnPrimary}" Width="120" Padding="0,10"
+                                                HorizontalAlignment="Left" Click="Record_Click"/>
+                                        <TextBlock Text="Hold to record · release to transcribe via Whisper"
+                                                   FontSize="10" FontFamily="Consolas" Foreground="{DynamicResource AccentDim}"
+                                                   Margin="0,8,0,0" TextWrapping="Wrap"/>
+                                    </StackPanel>
+                                </Border>
+                                <Border Background="{DynamicResource AccentBgCard}"
+                                        BorderBrush="{DynamicResource AccentBgBorder2}" BorderThickness="1" CornerRadius="8"
+                                        Padding="16,14">
+                                    <StackPanel>
+                                        <TextBlock Text="LAST TRANSCRIPT" FontSize="9" FontFamily="Consolas"
+                                                   Foreground="{DynamicResource AccentDim}" Margin="0,0,0,8"/>
+                                        <TextBlock x:Name="VoiceTranscriptText" Text="—"
+                                                   FontSize="12" Foreground="{DynamicResource AccentText}"
+                                                   TextWrapping="Wrap" FontStyle="Italic"/>
+                                    </StackPanel>
                                 </Border>
                             </StackPanel>
+                        </ScrollViewer>
+
+                        <Border Grid.Row="2" Background="{DynamicResource AccentBgDarker}"
+                                BorderBrush="{DynamicResource AccentBgBorder2}" BorderThickness="0,1,0,0" Padding="20,10">
+                            <TextBlock x:Name="VoiceStatusLabel" Text="ready · whisper api"
+                                       FontSize="9" FontFamily="Consolas" Foreground="{DynamicResource AccentDim}"/>
                         </Border>
+                    </Grid>
+
+                    <!-- ╔══════════ SANDBOX TAB ══════════╗ -->
+                    <Grid x:Name="SandboxTab" Visibility="Collapsed" Background="Transparent">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
+
+                        <Border Grid.Row="0" Background="{DynamicResource AccentBgDarker}"
+                                BorderBrush="{DynamicResource AccentBgBorder2}" BorderThickness="0,0,0,1" Padding="20,12">
+                            <TextBlock Text="// SANDBOX" FontSize="12" FontFamily="Consolas" FontWeight="Bold"
+                                       Foreground="{DynamicResource AccentBase}"/>
+                        </Border>
+
+                        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Padding="20,14">
+                            <StackPanel>
+                                <Border Background="{DynamicResource AccentBgCard}"
+                                        BorderBrush="{DynamicResource AccentBgBorder2}" BorderThickness="1" CornerRadius="8"
+                                        Padding="16,14" Margin="0,0,0,14">
+                                    <StackPanel>
+                                        <TextBlock Text="PROMPT WORKSPACE" FontSize="9" FontFamily="Consolas"
+                                                   Foreground="{DynamicResource AccentDim}" Margin="0,0,0,8"/>
+                                        <TextBox x:Name="SandboxInput" Style="{StaticResource InputBox}"
+                                                 MinHeight="120" MaxHeight="300" AcceptsReturn="True"
+                                                 TextWrapping="Wrap" VerticalScrollBarVisibility="Auto"
+                                                 FontFamily="Consolas" FontSize="11"
+                                                 ToolTip="Type a raw prompt to test..."/>
+                                        <Grid Margin="0,8,0,0">
+                                            <Button Content="▶ Execute" Style="{StaticResource BtnPrimary}"
+                                                    Padding="16,8" HorizontalAlignment="Left" Click="SandboxRun_Click"/>
+                                            <Button Content="⊘ Clear" Style="{StaticResource BtnGhost}"
+                                                    Padding="10,8" HorizontalAlignment="Right" Click="SandboxClear_Click"/>
+                                        </Grid>
+                                    </StackPanel>
+                                </Border>
+                                <Border Background="{DynamicResource AccentBgCard}"
+                                        BorderBrush="{DynamicResource AccentBgBorder2}" BorderThickness="1" CornerRadius="8"
+                                        Padding="16,14">
+                                    <StackPanel>
+                                        <TextBlock Text="OUTPUT" FontSize="9" FontFamily="Consolas"
+                                                   Foreground="{DynamicResource AccentDim}" Margin="0,0,0,8"/>
+                                        <TextBlock x:Name="SandboxOutput" Text="—"
+                                                   FontSize="11" FontFamily="Consolas" Foreground="{DynamicResource AccentText}"
+                                                   TextWrapping="Wrap"/>
+                                    </StackPanel>
+                                </Border>
+                            </StackPanel>
+                        </ScrollViewer>
                     </Grid>
 
                     <!-- ╔══════════ TELEGRAM TAB ══════════╗ -->
@@ -1931,10 +2101,191 @@
                     </Grid>
 
                 </Grid>
+
+                <!-- ─── RIGHT PANEL (Col 2) — Dashboard only ───────── -->
+                <Grid Grid.Column="2" x:Name="RightPanel" Width="360" HorizontalAlignment="Right">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="220"/>
+                    </Grid.RowDefinitions>
+
+                    <!-- Internal Monologue -->
+                    <Border Grid.Row="0" Background="{DynamicResource AccentBgDarker}"
+                            BorderBrush="{DynamicResource AccentBgBorder2}" BorderThickness="1,0,0,0">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="*"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+
+                            <Border Grid.Row="0" Padding="14,10,14,8"
+                                    BorderBrush="{DynamicResource AccentBgBorder2}" BorderThickness="0,0,0,1">
+                                <Grid>
+                                    <TextBlock Text="// INTERNAL MONOLOGUE" FontSize="9" FontFamily="Consolas"
+                                               Foreground="{DynamicResource AccentDim}"                                               VerticalAlignment="Center"/>
+                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                                        <Ellipse Width="5" Height="5" Fill="{DynamicResource AccentBase}"
+                                                 VerticalAlignment="Center" Margin="0,0,4,0">
+                                            <Ellipse.Effect>
+                                                <DropShadowEffect Color="#FFB020" BlurRadius="6" ShadowDepth="0" Opacity="0.8"/>
+                                            </Ellipse.Effect>
+                                        </Ellipse>
+                                        <TextBlock Text="STREAMING" FontSize="7" FontFamily="Consolas"
+                                                   Foreground="{DynamicResource AccentBase}"/>
+                                    </StackPanel>
+                                </Grid>
+                            </Border>
+
+                            <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto"
+                                          HorizontalScrollBarVisibility="Disabled" Padding="14,8">
+                                <ItemsControl x:Name="DashThoughtStream">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Grid Margin="0,0,0,8">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="34"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Grid.Column="0" Text="{Binding Time}"
+                                                           FontSize="7" FontFamily="Consolas"
+                                                           Foreground="{DynamicResource AccentDim}"
+                                                           VerticalAlignment="Top" Margin="0,2,4,0"/>
+                                                <StackPanel Grid.Column="1">
+                                                    <TextBlock Text="{Binding Thought}"
+                                                               Foreground="{DynamicResource AccentText}"
+                                                               FontSize="9" TextWrapping="Wrap"/>
+                                                    <TextBlock Text="{Binding MoodTag}"
+                                                               FontSize="7" FontFamily="Consolas"
+                                                               Foreground="{DynamicResource AccentDim}"
+                                                               FontStyle="Italic" Margin="0,1,0,0"/>
+                                                </StackPanel>
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </ScrollViewer>
+
+                            <Border Grid.Row="2" BorderBrush="{DynamicResource AccentBgBorder2}"
+                                    BorderThickness="0,1,0,0" Margin="14,0,14,0" Padding="0,8">
+                                <StackPanel>
+                                    <TextBlock Text="// INTERESTS" FontSize="8" FontFamily="Consolas"
+                                               Foreground="{DynamicResource AccentDim}" Margin="0,0,0,5"/>
+                                    <ItemsControl x:Name="DashCuriosityList">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <TextBlock Text="{Binding}" Foreground="{DynamicResource AccentBase}"
+                                                           FontSize="8" TextWrapping="Wrap" Margin="0,0,0,3">
+                                                    <TextBlock.Effect>
+                                                        <DropShadowEffect Color="#FFB020" ShadowDepth="0" BlurRadius="4" Opacity="0.3"/>
+                                                    </TextBlock.Effect>
+                                                </TextBlock>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </StackPanel>
+                            </Border>
+
+                            <Border Grid.Row="3" BorderBrush="{DynamicResource AccentBgBorder2}"
+                                    BorderThickness="0,1,0,0" Margin="14,0,14,0" Padding="0,8,0,10">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel>
+                                        <TextBlock Text="bond" FontSize="8" FontFamily="Consolas"
+                                                   Foreground="{DynamicResource AccentDim}"/>
+                                        <TextBlock x:Name="DashSideBondLabel" Text="KNOWN"
+                                                   FontSize="11" FontWeight="Bold"
+                                                   Foreground="{DynamicResource AccentBase}"/>
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="1" HorizontalAlignment="Right">
+                                        <TextBlock Text="connection" FontSize="8" FontFamily="Consolas"
+                                                   Foreground="{DynamicResource AccentDim}" HorizontalAlignment="Right"/>
+                                        <TextBlock x:Name="DashSideConnValue" Text="50%"
+                                                   FontSize="18" FontWeight="Bold"
+                                                   Foreground="{DynamicResource AccentPrimary}" HorizontalAlignment="Right"/>
+                                    </StackPanel>
+                                </Grid>
+                            </Border>
+                        </Grid>
+                    </Border>
+
+                    <!-- Obsidian MCP Panel -->
+                    <Border Grid.Row="1" Background="{DynamicResource AccentBgDarker}"
+                            BorderBrush="{DynamicResource AccentBgBorder2}" BorderThickness="1,1,0,0">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="*"/>
+                            </Grid.RowDefinitions>
+
+                            <Border Grid.Row="0" Padding="14,9,14,7"
+                                    BorderBrush="{DynamicResource AccentBgBorder2}" BorderThickness="0,0,0,1">
+                                <Grid>
+                                    <TextBlock Text="◆ OBSIDIAN MCP" FontSize="9" FontFamily="Consolas"
+                                               Foreground="{DynamicResource AccentBase}"                                               VerticalAlignment="Center"/>
+                                    <Ellipse Width="5" Height="5" Fill="{DynamicResource Brush_Ok}"
+                                             HorizontalAlignment="Right" VerticalAlignment="Center"/>
+                                </Grid>
+                            </Border>
+
+                            <WrapPanel Grid.Row="1" Margin="10,6,10,4">
+                                <Button Content="List"      Style="{StaticResource BtnGhost}" Padding="7,3" Margin="2" Click="McpListNotes_Click"/>
+                                <Button Content="Search"    Style="{StaticResource BtnGhost}" Padding="7,3" Margin="2" Click="McpSearch_Click"/>
+                                <Button Content="Daily"     Style="{StaticResource BtnGhost}" Padding="7,3" Margin="2" Click="McpDailyNote_Click"/>
+                                <Button Content="New"       Style="{StaticResource BtnGhost}" Padding="7,3" Margin="2" Click="McpNewNote_Click"/>
+                                <Button Content="Graph"     Style="{StaticResource BtnGhost}" Padding="7,3" Margin="2" Click="McpBuildGraph_Click"/>
+                                <Button Content="Visual"    Style="{StaticResource BtnGhost}" Padding="7,3" Margin="2" Click="OpenKnowledgeGraph_Click"/>
+                                <Button Content="Sync"      Style="{StaticResource BtnGhost}" Padding="7,3" Margin="2" Click="McpSyncNotes_Click"/>
+                                <Button Content="Recent"    Style="{StaticResource BtnGhost}" Padding="7,3" Margin="2" Click="McpRecentNotes_Click"/>
+                                <Button Content="Backlinks" Style="{StaticResource BtnGhost}" Padding="7,3" Margin="2" Click="McpBacklinks_Click"/>
+                                <Button Content="Isolated"  Style="{StaticResource BtnGhost}" Padding="7,3" Margin="2" Click="McpIsolated_Click"/>
+                            </WrapPanel>
+
+                            <Border Grid.Row="2" Background="{DynamicResource AccentBgPanel}"
+                                    Margin="10,0,10,10" CornerRadius="4" Padding="8">
+                                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                    <TextBlock x:Name="McpOutput" Foreground="{DynamicResource AccentMuted}"
+                                               FontSize="9" FontFamily="Consolas" TextWrapping="Wrap"/>
+                                </ScrollViewer>
+                            </Border>
+                        </Grid>
+                    </Border>
+                </Grid>
+
             </Grid>
 
+            <!-- ══════════════ STATUS BAR ══════════════ -->
+            <Border Grid.Row="2" Background="{DynamicResource AccentBgBase}"
+                    BorderBrush="{DynamicResource AccentBgBorder2}" BorderThickness="0,1,0,0">
+                <Grid Margin="14,0">
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <Ellipse Width="5" Height="5" Fill="{DynamicResource Brush_Ok}" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                        <TextBlock x:Name="StatusCoreLabel" Text="core.online"
+                                   FontSize="9" FontFamily="Consolas" Foreground="{DynamicResource AccentDim}"
+                                   VerticalAlignment="Center" Margin="0,0,16,0"/>
+                        <Ellipse Width="5" Height="5" Fill="{DynamicResource AccentDim}" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                        <TextBlock Text="obsidian.sync" FontSize="9" FontFamily="Consolas"
+                                   Foreground="{DynamicResource AccentDim}" VerticalAlignment="Center" Margin="0,0,16,0"/>
+                        <TextBlock x:Name="StatusBpm" Text="-- bpm"
+                                   FontSize="9" FontFamily="Consolas" Foreground="{DynamicResource AccentDim}"
+                                   VerticalAlignment="Center" Margin="0,0,16,0"/>
+                        <TextBlock x:Name="StatusMood" Text=""
+                                   FontSize="9" FontFamily="Consolas" Foreground="{DynamicResource AccentDim}"
+                                   VerticalAlignment="Center"/>
+                    </StackPanel>
+                    <TextBlock x:Name="StatusTimestamp" Text=""
+                               FontSize="9" FontFamily="Consolas" Foreground="{DynamicResource AccentDim}"
+                               HorizontalAlignment="Right" VerticalAlignment="Center"/>
+                </Grid>
+            </Border>
+
             <!-- ══════════════ LOADING OVERLAY ══════════════ -->
-            <Grid x:Name="LoadingOverlay" Grid.RowSpan="2"
+            <Grid x:Name="LoadingOverlay" Grid.RowSpan="3"
                   Background="{DynamicResource AccentBgMain}" Panel.ZIndex="100">
 
                 <Grid.Triggers>
@@ -2038,7 +2389,7 @@
             </Grid>
 
         <!-- ══════════════ SETTINGS PANEL (inline overlay) ══════════════ -->
-        <Grid x:Name="SettingsOverlay" Grid.RowSpan="2" Visibility="Collapsed"
+        <Grid x:Name="SettingsOverlay" Grid.RowSpan="3" Visibility="Collapsed"
               Background="#B2000000">
             <Grid.RenderTransform>
                 <TranslateTransform x:Name="SettingsTranslate" X="0"/>
@@ -2209,6 +2560,13 @@
                             <TextBlock Text="Модель" Style="{StaticResource SettingsLabel}"/>
                             <TextBox x:Name="SP_ModelBox" Style="{StaticResource SettingInput}" Margin="0,0,0,6"/>
                             <TextBlock x:Name="SP_ModelHint"
+                                       Foreground="#3A3A4E" FontFamily="Segoe UI Variable, Segoe UI" FontSize="10"
+                                       Margin="0,0,0,16" TextWrapping="Wrap"/>
+
+                            <!-- Vision Model -->
+                            <TextBlock Text="Vision Модель" Style="{StaticResource SettingsLabel}"/>
+                            <TextBox x:Name="SP_VisionModelBox" Style="{StaticResource SettingInput}" Margin="0,0,0,4"/>
+                            <TextBlock Text="Vision модель для фото. Рекомендовані (cloud): llama3.2-vision:11b-cloud, qwen2.5vl:7b-cloud, qwen2.5vl:72b-cloud (найкраща). Порожньо — основна модель."
                                        Foreground="#3A3A4E" FontFamily="Segoe UI Variable, Segoe UI" FontSize="10"
                                        Margin="0,0,0,16" TextWrapping="Wrap"/>
 

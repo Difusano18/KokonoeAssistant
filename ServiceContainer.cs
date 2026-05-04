@@ -248,9 +248,11 @@ namespace KokonoeAssistant
                             goals:       GoalService,
                             habits:      HabitService);
                         // Wire brain's internal engines to LlmService
-                        LlmService.Emotion  = _brain.Emotion;
-                        LlmService.Memory   = _brain.Memory;
-                        LlmService.Patterns = _brain.Patterns;
+                        LlmService.Emotion    = _brain.Emotion;
+                        LlmService.Memory     = _brain.Memory;
+                        LlmService.Patterns   = _brain.Patterns;
+                        LlmService.Scheduler  = _brain.Scheduler;
+                        LlmService.Goals      = GoalService;
                     }
                     return _brain;
                 }

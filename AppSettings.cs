@@ -35,6 +35,12 @@ namespace KokonoeAssistant
         public string OllamaUrl    { get; set; } = "https://ollama.com/v1/chat/completions";
         public string OllamaModel  { get; set; } = "gpt-oss:120b-cloud";
 
+        // Vision model — використовується замість основної коли є вкладене зображення
+        public string VisionModel  { get; set; } = "llama3.2-vision:11b-cloud";
+        // Vision URL — якщо заповнений, image requests йдуть сюди (локальний Ollama/LM Studio), а не на OllamaUrl
+        // Порожньо = той самий OllamaUrl, але з VisionModel
+        public string VisionUrl    { get; set; } = "";
+
         // Ollama Cloud — пул ключів з round-robin ротацією
         public List<OllamaKeyEntry> OllamaKeys { get; set; } = new();
         public int    OllamaPoolMaxPerHour    { get; set; } = 20;

@@ -56,6 +56,14 @@ namespace KokonoeAssistant.Services
             if (_apiId == 0 || string.IsNullOrEmpty(_apiHash))
                 throw new InvalidOperationException("Не задані api_id / api_hash. Зайди на my.telegram.org → App API.");
 
+            // Якщо попередній client ще живий — dispose перед повторним підключенням
+            if (_client != null)
+            {
+                try { _client.Dispose(); } catch { }
+                _client = null;
+                await Task.Delay(200);
+            }
+
             WTelegram.Helpers.Log = (lvl, msg) =>
                 System.Diagnostics.Debug.WriteLine($"[WTG:{lvl}] {msg}");
 
@@ -302,6 +310,7 @@ namespace KokonoeAssistant.Services
         public void Dispose()
         {
             try { _client?.Dispose(); } catch { }
+            _client = null;
             IsConnected = false;
         }
     }

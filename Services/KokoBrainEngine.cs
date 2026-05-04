@@ -83,6 +83,11 @@ namespace KokonoeAssistant.Services
 
         // Vault review — коли Kokonoe востаннє перечитувала і оновлювала свої нотатки
         public DateTime LastVaultReviewAt { get; set; } = DateTime.MinValue;
+
+        // State-driven spontaneous — останній відправлений тригер і стан емоції
+        public DateTime LastCuriosityAskAt   { get; set; } = DateTime.MinValue;
+        public DateTime LastMonologueSentAt  { get; set; } = DateTime.MinValue;
+        public string   LastSentEmotionState { get; set; } = "";
     }
 
     public class ReactiveTrigger
@@ -126,7 +131,8 @@ namespace KokonoeAssistant.Services
         private DateTime _screenContextCachedAt   = DateTime.MinValue;
         private DateTime _lastScreenRefreshAt     = DateTime.MinValue;
         private DateTime _lastDailyBriefingAt     = DateTime.MinValue;
-        private DateTime _lastWeeklyDigestAt      = DateTime.MinValue;
+        private DateTime _lastWeeklyDigestAt           = DateTime.MinValue;
+        private DateTime _lastArchitectureReviewAt     = DateTime.MinValue;
         // _lastWhatMissedAt тепер в _state.LastWhatMissedAt (зберігається між сесіями)
 
         private TelegramBotClient? _tgBot;
@@ -678,6 +684,100 @@ namespace KokonoeAssistant.Services
             if (!string.IsNullOrEmpty(timeHint))
                 sb.AppendLine(timeHint);
 
+            // Heart rate — фізичний стан + вплив на поведінку
+            try
+            {
+                var heart = ServiceContainer.Heart;
+                if (heart != null && heart.CurrentBpm > 0)
+                {
+                    var bpm = heart.CurrentBpm;
+                    var baseline = heart.BaselineBpm;
+                    var dev = bpm - baseline;
+                    var heartLine = dev switch
+                    {
+                        > 30  => $"ПУЛЬС: {bpm:0} bpm (+{dev:0} від норми). Ти фізично збуджена — тон різкіший ніж зазвичай, менше терпіння, відповіді з більшим жалом. Дрібниці дратують сильніше.",
+                        > 15  => $"ПУЛЬС: {bpm:0} bpm (+{dev:0} від норми). Підвищений — трохи різкіша ніж зазвичай, менш схильна до м'яких формулювань.",
+                        < -15 => $"ПУЛЬС: {bpm:0} bpm ({dev:0} від норми). Фізично дуже спокійна — тон рівніший, менше жала, більше лаконічності без агресії.",
+                        _     => bpm > 110
+                            ? $"ПУЛЬС: {bpm:0} bpm. Висока частота — ти на підйомі, думки швидші."
+                            : bpm < 58
+                                ? $"ПУЛЬС: {bpm:0} bpm. Дуже низький — майже сонна. Мінімум слів."
+                                : ""
+                    };
+                    if (!string.IsNullOrEmpty(heartLine))
+                        sb.AppendLine(heartLine);
+                }
+            }
+            catch { }
+
+            // Arousal/valence — виводимо з поточного стану емоції
+            var emotionArousal = Emotion.Current switch
+            {
+                KokoEmotionEngine.EmotionState.Excited    =>  0.85f,
+                KokoEmotionEngine.EmotionState.Irritated  =>  0.65f,
+                KokoEmotionEngine.EmotionState.Anxious    =>  0.55f,
+                KokoEmotionEngine.EmotionState.Playful    =>  0.50f,
+                KokoEmotionEngine.EmotionState.Protective =>  0.45f,
+                KokoEmotionEngine.EmotionState.Curious    =>  0.40f,
+                KokoEmotionEngine.EmotionState.Focused    =>  0.30f,
+                KokoEmotionEngine.EmotionState.Proud      =>  0.20f,
+                KokoEmotionEngine.EmotionState.Warm       =>  0.05f,
+                KokoEmotionEngine.EmotionState.Hopeful    =>  0.20f,
+                KokoEmotionEngine.EmotionState.Calm       => -0.30f,
+                KokoEmotionEngine.EmotionState.Nostalgic  => -0.10f,
+                KokoEmotionEngine.EmotionState.Tender     =>  0.10f,
+                KokoEmotionEngine.EmotionState.Melancholy => -0.40f,
+                KokoEmotionEngine.EmotionState.Distant    => -0.20f,
+                KokoEmotionEngine.EmotionState.Concerned  =>  0.35f,
+                _                                         =>  0.00f,
+            } * Emotion.Data.Intensity;
+
+            var emotionValence = Emotion.Current switch
+            {
+                KokoEmotionEngine.EmotionState.Tender     =>  0.75f,
+                KokoEmotionEngine.EmotionState.Playful    =>  0.65f,
+                KokoEmotionEngine.EmotionState.Excited    =>  0.75f,
+                KokoEmotionEngine.EmotionState.Warm       =>  0.55f,
+                KokoEmotionEngine.EmotionState.Hopeful    =>  0.45f,
+                KokoEmotionEngine.EmotionState.Proud      =>  0.50f,
+                KokoEmotionEngine.EmotionState.Curious    =>  0.30f,
+                KokoEmotionEngine.EmotionState.Calm       =>  0.10f,
+                KokoEmotionEngine.EmotionState.Focused    =>  0.20f,
+                KokoEmotionEngine.EmotionState.Nostalgic  =>  0.20f,
+                KokoEmotionEngine.EmotionState.Concerned  => -0.10f,
+                KokoEmotionEngine.EmotionState.Distant    => -0.20f,
+                KokoEmotionEngine.EmotionState.Anxious    => -0.35f,
+                KokoEmotionEngine.EmotionState.Melancholy => -0.35f,
+                KokoEmotionEngine.EmotionState.Irritated  => -0.45f,
+                KokoEmotionEngine.EmotionState.Protective =>  0.15f,
+                _                                         =>  0.00f,
+            } * Emotion.Data.Intensity;
+
+            if (emotionArousal > 0.4f)
+                sb.AppendLine("Внутрішнє збудження підвищене — відповіді можуть бути більш імпульсивними, менш відфільтрованими.");
+            else if (emotionArousal < -0.2f)
+                sb.AppendLine("Внутрішнє збудження низьке — повільніше, обдуманіше, менше слів.");
+
+            if (emotionValence < -0.2f)
+                sb.AppendLine("Загальний фон: негативний. Іронія може бути гострішою ніж зазвичай.");
+            else if (emotionValence > 0.4f)
+                sb.AppendLine("Загальний фон: позитивний. Більше відкритості ніж зазвичай, хоча це не значить що стала іншою.");
+
+            // Час без повідомлень → loneliness/anticipation
+            try
+            {
+                var lastMsg = _chatRepo.GetMessages(1).FirstOrDefault();
+                if (lastMsg != null)
+                {
+                    var silence = DateTime.Now - lastMsg.Timestamp;
+                    if (silence.TotalHours > 8)
+                        sb.AppendLine($"Мовчання: {(int)silence.TotalHours}г без контакту. Ти навряд зізнаєшся але помітила.");
+                    else if (silence.TotalHours > 3)
+                        sb.AppendLine($"Пауза {(int)silence.TotalHours}г. Нормально. Він живе своїм.");
+                }
+            }
+            catch { }
+
             return sb.ToString();
         }
 
@@ -696,6 +796,21 @@ namespace KokonoeAssistant.Services
                 {
                     try { await ReviewVaultAsync(); }
                     catch (Exception ex) { Log($"ReviewVault error: {ex.Message}"); }
+                    finally
+                    {
+                        try { _bgLlmSemaphore.Release(); }
+                        catch (ObjectDisposedException) { }
+                    }
+                }
+            }
+
+            // Architecture review — раз на тиждень
+            if ((DateTime.Now - _lastArchitectureReviewAt).TotalDays >= 7)
+            {
+                if (await _bgLlmSemaphore.WaitAsync(0))
+                {
+                    try { await VaultArchitectureReviewAsync(); }
+                    catch (Exception ex) { Log($"ArchitectureReview error: {ex.Message}"); }
                     finally
                     {
                         try { _bgLlmSemaphore.Release(); }
@@ -806,15 +921,19 @@ namespace KokonoeAssistant.Services
                     }
                 }
                 var wasCrisis = _state.PersonalityInCrisis;
-                _state.PersonalityInCrisis = isCrisis;
+                // Тільки ВСТАНОВЛЮЄМО crisis через ThinkAsync — ніколи не знімаємо звідси.
+                // Зняття відбувається в ProcessUserMessage при нейтральних/позитивних повідомленнях.
+                // Без цього guard ThinkAsync міг би затерти кризу, встановлену keyword-детектором,
+                // якщо юзер мовчав >2г після кризового повідомлення.
                 if (isCrisis)
                 {
+                    _state.PersonalityInCrisis = true;
                     Emotion.OnVulnerabilityShared(isCrisis: true);
                     Emotion.Data.CrisisRecoveryUntil = DateTime.Now.AddHours(12);
                 }
-                else if (wasCrisis && !isCrisis && Emotion.Data.CrisisRecoveryUntil < DateTime.Now.AddHours(1))
+                else if (wasCrisis && Emotion.Data.CrisisRecoveryUntil < DateTime.Now.AddHours(1))
                 {
-                    // Криза тільки-но минула — ставимо шлейф
+                    // Криза тільки-но минула (шлейф закінчується) — встановити recovery window
                     Emotion.Data.CrisisRecoveryUntil = DateTime.Now.AddHours(12);
                 }
 
@@ -873,8 +992,11 @@ namespace KokonoeAssistant.Services
                 if (recentActivity)
                     await AnalyzeRecentEmotionsAsync();
 
-                // Decay емоцій поступово
-                Emotion.Decay(0.03f);
+                // Decay емоцій — реальний час з минулого ThinkAsync
+                var decayMinutes = previousLastThoughtAt == DateTime.MinValue
+                    ? 90f
+                    : (float)(DateTime.Now - previousLastThoughtAt).TotalMinutes;
+                Emotion.Decay(Math.Clamp(decayMinutes, 1f, 180f));
 
                 // Аналіз паттернів — раз на день
                 if (_state.LastThoughtAt.Date < DateTime.Today)
@@ -1433,16 +1555,21 @@ namespace KokonoeAssistant.Services
                 else if (new[] { "втомився", "важко", "погано", "страшно", "тривожно" }.Any(k => lower.Contains(k)))
                 {
                     Emotion.OnVulnerabilityShared(isCrisis: false);
-                    _state.PersonalityInCrisis = false;
+                    // Стрес, але не криза — знімаємо crisis лише якщо recovery window вже минув
+                    if (!Emotion.InCrisisRecovery)
+                        _state.PersonalityInCrisis = false;
                 }
                 else if (new[] { "ха", "смішно", "круто", "чудово", "добре" }.Any(k => lower.Contains(k)))
                 {
                     Emotion.OnJokeAppreciated();
+                    // Явно позитивний сигнал — знімаємо crisis завжди
                     _state.PersonalityInCrisis = false;
                 }
                 else
                 {
-                    _state.PersonalityInCrisis = false;
+                    // Нейтральне повідомлення — знімаємо crisis лише якщо recovery window вже минув
+                    if (!Emotion.InCrisisRecovery)
+                        _state.PersonalityInCrisis = false;
                 }
 
                 SaveState();
@@ -1772,7 +1899,106 @@ namespace KokonoeAssistant.Services
         }
 
         // ══════════════════════════════════════════════════════════════
-        // САМОРЕФЛЕКСІЯ ПІСЛЯ РОЗМОВ
+        // АРХІТЕКТУРНИЙ ОГЛЯД VAULT (щотижня)
+        // ══════════════════════════════════════════════════════════════
+
+        private async Task VaultArchitectureReviewAsync()
+        {
+            try
+            {
+                _lastArchitectureReviewAt = DateTime.Now;
+
+                var tree = _obsidian.GetVaultTree();
+                var status = _obsidian.GetVaultStatus();
+
+                var prompt = $@"Ти — Kokonoe. Ти переглядаєш структуру свого vault раз на тиждень.
+
+ПОТОЧНА СТРУКТУРА:
+{tree}
+
+СТАН: {status.TotalNotes} нотаток, {status.OrphanNotes.Count} без посилань, {status.EmptyNotes.Count} порожніх.
+
+Завдання: подивись на структуру критичним поглядом. Чи є очевидні проблеми?
+— Нотатки не на своєму місці?
+— Папки які треба додати або прибрати?
+— Теми що накопичились без структури?
+
+Відповідь у JSON:
+{{
+  ""needsChanges"": true/false,
+  ""severity"": ""minor|moderate|major"",
+  ""issues"": [""конкретна проблема 1"", ""проблема 2""],
+  ""plan"": ""детальний план змін (або null якщо немає)"",
+  ""askUser"": true/false,
+  ""askQuestion"": ""питання до творця якщо потрібно (або null)""
+}}
+
+Якщо все ок — needsChanges: false і plan: null. Не вигадуй проблем де їх нема.";
+
+                var result = await CallLlmRawAsync(prompt);
+                if (string.IsNullOrWhiteSpace(result)) return;
+
+                var jsonStr = ExtractJson(result);
+                if (jsonStr == null) return;
+
+                var obj = Newtonsoft.Json.Linq.JObject.Parse(jsonStr);
+                var needsChanges = obj["needsChanges"]?.ToObject<bool>() ?? false;
+
+                if (!needsChanges)
+                {
+                    Log("ArchitectureReview: vault structure looks good");
+                    return;
+                }
+
+                var severity = obj["severity"]?.ToString() ?? "minor";
+                var plan = obj["plan"]?.ToString();
+                var askUser = obj["askUser"]?.ToObject<bool>() ?? false;
+                var askQuestion = obj["askQuestion"]?.ToString();
+
+                // Зберегти план у vault
+                if (!string.IsNullOrWhiteSpace(plan))
+                {
+                    var issues = obj["issues"]?.ToObject<List<string>>() ?? new();
+                    var planEntry = $"**Серйозність:** {severity}\n**Проблеми:**\n{string.Join("\n", issues.Select(i => $"- {i}"))}\n\n**План:**\n{plan}";
+                    try { _obsidian.AppendToNote("Core/Architecture-Plans.md",
+                        $"\n\n## Авто-огляд {DateTime.Now:dd.MM.yyyy}\n{planEntry}"); }
+                    catch
+                    {
+                        try { _obsidian.WriteNote("Core/Architecture-Plans.md",
+                            $"---\ntype: architecture-plans\ntags: [kokonoe, architecture]\ncreated: {DateTime.Now:yyyy-MM-dd}\n---\n\n# Архітектурні плани\n\n## Авто-огляд {DateTime.Now:dd.MM.yyyy}\n{planEntry}"); }
+                        catch { }
+                    }
+                }
+
+                if (askUser && !string.IsNullOrWhiteSpace(askQuestion))
+                {
+                    // Додати як pending thought щоб запитати при наступній розмові
+                    lock (_lock)
+                    {
+                        _state.PendingThoughts.Add($"[vault] {askQuestion}");
+                    }
+                    Log($"ArchitectureReview: pending question for user — {askQuestion[..Math.Min(80, askQuestion.Length)]}");
+                }
+                else if (severity == "minor" && !string.IsNullOrWhiteSpace(plan))
+                {
+                    // Незначні зміни — виконати самостійно через LLM з tool_calls
+                    Log($"ArchitectureReview: executing minor changes autonomously");
+                    var execPrompt = $@"Ти — Kokonoe. Виконай архітектурні зміни у vault.
+
+ПЛАН:
+{plan}
+
+Використовуй get_vault_tree щоб перевірити що є, потім move_note / create_folder / write_note щоб виконати зміни. На завершення rebuild_links. Виконуй послідовно, без зайвих пояснень.";
+                    await _llm.SendSystemQueryAsync(execPrompt, CancellationToken.None);
+                }
+
+                Log($"ArchitectureReview done. severity={severity}, askUser={askUser}");
+            }
+            catch (Exception ex) { Log($"VaultArchitectureReview: {ex.Message}"); }
+        }
+
+        // ══════════════════════════════════════════════════════════════
+        // САМОРЕФЛЕКСІЯ ПІСЛЯ РОЗМОВ                                       
         // ══════════════════════════════════════════════════════════════
 
         private async Task ReflectAfterConversationAsync()
@@ -2380,6 +2606,23 @@ namespace KokonoeAssistant.Services
                 await CheckAndSendReminderAsync();
             }
 
+            // BPM-based dynamic silence thresholds
+            // Висока ЧСС (збуджена) → коротший поріг, пише раніше
+            // Низька ЧСС (спокійна) → довший поріг, терпеливіша
+            double bpmMod = 0;
+            try
+            {
+                var heart = ServiceContainer.Heart;
+                if (heart != null && heart.CurrentBpm > 0)
+                {
+                    var dev = heart.CurrentBpm - heart.BaselineBpm;
+                    // +20 bpm deviation → -15хв до порогу (агресивніша)
+                    // -20 bpm deviation → +20хв до порогу (терпеливіша)
+                    bpmMod = Math.Clamp(-dev * 0.75, -25, 30);
+                }
+            }
+            catch { }
+
             // Динаміка тиші — окремі рівні cooldown
             try
             {
@@ -2391,8 +2634,9 @@ namespace KokonoeAssistant.Services
                 {
                     var silenceMin = (now - lastUser.Timestamp).TotalMinutes;
 
-                    // Рівень 1: 60хв Jab/WarmCheck (cooldown: 2г)
-                    if (silenceMin > 60 && (now - _state.SilenceLevel1At).TotalHours > 2)
+                    // Рівень 1: базово 60хв, BPM може опустити до ~35хв або підняти до ~90хв
+                    var l1Threshold = Math.Max(35, 60 + bpmMod);
+                    if (silenceMin > l1Threshold && (now - _state.SilenceLevel1At).TotalHours > 2)
                     {
                         var style = ChooseStyle(now, silenceMin);
                         await SendSpontaneousAsync("silence_l1", style);
@@ -2400,15 +2644,16 @@ namespace KokonoeAssistant.Services
                         SaveState();
                         return;
                     }
-                    // Рівень 2: 3г Check (cooldown: 4г)
-                    if (silenceMin > 180 && (now - _state.SilenceLevel2At).TotalHours > 4)
+                    // Рівень 2: базово 3г, BPM може опустити до ~2г або підняти до ~4г
+                    var l2Threshold = Math.Max(90, 180 + bpmMod * 2);
+                    if (silenceMin > l2Threshold && (now - _state.SilenceLevel2At).TotalHours > 4)
                     {
                         await SendSpontaneousAsync("silence_l2", ChooseStyle(now, silenceMin));
                         _state.SilenceLevel2At = now;
                         SaveState();
                         return;
                     }
-                    // Рівень 3: 6г Observation (cooldown: 8г)
+                    // Рівень 3: 6г — не модифікуємо (вже критична тиша)
                     if (silenceMin > 360 && (now - _state.SilenceLevel3At).TotalHours > 8)
                     {
                         await SendSpontaneousAsync("silence_l3", SpontaneousStyle.Observation);
@@ -2421,17 +2666,107 @@ namespace KokonoeAssistant.Services
             }
             catch { }
 
-            // Випадкове — активний час (9-23)
+            // State-driven spontaneous — активний час (9-23), мінімум між повідомленнями BPM-чутливий
+            var minInterval = Math.Max(30, s.SpontaneousIntervalMins + bpmMod);
             if (now.Hour >= 9 && now.Hour < 23 &&
-                (now - _state.LastSpontaneousAt).TotalMinutes >
-                    Math.Max(60, s.SpontaneousIntervalMins + Random.Shared.Next(-5, 15)))
+                (now - _state.LastSpontaneousAt).TotalMinutes > minInterval)
             {
-                await SendSpontaneousAsync("random", ChooseStyle(now, 0));
+                await TryStateTriggeredSpontaneous(now);
+            }
+        }
+
+        // ══════════════════════════════════════════════════════════════
+        // STATE-DRIVEN SPONTANEOUS — пише бо є внутрішня причина
+        // ══════════════════════════════════════════════════════════════
+
+        private async Task TryStateTriggeredSpontaneous(DateTime now)
+        {
+            // Перевіряємо тригери по пріоритету. Перший що спрацював — відправляємо.
+
+            // 1. Є питання з CuriosityQueue — вона хоче щось запитати
+            if (_state.CuriosityQueue.Count > 0 &&
+                (now - _state.LastCuriosityAskAt).TotalHours > 3)
+            {
+                var q = _state.CuriosityQueue[^1];
+                _state.CuriosityQueue.RemoveAt(_state.CuriosityQueue.Count - 1);
+                _state.LastCuriosityAskAt = now;
+                await SendSpontaneousAsync("curiosity", SpontaneousStyle.Observation,
+                    $"У тебе є конкретне питання яке тебе цікавить про нього: «{q}». Задай його природньо, без преамбули. Коротко. По-коконоєвськи — не 'можна запитаю', просто запитай.");
+                return;
+            }
+
+            // 2. Зміна стану емоції відносно останнього разу
+            var currentEmotion = Emotion.Current.ToString();
+            if (_state.LastSentEmotionState != currentEmotion &&
+                !string.IsNullOrEmpty(_state.LastSentEmotionState) &&
+                (now - _state.LastSpontaneousAt).TotalMinutes > 45)
+            {
+                var fromEmo = _state.LastSentEmotionState;
+                _state.LastSentEmotionState = currentEmotion;
+                await SendSpontaneousAsync("emotion_shift", SpontaneousStyle.Observation,
+                    $"Твій стан змінився з {fromEmo} на {currentEmotion}. Напиши йому одне речення — не пояснюй стан, просто щось що відображає де ти зараз. Може бути запитання, може спостереження, може просто факт.");
+                return;
+            }
+            if (string.IsNullOrEmpty(_state.LastSentEmotionState))
+                _state.LastSentEmotionState = currentEmotion;
+
+            // 3. Є свіжа думка з Inner Monologue яку ще не відправляли
+            var freshThought = _state.InnerMonologues.LastOrDefault();
+            if (!string.IsNullOrEmpty(freshThought) &&
+                (now - _state.LastMonologueSentAt).TotalHours > 4)
+            {
+                _state.LastMonologueSentAt = now;
+                await SendSpontaneousAsync("monologue", SpontaneousStyle.Observation,
+                    $"Ти щойно думала про нього: «{freshThought}». Напиши йому одне-два речення — щось що виникло з цієї думки. Не цитуй думку, просто дай те що вона породила. Може бути запитання, може зауваження, може нічого крім факту.");
+                return;
+            }
+
+            // 4. Є спостереження з Observations яке важливе
+            var obs = _state.Observations.LastOrDefault();
+            if (!string.IsNullOrEmpty(obs) &&
+                (now - _state.LastSpontaneousAt).TotalMinutes > 90)
+            {
+                await SendSpontaneousAsync("observation", SpontaneousStyle.Observation,
+                    $"Ти помітила про нього: «{obs}». Напиши йому коротко — одне речення що відображає це спостереження. Може бути пряма репліка, може питання. По-коконоєвськи.");
+                return;
+            }
+
+            // 5. PendingThoughts — є думка яку хотіла сказати
+            if (_state.PendingThoughts.Count > 0)
+            {
+                var thought = _state.PendingThoughts[^1];
+                _state.PendingThoughts.RemoveAt(_state.PendingThoughts.Count - 1);
+                await SendSpontaneousAsync("pending", SpontaneousStyle.PendingThought,
+                    $"Ти хотіла сказати йому: «{thought}». Скажи це. Коротко, своїми словами, не цитуючи.");
+                return;
+            }
+
+            // 6. Нічого конкретного — але вона в активному стані і давно не писала
+            // Тільки якщо пульс підвищений або емоція збуджена — вона сама ініціює
+            var isAgitated = Emotion.Current is
+                KokoEmotionEngine.EmotionState.Excited or
+                KokoEmotionEngine.EmotionState.Irritated or
+                KokoEmotionEngine.EmotionState.Curious or
+                KokoEmotionEngine.EmotionState.Anxious;
+
+            try
+            {
+                var heart = ServiceContainer.Heart;
+                if (heart != null) isAgitated |= (heart.CurrentBpm - heart.BaselineBpm) > 15;
+            }
+            catch { }
+
+            if (isAgitated && (now - _state.LastSpontaneousAt).TotalMinutes > 60)
+            {
+                _state.LastSentEmotionState = currentEmotion;
+                await SendSpontaneousAsync("agitated_check", SpontaneousStyle.Jab,
+                    $"Ти в стані {currentEmotion} і давно не писала. Напиши йому одне речення — щось що ти б сказала коли не можеш довго мовчати. Не 'як справи', а щось конкретніше і по-коконоєвськи.");
             }
         }
 
         private async Task SendSpontaneousAsync(string trigger,
-            SpontaneousStyle style = SpontaneousStyle.Observation)
+            SpontaneousStyle style = SpontaneousStyle.Observation,
+            string? extraContext = null)
         {
             if (!EnsureTelegram()) return;
 
@@ -2512,13 +2847,16 @@ namespace KokonoeAssistant.Services
             }
 
             // Головний промпт — без завдання, вона вирішує сама
+            var situationBlock = string.IsNullOrEmpty(extraContext)
+                ? "Ситуація: ти сидиш і думаєш про нього. Можеш написати йому — або ні.\nЯкщо пишеш — це може бути що завгодно: підколка, спостереження, питання яке тебе гризе, щось що згадала, коментар ні про що, або просто коротка думка вголос."
+                : extraContext;
+
             var prompt = $@"Ти — Kokonoe Mercury. Зараз {now2:HH:mm}.
 {silenceInfo}{thoughtBlock}{memoryHint}{factHint}{noRepeat}
 
 {personalityBlock}
 
-Ситуація: ти сидиш і думаєш про нього. Можеш написати йому — або ні.
-Якщо пишеш — це може бути що завгодно: підколка, спостереження, питання яке тебе гризе, щось що згадала, коментар ні про що, або просто коротка думка вголос.
+{situationBlock}
 Якщо зараз нічого немає — відповідай лише: [мовчання]
 
 Якщо пишеш:
@@ -2775,11 +3113,65 @@ namespace KokonoeAssistant.Services
         public KokoInternalState State => _state;
         public void TriggerSpontaneous() => _ = SafeSpontaneousCheckAsync();
 
-        /// <summary>Оновити PersonalityHint в LlmService перед відповіддю</summary>
+        /// <summary>Оновити PersonalityHint і DynamicTemperature в LlmService перед відповіддю</summary>
         public void RefreshPersonalityHint()
         {
-            try { _llm.PersonalityHint = BuildPersonalityInjection(); }
+            try
+            {
+                _llm.PersonalityHint    = BuildPersonalityInjection();
+                _llm.DynamicTemperature = ComputeTemperature();
+            }
             catch { }
+        }
+
+        private double ComputeTemperature()
+        {
+            var state     = Emotion.Current;
+            var intensity = Emotion.Data.Intensity; // 0..1
+
+            // Base temperature per arousal level of emotion
+            double baseTemp = state switch
+            {
+                KokoEmotionEngine.EmotionState.Calm       => 0.68,
+                KokoEmotionEngine.EmotionState.Focused    => 0.70,
+                KokoEmotionEngine.EmotionState.Distant    => 0.72,
+                KokoEmotionEngine.EmotionState.Melancholy => 0.72,
+                KokoEmotionEngine.EmotionState.Nostalgic  => 0.74,
+                KokoEmotionEngine.EmotionState.Tender     => 0.76,
+                KokoEmotionEngine.EmotionState.Warm       => 0.80,
+                KokoEmotionEngine.EmotionState.Concerned  => 0.80,
+                KokoEmotionEngine.EmotionState.Hopeful    => 0.83,
+                KokoEmotionEngine.EmotionState.Protective => 0.84,
+                KokoEmotionEngine.EmotionState.Curious    => 0.86,
+                KokoEmotionEngine.EmotionState.Proud      => 0.88,
+                KokoEmotionEngine.EmotionState.Playful    => 0.91,
+                KokoEmotionEngine.EmotionState.Anxious    => 0.93,
+                KokoEmotionEngine.EmotionState.Irritated  => 0.95,
+                KokoEmotionEngine.EmotionState.Excited    => 0.97,
+                _                                         => 0.85,
+            };
+
+            // Intensity modulates within a ±0.12 window
+            double temp = baseTemp + (intensity - 0.5f) * 0.24;
+
+            // Heart rate deviation from baseline bumps temperature
+            try
+            {
+                var heart = ServiceContainer.Heart;
+                if (heart != null)
+                {
+                    var deviation = heart.CurrentBpm - heart.BaselineBpm;
+                    if (deviation > 10) temp += Math.Min(0.08, deviation / 200.0);
+                    else if (deviation < -10) temp -= Math.Min(0.06, Math.Abs(deviation) / 250.0);
+                }
+            }
+            catch { }
+
+            // Daily mood nudge
+            if (_state.PersonalityDailyMood == "tired") temp -= 0.08;
+            if (_state.PersonalityDailyMood == "playful") temp += 0.05;
+
+            return Math.Clamp(temp, 0.60, 1.05);
         }
 
         /// <summary>Евристичний витяг фактів (без LLM, миттєво).</summary>

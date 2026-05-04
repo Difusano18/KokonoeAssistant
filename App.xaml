@@ -3,37 +3,359 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              StartupUri="MainWindow.xaml">
     <Application.Resources>
-        <!-- Default accent — indigo. ThemeManager overrides these at runtime. -->
-        <SolidColorBrush x:Key="AccentBase" Color="#6366F1"/>
-        <Color x:Key="AccentBaseColor">#6366F1</Color>
-        <SolidColorBrush x:Key="AccentPrimary"    Color="#4F52D4"/>
-        <SolidColorBrush x:Key="AccentDark"       Color="#3730A3"/>
-        <SolidColorBrush x:Key="AccentPale"       Color="#A5B4FC"/>
-        <SolidColorBrush x:Key="AccentText"       Color="#C7D2FE"/>
-        <SolidColorBrush x:Key="AccentTextLight"  Color="#E0E7FF"/>
-        <SolidColorBrush x:Key="AccentVeryLight"  Color="#EEF2FF"/>
-        <SolidColorBrush x:Key="AccentMuted"      Color="#6B6B80"/>
+        <ResourceDictionary>
 
+        <!-- ═══ SURFACES ═══════════════════════════════════════════ -->
+        <Color  x:Key="C_Bg0">#07090D</Color>
+        <Color  x:Key="C_Bg1">#0B0E14</Color>
+        <Color  x:Key="C_Bg2">#0F131B</Color>
+        <Color  x:Key="C_Bg3">#141923</Color>
+        <Color  x:Key="C_Bg4">#1B212D</Color>
+
+        <SolidColorBrush x:Key="AccentBgMain"      Color="#07090D"/>
+        <SolidColorBrush x:Key="AccentBgBase"      Color="#0B0E14"/>
+        <SolidColorBrush x:Key="AccentBgPanel"     Color="#0F131B"/>
+        <SolidColorBrush x:Key="AccentBgCard"      Color="#141923"/>
+        <SolidColorBrush x:Key="AccentBgHover"     Color="#1B212D"/>
+        <SolidColorBrush x:Key="AccentBgDarker"    Color="#0B0E14"/>
+        <SolidColorBrush x:Key="AccentBgInput"     Color="#00000066"/>
+
+        <!-- Glass panel (semi-transparent card) -->
+        <SolidColorBrush x:Key="AccentGlass"       Color="#0F131B" Opacity="0.9"/>
+
+        <!-- ═══ BORDERS / LINES ════════════════════════════════════ -->
+        <SolidColorBrush x:Key="AccentBgBorder"    Color="#FFFFFF0A"/>  <!-- line-1 -->
+        <SolidColorBrush x:Key="AccentBgBorder2"   Color="#FFFFFF14"/>  <!-- line-2 rgba(255,255,255,0.08) -->
+        <SolidColorBrush x:Key="AccentAsstBorder"  Color="#FFC3462E"/>  <!-- line-3 rgba(255,195,70,0.18) -->
+        <SolidColorBrush x:Key="AccentAmberLine"   Color="#FFB02066"/>  <!-- line-amber rgba(255,176,32,0.4) -->
+
+        <!-- ═══ AMBER ACCENT ════════════════════════════════════════ -->
+        <Color  x:Key="C_Amber">#FFB020</Color>
+        <Color  x:Key="C_AmberHi">#FFC94A</Color>
+        <Color  x:Key="C_AmberLo">#D18A00</Color>
+
+        <SolidColorBrush x:Key="AccentBase"        Color="#FFB020"/>
+        <Color           x:Key="AccentBaseColor"    >#FFB020</Color>
+        <SolidColorBrush x:Key="AccentPrimary"     Color="#FFC94A"/>
+        <SolidColorBrush x:Key="AccentDark"        Color="#D18A00"/>
+        <SolidColorBrush x:Key="AccentPale"        Color="#FFE199"/>
+        <SolidColorBrush x:Key="AccentText"        Color="#C8C4B6"/>
+        <SolidColorBrush x:Key="AccentTextLight"   Color="#F3F0E6"/>
+        <SolidColorBrush x:Key="AccentVeryLight"   Color="#FFF5E0"/>
+        <SolidColorBrush x:Key="AccentMuted"       Color="#8A8678"/>
+        <SolidColorBrush x:Key="AccentDim"         Color="#585548"/>
+        <SolidColorBrush x:Key="AccentNavBg"       Color="#FFB0201F"/> <!-- amber-soft 0x1F=12% -->
+
+        <!-- ═══ STATUS COLORS ═══════════════════════════════════════ -->
+        <SolidColorBrush x:Key="Brush_Ok"          Color="#7FD49A"/>
+        <SolidColorBrush x:Key="Brush_Err"         Color="#E26565"/>
+        <SolidColorBrush x:Key="Brush_Info"        Color="#8AA9FF"/>
+        <SolidColorBrush x:Key="Brush_Warn"        Color="#FFB020"/>
+
+        <!-- Legacy compatibility aliases (code-behind references) -->
+        <SolidColorBrush x:Key="Brush_030B05"      Color="#1A0F00"/>
+        <SolidColorBrush x:Key="Brush_8AC8A0"      Color="#C8C4B6"/>
+        <SolidColorBrush x:Key="Brush_1A3020"      Color="#585548"/>
+        <SolidColorBrush x:Key="Brush_2A4232"      Color="#8A8678"/>
+        <SolidColorBrush x:Key="Brush_163025"      Color="#FFB02040"/>
+        <SolidColorBrush x:Key="Brush_142018"      Color="#1B212D"/>
+        <SolidColorBrush x:Key="Brush_2A4030"      Color="#3A382F"/>
+        <SolidColorBrush x:Key="Brush_071209"      Color="#0F131B"/>
+        <SolidColorBrush x:Key="Brush_0A1A0D"      Color="#141923"/>
+        <SolidColorBrush x:Key="Brush_08180C"      Color="#141923"/>
+        <SolidColorBrush x:Key="Brush_071008"      Color="#07090D"/>
+        <SolidColorBrush x:Key="Brush_0F2818"      Color="#FFB02029"/>
+        <SolidColorBrush x:Key="Brush_060F08"      Color="#0F131B"/>
+        <SolidColorBrush x:Key="Brush_2A0808"      Color="#2A0A0A"/>
+        <SolidColorBrush x:Key="Brush_FF5555"      Color="#E26565"/>
+        <SolidColorBrush x:Key="Brush_2A4832"      Color="#585548"/>
+        <SolidColorBrush x:Key="AccentScrollThm"   Color="#FFB02020"/>
+        <SolidColorBrush x:Key="AccentListHovBg"   Color="#FFFFFF08"/>
+        <SolidColorBrush x:Key="AccentBgBorder1"   Color="#FFFFFF0A"/>
+        <SolidColorBrush x:Key="Brush_3A2020"      Color="#8A8678"/>
+        <SolidColorBrush x:Key="Brush_102818"      Color="#FFB0201F"/>
+        <SolidColorBrush x:Key="Brush_050D07"      Color="#0B0E14"/>
+        <SolidColorBrush x:Key="Brush_2A6040"      Color="#8A8678"/>
+
+        <!-- ═══ SCROLLBAR ══════════════════════════════════════════ -->
+        <Style x:Key="KokoScrollThumb" TargetType="Thumb">
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Thumb">
+                        <Border Background="{DynamicResource AccentScrollThm}" CornerRadius="2"/>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style TargetType="ScrollBar">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Width" Value="4"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ScrollBar">
+                        <Grid>
+                            <Track x:Name="PART_Track" IsDirectionReversed="True">
+                                <Track.Thumb>
+                                    <Thumb Style="{StaticResource KokoScrollThumb}"/>
+                                </Track.Thumb>
+                            </Track>
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- ═══ BUTTON: Primary ════════════════════════════════════ -->
+        <Style x:Key="BtnPrimary" TargetType="Button">
+            <Setter Property="Background">
+                <Setter.Value>
+                    <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                        <GradientStop Color="#FFB020" Offset="0"/>
+                        <GradientStop Color="#D18A00" Offset="1"/>
+                    </LinearGradientBrush>
+                </Setter.Value>
+            </Setter>
+            <Setter Property="Foreground"      Value="#1A0F00"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="FontSize"        Value="12"/>
+            <Setter Property="FontWeight"      Value="SemiBold"/>
+            <Setter Property="Cursor"          Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="bd" Background="{TemplateBinding Background}"
+                                CornerRadius="6" Padding="{TemplateBinding Padding}">
+                            <Border.Effect>
+                                <DropShadowEffect Color="#FFB020" BlurRadius="12" ShadowDepth="0" Opacity="0"/>
+                            </Border.Effect>
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="bd" Property="Effect">
+                                    <Setter.Value>
+                                        <DropShadowEffect Color="#FFB020" BlurRadius="16" ShadowDepth="0" Opacity="0.4"/>
+                                    </Setter.Value>
+                                </Setter>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="bd" Property="Opacity" Value="0.85"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="bd" Property="Opacity" Value="0.4"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- ═══ BUTTON: Ghost ═════════════════════════════════════ -->
+        <Style x:Key="BtnGhost" TargetType="Button">
+            <Setter Property="Background"      Value="Transparent"/>
+            <Setter Property="Foreground"      Value="{DynamicResource AccentMuted}"/>
+            <Setter Property="BorderBrush"     Value="{DynamicResource AccentBgBorder2}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="FontSize"        Value="12"/>
+            <Setter Property="Cursor"          Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="bd"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="6" Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="bd" Property="Background" Value="{DynamicResource AccentNavBg}"/>
+                                <Setter TargetName="bd" Property="BorderBrush" Value="{DynamicResource AccentAsstBorder}"/>
+                                <Setter Property="Foreground" Value="{DynamicResource AccentText}"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="bd" Property="Opacity" Value="0.7"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- ═══ BUTTON: Nav (sidebar) ════════════════════════════ -->
+        <Style x:Key="BtnNav" TargetType="Button">
+            <Setter Property="Background"      Value="Transparent"/>
+            <Setter Property="Foreground"      Value="{DynamicResource AccentText}"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Cursor"          Value="Hand"/>
+            <Setter Property="HorizontalContentAlignment" Value="Left"/>
+            <Setter Property="Height"          Value="38"/>
+            <Setter Property="Padding"         Value="0"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="bd" Background="{TemplateBinding Background}"
+                                CornerRadius="8" Margin="0,2"
+                                BorderBrush="Transparent" BorderThickness="1">
+                            <ContentPresenter HorizontalAlignment="Left" VerticalAlignment="Center"
+                                              Margin="12,0,0,0"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="bd" Property="Background" Value="#FFFFFF08"/>
+                                <Setter Property="Foreground" Value="{DynamicResource AccentTextLight}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="BtnNavActive" TargetType="Button">
+            <Setter Property="Foreground"      Value="{DynamicResource AccentPrimary}"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Cursor"          Value="Hand"/>
+            <Setter Property="HorizontalContentAlignment" Value="Left"/>
+            <Setter Property="Height"          Value="38"/>
+            <Setter Property="Padding"         Value="0"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Grid>
+                            <Border x:Name="bd" CornerRadius="8" Margin="0,2"
+                                    BorderBrush="{DynamicResource AccentAsstBorder}" BorderThickness="1">
+                                <Border.Background>
+                                    <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                                        <GradientStop Color="#FFB0201F" Offset="0"/>
+                                        <GradientStop Color="#FFB0200D" Offset="1"/>
+                                    </LinearGradientBrush>
+                                </Border.Background>
+                                <Border.Effect>
+                                    <DropShadowEffect Color="#FFB020" BlurRadius="16" ShadowDepth="0" Opacity="0.08"/>
+                                </Border.Effect>
+                                <ContentPresenter HorizontalAlignment="Left" VerticalAlignment="Center"
+                                                  Margin="16,0,0,0"/>
+                            </Border>
+                            <!-- Left amber indicator strip -->
+                            <Rectangle Width="2" HorizontalAlignment="Left" RadiusX="2" RadiusY="2"
+                                       Fill="{DynamicResource AccentBase}" Margin="0,8,0,8">
+                                <Rectangle.Effect>
+                                    <DropShadowEffect Color="#FFB020" BlurRadius="8" ShadowDepth="0" Opacity="0.8"/>
+                                </Rectangle.Effect>
+                            </Rectangle>
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Aliases for code-behind Tab_Click compatibility -->
+        <Style x:Key="BtnTab"       TargetType="Button" BasedOn="{StaticResource BtnNav}"/>
+        <Style x:Key="BtnTabActive" TargetType="Button" BasedOn="{StaticResource BtnNavActive}"/>
+
+        <!-- ═══ BUTTON: Chrome (titlebar) ════════════════════════ -->
+        <Style x:Key="ChromeBtn" TargetType="Button">
+            <Setter Property="Background"      Value="Transparent"/>
+            <Setter Property="Foreground"      Value="{DynamicResource AccentDim}"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Width"           Value="32"/>
+            <Setter Property="Height"          Value="24"/>
+            <Setter Property="Cursor"          Value="Hand"/>
+            <Setter Property="FontSize"        Value="11"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="bd" Background="{TemplateBinding Background}" CornerRadius="4">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="bd" Property="Background" Value="#FFFFFF0D"/>
+                                <Setter Property="Foreground" Value="{DynamicResource AccentTextLight}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- ═══ TEXTBOX ══════════════════════════════════════════ -->
+        <Style x:Key="InputBox" TargetType="TextBox">
+            <Setter Property="Background"      Value="{DynamicResource AccentBgInput}"/>
+            <Setter Property="Foreground"      Value="{DynamicResource AccentTextLight}"/>
+            <Setter Property="CaretBrush"      Value="{DynamicResource AccentBase}"/>
+            <Setter Property="BorderBrush"     Value="{DynamicResource AccentBgBorder2}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="FontSize"        Value="13"/>
+            <Setter Property="FontFamily"      Value="Segoe UI Variable, Segoe UI"/>
+            <Setter Property="Padding"         Value="12,10"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TextBox">
+                        <Border x:Name="bd"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="6">
+                            <ScrollViewer x:Name="PART_ContentHost" Margin="{TemplateBinding Padding}"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsFocused" Value="True">
+                                <Setter TargetName="bd" Property="BorderBrush" Value="{DynamicResource AccentBase}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- ═══ LISTBOX ══════════════════════════════════════════ -->
+        <Style TargetType="ListBoxItem">
+            <Setter Property="Background"   Value="Transparent"/>
+            <Setter Property="Foreground"   Value="{DynamicResource AccentText}"/>
+            <Setter Property="Padding"      Value="8,5"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ListBoxItem">
+                        <Border x:Name="bd" Background="{TemplateBinding Background}" CornerRadius="6"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="bd" Property="Background" Value="#FFFFFF08"/>
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="bd" Property="Background" Value="{DynamicResource AccentNavBg}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- ═══ SETTINGS STYLES (SettingsWindow) ════════════════ -->
         <Style x:Key="SettingsSectionHeader" TargetType="TextBlock">
-            <Setter Property="FontFamily"  Value="Segoe UI Variable, Segoe UI"/>
+            <Setter Property="FontFamily"  Value="Consolas"/>
             <Setter Property="FontSize"    Value="10"/>
-            <Setter Property="FontWeight"  Value="SemiBold"/>
-            <Setter Property="Foreground"  Value="#6B6B80"/>
+            <Setter Property="FontWeight"  Value="Normal"/>
+            <Setter Property="Foreground"  Value="{DynamicResource AccentDim}"/>
             <Setter Property="Margin"      Value="0,18,0,8"/>
         </Style>
 
         <Style x:Key="SettingsLabel" TargetType="TextBlock">
             <Setter Property="FontFamily"  Value="Segoe UI Variable, Segoe UI"/>
             <Setter Property="FontSize"    Value="11"/>
-            <Setter Property="Foreground"  Value="#6B6B80"/>
+            <Setter Property="Foreground"  Value="{DynamicResource AccentMuted}"/>
             <Setter Property="Margin"      Value="0,0,0,4"/>
         </Style>
 
         <Style x:Key="SettingInput" TargetType="TextBox">
-            <Setter Property="Background"      Value="#131318"/>
-            <Setter Property="Foreground"      Value="#E0E0EE"/>
-            <Setter Property="CaretBrush"      Value="#6366F1"/>
-            <Setter Property="BorderBrush"     Value="#2A2A35"/>
+            <Setter Property="Background"      Value="#1B212D"/>
+            <Setter Property="Foreground"      Value="{DynamicResource AccentTextLight}"/>
+            <Setter Property="CaretBrush"      Value="{DynamicResource AccentBase}"/>
+            <Setter Property="BorderBrush"     Value="{DynamicResource AccentBgBorder2}"/>
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="FontFamily"      Value="Segoe UI Variable, Segoe UI"/>
             <Setter Property="FontSize"        Value="12"/>
@@ -50,7 +372,7 @@
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsFocused" Value="True">
-                                <Setter TargetName="bd" Property="BorderBrush" Value="#6366F1"/>
+                                <Setter TargetName="bd" Property="BorderBrush" Value="{DynamicResource AccentBase}"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -59,9 +381,9 @@
         </Style>
 
         <Style x:Key="SettingComboBox" TargetType="ComboBox">
-            <Setter Property="Background"      Value="#131318"/>
-            <Setter Property="Foreground"      Value="#E0E0EE"/>
-            <Setter Property="BorderBrush"     Value="#2A2A35"/>
+            <Setter Property="Background"      Value="#1B212D"/>
+            <Setter Property="Foreground"      Value="{DynamicResource AccentTextLight}"/>
+            <Setter Property="BorderBrush"     Value="{DynamicResource AccentBgBorder2}"/>
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="FontFamily"      Value="Segoe UI Variable, Segoe UI"/>
             <Setter Property="FontSize"        Value="12"/>
@@ -87,7 +409,7 @@
                                         </Border>
                                         <ControlTemplate.Triggers>
                                             <Trigger Property="IsChecked" Value="True">
-                                                <Setter TargetName="bd" Property="BorderBrush" Value="#6366F1"/>
+                                                <Setter TargetName="bd" Property="BorderBrush" Value="{DynamicResource AccentBase}"/>
                                             </Trigger>
                                         </ControlTemplate.Triggers>
                                     </ControlTemplate>
@@ -99,7 +421,7 @@
                                                           Margin="0,0,20,0"/>
                                         <Path x:Name="arrow"
                                               Data="M0,0 L4,4 L8,0 Z"
-                                              Fill="#6B6B80"
+                                              Fill="{DynamicResource AccentMuted}"
                                               HorizontalAlignment="Right"
                                               VerticalAlignment="Center"
                                               Margin="0,0,8,0"/>
@@ -111,8 +433,8 @@
                                    PopupAnimation="Slide"
                                    AllowsTransparency="True"
                                    IsOpen="{Binding Path=IsDropDownOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}">
-                                <Border Background="#131318"
-                                        BorderBrush="#2A2A35"
+                                <Border Background="#141923"
+                                        BorderBrush="{DynamicResource AccentBgBorder2}"
                                         BorderThickness="1"
                                         CornerRadius="4"
                                         Margin="0,4,0,0">
@@ -126,5 +448,7 @@
                 </Setter.Value>
             </Setter>
         </Style>
+
+        </ResourceDictionary>
     </Application.Resources>
 </Application>

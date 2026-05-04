@@ -5,7 +5,7 @@ namespace KokonoeAssistant.Services.Heart
     public static class HeartMath
     {
         public const double MinBpm = 45;
-        public const double MaxBpm = 135;
+        public const double MaxBpm = 160;
         public const double SmoothingFactor = 0.08;
 
         public static double Circadian(DateTime localNow)
@@ -49,8 +49,10 @@ namespace KokonoeAssistant.Services.Heart
 
         public static double AdaptBaseline(double baseline, double currentBpm, double acuteStress)
         {
-            if (acuteStress >= 0.1) return baseline;
-            return baseline + (currentBpm - baseline) * 0.0001;
+            // Baseline рухається тільки вниз (до rest), ніколи вгору — щоб не дрейфував до 134
+            if (acuteStress >= 0.05) return baseline;
+            if (currentBpm >= baseline) return baseline;
+            return Math.Clamp(baseline + (currentBpm - baseline) * 0.00005, MinBpm, 80.0);
         }
     }
 }

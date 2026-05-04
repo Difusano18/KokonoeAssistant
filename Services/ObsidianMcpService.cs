@@ -100,6 +100,52 @@ tags: [{tagsLine}]
             return "Видалено: " + path;
         }
 
+        // ── MOVE / RENAME / FOLDER ────────────────────────────────
+
+        public string MoveNote(string oldPath, string newPath)
+        {
+            var oldFull = Resolve(oldPath);
+            if (!File.Exists(oldFull)) return $"Не знайдено: {oldPath}";
+            var newFull = Resolve(newPath);
+            Directory.CreateDirectory(Path.GetDirectoryName(newFull)!);
+            File.Move(oldFull, newFull, overwrite: false);
+            return $"Переміщено: {oldPath} → {newPath}";
+        }
+
+        public string CreateFolder(string folderPath)
+        {
+            var full = Path.Combine(_vault, folderPath.Replace('/', Path.DirectorySeparatorChar));
+            Directory.CreateDirectory(full);
+            return $"Папка створена: {folderPath}";
+        }
+
+        public string GetVaultTree(int maxDepth = 3)
+        {
+            var sb = new System.Text.StringBuilder();
+            BuildTree(sb, _vault, _vault, 0, maxDepth);
+            return sb.ToString();
+        }
+
+        private void BuildTree(System.Text.StringBuilder sb, string root, string current, int depth, int maxDepth)
+        {
+            if (depth > maxDepth) return;
+            var indent = new string(' ', depth * 2);
+            var name = Path.GetRelativePath(root, current);
+            if (name == ".") name = Path.GetFileName(root);
+
+            // skip hidden / data dirs
+            var dirName = Path.GetFileName(current);
+            if (dirName.StartsWith('.') || dirName == "kokonoe-data") return;
+
+            if (depth > 0) sb.AppendLine($"{indent}📁 {dirName}/");
+
+            foreach (var f in Directory.GetFiles(current, "*.md").OrderBy(x => x))
+                sb.AppendLine($"{indent}  📄 {Path.GetFileNameWithoutExtension(f)}");
+
+            foreach (var d in Directory.GetDirectories(current).OrderBy(x => x))
+                BuildTree(sb, root, d, depth + 1, maxDepth);
+        }
+
         // ── SEARCH ────────────────────────────────────────────────
 
         public List<SearchResult> SearchNotes(string query, int max = 10)

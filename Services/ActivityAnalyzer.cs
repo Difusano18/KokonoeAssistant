@@ -61,7 +61,7 @@ namespace KokonoeAssistant.Services
             // Analyze pixel difference
             if (_previousScreenshot != null)
             {
-                double difference = CalculatePixelDifference(currentScreenshot, _previousScreenshot);
+                double difference = CalculatePixelDifferenceAdvanced(currentScreenshot, _previousScreenshot);
                 state.PixelDifferencePercentage = difference;
                 state.IsActive = difference > ACTIVITY_THRESHOLD_PERCENT;
 
