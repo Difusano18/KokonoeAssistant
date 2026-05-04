@@ -405,12 +405,13 @@ namespace KokonoeAssistant
             else if (currentBpm < 120)  state = "стрес або сильна емоція";
             else                        state = "тахікардія — щось не так";
             DashHeartStateText.Text = state;
-            try
-            {
-                var somatic = ServiceContainer.BrainEngine.GetSomaticSnapshot();
-                DashHeartStateText.Text = $"{somatic.State.ToUpper()} // {somatic.Label} · strain {somatic.Strain:P0}";
-            }
-            catch { }
+                try
+                {
+                    var somatic = ServiceContainer.BrainEngine.GetSomaticSnapshot();
+                    var selfReg = ServiceContainer.BrainEngine.GetSelfRegulationFrame(somatic);
+                    DashHeartStateText.Text = $"{somatic.State.ToUpper()} // {selfReg.Reaction} · {selfReg.Regulation} · strain {somatic.Strain:P0}";
+                }
+                catch { }
         }
 
         private async Task StartupSequenceAsync()
@@ -838,7 +839,8 @@ namespace KokonoeAssistant
                 try
                 {
                     var somatic = ServiceContainer.BrainEngine.GetSomaticSnapshot();
-                    PulseTabStateLabel.Text = $"{somatic.State.ToUpper()} · strain {somatic.Strain:P0}";
+                    var selfReg = ServiceContainer.BrainEngine.GetSelfRegulationFrame(somatic);
+                    PulseTabStateLabel.Text = $"{somatic.State.ToUpper()} · {selfReg.Regulation} · strain {somatic.Strain:P0}";
                 }
                 catch { }
 
@@ -3668,6 +3670,16 @@ namespace KokonoeAssistant
                     });
                 }
 
+                foreach (var line in brain.GetSelfRegulationLog(5))
+                {
+                    _dashThoughts.Add(new DashThoughtVm
+                    {
+                        Time = DateTime.Now.ToString("HH:mm"),
+                        Thought = CleanDashboardThought(line),
+                        MoodTag = "// self-reg"
+                    });
+                }
+
                 // 2. Recent observations from today's vault daily note
                 try
                 {
@@ -3776,6 +3788,13 @@ namespace KokonoeAssistant
             try
             {
                 var emotion = ServiceContainer.EmotionEngine;
+                var selfReg = ServiceContainer.BrainEngine.GetSelfRegulationFrame();
+                if (!string.IsNullOrWhiteSpace(selfReg.BehaviorDirective))
+                {
+                    DashFooterComment.Text = $"self-reg: {selfReg.Regulation} · {selfReg.BehaviorDirective}";
+                    return;
+                }
+
                 var initiative = ServiceContainer.BrainEngine.GetInitiativeReasonLog(1).FirstOrDefault();
                 if (!string.IsNullOrWhiteSpace(initiative))
                 {

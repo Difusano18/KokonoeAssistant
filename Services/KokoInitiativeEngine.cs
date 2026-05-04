@@ -34,11 +34,25 @@ namespace KokonoeAssistant.Services
             KokoMemoryEngine memory,
             ChatRepository chatRepo,
             double bpmDeviation = 0,
-            KokoSomaticSnapshot? somatic = null)
+            KokoSomaticSnapshot? somatic = null,
+            KokoSelfRegulationFrame? selfRegulation = null)
         {
-            var candidates = BuildCandidates(now, state, emotion, relationship, memory, chatRepo, bpmDeviation, somatic)
+            var candidates = BuildCandidates(now, state, emotion, relationship, memory, chatRepo, bpmDeviation, somatic, selfRegulation)
                 .OrderByDescending(c => c.Priority)
                 .ToList();
+
+            if (selfRegulation?.ShouldPreferSilence == true &&
+                candidates.All(c => c.Priority < 80))
+            {
+                return new KokoInitiativeDecision
+                {
+                    ShouldAct = false,
+                    Trigger = "self_regulation_silence",
+                    StyleHint = "cold",
+                    Reason = $"self-regulation prefers silence: {selfRegulation.Reaction}",
+                    Priority = 25
+                };
+            }
 
             if (candidates.Count == 0)
             {
@@ -123,7 +137,8 @@ namespace KokonoeAssistant.Services
             KokoMemoryEngine memory,
             ChatRepository chatRepo,
             double bpmDeviation,
-            KokoSomaticSnapshot? somatic)
+            KokoSomaticSnapshot? somatic,
+            KokoSelfRegulationFrame? selfRegulation)
         {
             var currentEmotion = emotion.Current.ToString();
             var relationshipState = relationship.State;
@@ -161,6 +176,30 @@ namespace KokonoeAssistant.Services
                     "Somatic state is wired. If you write, make it short, grounded, and protective. Do not diagnose.",
                     88,
                     TimeSpan.FromHours(2));
+            }
+
+            if (selfRegulation?.ShouldProtect == true &&
+                (now - state.LastSpontaneousAt).TotalMinutes > 35)
+            {
+                yield return new Candidate(
+                    "self_regulation_protect",
+                    "warm",
+                    $"self-regulation protective override: {selfRegulation.Reaction}",
+                    $"Self-regulation is in protect mode. Directive: {selfRegulation.BehaviorDirective}",
+                    90,
+                    TimeSpan.FromHours(2));
+            }
+
+            if (selfRegulation?.Reaction == "pulse_spike" &&
+                (now - state.LastSpontaneousAt).TotalMinutes > 50)
+            {
+                yield return new Candidate(
+                    "pulse_spike_reaction",
+                    "observation",
+                    "digital body noticed a pulse spike and clamped down",
+                    $"Internal reaction: {selfRegulation.PrivateThought}. Write only if it becomes useful, short, and controlled.",
+                    73,
+                    TimeSpan.FromHours(3));
             }
 
             if (somatic?.State == "tired" &&

@@ -98,6 +98,7 @@ namespace KokonoeAssistant.Services
         public double LastSomaticStrain { get; set; }
         public double LastSomaticCalm { get; set; }
         public DateTime LastSomaticAt { get; set; } = DateTime.MinValue;
+        public KokoSelfRegulationState SelfRegulation { get; set; } = new();
     }
 
     public class ReactiveTrigger
@@ -132,6 +133,7 @@ namespace KokonoeAssistant.Services
         public readonly KokoRelationshipEngine Relationship;
         public readonly KokoInitiativeEngine Initiative;
         public readonly KokoSomaticEngine Somatic;
+        public readonly KokoSomaticSelfRegulationEngine SelfRegulator;
 
         // ── Зовнішні сервіси (опціональні) ───────────────────────────
         private EnhancedMemory?    _enhanced;
@@ -203,6 +205,7 @@ namespace KokonoeAssistant.Services
             Relationship = new KokoRelationshipEngine(dataDir);
             Initiative = new KokoInitiativeEngine();
             Somatic = new KokoSomaticEngine();
+            SelfRegulator = new KokoSomaticSelfRegulationEngine();
 
             // Підключити нові сервіси в LLM
             _llm.Memory    = Memory;
@@ -603,6 +606,7 @@ namespace KokonoeAssistant.Services
                 sb.AppendLine(Relationship.BuildPromptBlock());
                 var somatic = GetSomaticSnapshot();
                 sb.AppendLine(Somatic.BuildPromptBlock(somatic));
+                sb.AppendLine(SelfRegulator.BuildPromptBlock(GetSelfRegulationFrame(somatic)));
                 sb.AppendLine(Initiative.BuildDebugBlock(_state));
             }
             catch { }
@@ -1561,6 +1565,7 @@ namespace KokonoeAssistant.Services
 
                 try { RuntimeState.ObserveUserMessage(_state, Emotion, content); } catch { }
                 try { Relationship.ObserveUserTone(_state.LastUserEmotionalTone, _state.PersonalityInCrisis); } catch { }
+                try { GetSelfRegulationFrame(); } catch { }
 
                 // Шукати факти в повідомленні і зберегти в пам'ять
                 _ = Task.Run(() => ExtractAndRememberFacts(content));
@@ -2889,7 +2894,8 @@ namespace KokonoeAssistant.Services
                 _state.LastSentEmotionState = initiativeEmotion;
 
             var somatic = GetSomaticSnapshot();
-            var decision = Initiative.Evaluate(now, _state, Emotion, Relationship, Memory, _chatRepo, initiativeBpmDeviation, somatic);
+            var selfRegulation = GetSelfRegulationFrame(somatic);
+            var decision = Initiative.Evaluate(now, _state, Emotion, Relationship, Memory, _chatRepo, initiativeBpmDeviation, somatic, selfRegulation);
             Initiative.RecordDecision(_state, decision, now);
 
             if (!decision.ShouldAct)
@@ -3561,7 +3567,9 @@ namespace KokonoeAssistant.Services
                 var sb = new StringBuilder();
                 sb.AppendLine(RuntimeState.BuildPromptBlock(_state, Emotion, _health, _chatRepo));
                 sb.AppendLine(Relationship.BuildPromptBlock());
-                sb.AppendLine(Somatic.BuildPromptBlock(GetSomaticSnapshot()));
+                var somatic = GetSomaticSnapshot();
+                sb.AppendLine(Somatic.BuildPromptBlock(somatic));
+                sb.AppendLine(SelfRegulator.BuildPromptBlock(GetSelfRegulationFrame(somatic)));
                 sb.AppendLine(Initiative.BuildDebugBlock(_state));
                 return sb.ToString();
             }
@@ -3579,6 +3587,37 @@ namespace KokonoeAssistant.Services
             _state.LastSomaticCalm = snapshot.Calm;
             _state.LastSomaticAt = DateTime.Now;
             return snapshot;
+        }
+
+        public KokoSelfRegulationFrame GetSelfRegulationFrame(KokoSomaticSnapshot? snapshot = null)
+        {
+            snapshot ??= GetSomaticSnapshot();
+            var before = _state.SelfRegulation.Reactions.Count;
+            var frame = SelfRegulator.Evaluate(
+                _state.SelfRegulation,
+                snapshot,
+                Emotion,
+                Relationship,
+                _state.LastUserEmotionalTone,
+                DateTime.Now);
+
+            if (_state.SelfRegulation.Reactions.Count > before &&
+                !string.IsNullOrWhiteSpace(frame.PrivateThought))
+            {
+                _state.InnerMonologues.Add($"[somatic/{frame.Regulation}] {frame.PrivateThought}");
+                if (_state.InnerMonologues.Count > 30)
+                    _state.InnerMonologues.RemoveRange(0, _state.InnerMonologues.Count - 30);
+            }
+
+            return frame;
+        }
+
+        public List<string> GetSelfRegulationLog(int count = 8)
+        {
+            lock (_lock)
+            {
+                return SelfRegulator.GetRecentLines(_state.SelfRegulation, count).ToList();
+            }
         }
 
         public void Dispose()
