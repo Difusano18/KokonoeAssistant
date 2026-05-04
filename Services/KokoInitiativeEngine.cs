@@ -33,9 +33,10 @@ namespace KokonoeAssistant.Services
             KokoRelationshipEngine relationship,
             KokoMemoryEngine memory,
             ChatRepository chatRepo,
-            double bpmDeviation = 0)
+            double bpmDeviation = 0,
+            KokoSomaticSnapshot? somatic = null)
         {
-            var candidates = BuildCandidates(now, state, emotion, relationship, memory, chatRepo, bpmDeviation)
+            var candidates = BuildCandidates(now, state, emotion, relationship, memory, chatRepo, bpmDeviation, somatic)
                 .OrderByDescending(c => c.Priority)
                 .ToList();
 
@@ -121,7 +122,8 @@ namespace KokonoeAssistant.Services
             KokoRelationshipEngine relationship,
             KokoMemoryEngine memory,
             ChatRepository chatRepo,
-            double bpmDeviation)
+            double bpmDeviation,
+            KokoSomaticSnapshot? somatic)
         {
             var currentEmotion = emotion.Current.ToString();
             var relationshipState = relationship.State;
@@ -147,6 +149,31 @@ namespace KokonoeAssistant.Services
                     $"A pending follow-up is due. Context: {trigger.Context}",
                     92,
                     TimeSpan.FromMinutes(60));
+            }
+
+            if (somatic?.State == "wired" &&
+                (now - state.LastSpontaneousAt).TotalMinutes > 45)
+            {
+                yield return new Candidate(
+                    "somatic_wired",
+                    "warm",
+                    $"somatic state is wired: strain {somatic.Strain:F2}, delta {somatic.BpmDelta:F0} bpm",
+                    "Somatic state is wired. If you write, make it short, grounded, and protective. Do not diagnose.",
+                    88,
+                    TimeSpan.FromHours(2));
+            }
+
+            if (somatic?.State == "tired" &&
+                state.CuriosityQueue.Count == 0 &&
+                state.PendingThoughts.Count == 0)
+            {
+                yield return new Candidate(
+                    "somatic_tired_silence",
+                    "cold",
+                    "somatic state is tired; initiative should stay quiet unless something else is important",
+                    "Somatic state is tired. Prefer silence unless the message is truly useful.",
+                    20,
+                    TimeSpan.FromHours(4));
             }
 
             if (state.CuriosityQueue.Count > 0 && (now - state.LastCuriosityAskAt).TotalHours > 3)

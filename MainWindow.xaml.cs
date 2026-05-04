@@ -405,6 +405,12 @@ namespace KokonoeAssistant
             else if (currentBpm < 120)  state = "стрес або сильна емоція";
             else                        state = "тахікардія — щось не так";
             DashHeartStateText.Text = state;
+            try
+            {
+                var somatic = ServiceContainer.BrainEngine.GetSomaticSnapshot();
+                DashHeartStateText.Text = $"{somatic.State.ToUpper()} // {somatic.Label} · strain {somatic.Strain:P0}";
+            }
+            catch { }
         }
 
         private async Task StartupSequenceAsync()
@@ -829,6 +835,12 @@ namespace KokonoeAssistant
                 PulseTabBpmBig.Text   = cur > 0 ? $"{cur:0}" : "—";
                 PulseTabCurText.Text  = cur > 0 ? $"{cur:0.0}" : "—";
                 PulseTabBaseText.Text = $"{heart.BaselineBpm:0.0}";
+                try
+                {
+                    var somatic = ServiceContainer.BrainEngine.GetSomaticSnapshot();
+                    PulseTabStateLabel.Text = $"{somatic.State.ToUpper()} · strain {somatic.Strain:P0}";
+                }
+                catch { }
 
                 if (_heartRR.Count >= 4)
                 {

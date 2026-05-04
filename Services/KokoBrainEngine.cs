@@ -93,6 +93,11 @@ namespace KokonoeAssistant.Services
         public List<string> InitiativeReasonLog { get; set; } = new();
         public string LastInitiativeDecision { get; set; } = "";
         public DateTime LastInitiativeDecisionAt { get; set; } = DateTime.MinValue;
+        public string LastSomaticState { get; set; } = "unknown";
+        public string LastSomaticLabel { get; set; } = "";
+        public double LastSomaticStrain { get; set; }
+        public double LastSomaticCalm { get; set; }
+        public DateTime LastSomaticAt { get; set; } = DateTime.MinValue;
     }
 
     public class ReactiveTrigger
@@ -126,6 +131,7 @@ namespace KokonoeAssistant.Services
         public readonly KokoRuntimeStateService RuntimeState;
         public readonly KokoRelationshipEngine Relationship;
         public readonly KokoInitiativeEngine Initiative;
+        public readonly KokoSomaticEngine Somatic;
 
         // ── Зовнішні сервіси (опціональні) ───────────────────────────
         private EnhancedMemory?    _enhanced;
@@ -196,6 +202,7 @@ namespace KokonoeAssistant.Services
             RuntimeState = new KokoRuntimeStateService();
             Relationship = new KokoRelationshipEngine(dataDir);
             Initiative = new KokoInitiativeEngine();
+            Somatic = new KokoSomaticEngine();
 
             // Підключити нові сервіси в LLM
             _llm.Memory    = Memory;
@@ -594,6 +601,8 @@ namespace KokonoeAssistant.Services
 
                 sb.AppendLine(RuntimeState.BuildPromptBlock(_state, Emotion, _health, _chatRepo, bpm, baseline));
                 sb.AppendLine(Relationship.BuildPromptBlock());
+                var somatic = GetSomaticSnapshot();
+                sb.AppendLine(Somatic.BuildPromptBlock(somatic));
                 sb.AppendLine(Initiative.BuildDebugBlock(_state));
             }
             catch { }
@@ -2879,7 +2888,8 @@ namespace KokonoeAssistant.Services
             if (string.IsNullOrEmpty(_state.LastSentEmotionState))
                 _state.LastSentEmotionState = initiativeEmotion;
 
-            var decision = Initiative.Evaluate(now, _state, Emotion, Relationship, Memory, _chatRepo, initiativeBpmDeviation);
+            var somatic = GetSomaticSnapshot();
+            var decision = Initiative.Evaluate(now, _state, Emotion, Relationship, Memory, _chatRepo, initiativeBpmDeviation, somatic);
             Initiative.RecordDecision(_state, decision, now);
 
             if (!decision.ShouldAct)
@@ -3551,9 +3561,24 @@ namespace KokonoeAssistant.Services
                 var sb = new StringBuilder();
                 sb.AppendLine(RuntimeState.BuildPromptBlock(_state, Emotion, _health, _chatRepo));
                 sb.AppendLine(Relationship.BuildPromptBlock());
+                sb.AppendLine(Somatic.BuildPromptBlock(GetSomaticSnapshot()));
                 sb.AppendLine(Initiative.BuildDebugBlock(_state));
                 return sb.ToString();
             }
+        }
+
+        public KokoSomaticSnapshot GetSomaticSnapshot()
+        {
+            KokoHeartEngine? heart = null;
+            try { heart = ServiceContainer.Heart; } catch { }
+
+            var snapshot = Somatic.Evaluate(heart, Emotion, _health, DateTime.Now);
+            _state.LastSomaticState = snapshot.State;
+            _state.LastSomaticLabel = snapshot.Label;
+            _state.LastSomaticStrain = snapshot.Strain;
+            _state.LastSomaticCalm = snapshot.Calm;
+            _state.LastSomaticAt = DateTime.Now;
+            return snapshot;
         }
 
         public void Dispose()

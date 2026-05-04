@@ -67,7 +67,17 @@ namespace KokonoeAssistant.Services
             if (!string.IsNullOrEmpty(fatigue))
                 sb.AppendLine($"body_hint: {fatigue}");
             if (currentBpm.HasValue && baselineBpm.HasValue)
-                sb.AppendLine($"heart: bpm={currentBpm.Value:F0} baseline={baselineBpm.Value:F0} delta={(currentBpm.Value - baselineBpm.Value):+0;-0;0}");
+            {
+                var delta = currentBpm.Value - baselineBpm.Value;
+                var somatic = delta switch
+                {
+                    >= 26 => "wired",
+                    >= 14 => "strained",
+                    <= -10 => "low-charge",
+                    _ => "stable"
+                };
+                sb.AppendLine($"heart: bpm={currentBpm.Value:F0} baseline={baselineBpm.Value:F0} delta={delta:+0;-0;0} somatic_hint={somatic}");
+            }
 
             sb.AppendLine("behavior:");
             sb.AppendLine("- Use this state as behavior control, not as text to reveal.");

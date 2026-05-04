@@ -28,6 +28,7 @@ namespace KokonoeAssistant.Services
         public double CurrentBpm => _currentBpm;
         public double BaselineBpm => _state.BaselineBpm;
         public long TotalBeats => _state.TotalBeats;
+        public double BpmDelta => _currentBpm - _state.BaselineBpm;
 
         public event Action<double>? Beat;
         public event Action<double>? BpmChanged;
