@@ -3535,6 +3535,16 @@ namespace KokonoeAssistant
                 DashSideConnValue.Text = connStr;
                 DashSideBondLabel.Text = bondStr;
 
+                try
+                {
+                    var rel = ServiceContainer.BrainEngine.Relationship.State;
+                    var relPct = (int)(rel.BondScore * 100);
+                    DashSideConnValue.Text = $"{connStr}/{relPct}%";
+                    if (!string.IsNullOrWhiteSpace(rel.LastAftertaste))
+                        DashSideBondLabel.Text = $"{bondStr} · {rel.LastAftertaste.ToUpper()}";
+                }
+                catch { }
+
                 var connBrush = emotion.ConnectionScore switch
                 {
                     >= 0.75f => new System.Windows.Media.SolidColorBrush(MediaColor.FromRgb(255, 105, 180)),
@@ -3632,6 +3642,17 @@ namespace KokonoeAssistant
                         Time    = DateTime.Now.ToString("HH:mm"),
                         Thought = cleaned,
                         MoodTag = $"// {emotion.Current.ToString().ToLower()}"
+                    });
+                }
+
+                // 1b. Initiative reasons: why she acted, or why she stayed quiet.
+                foreach (var reason in brain.GetInitiativeReasonLog(5))
+                {
+                    _dashThoughts.Add(new DashThoughtVm
+                    {
+                        Time = DateTime.Now.ToString("HH:mm"),
+                        Thought = CleanDashboardThought(reason),
+                        MoodTag = "// initiative"
                     });
                 }
 
@@ -3743,6 +3764,13 @@ namespace KokonoeAssistant
             try
             {
                 var emotion = ServiceContainer.EmotionEngine;
+                var initiative = ServiceContainer.BrainEngine.GetInitiativeReasonLog(1).FirstOrDefault();
+                if (!string.IsNullOrWhiteSpace(initiative))
+                {
+                    DashFooterComment.Text = $"initiative: {initiative}";
+                    return;
+                }
+
                 var c = new[]
                 {
                     "Так, я моніторю все. Ні, не вибачуся.",

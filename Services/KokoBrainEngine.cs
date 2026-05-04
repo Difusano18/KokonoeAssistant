@@ -88,6 +88,11 @@ namespace KokonoeAssistant.Services
         public DateTime LastCuriosityAskAt   { get; set; } = DateTime.MinValue;
         public DateTime LastMonologueSentAt  { get; set; } = DateTime.MinValue;
         public string   LastSentEmotionState { get; set; } = "";
+
+        public Dictionary<string, DateTime> InitiativeCooldowns { get; set; } = new();
+        public List<string> InitiativeReasonLog { get; set; } = new();
+        public string LastInitiativeDecision { get; set; } = "";
+        public DateTime LastInitiativeDecisionAt { get; set; } = DateTime.MinValue;
     }
 
     public class ReactiveTrigger
@@ -120,6 +125,7 @@ namespace KokonoeAssistant.Services
         public readonly KokoCognitionEngine Cognition;
         public readonly KokoRuntimeStateService RuntimeState;
         public readonly KokoRelationshipEngine Relationship;
+        public readonly KokoInitiativeEngine Initiative;
 
         // ── Зовнішні сервіси (опціональні) ───────────────────────────
         private EnhancedMemory?    _enhanced;
@@ -189,6 +195,7 @@ namespace KokonoeAssistant.Services
             Cognition = new KokoCognitionEngine(dataDir);
             RuntimeState = new KokoRuntimeStateService();
             Relationship = new KokoRelationshipEngine(dataDir);
+            Initiative = new KokoInitiativeEngine();
 
             // Підключити нові сервіси в LLM
             _llm.Memory    = Memory;
@@ -587,6 +594,7 @@ namespace KokonoeAssistant.Services
 
                 sb.AppendLine(RuntimeState.BuildPromptBlock(_state, Emotion, _health, _chatRepo, bpm, baseline));
                 sb.AppendLine(Relationship.BuildPromptBlock());
+                sb.AppendLine(Initiative.BuildDebugBlock(_state));
             }
             catch { }
 
@@ -2859,6 +2867,59 @@ namespace KokonoeAssistant.Services
 
         private async Task TryStateTriggeredSpontaneous(DateTime now)
         {
+            var initiativeBpmDeviation = 0d;
+            try
+            {
+                var heart = ServiceContainer.Heart;
+                if (heart != null) initiativeBpmDeviation = heart.CurrentBpm - heart.BaselineBpm;
+            }
+            catch { }
+
+            var initiativeEmotion = Emotion.Current.ToString();
+            if (string.IsNullOrEmpty(_state.LastSentEmotionState))
+                _state.LastSentEmotionState = initiativeEmotion;
+
+            var decision = Initiative.Evaluate(now, _state, Emotion, Relationship, Memory, _chatRepo, initiativeBpmDeviation);
+            Initiative.RecordDecision(_state, decision, now);
+
+            if (!decision.ShouldAct)
+            {
+                SaveState();
+                return;
+            }
+
+            switch (decision.Trigger)
+            {
+                case "curiosity":
+                    if (_state.CuriosityQueue.Count > 0)
+                    {
+                        _state.CuriosityQueue.RemoveAt(_state.CuriosityQueue.Count - 1);
+                        _state.LastCuriosityAskAt = now;
+                    }
+                    break;
+                case "emotion_shift":
+                case "agitated_check":
+                    _state.LastSentEmotionState = initiativeEmotion;
+                    break;
+                case "monologue":
+                    _state.LastMonologueSentAt = now;
+                    break;
+                case "pending":
+                    if (_state.PendingThoughts.Count > 0)
+                        _state.PendingThoughts.RemoveAt(_state.PendingThoughts.Count - 1);
+                    break;
+                case "reactive_followup":
+                    _state.PendingTriggers.RemoveAll(t => t.FireAt <= now);
+                    break;
+            }
+
+            SaveState();
+            await SendSpontaneousAsync(decision.Trigger, MapInitiativeStyle(decision.StyleHint), decision.ExtraContext);
+            return;
+        }
+
+#if false
+
             // Перевіряємо тригери по пріоритету. Перший що спрацював — відправляємо.
 
             // 1. Є питання з CuriosityQueue — вона хоче щось запитати
@@ -2941,6 +3002,20 @@ namespace KokonoeAssistant.Services
                     $"Ти в стані {currentEmotion} і давно не писала. Напиши йому одне речення — щось що ти б сказала коли не можеш довго мовчати. Не 'як справи', а щось конкретніше і по-коконоєвськи.");
             }
         }
+
+#endif
+
+        private static SpontaneousStyle MapInitiativeStyle(string styleHint) => styleHint switch
+        {
+            "crisis" => SpontaneousStyle.CrisisSupport,
+            "callback" => SpontaneousStyle.Callback,
+            "pending" => SpontaneousStyle.PendingThought,
+            "warm" => SpontaneousStyle.WarmCheck,
+            "jab" => SpontaneousStyle.Jab,
+            "cold" => SpontaneousStyle.ColdCheck,
+            "night" => SpontaneousStyle.NightMessage,
+            _ => SpontaneousStyle.Observation
+        };
 
         private async Task SendSpontaneousAsync(string trigger,
             SpontaneousStyle style = SpontaneousStyle.Observation,
@@ -3458,6 +3533,26 @@ namespace KokonoeAssistant.Services
             lock (_lock)
             {
                 return _state.CuriosityQueue.Take(count).ToList();
+            }
+        }
+
+        public List<string> GetInitiativeReasonLog(int count = 8)
+        {
+            lock (_lock)
+            {
+                return _state.InitiativeReasonLog.TakeLast(count).Reverse().ToList();
+            }
+        }
+
+        public string GetDebugStateSnapshot()
+        {
+            lock (_lock)
+            {
+                var sb = new StringBuilder();
+                sb.AppendLine(RuntimeState.BuildPromptBlock(_state, Emotion, _health, _chatRepo));
+                sb.AppendLine(Relationship.BuildPromptBlock());
+                sb.AppendLine(Initiative.BuildDebugBlock(_state));
+                return sb.ToString();
             }
         }
 
