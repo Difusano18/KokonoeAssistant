@@ -118,6 +118,8 @@ namespace KokonoeAssistant.Services
         public readonly KokoPatternEngine   Patterns;
         public readonly KokoSchedulerEngine Scheduler;
         public readonly KokoCognitionEngine Cognition;
+        public readonly KokoRuntimeStateService RuntimeState;
+        public readonly KokoRelationshipEngine Relationship;
 
         // ── Зовнішні сервіси (опціональні) ───────────────────────────
         private EnhancedMemory?    _enhanced;
@@ -185,6 +187,8 @@ namespace KokonoeAssistant.Services
             Patterns  = new KokoPatternEngine(dataDir);
             Scheduler = new KokoSchedulerEngine(dataDir);
             Cognition = new KokoCognitionEngine(dataDir);
+            RuntimeState = new KokoRuntimeStateService();
+            Relationship = new KokoRelationshipEngine(dataDir);
 
             // Підключити нові сервіси в LLM
             _llm.Memory    = Memory;
@@ -568,6 +572,23 @@ namespace KokonoeAssistant.Services
             var behaviorMod = Emotion.GetBehaviorModifier();
             if (!string.IsNullOrEmpty(behaviorMod))
                 sb.AppendLine(behaviorMod);
+
+            try
+            {
+                double? bpm = null;
+                double? baseline = null;
+                try
+                {
+                    var heart = ServiceContainer.Heart;
+                    bpm = heart.CurrentBpm;
+                    baseline = heart.BaselineBpm;
+                }
+                catch { }
+
+                sb.AppendLine(RuntimeState.BuildPromptBlock(_state, Emotion, _health, _chatRepo, bpm, baseline));
+                sb.AppendLine(Relationship.BuildPromptBlock());
+            }
+            catch { }
 
             // Криза
             if (_state.PersonalityInCrisis)
@@ -1521,6 +1542,9 @@ namespace KokonoeAssistant.Services
                 // Стан зовнішнього State Engine
                 try { _stateEngine?.UpdateContextFromMessage(content, ""); } catch { }
 
+                try { RuntimeState.ObserveUserMessage(_state, Emotion, content); } catch { }
+                try { Relationship.ObserveUserTone(_state.LastUserEmotionalTone, _state.PersonalityInCrisis); } catch { }
+
                 // Шукати факти в повідомленні і зберегти в пам'ять
                 _ = Task.Run(() => ExtractAndRememberFacts(content));
 
@@ -2015,6 +2039,9 @@ namespace KokonoeAssistant.Services
 
                 if (msgs.Count < 2) return;
 
+                if (await ReflectAfterConversationAdvancedAsync(msgs))
+                    return;
+
                 var dialog = string.Join("\n", msgs.Select(m =>
                     $"{(m.Role == "user" ? "Він" : "Я")}: {m.Content[..Math.Min(150, m.Content.Length)]}"));
 
@@ -2073,6 +2100,157 @@ namespace KokonoeAssistant.Services
                 Log($"Reflection saved: {reflect?[..Math.Min(60, reflect?.Length ?? 0)] ?? ""}");
             }
             catch (Exception ex) { Log($"ReflectAfterConversation: {ex.Message}"); }
+        }
+
+        private async Task<bool> ReflectAfterConversationAdvancedAsync(List<ChatRepository.ChatMessage> msgs)
+        {
+            try
+            {
+                var dialog = string.Join("\n", msgs.Select(m =>
+                    $"{(m.Role == "user" ? "Він" : "Я")}: {m.Content[..Math.Min(220, m.Content.Length)]}"));
+
+                var prompt = $$"""
+Ти — Kokonoe. Розмова щойно закінчилась. Проаналізуй її як внутрішній механізм пам'яті й стосунку.
+
+Діалог:
+{{dialog}}
+
+Поточний стан:
+{{RuntimeState.BuildPromptBlock(_state, Emotion, _health, _chatRepo)}}
+{{Relationship.BuildPromptBlock()}}
+
+Поверни лише валідний JSON:
+{
+  "learned": "що нового дізналась про нього або null",
+  "reflection": "короткий внутрішній висновок Kokonoe",
+  "remember": "що варто зберегти в довгу пам'ять або null",
+  "userTone": "neutral|positive|vulnerable|angry|seeking|crisis",
+  "aftertaste": "короткий стан після розмови",
+  "followUpQuestion": "конкретне питання на потім або null",
+  "importance": 0.0,
+  "trustDelta": 0.0,
+  "intimacyDelta": 0.0,
+  "frictionDelta": 0.0,
+  "protectivenessDelta": 0.0,
+  "curiosityDelta": 0.0,
+  "stabilityDelta": 0.0
+}
+""";
+
+                var result = await CallLlmRawAsync(prompt);
+                if (string.IsNullOrWhiteSpace(result)) return false;
+
+                var jsonStr = ExtractJson(result);
+                if (jsonStr == null) return false;
+
+                var obj = Newtonsoft.Json.Linq.JObject.Parse(jsonStr);
+                var reflection = new KokoConversationReflection
+                {
+                    Learned = CleanJsonString(obj["learned"]?.ToString()),
+                    Reflection = CleanJsonString(obj["reflection"]?.ToString()),
+                    Remember = CleanJsonString(obj["remember"]?.ToString()),
+                    UserTone = CleanJsonString(obj["userTone"]?.ToString(), "neutral"),
+                    Aftertaste = CleanJsonString(obj["aftertaste"]?.ToString(), "neutral"),
+                    FollowUpQuestion = CleanJsonString(obj["followUpQuestion"]?.ToString()),
+                    Importance = ReadFloat(obj, "importance", 0.5f),
+                    TrustDelta = ReadFloat(obj, "trustDelta", 0f),
+                    IntimacyDelta = ReadFloat(obj, "intimacyDelta", 0f),
+                    FrictionDelta = ReadFloat(obj, "frictionDelta", 0f),
+                    ProtectivenessDelta = ReadFloat(obj, "protectivenessDelta", 0f),
+                    CuriosityDelta = ReadFloat(obj, "curiosityDelta", 0f),
+                    StabilityDelta = ReadFloat(obj, "stabilityDelta", 0f)
+                };
+
+                ApplyConversationReflection(reflection);
+                SaveAdvancedReflection(reflection);
+                Log($"Advanced reflection saved: {reflection.Aftertaste} / {reflection.Importance:F2}");
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Log($"Advanced reflection failed: {ex.Message}");
+                return false;
+            }
+        }
+
+        private void ApplyConversationReflection(KokoConversationReflection reflection)
+        {
+            Relationship.ApplyReflection(reflection);
+
+            if (!string.IsNullOrEmpty(reflection.UserTone))
+                _state.LastUserEmotionalTone = reflection.UserTone;
+
+            if (!string.IsNullOrEmpty(reflection.Reflection))
+            {
+                _state.InnerMonologues.Add(reflection.Reflection);
+                if (_state.InnerMonologues.Count > 80) _state.InnerMonologues.RemoveAt(0);
+            }
+
+            if (!string.IsNullOrEmpty(reflection.Learned))
+            {
+                _state.Observations.Add($"[{DateTime.Now:HH:mm}] {reflection.Learned}");
+                if (_state.Observations.Count > 50) _state.Observations.RemoveAt(0);
+            }
+
+            if (!string.IsNullOrEmpty(reflection.FollowUpQuestion) &&
+                !_state.CuriosityQueue.Contains(reflection.FollowUpQuestion))
+            {
+                _state.CuriosityQueue.Add(reflection.FollowUpQuestion);
+                if (_state.CuriosityQueue.Count > 20) _state.CuriosityQueue.RemoveAt(0);
+            }
+
+            var memoryText = !string.IsNullOrEmpty(reflection.Remember) ? reflection.Remember : reflection.Learned;
+            if (!string.IsNullOrEmpty(memoryText))
+            {
+                var importance = Math.Clamp(reflection.Importance, 0.1f, 1f);
+                Memory.LearnFact(memoryText, "relationship_reflection", importance, new[] { "reflection", reflection.UserTone });
+                Memory.RecordEpisode(memoryText, reflection.UserTone, importance,
+                    new[] { "reflection", "relationship", reflection.Aftertaste });
+            }
+
+            SaveState();
+        }
+
+        private void SaveAdvancedReflection(KokoConversationReflection reflection)
+        {
+            var reflectNote = "Kokonoe/Рефлексія.md";
+            var entry = new StringBuilder();
+            entry.AppendLine($"\n## {DateTime.Now:dd.MM.yyyy HH:mm}");
+            if (!string.IsNullOrEmpty(reflection.Reflection)) entry.AppendLine($"**Думка:** {reflection.Reflection}");
+            if (!string.IsNullOrEmpty(reflection.Learned)) entry.AppendLine($"**Дізналась:** {reflection.Learned}");
+            if (!string.IsNullOrEmpty(reflection.Remember)) entry.AppendLine($"**Запам'ятати:** {reflection.Remember}");
+            if (!string.IsNullOrEmpty(reflection.FollowUpQuestion)) entry.AppendLine($"**Питання на потім:** {reflection.FollowUpQuestion}");
+            entry.AppendLine($"**Тон:** {reflection.UserTone}");
+            entry.AppendLine($"**Aftertaste:** {reflection.Aftertaste}");
+            entry.AppendLine($"**Importance:** {reflection.Importance:F2}");
+
+            try { _obsidian.AppendToNote(reflectNote, entry.ToString()); }
+            catch
+            {
+                try
+                {
+                    _obsidian.WriteNote(reflectNote,
+                        $"---\ntype: reflection\ntags: [kokonoe, reflection]\n---\n\n# Рефлексія\n{entry}");
+                }
+                catch { }
+            }
+        }
+
+        private static string CleanJsonString(string? value, string fallback = "")
+        {
+            if (string.IsNullOrWhiteSpace(value)) return fallback;
+            var cleaned = value.Trim();
+            return cleaned.Equals("null", StringComparison.OrdinalIgnoreCase) ? fallback : cleaned;
+        }
+
+        private static float ReadFloat(Newtonsoft.Json.Linq.JObject obj, string name, float fallback)
+        {
+            try
+            {
+                var token = obj[name];
+                return token == null ? fallback : Math.Clamp(token.Value<float>(), -1f, 1f);
+            }
+            catch { return fallback; }
         }
 
         // ══════════════════════════════════════════════════════════════
