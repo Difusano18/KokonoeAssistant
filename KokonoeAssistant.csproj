@@ -22,6 +22,12 @@
     </None>
   </ItemGroup>
   <ItemGroup>
+    <Compile Remove="Tests\**\*.cs" />
+    <EmbeddedResource Remove="Tests\**\*" />
+    <None Remove="Tests\**\*" />
+    <Page Remove="Tests\**\*.xaml" />
+  </ItemGroup>
+  <ItemGroup>
     <PackageReference Include="Newtonsoft.Json"               Version="13.0.3" />
     <PackageReference Include="Telegram.Bot"                  Version="22.0.0" />
     <PackageReference Include="WTelegramClient"               Version="3.6.8"  />
