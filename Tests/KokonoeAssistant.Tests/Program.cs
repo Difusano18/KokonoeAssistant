@@ -19,6 +19,7 @@ internal static class Program
             Run("Initiative respects low-power silence", InitiativeRespectsLowPowerSilence);
             Run("Initiative reacts to protective override", InitiativeReactsToProtectiveOverride);
             Run("Inspector renders state report", InspectorRendersStateReport);
+            Run("Obsidian vault architecture maintenance", ObsidianVaultArchitectureMaintenance);
 
             Console.WriteLine($"PASS {_passed} tests");
             return 0;
@@ -209,6 +210,31 @@ internal static class Program
         AssertTrue(markdown.Contains("## Somatic"), "markdown should include somatic section");
         AssertTrue(markdown.Contains("## Top Facts"), "markdown should include facts");
         AssertTrue(json.Contains("\"Somatic\""), "json should include somatic object");
+    }
+
+    private static void ObsidianVaultArchitectureMaintenance()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "KokonoeAssistant.Tests", "vault-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            var obsidian = new ObsidianMcpService(dir);
+            obsidian.WriteNote("Project/Idea.md", "# Idea\n\nKokonoe should maintain Obsidian architecture.");
+
+            var result = obsidian.MaintainKokonoeVaultArchitecture("test");
+
+            AssertTrue(result.CreatedFolders.Contains("Kokonoe/Architecture"), "architecture folder should be created");
+            AssertTrue(File.Exists(Path.Combine(dir, "Kokonoe", "Vault Index.md")), "vault index should be created");
+            AssertTrue(File.Exists(Path.Combine(dir, "Kokonoe", "Architecture", "Manifest.md")), "manifest should be created");
+            AssertTrue(File.Exists(Path.Combine(dir, "Kokonoe", "Architecture", "Health.md")), "health note should be created");
+            AssertTrue(File.Exists(Path.Combine(dir, "Kokonoe", "Architecture", "Backlog.md")), "backlog should be created");
+            AssertTrue(File.Exists(Path.Combine(dir, "Kokonoe", "Automation", "Obsidian Sync.md")), "automation note should be created");
+            AssertTrue(File.ReadAllText(Path.Combine(dir, "Kokonoe", "Architecture", "Change Log.md")).Contains("Reason: test"), "change log should record reason");
+        }
+        finally
+        {
+            try { Directory.Delete(dir, recursive: true); } catch { }
+        }
     }
 
     private static void Run(string name, Action test)

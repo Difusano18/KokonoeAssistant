@@ -3366,6 +3366,13 @@ namespace KokonoeAssistant.Services
         {
             try
             {
+                try
+                {
+                    var maintenance = _obsidian.MaintainKokonoeVaultArchitecture("startup");
+                    Log(maintenance.ToString());
+                }
+                catch (Exception ex) { Log($"VaultMaintenance startup: {ex.Message}"); }
+
                 var status = _obsidian.GetVaultInitStatus();
                 Log($"Vault status: {status.NoteCount} notes, {status.TotalLinks} links. Core: {status.HasCoreNote}");
 
@@ -3730,6 +3737,12 @@ CHAT:
                 }
 
                 WriteAutoVaultNotes(obj);
+                try
+                {
+                    var maintenance = _obsidian.MaintainKokonoeVaultArchitecture("auto-batch-sync");
+                    Log(maintenance.ToString());
+                }
+                catch (Exception ex) { Log($"AutoSyncVaultMaintenance: {ex.Message}"); }
 
                 lock (_lock)
                 {

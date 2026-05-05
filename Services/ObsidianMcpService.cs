@@ -391,6 +391,253 @@ tags: [{tagsLine}]
 
         // ── TOOLS FOR LLM ─────────────────────────────────────────
 
+        public VaultMaintenanceResult MaintainKokonoeVaultArchitecture(string reason = "manual")
+        {
+            var result = new VaultMaintenanceResult { Reason = reason, RanAt = DateTime.Now };
+
+            foreach (var folder in new[]
+            {
+                "Kokonoe",
+                "Kokonoe/Architecture",
+                "Kokonoe/Memory",
+                "Kokonoe/Automation",
+                "Kokonoe/Reviews",
+                "Kokonoe/Logs",
+                "Daily",
+                "Chats"
+            })
+            {
+                var full = Path.Combine(_vault, folder.Replace('/', Path.DirectorySeparatorChar));
+                if (!Directory.Exists(full))
+                {
+                    Directory.CreateDirectory(full);
+                    result.CreatedFolders.Add(folder);
+                }
+            }
+
+            var notesBefore = ListNotes();
+            var status = GetVaultStatus();
+            var init = GetVaultInitStatus();
+            var modifiedToday = GetNotesModifiedToday().Take(20).ToList();
+            var folders = ListFolders();
+            var graph = GetNoteGraph();
+            var isolated = GetIsolatedNotes().Take(30).ToList();
+
+            UpsertManagedNote("Kokonoe/Vault Index.md", BuildVaultIndex(status, init, folders, modifiedToday), result);
+            UpsertManagedNote("Kokonoe/Architecture/Manifest.md", BuildVaultManifest(notesBefore, folders), result);
+            UpsertManagedNote("Kokonoe/Architecture/Map.md", BuildVaultMap(graph), result);
+            UpsertManagedNote("Kokonoe/Architecture/Health.md", BuildVaultHealth(status, init, isolated), result);
+            UpsertManagedNote("Kokonoe/Architecture/Backlog.md", BuildVaultBacklog(status, init, isolated), result);
+            UpsertManagedNote("Kokonoe/Automation/Obsidian Sync.md", BuildVaultAutomationNote(), result);
+
+            var linkResult = RebuildLinks();
+            result.LinkTouchedNotes = linkResult.changed;
+            result.LinksAdded = linkResult.linksAdded;
+            AppendMaintenanceLog(result, status, init);
+            return result;
+        }
+
+        private void UpsertManagedNote(string path, string content, VaultMaintenanceResult result)
+        {
+            var full = Resolve(path);
+            var existed = File.Exists(full);
+            var current = existed ? File.ReadAllText(full, Encoding.UTF8) : null;
+            if (current == content) return;
+
+            Directory.CreateDirectory(Path.GetDirectoryName(full)!);
+            File.WriteAllText(full, content, Encoding.UTF8);
+
+            if (existed)
+                result.UpdatedNotes.Add(path);
+            else
+                result.CreatedNotes.Add(path);
+        }
+
+        private static string BuildManagedFrontmatter(string type)
+        {
+            return $"""
+---
+type: {type}
+managed-by: Kokonoe
+updated: {DateTime.Now:yyyy-MM-dd HH:mm}
+tags: [kokonoe, vault, architecture]
+---
+
+""";
+        }
+
+        private string BuildVaultIndex(VaultStatus status, VaultInitStatus init, List<string> folders, List<string> modifiedToday)
+        {
+            var sb = new StringBuilder();
+            sb.Append(BuildManagedFrontmatter("vault-index"));
+            sb.AppendLine("# Kokonoe Vault Index");
+            sb.AppendLine();
+            sb.AppendLine("## Core");
+            sb.AppendLine("- [[Kokonoe/Architecture/Manifest|Manifest]]");
+            sb.AppendLine("- [[Kokonoe/Architecture/Map|Map]]");
+            sb.AppendLine("- [[Kokonoe/Architecture/Health|Health]]");
+            sb.AppendLine("- [[Kokonoe/Architecture/Backlog|Backlog]]");
+            sb.AppendLine("- [[Kokonoe/Automation/Obsidian Sync|Obsidian Sync]]");
+            sb.AppendLine("- [[Kokonoe/AutoMemory|Auto Memory]]");
+            sb.AppendLine("- [[Kokonoe/Project Log|Project Log]]");
+            sb.AppendLine("- [[Kokonoe/Memory/Facts|Facts]]");
+            sb.AppendLine();
+            sb.AppendLine("## Status");
+            sb.AppendLine($"- Notes: {status.TotalNotes}");
+            sb.AppendLine($"- Filled notes: {status.FilledNotes}");
+            sb.AppendLine($"- Empty notes: {status.EmptyNotes.Count}");
+            sb.AppendLine($"- Orphan notes: {status.OrphanNotes.Count}");
+            sb.AppendLine($"- Brain core: {(init.HasCoreNote ? init.CoreNotePath : "missing")}");
+            sb.AppendLine();
+            sb.AppendLine("## Main Folders");
+            foreach (var folder in folders.Take(40))
+                sb.AppendLine($"- [[{folder}/]]");
+            sb.AppendLine();
+            sb.AppendLine("## Modified Today");
+            foreach (var note in modifiedToday)
+                sb.AppendLine($"- [[{Path.GetFileNameWithoutExtension(note)}]] ({note})");
+            return sb.ToString();
+        }
+
+        private string BuildVaultManifest(List<string> notes, List<string> folders)
+        {
+            var sb = new StringBuilder();
+            sb.Append(BuildManagedFrontmatter("vault-manifest"));
+            sb.AppendLine("# Vault Manifest");
+            sb.AppendLine();
+            sb.AppendLine("## Managed Areas");
+            sb.AppendLine("- Kokonoe/: runtime memory, state exports, project knowledge.");
+            sb.AppendLine("- Kokonoe/Architecture/: generated maps, health reports, backlog.");
+            sb.AppendLine("- Kokonoe/Memory/: stable facts and episodes.");
+            sb.AppendLine("- Kokonoe/Automation/: sync rules and automation notes.");
+            sb.AppendLine("- Daily/: daily operational notes.");
+            sb.AppendLine("- Chats/: raw chat logs.");
+            sb.AppendLine();
+            sb.AppendLine("## Folder Inventory");
+            foreach (var folder in folders.Take(80))
+                sb.AppendLine($"- {folder}");
+            sb.AppendLine();
+            sb.AppendLine("## Note Inventory");
+            foreach (var note in notes.Take(200))
+                sb.AppendLine($"- [[{Path.GetFileNameWithoutExtension(note)}]] ({note})");
+            if (notes.Count > 200)
+                sb.AppendLine($"- ... {notes.Count - 200} more notes");
+            return sb.ToString();
+        }
+
+        private string BuildVaultMap(Dictionary<string, List<string>> graph)
+        {
+            var sb = new StringBuilder();
+            sb.Append(BuildManagedFrontmatter("vault-map"));
+            sb.AppendLine("# Vault Map");
+            sb.AppendLine();
+            sb.AppendLine("## Link Hubs");
+            foreach (var node in graph.OrderByDescending(x => x.Value.Count).Take(40))
+                sb.AppendLine($"- {node.Key}: {node.Value.Count} outgoing");
+            sb.AppendLine();
+            sb.AppendLine("## Edges");
+            foreach (var node in graph.OrderBy(x => x.Key).Take(120))
+            {
+                if (node.Value.Count == 0) continue;
+                sb.AppendLine($"### {node.Key}");
+                foreach (var link in node.Value.Take(20))
+                    sb.AppendLine($"- [[{link}]]");
+            }
+            return sb.ToString();
+        }
+
+        private string BuildVaultHealth(VaultStatus status, VaultInitStatus init, List<string> isolated)
+        {
+            var sb = new StringBuilder();
+            sb.Append(BuildManagedFrontmatter("vault-health"));
+            sb.AppendLine("# Vault Health");
+            sb.AppendLine();
+            sb.AppendLine("## Signals");
+            sb.AppendLine($"- Total notes: {status.TotalNotes}");
+            sb.AppendLine($"- Filled notes: {status.FilledNotes}");
+            sb.AppendLine($"- Empty notes: {status.EmptyNotes.Count}");
+            sb.AppendLine($"- Orphan notes: {status.OrphanNotes.Count}");
+            sb.AppendLine($"- Isolated notes: {isolated.Count}");
+            sb.AppendLine($"- Brain core: {(init.HasCoreNote ? init.CoreNotePath : "missing")}");
+            sb.AppendLine();
+            sb.AppendLine("## Empty Notes");
+            foreach (var note in status.EmptyNotes.Take(50))
+                sb.AppendLine($"- [[{Path.GetFileNameWithoutExtension(note)}]] ({note})");
+            sb.AppendLine();
+            sb.AppendLine("## Orphan Notes");
+            foreach (var note in status.OrphanNotes.Take(50))
+                sb.AppendLine($"- [[{Path.GetFileNameWithoutExtension(note)}]] ({note})");
+            sb.AppendLine();
+            sb.AppendLine("## Isolated Notes");
+            foreach (var note in isolated.Take(50))
+                sb.AppendLine($"- [[{Path.GetFileNameWithoutExtension(note)}]] ({note})");
+            return sb.ToString();
+        }
+
+        private string BuildVaultBacklog(VaultStatus status, VaultInitStatus init, List<string> isolated)
+        {
+            var sb = new StringBuilder();
+            sb.Append(BuildManagedFrontmatter("vault-backlog"));
+            sb.AppendLine("# Vault Backlog");
+            sb.AppendLine();
+            if (!init.HasCoreNote)
+                sb.AppendLine("- [ ] Create or mark a central note with `type: brain-core`.");
+            if (status.EmptyNotes.Count > 0)
+                sb.AppendLine($"- [ ] Review {status.EmptyNotes.Count} empty notes.");
+            if (status.OrphanNotes.Count > 0)
+                sb.AppendLine($"- [ ] Connect {status.OrphanNotes.Count} orphan notes into the graph.");
+            if (isolated.Count > 0)
+                sb.AppendLine($"- [ ] Decide where {isolated.Count} isolated notes belong.");
+            if (status.EmptyNotes.Count == 0 && status.OrphanNotes.Count == 0 && init.HasCoreNote)
+                sb.AppendLine("- [x] No obvious structural debt detected.");
+            sb.AppendLine();
+            sb.AppendLine("## Candidates");
+            foreach (var note in status.OrphanNotes.Concat(isolated).Distinct().Take(80))
+                sb.AppendLine($"- [ ] [[{Path.GetFileNameWithoutExtension(note)}]] ({note})");
+            return sb.ToString();
+        }
+
+        private static string BuildVaultAutomationNote()
+        {
+            var sb = new StringBuilder();
+            sb.Append(BuildManagedFrontmatter("vault-automation"));
+            sb.AppendLine("# Obsidian Sync");
+            sb.AppendLine();
+            sb.AppendLine("## Rules");
+            sb.AppendLine("- Every 5 chat exchanges are batched into Kokonoe memory notes.");
+            sb.AppendLine("- Vault architecture notes are refreshed after each batch sync.");
+            sb.AppendLine("- Managed notes are overwritten because they are generated snapshots.");
+            sb.AppendLine("- Human-written notes are only appended or linked by normal memory sync.");
+            sb.AppendLine();
+            sb.AppendLine("## Managed Notes");
+            sb.AppendLine("- [[Kokonoe/Vault Index]]");
+            sb.AppendLine("- [[Kokonoe/Architecture/Manifest]]");
+            sb.AppendLine("- [[Kokonoe/Architecture/Map]]");
+            sb.AppendLine("- [[Kokonoe/Architecture/Health]]");
+            sb.AppendLine("- [[Kokonoe/Architecture/Backlog]]");
+            return sb.ToString();
+        }
+
+        private void AppendMaintenanceLog(VaultMaintenanceResult result, VaultStatus status, VaultInitStatus init)
+        {
+            var sb = new StringBuilder();
+            sb.AppendLine($"\n## {result.RanAt:yyyy-MM-dd HH:mm}");
+            sb.AppendLine($"- Reason: {result.Reason}");
+            sb.AppendLine($"- Created folders: {result.CreatedFolders.Count}");
+            sb.AppendLine($"- Created notes: {result.CreatedNotes.Count}");
+            sb.AppendLine($"- Updated notes: {result.UpdatedNotes.Count}");
+            sb.AppendLine($"- Link touched notes: {result.LinkTouchedNotes}");
+            sb.AppendLine($"- Links added: {result.LinksAdded}");
+            sb.AppendLine($"- Notes: {status.TotalNotes}, orphans: {status.OrphanNotes.Count}, empty: {status.EmptyNotes.Count}");
+            sb.AppendLine($"- Brain core: {(init.HasCoreNote ? init.CoreNotePath : "missing")}");
+
+            var full = Resolve("Kokonoe/Architecture/Change Log.md");
+            Directory.CreateDirectory(Path.GetDirectoryName(full)!);
+            if (!File.Exists(full))
+                File.WriteAllText(full, BuildManagedFrontmatter("vault-change-log") + "# Architecture Change Log\n", Encoding.UTF8);
+            File.AppendAllText(full, sb.ToString(), Encoding.UTF8);
+        }
+
         public string GetToolsDescription() => """
 === OBSIDIAN TOOLS ===
 list_notes [folder] — список нотаток
@@ -832,6 +1079,22 @@ cleanup_empty — видалити порожні нотатки
             if (OrphanNotes.Count > 0)
                 sb.AppendLine($"Осиротілих без [[links]] ({OrphanNotes.Count}): {string.Join(", ", OrphanNotes.Take(10))}");
             return sb.ToString().Trim();
+        }
+    }
+
+    public class VaultMaintenanceResult
+    {
+        public string Reason { get; set; } = "";
+        public DateTime RanAt { get; set; }
+        public List<string> CreatedFolders { get; set; } = new();
+        public List<string> CreatedNotes { get; set; } = new();
+        public List<string> UpdatedNotes { get; set; } = new();
+        public int LinkTouchedNotes { get; set; }
+        public int LinksAdded { get; set; }
+
+        public override string ToString()
+        {
+            return $"Vault maintenance: {CreatedFolders.Count} folders, {CreatedNotes.Count} created notes, {UpdatedNotes.Count} updated notes, {LinksAdded} links.";
         }
     }
 }

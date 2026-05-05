@@ -274,6 +274,16 @@ Kokonoe: Стоп. Де ти зараз. Коли востаннє їв.
                 "Перевірити стан vault і отримати рекомендацію: скільки нотаток, скільки [[посилань]], чи є центральна нотатка (brain-core), що треба зробити. Викликай при старті або якщо vault здається порожнім.",
                 new { type = "object", properties = new { }, required = Array.Empty<string>() }),
 
+            Tool("maintain_vault_architecture",
+                "Create and refresh Kokonoe-managed Obsidian architecture notes: vault index, manifest, map, health, backlog, automation notes, change log, and rebuild links.",
+                new {
+                    type = "object",
+                    properties = new {
+                        reason = new { type = "string", description = "Why maintenance is being run, for the change log." }
+                    },
+                    required = Array.Empty<string>()
+                }),
+
             Tool("get_vault_tree",
                 "Отримати дерево структури vault (папки та файли). Використовуй щоб зрозуміти поточну організацію перед архітектурними рішеннями.",
                 new { type = "object", properties = new { }, required = Array.Empty<string>() }),
@@ -1214,6 +1224,10 @@ Kokonoe: Стоп. Де ти зараз. Коли востаннє їв.
 
                     "init_brain_vault" => Obsidian.GetVaultInitStatus().ToString(),
 
+                    "maintain_vault_architecture" => Obsidian
+                        .MaintainKokonoeVaultArchitecture(args["reason"]?.ToString() ?? "tool-call")
+                        .ToString(),
+
                     "get_vault_tree" => Obsidian.GetVaultTree(),
 
                     "move_note" => Obsidian.MoveNote(
@@ -1291,7 +1305,7 @@ Kokonoe: Стоп. Де ти зараз. Коли востаннє їв.
             "write_note", "create_note", "append_to_note", "append_to_daily_note",
             "read_note", "list_notes", "list_folders", "delete_note", "search_notes",
             "get_daily_note", "rebuild_links", "vault_status", "cleanup_empty_notes",
-            "init_brain_vault", "get_outgoing_links", "get_backlinks",
+            "init_brain_vault", "maintain_vault_architecture", "get_outgoing_links", "get_backlinks",
             "get_vault_tree", "move_note", "create_folder", "save_architecture_plan"
         };
 
