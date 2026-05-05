@@ -30,7 +30,7 @@
   <ItemGroup>
     <PackageReference Include="Newtonsoft.Json"               Version="13.0.3" />
     <PackageReference Include="Telegram.Bot"                  Version="22.0.0" />
-    <PackageReference Include="WTelegramClient"               Version="3.6.8"  />
+    <PackageReference Include="WTelegramClient"               Version="3.7.1"  />
     <PackageReference Include="System.Data.SQLite"            Version="1.0.118" />
     <PackageReference Include="NAudio"                        Version="2.2.1" />
     <PackageReference Include="NAudio.Wasapi"                 Version="2.2.1" />

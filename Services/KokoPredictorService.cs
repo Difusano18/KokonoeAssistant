@@ -184,7 +184,7 @@ namespace KokonoeAssistant.Services
                 // Spike detection (різкі відхилення)
                 var spikeModel = _mlContext.Transforms
                     .DetectIidSpike("Prediction", "Value",
-                        confidence: 95, pvalueHistoryLength: Math.Min(values.Count / 2, 30))
+                        confidence: 95.0, pvalueHistoryLength: Math.Min(values.Count / 2, 30))
                     .Fit(data);
 
                 var spikePredictions = spikeModel.Transform(data);
@@ -215,7 +215,7 @@ namespace KokonoeAssistant.Services
                 {
                     var cpModel = _mlContext.Transforms
                         .DetectIidChangePoint("Prediction", "Value",
-                            confidence: 95, changeHistoryLength: Math.Min(values.Count / 3, 20))
+                            confidence: 95.0, changeHistoryLength: Math.Min(values.Count / 3, 20))
                         .Fit(data);
 
                     var cpPredictions = cpModel.Transform(data);
