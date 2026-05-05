@@ -98,6 +98,8 @@ namespace KokonoeAssistant.Services
         public double LastSomaticStrain { get; set; }
         public double LastSomaticCalm { get; set; }
         public DateTime LastSomaticAt { get; set; } = DateTime.MinValue;
+        public DateTime LastSomaticVaultEventAt { get; set; } = DateTime.MinValue;
+        public string LastSomaticVaultEventKey { get; set; } = "";
         public KokoSelfRegulationState SelfRegulation { get; set; } = new();
 
         public int PendingVaultExchangeCount { get; set; }
@@ -3633,9 +3635,69 @@ namespace KokonoeAssistant.Services
                 _state.InnerMonologues.Add($"[somatic/{frame.Regulation}] {frame.PrivateThought}");
                 if (_state.InnerMonologues.Count > 30)
                     _state.InnerMonologues.RemoveRange(0, _state.InnerMonologues.Count - 30);
+                TryRecordSomaticVaultEvent(snapshot, frame);
             }
 
             return frame;
+        }
+
+        private void TryRecordSomaticVaultEvent(KokoSomaticSnapshot somatic, KokoSelfRegulationFrame frame)
+        {
+            try
+            {
+                if (!ShouldPersistSomaticEvent(somatic, frame))
+                    return;
+
+                var key = $"{frame.Reaction}:{frame.Regulation}:{somatic.State}:{Math.Round(somatic.Strain, 1)}";
+                var now = DateTime.Now;
+                if (key == _state.LastSomaticVaultEventKey &&
+                    now - _state.LastSomaticVaultEventAt < TimeSpan.FromMinutes(20))
+                    return;
+
+                var path = "Kokonoe/Logs/Somatic Events.md";
+                var existing = _obsidian.ReadNote(path);
+                if (string.IsNullOrWhiteSpace(existing))
+                {
+                    existing = """
+---
+type: somatic-events
+tags: [kokonoe, somatic, pulse, self-regulation]
+---
+
+# Somatic Events
+
+""";
+                }
+
+                var sb = new StringBuilder();
+                sb.AppendLine($"## {now:yyyy-MM-dd HH:mm:ss} - {frame.Reaction}");
+                sb.AppendLine($"- Body: {somatic.State} / {somatic.Label}");
+                sb.AppendLine($"- Pulse: {somatic.Bpm:F0} bpm, baseline {somatic.BaselineBpm:F0}, delta {somatic.BpmDelta:+0;-0;0}");
+                sb.AppendLine($"- Load: strain {somatic.Strain:F2}, calm {somatic.Calm:F2}, volatility {somatic.Volatility:F2}");
+                sb.AppendLine($"- Regulation: {frame.Regulation}, control {frame.Control:F2}, containment {frame.Containment:F2}, drive {frame.Drive:F2}");
+                if (!string.IsNullOrWhiteSpace(frame.PrivateThought))
+                    sb.AppendLine($"- Private thought: {frame.PrivateThought}");
+                if (!string.IsNullOrWhiteSpace(frame.BehaviorDirective))
+                    sb.AppendLine($"- Behavior directive: {frame.BehaviorDirective}");
+
+                _obsidian.WriteNote(path, existing.TrimEnd() + "\n\n" + sb.ToString().TrimEnd() + "\n");
+                _state.LastSomaticVaultEventKey = key;
+                _state.LastSomaticVaultEventAt = now;
+                SaveState();
+            }
+            catch (Exception ex)
+            {
+                Log($"Somatic vault event: {ex.Message}");
+            }
+        }
+
+        private static bool ShouldPersistSomaticEvent(KokoSomaticSnapshot somatic, KokoSelfRegulationFrame frame)
+        {
+            if (frame.Reaction is "pulse_spike" or "protective_override" or "combat_focus" or "pressure_rise" or "low_power" or "recovered_calm")
+                return true;
+            if (somatic.Strain >= 0.65 || Math.Abs(somatic.BpmDelta) >= 18)
+                return true;
+            return false;
         }
 
         public List<string> GetSelfRegulationLog(int count = 8)
