@@ -1294,6 +1294,7 @@ namespace KokonoeAssistant
 
                 // Auto-log this exchange to Obsidian vault for archival memory
                 _ = Task.Run(() => ServiceContainer.ChatLogger.LogExchange("app", text, reply));
+                try { ServiceContainer.BrainEngine?.ObserveExchangeForVaultSync(text, reply); } catch { }
 
                 if (AppSettings.Load().TtsEnabled) SpeakAsync(reply);
 

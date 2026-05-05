@@ -99,6 +99,11 @@ namespace KokonoeAssistant.Services
         public double LastSomaticCalm { get; set; }
         public DateTime LastSomaticAt { get; set; } = DateTime.MinValue;
         public KokoSelfRegulationState SelfRegulation { get; set; } = new();
+
+        public int PendingVaultExchangeCount { get; set; }
+        public List<string> PendingVaultExchangeBuffer { get; set; } = new();
+        public DateTime LastAutoVaultSyncAt { get; set; } = DateTime.MinValue;
+        public string LastAutoVaultSyncSummary { get; set; } = "";
     }
 
     public class ReactiveTrigger
@@ -164,6 +169,7 @@ namespace KokonoeAssistant.Services
         private readonly SemaphoreSlim _bgLlmSemaphore = new(1, 1);
         private int _thinkInFlight;
         private int _spontaneousInFlight;
+        private int _vaultSyncInFlight;
         private readonly object    _lock = new();
         private DateTime           _lastInAppSilenceMsgAt = DateTime.MinValue;
 
@@ -3652,6 +3658,191 @@ namespace KokonoeAssistant.Services
                 _obsidian.WriteNote("Kokonoe/Inspector.json", Inspector.ToJson(snapshot));
             }
             catch (Exception ex) { Log($"ExportInspectorToVault: {ex.Message}"); }
+        }
+
+        public void ObserveExchangeForVaultSync(string userText, string assistantText)
+        {
+            if (string.IsNullOrWhiteSpace(userText) && string.IsNullOrWhiteSpace(assistantText)) return;
+
+            lock (_lock)
+            {
+                _state.PendingVaultExchangeCount++;
+                _state.PendingVaultExchangeBuffer.Add($"""
+[{DateTime.Now:yyyy-MM-dd HH:mm}]
+USER: {TrimForVaultBuffer(userText, 900)}
+KOKONOE: {TrimForVaultBuffer(assistantText, 900)}
+""");
+                if (_state.PendingVaultExchangeBuffer.Count > 12)
+                    _state.PendingVaultExchangeBuffer.RemoveRange(0, _state.PendingVaultExchangeBuffer.Count - 12);
+                SaveState();
+            }
+
+            if (_state.PendingVaultExchangeCount >= 5)
+                _ = Task.Run(AutoSyncVaultBatchAsync);
+        }
+
+        private async Task AutoSyncVaultBatchAsync()
+        {
+            if (Interlocked.CompareExchange(ref _vaultSyncInFlight, 1, 0) != 0) return;
+
+            List<string> batch;
+            try
+            {
+                lock (_lock)
+                {
+                    if (_state.PendingVaultExchangeCount < 5 || _state.PendingVaultExchangeBuffer.Count == 0)
+                        return;
+                    batch = _state.PendingVaultExchangeBuffer.ToList();
+                }
+
+                var prompt = $$"""
+You are Kokonoe's background Obsidian archivist.
+Analyze the last chat exchanges and output ONLY valid JSON.
+Do not invent facts. If a section has nothing useful, use an empty array/string.
+
+JSON schema:
+{
+  "summary": "one compact Ukrainian summary",
+  "facts": ["stable facts about the user or project"],
+  "project": ["implementation decisions, architecture, bugs, plans"],
+  "preferences": ["user preferences about Kokonoe/app/workflow"],
+  "tasks": ["open tasks or follow-ups"],
+  "emotional": ["emotional/relationship observations"],
+  "reflection": "Kokonoe private reflection in 1-3 Ukrainian sentences"
+}
+
+CHAT:
+{{string.Join("\n\n---\n\n", batch)}}
+""";
+
+                var raw = await _llm.SendSystemQueryAsync(prompt);
+                if (string.IsNullOrWhiteSpace(raw))
+                {
+                    WriteVaultFallback(batch, "LLM returned nothing");
+                    return;
+                }
+
+                var obj = ExtractJsonObject(raw);
+                if (obj == null)
+                {
+                    WriteVaultFallback(batch, "JSON parse failed: " + TrimForVaultBuffer(raw, 600));
+                    return;
+                }
+
+                WriteAutoVaultNotes(obj);
+
+                lock (_lock)
+                {
+                    _state.PendingVaultExchangeCount = 0;
+                    _state.PendingVaultExchangeBuffer.Clear();
+                    _state.LastAutoVaultSyncAt = DateTime.Now;
+                    _state.LastAutoVaultSyncSummary = obj["summary"]?.ToString() ?? "";
+                    SaveState();
+                }
+            }
+            catch (Exception ex)
+            {
+                Log($"AutoSyncVaultBatch: {ex.Message}");
+            }
+            finally
+            {
+                Interlocked.Exchange(ref _vaultSyncInFlight, 0);
+            }
+        }
+
+        private void WriteAutoVaultNotes(JObject obj)
+        {
+            var now = DateTime.Now;
+            var summary = obj["summary"]?.ToString()?.Trim() ?? "";
+            var reflection = obj["reflection"]?.ToString()?.Trim() ?? "";
+
+            var hub = new StringBuilder();
+            hub.AppendLine($"\n## {now:yyyy-MM-dd HH:mm}");
+            if (!string.IsNullOrWhiteSpace(summary))
+                hub.AppendLine($"- Summary: {summary}");
+            AppendJsonArray(hub, "Facts", obj["facts"]);
+            AppendJsonArray(hub, "Project", obj["project"]);
+            AppendJsonArray(hub, "Preferences", obj["preferences"]);
+            AppendJsonArray(hub, "Tasks", obj["tasks"]);
+            AppendJsonArray(hub, "Emotional", obj["emotional"]);
+            if (!string.IsNullOrWhiteSpace(reflection))
+                hub.AppendLine($"- Reflection: {reflection}");
+            AppendOrCreate("Kokonoe/AutoMemory.md", "# Auto Memory\n", hub.ToString());
+
+            AppendItemsToNote("Kokonoe/Memory/Facts.md", obj["facts"], "auto-fact");
+            AppendItemsToNote("Kokonoe/Project Log.md", obj["project"], "project");
+            AppendItemsToNote("Kokonoe/Preferences.md", obj["preferences"], "preference");
+            AppendItemsToNote("Kokonoe/Tasks.md", obj["tasks"], "task");
+            AppendItemsToNote("Kokonoe/Relationship Notes.md", obj["emotional"], "emotional");
+
+            if (!string.IsNullOrWhiteSpace(reflection))
+                AppendOrCreate("Kokonoe/Рефлексія.md", "# Рефлексія\n", $"\n## {now:yyyy-MM-dd HH:mm}\n{reflection}\n");
+        }
+
+        private void WriteVaultFallback(List<string> batch, string reason)
+        {
+            var entry = $"\n## {DateTime.Now:yyyy-MM-dd HH:mm} fallback\n- reason: {reason}\n\n```text\n{string.Join("\n\n---\n\n", batch)}\n```\n";
+            AppendOrCreate("Kokonoe/AutoMemory.md", "# Auto Memory\n", entry);
+        }
+
+        private void AppendItemsToNote(string path, JToken? token, string label)
+        {
+            var items = token?.Type == JTokenType.Array
+                ? token.Values<string>().Where(s => !string.IsNullOrWhiteSpace(s)).Select(s => s!.Trim()).ToList()
+                : new List<string>();
+            if (items.Count == 0) return;
+
+            var sb = new StringBuilder();
+            sb.AppendLine($"\n## {DateTime.Now:yyyy-MM-dd HH:mm}");
+            foreach (var item in items)
+                sb.AppendLine($"- [{label}] {item}");
+            AppendOrCreate(path, $"# {Path.GetFileNameWithoutExtension(path)}\n", sb.ToString());
+        }
+
+        private void AppendOrCreate(string path, string header, string content)
+        {
+            try
+            {
+                var existing = _obsidian.ReadNote(path);
+                if (existing == null)
+                    _obsidian.WriteNote(path, header.TrimEnd() + "\n" + content);
+                else
+                    _obsidian.AppendToNote(path, content);
+            }
+            catch (Exception ex) { Log($"AppendOrCreate {path}: {ex.Message}"); }
+        }
+
+        private static JObject? ExtractJsonObject(string raw)
+        {
+            try { return JObject.Parse(raw.Trim()); }
+            catch
+            {
+                var start = raw.IndexOf('{');
+                var end = raw.LastIndexOf('}');
+                if (start >= 0 && end > start)
+                {
+                    try { return JObject.Parse(raw[start..(end + 1)]); }
+                    catch { }
+                }
+            }
+            return null;
+        }
+
+        private static void AppendJsonArray(StringBuilder sb, string title, JToken? token)
+        {
+            if (token?.Type != JTokenType.Array) return;
+            var items = token.Values<string>().Where(s => !string.IsNullOrWhiteSpace(s)).Select(s => s!.Trim()).ToList();
+            if (items.Count == 0) return;
+            sb.AppendLine($"- {title}:");
+            foreach (var item in items)
+                sb.AppendLine($"  - {item}");
+        }
+
+        private static string TrimForVaultBuffer(string? text, int max)
+        {
+            if (string.IsNullOrWhiteSpace(text)) return "";
+            text = text.Replace("\r", " ").Trim();
+            return text.Length <= max ? text : text[..max] + "...";
         }
 
         public void Dispose()
