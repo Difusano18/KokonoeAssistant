@@ -211,9 +211,9 @@ internal static class Program
         var markdown = inspector.ToMarkdown(snapshot);
         var json = inspector.ToJson(snapshot);
 
-        AssertTrue(markdown.Contains("Kokonoe State Inspector"), "markdown should have inspector title");
-        AssertTrue(markdown.Contains("## Somatic"), "markdown should include somatic section");
-        AssertTrue(markdown.Contains("## Top Facts"), "markdown should include facts");
+        AssertTrue(markdown.Contains("Інспектор стану Коконое"), "markdown should have inspector title");
+        AssertTrue(markdown.Contains("## Соматика"), "markdown should include somatic section");
+        AssertTrue(markdown.Contains("## Головні факти"), "markdown should include facts");
         AssertTrue(json.Contains("\"Somatic\""), "json should include somatic object");
     }
 
@@ -234,7 +234,7 @@ internal static class Program
             AssertTrue(File.Exists(Path.Combine(dir, "Kokonoe", "Architecture", "Health.md")), "health note should be created");
             AssertTrue(File.Exists(Path.Combine(dir, "Kokonoe", "Architecture", "Backlog.md")), "backlog should be created");
             AssertTrue(File.Exists(Path.Combine(dir, "Kokonoe", "Automation", "Obsidian Sync.md")), "automation note should be created");
-            AssertTrue(File.ReadAllText(Path.Combine(dir, "Kokonoe", "Architecture", "Change Log.md")).Contains("Reason: test"), "change log should record reason");
+            AssertTrue(File.ReadAllText(Path.Combine(dir, "Kokonoe", "Architecture", "Change Log.md")).Contains("Причина: test"), "change log should record reason");
 
             var second = obsidian.MaintainKokonoeVaultArchitecture("test-inventory-settle");
             AssertTrue(second.CreatedNotes.Count == 0, "second maintenance should not create managed notes again");
@@ -392,7 +392,7 @@ internal static class Program
             AssertTrue(review.Actions.Any(a => a.Action == "merge"), "review should suggest merging exact duplicates");
             AssertTrue(review.Actions.Any(a => a.Action == "keep"), "review should keep open tasks visible");
             AssertTrue(review.Actions.Any(a => a.Action == "promote_to_preference"), "review should identify preference-like memory");
-            AssertTrue(reviewNote.Contains("## merge"), "review note should render merge section");
+            AssertTrue(reviewNote.Contains("## Об'єднати"), "review note should render merge section");
             AssertTrue(maintenance.MemoryReviewActionCount >= 3, "maintenance should report review action count");
         }
         finally

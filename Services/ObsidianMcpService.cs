@@ -480,6 +480,7 @@ tags: [{tagsLine}]
             UpsertManagedNote("Kokonoe/Architecture/Map.md", BuildVaultMap(graph), result);
             UpsertManagedNote("Kokonoe/Architecture/Health.md", BuildVaultHealth(status, init, isolated), result);
             UpsertManagedNote("Kokonoe/Architecture/Backlog.md", BuildVaultBacklog(status, init, isolated), result);
+            UpsertManagedNote("Kokonoe/Architecture/Language Policy.md", BuildVaultLanguagePolicy(), result);
             UpsertManagedNote("Kokonoe/Memory/Quality.md", BuildMemoryQualityNote(memoryQuality), result);
             UpsertManagedNote("Kokonoe/Memory/Review.md", BuildMemoryReviewNote(memoryReview), result);
             UpsertManagedNote("Kokonoe/Tasks Queue.md", BuildTaskQueueNote(taskQueue), result);
@@ -553,34 +554,34 @@ tags: [kokonoe, vault, architecture]
         {
             var sb = new StringBuilder();
             sb.Append(BuildManagedFrontmatter("vault-index"));
-            sb.AppendLine("# Kokonoe Vault Index");
+            sb.AppendLine("# Індекс vault Коконое");
             sb.AppendLine();
-            sb.AppendLine("## Core");
-            sb.AppendLine("- [[Kokonoe/Architecture/Manifest|Manifest]]");
-            sb.AppendLine("- [[Kokonoe/Architecture/Map|Map]]");
-            sb.AppendLine("- [[Kokonoe/Architecture/Health|Health]]");
-            sb.AppendLine("- [[Kokonoe/Architecture/Backlog|Backlog]]");
-            sb.AppendLine("- [[Kokonoe/Automation/Obsidian Sync|Obsidian Sync]]");
-            sb.AppendLine("- [[Kokonoe/AutoMemory|Auto Memory]]");
-            sb.AppendLine("- [[Kokonoe/Project Log|Project Log]]");
-            sb.AppendLine("- [[Kokonoe/Memory/Facts|Facts]]");
-            sb.AppendLine("- [[Kokonoe/Memory/Quality|Memory Quality]]");
-            sb.AppendLine("- [[Kokonoe/Memory/Cleanup|Memory Cleanup]]");
-            sb.AppendLine("- [[Kokonoe/Memory/Review|Memory Review]]");
-            sb.AppendLine("- [[Kokonoe/Tasks Queue|Tasks Queue]]");
+            sb.AppendLine("## Ядро");
+            sb.AppendLine("- [[Kokonoe/Architecture/Manifest|Маніфест]]");
+            sb.AppendLine("- [[Kokonoe/Architecture/Map|Карта]]");
+            sb.AppendLine("- [[Kokonoe/Architecture/Health|Стан]]");
+            sb.AppendLine("- [[Kokonoe/Architecture/Backlog|Беклог]]");
+            sb.AppendLine("- [[Kokonoe/Automation/Obsidian Sync|Синхронізація Obsidian]]");
+            sb.AppendLine("- [[Kokonoe/AutoMemory|Автопам'ять]]");
+            sb.AppendLine("- [[Kokonoe/Project Log|Журнал проекту]]");
+            sb.AppendLine("- [[Kokonoe/Memory/Facts|Факти]]");
+            sb.AppendLine("- [[Kokonoe/Memory/Quality|Якість пам'яті]]");
+            sb.AppendLine("- [[Kokonoe/Memory/Cleanup|Очищення пам'яті]]");
+            sb.AppendLine("- [[Kokonoe/Memory/Review|Огляд пам'яті]]");
+            sb.AppendLine("- [[Kokonoe/Tasks Queue|Черга задач]]");
             sb.AppendLine();
-            sb.AppendLine("## Status");
-            sb.AppendLine($"- Notes: {status.TotalNotes}");
-            sb.AppendLine($"- Filled notes: {status.FilledNotes}");
-            sb.AppendLine($"- Empty notes: {status.EmptyNotes.Count}");
-            sb.AppendLine($"- Orphan notes: {status.OrphanNotes.Count}");
-            sb.AppendLine($"- Brain core: {(init.HasCoreNote ? init.CoreNotePath : "missing")}");
+            sb.AppendLine("## Стан");
+            sb.AppendLine($"- Нотаток: {status.TotalNotes}");
+            sb.AppendLine($"- Заповнених нотаток: {status.FilledNotes}");
+            sb.AppendLine($"- Порожніх нотаток: {status.EmptyNotes.Count}");
+            sb.AppendLine($"- Осиротілих нотаток: {status.OrphanNotes.Count}");
+            sb.AppendLine($"- Ядро мозку: {(init.HasCoreNote ? init.CoreNotePath : "відсутнє")}");
             sb.AppendLine();
-            sb.AppendLine("## Main Folders");
+            sb.AppendLine("## Основні папки");
             foreach (var folder in folders.Take(40))
                 sb.AppendLine($"- [[{folder}/]]");
             sb.AppendLine();
-            sb.AppendLine("## Modified Today");
+            sb.AppendLine("## Змінено сьогодні");
             foreach (var note in modifiedToday)
                 sb.AppendLine($"- [[{Path.GetFileNameWithoutExtension(note)}]] ({note})");
             return sb.ToString();
@@ -590,25 +591,25 @@ tags: [kokonoe, vault, architecture]
         {
             var sb = new StringBuilder();
             sb.Append(BuildManagedFrontmatter("vault-manifest"));
-            sb.AppendLine("# Vault Manifest");
+            sb.AppendLine("# Маніфест vault");
             sb.AppendLine();
-            sb.AppendLine("## Managed Areas");
-            sb.AppendLine("- Kokonoe/: runtime memory, state exports, project knowledge.");
-            sb.AppendLine("- Kokonoe/Architecture/: generated maps, health reports, backlog.");
-            sb.AppendLine("- Kokonoe/Memory/: stable facts and episodes.");
-            sb.AppendLine("- Kokonoe/Automation/: sync rules and automation notes.");
-            sb.AppendLine("- Daily/: daily operational notes.");
-            sb.AppendLine("- Chats/: raw chat logs.");
+            sb.AppendLine("## Керовані області");
+            sb.AppendLine("- Kokonoe/: оперативна пам'ять, експорт стану, знання проекту.");
+            sb.AppendLine("- Kokonoe/Architecture/: згенеровані карти, звіти стану, беклог.");
+            sb.AppendLine("- Kokonoe/Memory/: стабільні факти та епізоди.");
+            sb.AppendLine("- Kokonoe/Automation/: правила синхронізації та автоматизація.");
+            sb.AppendLine("- Daily/: щоденні робочі нотатки.");
+            sb.AppendLine("- Chats/: сирі логи чатів.");
             sb.AppendLine();
-            sb.AppendLine("## Folder Inventory");
+            sb.AppendLine("## Інвентар папок");
             foreach (var folder in folders.Take(80))
                 sb.AppendLine($"- {folder}");
             sb.AppendLine();
-            sb.AppendLine("## Note Inventory");
+            sb.AppendLine("## Інвентар нотаток");
             foreach (var note in notes.Take(200))
                 sb.AppendLine($"- [[{Path.GetFileNameWithoutExtension(note)}]] ({note})");
             if (notes.Count > 200)
-                sb.AppendLine($"- ... {notes.Count - 200} more notes");
+                sb.AppendLine($"- ... ще {notes.Count - 200} нотаток");
             return sb.ToString();
         }
 
@@ -616,13 +617,13 @@ tags: [kokonoe, vault, architecture]
         {
             var sb = new StringBuilder();
             sb.Append(BuildManagedFrontmatter("vault-map"));
-            sb.AppendLine("# Vault Map");
+            sb.AppendLine("# Карта vault");
             sb.AppendLine();
-            sb.AppendLine("## Link Hubs");
+            sb.AppendLine("## Вузли посилань");
             foreach (var node in graph.OrderByDescending(x => x.Value.Count).Take(40))
-                sb.AppendLine($"- {node.Key}: {node.Value.Count} outgoing");
+                sb.AppendLine($"- {node.Key}: вихідних посилань {node.Value.Count}");
             sb.AppendLine();
-            sb.AppendLine("## Edges");
+            sb.AppendLine("## Зв'язки");
             foreach (var node in graph.OrderBy(x => x.Key).Take(120))
             {
                 if (node.Value.Count == 0) continue;
@@ -637,25 +638,25 @@ tags: [kokonoe, vault, architecture]
         {
             var sb = new StringBuilder();
             sb.Append(BuildManagedFrontmatter("vault-health"));
-            sb.AppendLine("# Vault Health");
+            sb.AppendLine("# Стан vault");
             sb.AppendLine();
-            sb.AppendLine("## Signals");
-            sb.AppendLine($"- Total notes: {status.TotalNotes}");
-            sb.AppendLine($"- Filled notes: {status.FilledNotes}");
-            sb.AppendLine($"- Empty notes: {status.EmptyNotes.Count}");
-            sb.AppendLine($"- Orphan notes: {status.OrphanNotes.Count}");
-            sb.AppendLine($"- Isolated notes: {isolated.Count}");
-            sb.AppendLine($"- Brain core: {(init.HasCoreNote ? init.CoreNotePath : "missing")}");
+            sb.AppendLine("## Сигнали");
+            sb.AppendLine($"- Усього нотаток: {status.TotalNotes}");
+            sb.AppendLine($"- Заповнених нотаток: {status.FilledNotes}");
+            sb.AppendLine($"- Порожніх нотаток: {status.EmptyNotes.Count}");
+            sb.AppendLine($"- Осиротілих нотаток: {status.OrphanNotes.Count}");
+            sb.AppendLine($"- Ізольованих нотаток: {isolated.Count}");
+            sb.AppendLine($"- Ядро мозку: {(init.HasCoreNote ? init.CoreNotePath : "відсутнє")}");
             sb.AppendLine();
-            sb.AppendLine("## Empty Notes");
+            sb.AppendLine("## Порожні нотатки");
             foreach (var note in status.EmptyNotes.Take(50))
                 sb.AppendLine($"- [[{Path.GetFileNameWithoutExtension(note)}]] ({note})");
             sb.AppendLine();
-            sb.AppendLine("## Orphan Notes");
+            sb.AppendLine("## Осиротілі нотатки");
             foreach (var note in status.OrphanNotes.Take(50))
                 sb.AppendLine($"- [[{Path.GetFileNameWithoutExtension(note)}]] ({note})");
             sb.AppendLine();
-            sb.AppendLine("## Isolated Notes");
+            sb.AppendLine("## Ізольовані нотатки");
             foreach (var note in isolated.Take(50))
                 sb.AppendLine($"- [[{Path.GetFileNameWithoutExtension(note)}]] ({note})");
             return sb.ToString();
@@ -665,22 +666,40 @@ tags: [kokonoe, vault, architecture]
         {
             var sb = new StringBuilder();
             sb.Append(BuildManagedFrontmatter("vault-backlog"));
-            sb.AppendLine("# Vault Backlog");
+            sb.AppendLine("# Беклог vault");
             sb.AppendLine();
             if (!init.HasCoreNote)
-                sb.AppendLine("- [ ] Create or mark a central note with `type: brain-core`.");
+                sb.AppendLine("- [ ] Створити або позначити центральну нотатку з `type: brain-core`.");
             if (status.EmptyNotes.Count > 0)
-                sb.AppendLine($"- [ ] Review {status.EmptyNotes.Count} empty notes.");
+                sb.AppendLine($"- [ ] Переглянути порожні нотатки: {status.EmptyNotes.Count}.");
             if (status.OrphanNotes.Count > 0)
-                sb.AppendLine($"- [ ] Connect {status.OrphanNotes.Count} orphan notes into the graph.");
+                sb.AppendLine($"- [ ] Під'єднати осиротілі нотатки до графа: {status.OrphanNotes.Count}.");
             if (isolated.Count > 0)
-                sb.AppendLine($"- [ ] Decide where {isolated.Count} isolated notes belong.");
+                sb.AppendLine($"- [ ] Визначити місце для ізольованих нотаток: {isolated.Count}.");
             if (status.EmptyNotes.Count == 0 && status.OrphanNotes.Count == 0 && init.HasCoreNote)
-                sb.AppendLine("- [x] No obvious structural debt detected.");
+                sb.AppendLine("- [x] Очевидного структурного боргу не знайдено.");
             sb.AppendLine();
-            sb.AppendLine("## Candidates");
+            sb.AppendLine("## Кандидати");
             foreach (var note in status.OrphanNotes.Concat(isolated).Distinct().Take(80))
                 sb.AppendLine($"- [ ] [[{Path.GetFileNameWithoutExtension(note)}]] ({note})");
+            return sb.ToString();
+        }
+
+        private string BuildVaultLanguagePolicy()
+        {
+            var sb = new StringBuilder();
+            sb.Append(BuildManagedFrontmatter("vault-language-policy"));
+            sb.AppendLine("# Мовна політика vault");
+            sb.AppendLine();
+            sb.AppendLine("## Правило");
+            sb.AppendLine("- Людські записи, підсумки, журнали, пам'ять, задачі та архітектурні нотатки ведуться українською.");
+            sb.AppendLine("- Англійська дозволена тільки для технічних ключів, назв API, назв моделей, команд, шляхів, frontmatter, JSON-полів, тегів, коду та сталих термінів на кшталт health, mood, bpm, vault.");
+            sb.AppendLine("- Якщо службова нотатка генерується автоматично, її видимий текст має бути українським.");
+            sb.AppendLine("- Сирі історичні чати не переписуються агресивно, щоб не пошкодити архів розмов.");
+            sb.AppendLine();
+            sb.AppendLine("## Контроль");
+            sb.AppendLine("- Після змін у генераторах треба запускати build і тести.");
+            sb.AppendLine("- Після масової чистки vault треба повторно сканувати Kokonoe/Daily на старі англійські заголовки.");
             return sb.ToString();
         }
 
@@ -799,26 +818,26 @@ tags: [kokonoe, vault, architecture]
         {
             var sb = new StringBuilder();
             sb.Append(BuildManagedFrontmatter("memory-quality"));
-            sb.AppendLine("# Memory Quality");
+            sb.AppendLine("# Якість пам'яті");
             sb.AppendLine();
-            sb.AppendLine("## Summary");
-            sb.AppendLine($"- Memory items scanned: {report.NormalizedItems.Count}");
-            sb.AppendLine($"- Exact duplicate groups: {report.DuplicateGroups.Count}");
-            sb.AppendLine($"- Similar duplicate groups: {report.SimilarGroups.Count}");
+            sb.AppendLine("## Підсумок");
+            sb.AppendLine($"- Перевірено елементів пам'яті: {report.NormalizedItems.Count}");
+            sb.AppendLine($"- Груп точних дублікатів: {report.DuplicateGroups.Count}");
+            sb.AppendLine($"- Груп схожих дублікатів: {report.SimilarGroups.Count}");
             sb.AppendLine();
-            sb.AppendLine("## Note Sizes");
+            sb.AppendLine("## Розмір нотаток");
             foreach (var pair in report.NoteItemCounts.OrderByDescending(p => p.Value))
-                sb.AppendLine($"- {pair.Key}: {pair.Value} items");
+                sb.AppendLine($"- {pair.Key}: елементів {pair.Value}");
             sb.AppendLine();
-            sb.AppendLine("## Exact Duplicates");
+            sb.AppendLine("## Точні дублікати");
             AppendMemoryGroups(sb, report.DuplicateGroups);
             sb.AppendLine();
-            sb.AppendLine("## Similar Duplicates");
+            sb.AppendLine("## Схожі дублікати");
             AppendMemoryGroups(sb, report.SimilarGroups);
             sb.AppendLine();
-            sb.AppendLine("## Cleanup");
-            sb.AppendLine("- Use `cleanup_memory_duplicates` with `dry_run: true` to preview exact duplicate removals.");
-            sb.AppendLine("- Use `dry_run: false` only after preview. Similar duplicates are reported, not auto-removed.");
+            sb.AppendLine("## Очищення");
+            sb.AppendLine("- Використай `cleanup_memory_duplicates` з `dry_run: true`, щоб переглянути точні дублікати перед видаленням.");
+            sb.AppendLine("- `dry_run: false` використовуй тільки після перегляду. Схожі дублікати лише показуються, автоматично не видаляються.");
             return sb.ToString();
         }
 
@@ -826,15 +845,15 @@ tags: [kokonoe, vault, architecture]
         {
             var sb = new StringBuilder();
             sb.Append(BuildManagedFrontmatter("memory-cleanup"));
-            sb.AppendLine("# Memory Cleanup");
+            sb.AppendLine("# Очищення пам'яті");
             sb.AppendLine();
-            sb.AppendLine("## Summary");
-            sb.AppendLine($"- Dry run: {result.DryRun}");
-            sb.AppendLine($"- Duplicate lines detected: {result.TotalRemoved}");
+            sb.AppendLine("## Підсумок");
+            sb.AppendLine($"- Пробний режим: {result.DryRun}");
+            sb.AppendLine($"- Знайдено рядків-дублікатів: {result.TotalRemoved}");
             sb.AppendLine();
-            sb.AppendLine("## Removed Candidates");
+            sb.AppendLine("## Кандидати на видалення");
             if (result.TotalRemoved == 0)
-                sb.AppendLine("- none");
+                sb.AppendLine("- немає");
             foreach (var pair in result.RemovedByPath)
             {
                 sb.AppendLine($"### {pair.Key}");
@@ -849,13 +868,13 @@ tags: [kokonoe, vault, architecture]
         {
             if (groups.Count == 0)
             {
-                sb.AppendLine("- none");
+                sb.AppendLine("- немає");
                 return;
             }
 
             foreach (var group in groups.Take(20))
             {
-                sb.AppendLine("- group:");
+                sb.AppendLine("- група:");
                 foreach (var item in group.Take(6))
                     sb.AppendLine($"  - {item.Path}: {item.Text}");
             }
@@ -872,7 +891,7 @@ tags: [kokonoe, vault, architecture]
                 review.Actions.Add(new MemoryReviewAction
                 {
                     Action = "merge",
-                    Reason = "exact duplicate memory items",
+                    Reason = "точні дублікати в пам'яті",
                     SourcePath = group.First().Path,
                     TargetPath = group.First().Path,
                     Confidence = 1.0,
@@ -885,7 +904,7 @@ tags: [kokonoe, vault, architecture]
                 review.Actions.Add(new MemoryReviewAction
                 {
                     Action = "confirm",
-                    Reason = "similar memory items need human or later-model confirmation before merge",
+                    Reason = "схожі елементи пам'яті потребують підтвердження перед об'єднанням",
                     SourcePath = group.First().Path,
                     TargetPath = group.First().Path,
                     Confidence = 0.72,
@@ -898,7 +917,7 @@ tags: [kokonoe, vault, architecture]
                 review.Actions.Add(new MemoryReviewAction
                 {
                     Action = "keep",
-                    Reason = "open task still needs tracking",
+                    Reason = "відкрита задача ще потребує відстеження",
                     SourcePath = task.Path,
                     TargetPath = "Kokonoe/Tasks Queue.md",
                     Confidence = 0.85,
@@ -916,7 +935,7 @@ tags: [kokonoe, vault, architecture]
                 review.Actions.Add(new MemoryReviewAction
                 {
                     Action = "promote_to_preference",
-                    Reason = "preference-like memory should stay easy to retrieve",
+                    Reason = "пам'ять схожа на вподобання, її треба легко знаходити",
                     SourcePath = item.Path,
                     TargetPath = "Kokonoe/Preferences.md",
                     Confidence = item.Path.Contains("Preferences", StringComparison.OrdinalIgnoreCase) ? 0.95 : 0.65,
@@ -938,27 +957,36 @@ tags: [kokonoe, vault, architecture]
         {
             var sb = new StringBuilder();
             sb.Append(BuildManagedFrontmatter("memory-review"));
-            sb.AppendLine("# Memory Review");
+            sb.AppendLine("# Огляд пам'яті");
             sb.AppendLine();
-            sb.AppendLine("## Summary");
-            sb.AppendLine($"- Suggested actions: {review.Actions.Count}");
-            sb.AppendLine("- This is advisory. It does not mutate memory notes by itself.");
+            sb.AppendLine("## Підсумок");
+            sb.AppendLine($"- Запропоновано дій: {review.Actions.Count}");
+            sb.AppendLine("- Це рекомендації. Нотатки пам'яті самі по собі не змінюються.");
             sb.AppendLine();
             foreach (var actionGroup in review.Actions.GroupBy(a => a.Action).OrderBy(g => g.Key))
             {
-                sb.AppendLine($"## {actionGroup.Key}");
+                sb.AppendLine($"## {MemoryReviewActionLabel(actionGroup.Key)}");
                 foreach (var action in actionGroup.Take(40))
                 {
-                    sb.AppendLine($"- confidence {action.Confidence:0.00}: {action.Reason}");
-                    sb.AppendLine($"  - source: {action.SourcePath}");
-                    sb.AppendLine($"  - target: {action.TargetPath}");
+                    sb.AppendLine($"- впевненість {action.Confidence:0.00}: {action.Reason}");
+                    sb.AppendLine($"  - джерело: {action.SourcePath}");
+                    sb.AppendLine($"  - ціль: {action.TargetPath}");
                     foreach (var item in action.Items.Take(5))
-                        sb.AppendLine($"  - item: {item}");
+                        sb.AppendLine($"  - елемент: {item}");
                 }
                 sb.AppendLine();
             }
             return sb.ToString();
         }
+
+        private static string MemoryReviewActionLabel(string action) => action switch
+        {
+            "merge" => "Об'єднати",
+            "confirm" => "Підтвердити",
+            "keep" => "Залишити",
+            "promote_to_preference" => "Перенести у вподобання",
+            _ => action
+        };
 
         public TaskQueueSnapshot BuildTaskQueue()
         {
@@ -990,15 +1018,15 @@ tags: [kokonoe, vault, architecture]
         {
             var sb = new StringBuilder();
             sb.Append(BuildManagedFrontmatter("task-queue"));
-            sb.AppendLine("# Tasks Queue");
+            sb.AppendLine("# Черга задач");
             sb.AppendLine();
-            sb.AppendLine("## Summary");
-            sb.AppendLine($"- Open tasks: {snapshot.OpenTasks.Count}");
-            sb.AppendLine($"- Done tasks seen: {snapshot.DoneTasks.Count}");
+            sb.AppendLine("## Підсумок");
+            sb.AppendLine($"- Відкритих задач: {snapshot.OpenTasks.Count}");
+            sb.AppendLine($"- Завершених задач знайдено: {snapshot.DoneTasks.Count}");
             sb.AppendLine();
-            sb.AppendLine("## Open");
+            sb.AppendLine("## Відкриті");
             if (snapshot.OpenTasks.Count == 0)
-                sb.AppendLine("- [x] No open tasks detected.");
+                sb.AppendLine("- [x] Відкритих задач не знайдено.");
             foreach (var task in snapshot.OpenTasks)
                 sb.AppendLine($"- [ ] {task.Text} ({task.Path})");
             return sb.ToString();
@@ -1036,15 +1064,15 @@ tags: [kokonoe, vault, architecture]
         {
             var sb = new StringBuilder();
             sb.Append(BuildManagedFrontmatter("vault-automation"));
-            sb.AppendLine("# Obsidian Sync");
+            sb.AppendLine("# Синхронізація Obsidian");
             sb.AppendLine();
-            sb.AppendLine("## Rules");
-            sb.AppendLine("- Every 5 chat exchanges are batched into Kokonoe memory notes.");
-            sb.AppendLine("- Vault architecture notes are refreshed after each batch sync.");
-            sb.AppendLine("- Managed notes are overwritten because they are generated snapshots.");
-            sb.AppendLine("- Human-written notes are only appended or linked by normal memory sync.");
+            sb.AppendLine("## Правила");
+            sb.AppendLine("- Кожні 5 обмінів у чаті збираються в нотатки пам'яті Коконое.");
+            sb.AppendLine("- Архітектурні нотатки vault оновлюються після кожної пакетної синхронізації.");
+            sb.AppendLine("- Керовані нотатки перезаписуються, бо це згенеровані знімки стану.");
+            sb.AppendLine("- Нотатки, написані людиною, тільки доповнюються або зв'язуються звичайною синхронізацією пам'яті.");
             sb.AppendLine();
-            sb.AppendLine("## Managed Notes");
+            sb.AppendLine("## Керовані нотатки");
             sb.AppendLine("- [[Kokonoe/Vault Index]]");
             sb.AppendLine("- [[Kokonoe/Architecture/Manifest]]");
             sb.AppendLine("- [[Kokonoe/Architecture/Map]]");
@@ -1061,22 +1089,22 @@ tags: [kokonoe, vault, architecture]
         {
             var sb = new StringBuilder();
             sb.AppendLine($"\n## {result.RanAt:yyyy-MM-dd HH:mm}");
-            sb.AppendLine($"- Reason: {result.Reason}");
-            sb.AppendLine($"- Created folders: {result.CreatedFolders.Count}");
-            sb.AppendLine($"- Created notes: {result.CreatedNotes.Count}");
-            sb.AppendLine($"- Updated notes: {result.UpdatedNotes.Count}");
-            sb.AppendLine($"- Link touched notes: {result.LinkTouchedNotes}");
-            sb.AppendLine($"- Links added: {result.LinksAdded}");
-            sb.AppendLine($"- Memory duplicate groups: {result.MemoryDuplicateGroups}");
-            sb.AppendLine($"- Open tasks: {result.OpenTaskCount}");
-            sb.AppendLine($"- Memory review actions: {result.MemoryReviewActionCount}");
-            sb.AppendLine($"- Notes: {status.TotalNotes}, orphans: {status.OrphanNotes.Count}, empty: {status.EmptyNotes.Count}");
-            sb.AppendLine($"- Brain core: {(init.HasCoreNote ? init.CoreNotePath : "missing")}");
+            sb.AppendLine($"- Причина: {result.Reason}");
+            sb.AppendLine($"- Створено папок: {result.CreatedFolders.Count}");
+            sb.AppendLine($"- Створено нотаток: {result.CreatedNotes.Count}");
+            sb.AppendLine($"- Оновлено нотаток: {result.UpdatedNotes.Count}");
+            sb.AppendLine($"- Нотаток із зміненими посиланнями: {result.LinkTouchedNotes}");
+            sb.AppendLine($"- Додано посилань: {result.LinksAdded}");
+            sb.AppendLine($"- Груп дублікатів пам'яті: {result.MemoryDuplicateGroups}");
+            sb.AppendLine($"- Відкритих задач: {result.OpenTaskCount}");
+            sb.AppendLine($"- Дій огляду пам'яті: {result.MemoryReviewActionCount}");
+            sb.AppendLine($"- Нотаток: {status.TotalNotes}, осиротілих: {status.OrphanNotes.Count}, порожніх: {status.EmptyNotes.Count}");
+            sb.AppendLine($"- Ядро мозку: {(init.HasCoreNote ? init.CoreNotePath : "відсутнє")}");
 
             var full = Resolve("Kokonoe/Architecture/Change Log.md");
             Directory.CreateDirectory(Path.GetDirectoryName(full)!);
             if (!File.Exists(full))
-                File.WriteAllText(full, BuildManagedFrontmatter("vault-change-log") + "# Architecture Change Log\n", Encoding.UTF8);
+                File.WriteAllText(full, BuildManagedFrontmatter("vault-change-log") + "# Журнал архітектурних змін\n", Encoding.UTF8);
             File.AppendAllText(full, sb.ToString(), Encoding.UTF8);
         }
 

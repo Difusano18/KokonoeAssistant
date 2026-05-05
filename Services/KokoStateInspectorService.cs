@@ -96,57 +96,57 @@ namespace KokonoeAssistant.Services
             sb.AppendLine("tags: [kokonoe, inspector, state]");
             sb.AppendLine("---");
             sb.AppendLine();
-            sb.AppendLine("# Kokonoe State Inspector");
+            sb.AppendLine("# Інспектор стану Коконое");
             sb.AppendLine();
-            sb.AppendLine("## Core");
+            sb.AppendLine("## Ядро");
             sb.AppendLine();
-            sb.AppendLine("| Field | Value |");
+            sb.AppendLine("| Поле | Значення |");
             sb.AppendLine("|---|---|");
-            sb.AppendLine($"| mood | {snapshot.Mood} ({snapshot.MoodScore:F2}) |");
-            sb.AppendLine($"| user tone | {snapshot.UserTone} |");
-            sb.AppendLine($"| emotion | {snapshot.Emotion} ({snapshot.EmotionIntensity:F2}) |");
-            sb.AppendLine($"| bond | {snapshot.Bond} / connection {snapshot.ConnectionScore:P0} |");
-            sb.AppendLine($"| initiative | {Escape(snapshot.LastInitiativeDecision)} |");
+            sb.AppendLine($"| настрій | {snapshot.Mood} ({snapshot.MoodScore:F2}) |");
+            sb.AppendLine($"| тон користувача | {snapshot.UserTone} |");
+            sb.AppendLine($"| емоція | {snapshot.Emotion} ({snapshot.EmotionIntensity:F2}) |");
+            sb.AppendLine($"| зв'язок | {snapshot.Bond} / близькість {snapshot.ConnectionScore:P0} |");
+            sb.AppendLine($"| ініціатива | {Escape(snapshot.LastInitiativeDecision)} |");
             sb.AppendLine();
 
-            sb.AppendLine("## Relationship");
+            sb.AppendLine("## Стосунок");
             sb.AppendLine();
-            sb.AppendLine("| Trust | Intimacy | Friction | Protect | Curiosity | Stability | Bond Score | Aftertaste |");
+            sb.AppendLine("| Довіра | Близькість | Тертя | Захист | Цікавість | Стабільність | Оцінка зв'язку | Післясмак |");
             sb.AppendLine("|---:|---:|---:|---:|---:|---:|---:|---|");
             sb.AppendLine($"| {snapshot.Relationship.Trust:F2} | {snapshot.Relationship.Intimacy:F2} | {snapshot.Relationship.Friction:F2} | {snapshot.Relationship.Protectiveness:F2} | {snapshot.Relationship.Curiosity:F2} | {snapshot.Relationship.Stability:F2} | {snapshot.Relationship.BondScore:F2} | {Escape(snapshot.Relationship.LastAftertaste)} |");
             sb.AppendLine();
 
-            sb.AppendLine("## Somatic");
+            sb.AppendLine("## Соматика");
             sb.AppendLine();
-            sb.AppendLine("| State | BPM | Baseline | Delta | Strain | Calm | Volatility |");
+            sb.AppendLine("| Стан | BPM | База | Зміна | Strain | Calm | Volatility |");
             sb.AppendLine("|---|---:|---:|---:|---:|---:|---:|");
             sb.AppendLine($"| {snapshot.Somatic.State} | {snapshot.Somatic.Bpm:F0} | {snapshot.Somatic.BaselineBpm:F0} | {snapshot.Somatic.BpmDelta:+0;-0;0} | {snapshot.Somatic.Strain:F2} | {snapshot.Somatic.Calm:F2} | {snapshot.Somatic.Volatility:F2} |");
             sb.AppendLine();
-            sb.AppendLine($"Directive: `{Escape(snapshot.Somatic.BehaviorHint)}`");
+            sb.AppendLine($"Директива: `{Escape(snapshot.Somatic.BehaviorHint)}`");
             sb.AppendLine();
 
-            sb.AppendLine("## Self Regulation");
+            sb.AppendLine("## Саморегуляція");
             sb.AppendLine();
-            sb.AppendLine("| Reaction | Regulation | Control | Containment | Drive | Irritation | Warmth | Distance | Exhaustion |");
+            sb.AppendLine("| Реакція | Регуляція | Контроль | Стримування | Імпульс | Роздратування | Тепло | Дистанція | Виснаження |");
             sb.AppendLine("|---|---|---:|---:|---:|---:|---:|---:|---:|");
-            sb.AppendLine($"| {snapshot.SelfRegulation.Reaction} | {snapshot.SelfRegulation.Regulation} | {snapshot.SelfRegulation.Control:F2} | {snapshot.SelfRegulation.Containment:F2} | {snapshot.SelfRegulation.Drive:F2} | {snapshot.SelfRegulation.IrritationGate:F2} | {snapshot.SelfRegulation.WarmthLeak:F2} | {snapshot.SelfRegulation.SocialDistance:F2} | {snapshot.SelfRegulation.Exhaustion:F2} |");
+            sb.AppendLine($"| {CodeLabel(snapshot.SelfRegulation.Reaction)} | {CodeLabel(snapshot.SelfRegulation.Regulation)} | {snapshot.SelfRegulation.Control:F2} | {snapshot.SelfRegulation.Containment:F2} | {snapshot.SelfRegulation.Drive:F2} | {snapshot.SelfRegulation.IrritationGate:F2} | {snapshot.SelfRegulation.WarmthLeak:F2} | {snapshot.SelfRegulation.SocialDistance:F2} | {snapshot.SelfRegulation.Exhaustion:F2} |");
             sb.AppendLine();
-            sb.AppendLine($"Private thought: `{Escape(snapshot.SelfRegulation.PrivateThought)}`");
+            sb.AppendLine($"Внутрішня думка: `{Escape(snapshot.SelfRegulation.PrivateThought)}`");
             sb.AppendLine();
-            sb.AppendLine($"Directive: `{Escape(snapshot.SelfRegulation.BehaviorDirective)}`");
+            sb.AppendLine($"Директива: `{Escape(snapshot.SelfRegulation.BehaviorDirective)}`");
             sb.AppendLine();
 
-            AppendList(sb, "Initiative Log", snapshot.InitiativeLog);
-            AppendList(sb, "Self-Regulation Log", snapshot.SelfRegulationLog);
-            AppendList(sb, "Curiosity Queue", snapshot.CuriosityQueue);
-            AppendList(sb, "Inner Monologues", snapshot.InnerMonologues);
+            AppendList(sb, "Журнал ініціативи", snapshot.InitiativeLog);
+            AppendList(sb, "Журнал саморегуляції", snapshot.SelfRegulationLog);
+            AppendList(sb, "Черга цікавості", snapshot.CuriosityQueue);
+            AppendList(sb, "Внутрішні монологи", snapshot.InnerMonologues);
 
-            sb.AppendLine("## Top Facts");
+            sb.AppendLine("## Головні факти");
             sb.AppendLine();
             AppendJsonObjects(sb, snapshot.TopFacts);
             sb.AppendLine();
 
-            sb.AppendLine("## Recent Episodes");
+            sb.AppendLine("## Останні епізоди");
             sb.AppendLine();
             AppendJsonObjects(sb, snapshot.RecentEpisodes);
 
@@ -159,7 +159,7 @@ namespace KokonoeAssistant.Services
             sb.AppendLine();
             if (items.Length == 0)
             {
-                sb.AppendLine("- none");
+                sb.AppendLine("- немає");
                 sb.AppendLine();
                 return;
             }
@@ -173,7 +173,7 @@ namespace KokonoeAssistant.Services
         {
             if (items.Length == 0)
             {
-                sb.AppendLine("- none");
+                sb.AppendLine("- немає");
                 return;
             }
 
@@ -183,6 +183,30 @@ namespace KokonoeAssistant.Services
                 sb.AppendLine($"- `{Escape(json)}`");
             }
         }
+
+        private static string CodeLabel(string code) => code switch
+        {
+            "protective_override" => "захисне перевизначення",
+            "pulse_spike" => "стрибок пульсу",
+            "anger_contained" => "стримане роздратування",
+            "combat_focus" => "бойовий фокус",
+            "pressure_rise" => "зростання тиску",
+            "low_power" => "низький заряд",
+            "recovered_calm" => "повернення спокою",
+            "steady_calm" => "стабільний спокій",
+            "stable_loop" => "стабільний цикл",
+            "clean_focus" => "чистий фокус",
+            "unknown_body" => "невідомий тілесний сигнал",
+            "protect" => "захист",
+            "clamp" => "затиск",
+            "contain" => "стримування",
+            "focus" => "фокус",
+            "compress" => "стиснення",
+            "conserve" => "збереження ресурсу",
+            "release" => "відпускання",
+            "baseline" => "базовий режим",
+            _ => code
+        };
 
         private static string Escape(string? text)
         {

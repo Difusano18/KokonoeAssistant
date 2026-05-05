@@ -3664,21 +3664,21 @@ type: somatic-events
 tags: [kokonoe, somatic, pulse, self-regulation]
 ---
 
-# Somatic Events
+# Соматичні події
 
 """;
                 }
 
                 var sb = new StringBuilder();
-                sb.AppendLine($"## {now:yyyy-MM-dd HH:mm:ss} - {frame.Reaction}");
-                sb.AppendLine($"- Body: {somatic.State} / {somatic.Label}");
-                sb.AppendLine($"- Pulse: {somatic.Bpm:F0} bpm, baseline {somatic.BaselineBpm:F0}, delta {somatic.BpmDelta:+0;-0;0}");
-                sb.AppendLine($"- Load: strain {somatic.Strain:F2}, calm {somatic.Calm:F2}, volatility {somatic.Volatility:F2}");
-                sb.AppendLine($"- Regulation: {frame.Regulation}, control {frame.Control:F2}, containment {frame.Containment:F2}, drive {frame.Drive:F2}");
+                sb.AppendLine($"## {now:yyyy-MM-dd HH:mm:ss} - {SomaticCodeLabel(frame.Reaction)}");
+                sb.AppendLine($"- Тіло: {somatic.State} / {somatic.Label}");
+                sb.AppendLine($"- Пульс: {somatic.Bpm:F0} bpm, база {somatic.BaselineBpm:F0}, зміна {somatic.BpmDelta:+0;-0;0}");
+                sb.AppendLine($"- Навантаження: strain {somatic.Strain:F2}, calm {somatic.Calm:F2}, volatility {somatic.Volatility:F2}");
+                sb.AppendLine($"- Саморегуляція: {SomaticCodeLabel(frame.Regulation)}, контроль {frame.Control:F2}, стримування {frame.Containment:F2}, імпульс {frame.Drive:F2}");
                 if (!string.IsNullOrWhiteSpace(frame.PrivateThought))
-                    sb.AppendLine($"- Private thought: {frame.PrivateThought}");
+                    sb.AppendLine($"- Внутрішня думка: {frame.PrivateThought}");
                 if (!string.IsNullOrWhiteSpace(frame.BehaviorDirective))
-                    sb.AppendLine($"- Behavior directive: {frame.BehaviorDirective}");
+                    sb.AppendLine($"- Поведінкова директива: {frame.BehaviorDirective}");
 
                 _obsidian.WriteNote(path, existing.TrimEnd() + "\n\n" + sb.ToString().TrimEnd() + "\n");
                 _state.LastSomaticVaultEventKey = key;
@@ -3699,6 +3699,30 @@ tags: [kokonoe, somatic, pulse, self-regulation]
                 return true;
             return false;
         }
+
+        private static string SomaticCodeLabel(string code) => code switch
+        {
+            "protective_override" => "захисне перевизначення",
+            "pulse_spike" => "стрибок пульсу",
+            "anger_contained" => "стримане роздратування",
+            "combat_focus" => "бойовий фокус",
+            "pressure_rise" => "зростання тиску",
+            "low_power" => "низький заряд",
+            "recovered_calm" => "повернення спокою",
+            "steady_calm" => "стабільний спокій",
+            "stable_loop" => "стабільний цикл",
+            "clean_focus" => "чистий фокус",
+            "unknown_body" => "невідомий тілесний сигнал",
+            "protect" => "захист",
+            "clamp" => "затиск",
+            "contain" => "стримування",
+            "focus" => "фокус",
+            "compress" => "стиснення",
+            "conserve" => "збереження ресурсу",
+            "release" => "відпускання",
+            "baseline" => "базовий режим",
+            _ => code
+        };
 
         public List<string> GetSelfRegulationLog(int count = 8)
         {

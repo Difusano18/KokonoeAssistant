@@ -322,13 +322,13 @@ type: live-core-log
 tags: [kokonoe, live-core, diagnostics]
 ---
 
-# Live Core
+# Живе ядро
 
 """;
                 }
 
                 _obsidian.WriteNote(path, existing.TrimEnd() + "\n\n" + report);
-                LiveCoreVaultText.Text = $"snapshot saved | {DateTime.Now:HH:mm}";
+                LiveCoreVaultText.Text = $"знімок збережено | {DateTime.Now:HH:mm}";
             }
             catch (Exception ex)
             {
@@ -348,25 +348,49 @@ tags: [kokonoe, live-core, diagnostics]
 
             sb.AppendLine($"## {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
             sb.AppendLine();
-            sb.AppendLine("| Layer | Value |");
+            sb.AppendLine("| Шар | Значення |");
             sb.AppendLine("|---|---|");
-            sb.AppendLine($"| Emotion | {emotion.Current} / intensity {emotion.Data.Intensity:F2} / bond {emotion.Bond} |");
+            sb.AppendLine($"| Емоція | {emotion.Current} / інтенсивність {emotion.Data.Intensity:F2} / зв'язок {emotion.Bond} |");
             if (emotion.Secondary.HasValue)
-                sb.AppendLine($"| Secondary | {emotion.Secondary.Value} / {emotion.SecondaryIntensity:F2} |");
-            sb.AppendLine($"| Mood | {state.CurrentMood} / score {state.MoodScore:F2} / baseline {state.BaselineMood:F2} |");
-            sb.AppendLine($"| Body | {somatic.State} / {somatic.Label} |");
-            sb.AppendLine($"| Pulse | {heart.CurrentBpm:F0} bpm / baseline {heart.BaselineBpm:F0} / delta {heart.BpmDelta:+0;-0;0} |");
-            sb.AppendLine($"| Somatic load | strain {somatic.Strain:F2} / calm {somatic.Calm:F2} / volatility {somatic.Volatility:F2} |");
-            sb.AppendLine($"| Regulation | {selfReg.Reaction} -> {selfReg.Regulation} / control {selfReg.Control:F2} / drive {selfReg.Drive:F2} |");
-            sb.AppendLine($"| Memory sync | pending {state.PendingVaultExchangeCount}/5 / last {(state.LastAutoVaultSyncAt > DateTime.MinValue ? state.LastAutoVaultSyncAt.ToString("yyyy-MM-dd HH:mm") : "never")} |");
-            sb.AppendLine($"| Vault | memory {_liveCoreMemoryItems} / review {_liveCoreReviewActions} / tasks {_liveCoreOpenTasks} |");
+                sb.AppendLine($"| Вторинна емоція | {emotion.Secondary.Value} / {emotion.SecondaryIntensity:F2} |");
+            sb.AppendLine($"| Настрій | {state.CurrentMood} / оцінка {state.MoodScore:F2} / база {state.BaselineMood:F2} |");
+            sb.AppendLine($"| Тіло | {somatic.State} / {somatic.Label} |");
+            sb.AppendLine($"| Пульс | {heart.CurrentBpm:F0} bpm / база {heart.BaselineBpm:F0} / зміна {heart.BpmDelta:+0;-0;0} |");
+            sb.AppendLine($"| Соматичне навантаження | strain {somatic.Strain:F2} / calm {somatic.Calm:F2} / volatility {somatic.Volatility:F2} |");
+            sb.AppendLine($"| Саморегуляція | {LiveCoreCodeLabel(selfReg.Reaction)} -> {LiveCoreCodeLabel(selfReg.Regulation)} / контроль {selfReg.Control:F2} / імпульс {selfReg.Drive:F2} |");
+            sb.AppendLine($"| Синхронізація пам'яті | очікує {state.PendingVaultExchangeCount}/5 / остання {(state.LastAutoVaultSyncAt > DateTime.MinValue ? state.LastAutoVaultSyncAt.ToString("yyyy-MM-dd HH:mm") : "ніколи")} |");
+            sb.AppendLine($"| Vault | пам'ять {_liveCoreMemoryItems} / огляд {_liveCoreReviewActions} / задачі {_liveCoreOpenTasks} |");
             if (!string.IsNullOrWhiteSpace(selfReg.PrivateThought))
-                sb.AppendLine($"| Private thought | {selfReg.PrivateThought.Replace("|", "/")} |");
+                sb.AppendLine($"| Внутрішня думка | {selfReg.PrivateThought.Replace("|", "/")} |");
             if (!string.IsNullOrWhiteSpace(selfReg.BehaviorDirective))
-                sb.AppendLine($"| Behavior | {selfReg.BehaviorDirective.Replace("|", "/")} |");
+                sb.AppendLine($"| Поведінка | {selfReg.BehaviorDirective.Replace("|", "/")} |");
 
             return sb.ToString().TrimEnd();
         }
+
+        private static string LiveCoreCodeLabel(string code) => code switch
+        {
+            "protective_override" => "захисне перевизначення",
+            "pulse_spike" => "стрибок пульсу",
+            "anger_contained" => "стримане роздратування",
+            "combat_focus" => "бойовий фокус",
+            "pressure_rise" => "зростання тиску",
+            "low_power" => "низький заряд",
+            "recovered_calm" => "повернення спокою",
+            "steady_calm" => "стабільний спокій",
+            "stable_loop" => "стабільний цикл",
+            "clean_focus" => "чистий фокус",
+            "unknown_body" => "невідомий тілесний сигнал",
+            "protect" => "захист",
+            "clamp" => "затиск",
+            "contain" => "стримування",
+            "focus" => "фокус",
+            "compress" => "стиснення",
+            "conserve" => "збереження ресурсу",
+            "release" => "відпускання",
+            "baseline" => "базовий режим",
+            _ => code
+        };
 
         private void SetupHeartUI()
         {

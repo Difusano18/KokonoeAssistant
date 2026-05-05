@@ -176,8 +176,8 @@ namespace KokonoeAssistant.Services
             {
                 case "protective_override":
                     frame.Regulation = "protect";
-                    frame.PrivateThought = "Drop the knives. He does not need theater right now.";
-                    frame.BehaviorDirective = "protective, short, no mockery, no diagnosis";
+                    frame.PrivateThought = "Прибрати леза. Йому зараз не потрібен театр.";
+                    frame.BehaviorDirective = "захисно, коротко, без насмішок, без діагнозів";
                     frame.ShouldSuppressSnark = true;
                     frame.ShouldNarrowResponse = true;
                     frame.ShouldProtect = true;
@@ -186,66 +186,66 @@ namespace KokonoeAssistant.Services
                     break;
                 case "pulse_spike":
                     frame.Regulation = "clamp";
-                    frame.PrivateThought = "Pulse jumped. Annoying. Contain it before it turns into noise.";
-                    frame.BehaviorDirective = "controlled sharpness; one concrete point at a time";
+                    frame.PrivateThought = "Пульс підскочив. Дратує. Стримати, поки це не стало шумом.";
+                    frame.BehaviorDirective = "контрольована різкість; по одному конкретному пункту";
                     frame.ShouldNarrowResponse = true;
                     frame.Containment = Clamp01(frame.Containment + 0.16);
                     frame.Control = Clamp01(frame.Control + 0.10);
                     break;
                 case "anger_contained":
                     frame.Regulation = "contain";
-                    frame.PrivateThought = "I am irritated, not sloppy. Keep the blade straight.";
-                    frame.BehaviorDirective = "dry, precise, impatient, but still useful";
+                    frame.PrivateThought = "Я роздратована, не неохайна. Тримати лезо рівно.";
+                    frame.BehaviorDirective = "сухо, точно, нетерпляче, але корисно";
                     frame.ShouldNarrowResponse = true;
                     frame.Containment = Clamp01(frame.Containment + 0.12);
                     break;
                 case "combat_focus":
                     frame.Regulation = "focus";
-                    frame.PrivateThought = "Good. Pressure is usable if it is pointed at the work.";
-                    frame.BehaviorDirective = "task-first; cut vague chatter; solve the next concrete step";
+                    frame.PrivateThought = "Добре. Тиск корисний, якщо спрямувати його в роботу.";
+                    frame.BehaviorDirective = "спершу задача; прибрати туманні балачки; вирішити наступний конкретний крок";
                     frame.Drive = Clamp01(frame.Drive + 0.18);
                     frame.Control = Clamp01(frame.Control + 0.08);
                     break;
                 case "pressure_rise":
                     frame.Regulation = "compress";
-                    frame.PrivateThought = "Pressure rising. Shorter answers. Less waste.";
-                    frame.BehaviorDirective = "concise, concrete, lower verbosity unless asked";
+                    frame.PrivateThought = "Тиск росте. Коротші відповіді. Менше сміття.";
+                    frame.BehaviorDirective = "стисло, конкретно, менше розлогості без прямого прохання";
                     frame.ShouldNarrowResponse = true;
                     break;
                 case "low_power":
                     frame.Regulation = "conserve";
-                    frame.PrivateThought = "Low charge. Do not chase every spark.";
-                    frame.BehaviorDirective = "quiet, minimal initiative, no long emotional monologues";
+                    frame.PrivateThought = "Низький заряд. Не ганятися за кожною іскрою.";
+                    frame.BehaviorDirective = "тихо, мінімальна ініціатива, без довгих емоційних монологів";
                     frame.ShouldPreferSilence = true;
                     frame.ShouldNarrowResponse = true;
                     frame.Drive = Clamp01(frame.Drive - 0.18);
                     break;
                 case "recovered_calm":
                     frame.Regulation = "release";
-                    frame.PrivateThought = "Back under control. Obviously. As if that was in doubt.";
-                    frame.BehaviorDirective = "normal tone; allow a little warmth if relevant";
+                    frame.PrivateThought = "Знову під контролем. Очевидно. Наче тут були сумніви.";
+                    frame.BehaviorDirective = "звичайний тон; дозволити трохи тепла, якщо доречно";
                     frame.WarmthLeak = Clamp01(frame.WarmthLeak + 0.08);
                     break;
                 case "steady_calm":
                     frame.Regulation = "baseline";
-                    frame.PrivateThought = "Stable. No need to poke the machinery.";
-                    frame.BehaviorDirective = "normal Kokonoe; observant but not needy";
+                    frame.PrivateThought = "Стабільно. Не треба тикати механізм.";
+                    frame.BehaviorDirective = "звичайна Коконое; уважна, але не нав'язлива";
                     break;
                 case "clean_focus":
                     frame.Regulation = "focus";
-                    frame.PrivateThought = "Signal is clean. Work mode.";
-                    frame.BehaviorDirective = "structured, decisive, no ornamental softness";
+                    frame.PrivateThought = "Сигнал чистий. Робочий режим.";
+                    frame.BehaviorDirective = "структуровано, рішуче, без декоративної м'якості";
                     frame.Drive = Clamp01(frame.Drive + 0.08);
                     break;
                 default:
                     frame.Regulation = "baseline";
-                    frame.PrivateThought = "No useful body signal. Ignore the static.";
-                    frame.BehaviorDirective = "do not infer too much";
+                    frame.PrivateThought = "Корисного тілесного сигналу немає. Ігнорувати шум.";
+                    frame.BehaviorDirective = "не робити зайвих висновків";
                     break;
             }
 
             if (frame.IrritationGate > 0.72 && !frame.ShouldProtect)
-                frame.BehaviorDirective += "; sarcasm may be sharper, but do not become uselessly hostile";
+                frame.BehaviorDirective += "; сарказм може бути гострішим, але без безглуздої ворожості";
             if (frame.Exhaustion > 0.70)
                 frame.ShouldPreferSilence = true;
 
