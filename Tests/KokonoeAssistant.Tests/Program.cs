@@ -23,6 +23,7 @@ internal static class Program
             Run("Obsidian unique memory append", ObsidianUniqueMemoryAppend);
             Run("Obsidian memory quality and task queue", ObsidianMemoryQualityAndTaskQueue);
             Run("Obsidian memory duplicate cleanup", ObsidianMemoryDuplicateCleanup);
+            Run("Obsidian memory review suggestions", ObsidianMemoryReviewSuggestions);
 
             Console.WriteLine($"PASS {_passed} tests");
             return 0;
@@ -347,6 +348,51 @@ internal static class Program
             AssertTrue(after.Split("[auto-fact]").Length - 1 == 1, "apply should leave one active fact");
             AssertTrue(after.Contains("[x] User likes long answers."), "cleanup should not remove done checklist lines");
             AssertTrue(File.Exists(Path.Combine(dir, "Kokonoe", "Memory", "Cleanup.md")), "cleanup report should be written");
+        }
+        finally
+        {
+            try { Directory.Delete(dir, recursive: true); } catch { }
+        }
+    }
+
+    private static void ObsidianMemoryReviewSuggestions()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "KokonoeAssistant.Tests", "vault-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            var obsidian = new ObsidianMcpService(dir);
+            obsidian.WriteNote("Kokonoe/Memory/Facts.md", """
+# Facts
+
+## sample
+- [auto-fact] User likes long answers.
+- [auto-fact] User likes long answers.
+""");
+            obsidian.WriteNote("Kokonoe/Tasks.md", """
+# Tasks
+
+## sample
+- [task] Add memory review loop
+""");
+            obsidian.WriteNote("Kokonoe/Preferences.md", """
+# Preferences
+
+## sample
+- [preference] User prefers long detailed answers.
+""");
+
+            var quality = obsidian.AnalyzeMemoryQuality();
+            var queue = obsidian.BuildTaskQueue();
+            var review = obsidian.BuildMemoryReview(quality, queue);
+            var maintenance = obsidian.MaintainKokonoeVaultArchitecture("test-memory-review");
+            var reviewNote = File.ReadAllText(Path.Combine(dir, "Kokonoe", "Memory", "Review.md"));
+
+            AssertTrue(review.Actions.Any(a => a.Action == "merge"), "review should suggest merging exact duplicates");
+            AssertTrue(review.Actions.Any(a => a.Action == "keep"), "review should keep open tasks visible");
+            AssertTrue(review.Actions.Any(a => a.Action == "promote_to_preference"), "review should identify preference-like memory");
+            AssertTrue(reviewNote.Contains("## merge"), "review note should render merge section");
+            AssertTrue(maintenance.MemoryReviewActionCount >= 3, "maintenance should report review action count");
         }
         finally
         {

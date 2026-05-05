@@ -1499,11 +1499,14 @@ namespace KokonoeAssistant
             {
                 var taskQueue = _obsidian.ReadNote("Kokonoe/Tasks Queue.md");
                 var memoryQuality = _obsidian.ReadNote("Kokonoe/Memory/Quality.md");
+                var memoryReview = _obsidian.ReadNote("Kokonoe/Memory/Review.md");
                 var ops = new List<string>();
                 if (!string.IsNullOrWhiteSpace(taskQueue))
                     ops.Add(TruncateAtWordBoundary(SanitizeForLlm(taskQueue), 700));
                 if (!string.IsNullOrWhiteSpace(memoryQuality))
                     ops.Add(TruncateAtWordBoundary(SanitizeForLlm(memoryQuality), 500));
+                if (!string.IsNullOrWhiteSpace(memoryReview))
+                    ops.Add(TruncateAtWordBoundary(SanitizeForLlm(memoryReview), 500));
                 if (ops.Count > 0)
                     parts.Add(("=== KOKONOE MEMORY OPS ===\n" + string.Join("\n\n", ops), 6));
             }

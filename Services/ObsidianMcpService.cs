@@ -473,6 +473,7 @@ tags: [{tagsLine}]
             var isolated = GetIsolatedNotes().Take(30).ToList();
             var memoryQuality = AnalyzeMemoryQuality();
             var taskQueue = BuildTaskQueue();
+            var memoryReview = BuildMemoryReview(memoryQuality, taskQueue);
 
             UpsertManagedNote("Kokonoe/Vault Index.md", BuildVaultIndex(status, init, folders, modifiedToday), result);
             UpsertManagedNote("Kokonoe/Architecture/Manifest.md", BuildVaultManifest(notesBefore, folders), result);
@@ -480,6 +481,7 @@ tags: [{tagsLine}]
             UpsertManagedNote("Kokonoe/Architecture/Health.md", BuildVaultHealth(status, init, isolated), result);
             UpsertManagedNote("Kokonoe/Architecture/Backlog.md", BuildVaultBacklog(status, init, isolated), result);
             UpsertManagedNote("Kokonoe/Memory/Quality.md", BuildMemoryQualityNote(memoryQuality), result);
+            UpsertManagedNote("Kokonoe/Memory/Review.md", BuildMemoryReviewNote(memoryReview), result);
             UpsertManagedNote("Kokonoe/Tasks Queue.md", BuildTaskQueueNote(taskQueue), result);
             UpsertManagedNote("Kokonoe/Automation/Obsidian Sync.md", BuildVaultAutomationNote(), result);
 
@@ -488,6 +490,7 @@ tags: [{tagsLine}]
             result.LinksAdded = linkResult.linksAdded;
             result.MemoryDuplicateGroups = memoryQuality.DuplicateGroups.Count;
             result.OpenTaskCount = taskQueue.OpenTasks.Count;
+            result.MemoryReviewActionCount = memoryReview.Actions.Count;
             AppendMaintenanceLog(result, status, init);
             return result;
         }
@@ -563,6 +566,7 @@ tags: [kokonoe, vault, architecture]
             sb.AppendLine("- [[Kokonoe/Memory/Facts|Facts]]");
             sb.AppendLine("- [[Kokonoe/Memory/Quality|Memory Quality]]");
             sb.AppendLine("- [[Kokonoe/Memory/Cleanup|Memory Cleanup]]");
+            sb.AppendLine("- [[Kokonoe/Memory/Review|Memory Review]]");
             sb.AppendLine("- [[Kokonoe/Tasks Queue|Tasks Queue]]");
             sb.AppendLine();
             sb.AppendLine("## Status");
@@ -857,6 +861,105 @@ tags: [kokonoe, vault, architecture]
             }
         }
 
+        public MemoryReviewSnapshot BuildMemoryReview(MemoryQualityReport? quality = null, TaskQueueSnapshot? queue = null)
+        {
+            quality ??= AnalyzeMemoryQuality();
+            queue ??= BuildTaskQueue();
+
+            var review = new MemoryReviewSnapshot { RanAt = DateTime.Now };
+            foreach (var group in quality.DuplicateGroups.Take(20))
+            {
+                review.Actions.Add(new MemoryReviewAction
+                {
+                    Action = "merge",
+                    Reason = "exact duplicate memory items",
+                    SourcePath = group.First().Path,
+                    TargetPath = group.First().Path,
+                    Confidence = 1.0,
+                    Items = group.Select(i => i.Text).Distinct().Take(8).ToList()
+                });
+            }
+
+            foreach (var group in quality.SimilarGroups.Take(20))
+            {
+                review.Actions.Add(new MemoryReviewAction
+                {
+                    Action = "confirm",
+                    Reason = "similar memory items need human or later-model confirmation before merge",
+                    SourcePath = group.First().Path,
+                    TargetPath = group.First().Path,
+                    Confidence = 0.72,
+                    Items = group.Select(i => i.Text).Distinct().Take(8).ToList()
+                });
+            }
+
+            foreach (var task in queue.OpenTasks.Take(20))
+            {
+                review.Actions.Add(new MemoryReviewAction
+                {
+                    Action = "keep",
+                    Reason = "open task still needs tracking",
+                    SourcePath = task.Path,
+                    TargetPath = "Kokonoe/Tasks Queue.md",
+                    Confidence = 0.85,
+                    Items = new List<string> { task.Text }
+                });
+            }
+
+            foreach (var item in quality.NormalizedItems
+                .Where(i => i.Path.Contains("Preferences", StringComparison.OrdinalIgnoreCase) ||
+                            i.Text.Contains("like", StringComparison.OrdinalIgnoreCase) ||
+                            i.Text.Contains("prefer", StringComparison.OrdinalIgnoreCase) ||
+                            i.Text.Contains("подоба", StringComparison.OrdinalIgnoreCase))
+                .Take(20))
+            {
+                review.Actions.Add(new MemoryReviewAction
+                {
+                    Action = "promote_to_preference",
+                    Reason = "preference-like memory should stay easy to retrieve",
+                    SourcePath = item.Path,
+                    TargetPath = "Kokonoe/Preferences.md",
+                    Confidence = item.Path.Contains("Preferences", StringComparison.OrdinalIgnoreCase) ? 0.95 : 0.65,
+                    Items = new List<string> { item.Text }
+                });
+            }
+
+            review.Actions = review.Actions
+                .GroupBy(a => $"{a.Action}|{a.TargetPath}|{string.Join(";", a.Items.Select(NormalizeMemoryText))}")
+                .Select(g => g.First())
+                .OrderByDescending(a => a.Confidence)
+                .ThenBy(a => a.Action)
+                .Take(120)
+                .ToList();
+            return review;
+        }
+
+        private string BuildMemoryReviewNote(MemoryReviewSnapshot review)
+        {
+            var sb = new StringBuilder();
+            sb.Append(BuildManagedFrontmatter("memory-review"));
+            sb.AppendLine("# Memory Review");
+            sb.AppendLine();
+            sb.AppendLine("## Summary");
+            sb.AppendLine($"- Suggested actions: {review.Actions.Count}");
+            sb.AppendLine("- This is advisory. It does not mutate memory notes by itself.");
+            sb.AppendLine();
+            foreach (var actionGroup in review.Actions.GroupBy(a => a.Action).OrderBy(g => g.Key))
+            {
+                sb.AppendLine($"## {actionGroup.Key}");
+                foreach (var action in actionGroup.Take(40))
+                {
+                    sb.AppendLine($"- confidence {action.Confidence:0.00}: {action.Reason}");
+                    sb.AppendLine($"  - source: {action.SourcePath}");
+                    sb.AppendLine($"  - target: {action.TargetPath}");
+                    foreach (var item in action.Items.Take(5))
+                        sb.AppendLine($"  - item: {item}");
+                }
+                sb.AppendLine();
+            }
+            return sb.ToString();
+        }
+
         public TaskQueueSnapshot BuildTaskQueue()
         {
             var snapshot = new TaskQueueSnapshot { RanAt = DateTime.Now };
@@ -909,6 +1012,9 @@ tags: [kokonoe, vault, architecture]
                    item.Contains("[ ]", StringComparison.OrdinalIgnoreCase) ||
                    text.Contains("todo") ||
                    text.Contains("task") ||
+                   text.Contains("add") ||
+                   text.Contains("implement") ||
+                   text.Contains("create") ||
                    text.Contains("зроб") ||
                    text.Contains("реаліз") ||
                    text.Contains("дод") ||
@@ -946,6 +1052,7 @@ tags: [kokonoe, vault, architecture]
             sb.AppendLine("- [[Kokonoe/Architecture/Backlog]]");
             sb.AppendLine("- [[Kokonoe/Memory/Quality]]");
             sb.AppendLine("- [[Kokonoe/Memory/Cleanup]]");
+            sb.AppendLine("- [[Kokonoe/Memory/Review]]");
             sb.AppendLine("- [[Kokonoe/Tasks Queue]]");
             return sb.ToString();
         }
@@ -962,6 +1069,7 @@ tags: [kokonoe, vault, architecture]
             sb.AppendLine($"- Links added: {result.LinksAdded}");
             sb.AppendLine($"- Memory duplicate groups: {result.MemoryDuplicateGroups}");
             sb.AppendLine($"- Open tasks: {result.OpenTaskCount}");
+            sb.AppendLine($"- Memory review actions: {result.MemoryReviewActionCount}");
             sb.AppendLine($"- Notes: {status.TotalNotes}, orphans: {status.OrphanNotes.Count}, empty: {status.EmptyNotes.Count}");
             sb.AppendLine($"- Brain core: {(init.HasCoreNote ? init.CoreNotePath : "missing")}");
 
@@ -1493,10 +1601,11 @@ cleanup_empty — видалити порожні нотатки
         public int LinksAdded { get; set; }
         public int MemoryDuplicateGroups { get; set; }
         public int OpenTaskCount { get; set; }
+        public int MemoryReviewActionCount { get; set; }
 
         public override string ToString()
         {
-            return $"Vault maintenance: {CreatedFolders.Count} folders, {CreatedNotes.Count} created notes, {UpdatedNotes.Count} updated notes, {LinksAdded} links, {MemoryDuplicateGroups} duplicate groups, {OpenTaskCount} open tasks.";
+            return $"Vault maintenance: {CreatedFolders.Count} folders, {CreatedNotes.Count} created notes, {UpdatedNotes.Count} updated notes, {LinksAdded} links, {MemoryDuplicateGroups} duplicate groups, {OpenTaskCount} open tasks, {MemoryReviewActionCount} review actions.";
         }
     }
 
@@ -1510,6 +1619,22 @@ cleanup_empty — видалити порожні нотатки
     }
 
     public record MemoryQualityItem(string Path, string Text, string Normalized);
+
+    public class MemoryReviewSnapshot
+    {
+        public DateTime RanAt { get; set; }
+        public List<MemoryReviewAction> Actions { get; set; } = new();
+    }
+
+    public class MemoryReviewAction
+    {
+        public string Action { get; set; } = "";
+        public string Reason { get; set; } = "";
+        public string SourcePath { get; set; } = "";
+        public string TargetPath { get; set; } = "";
+        public double Confidence { get; set; }
+        public List<string> Items { get; set; } = new();
+    }
 
     public class MemoryCleanupResult
     {
