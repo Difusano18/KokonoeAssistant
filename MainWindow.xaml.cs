@@ -4191,6 +4191,132 @@ tags: [kokonoe, live-core, diagnostics]
             catch { }
         }
 
+        private static string DashboardEmotionLabel(KokoEmotionEngine.EmotionState state) => state switch
+        {
+            KokoEmotionEngine.EmotionState.Calm       => "спокійна",
+            KokoEmotionEngine.EmotionState.Curious    => "зацікавлена",
+            KokoEmotionEngine.EmotionState.Warm       => "тепліша",
+            KokoEmotionEngine.EmotionState.Playful    => "грайлива",
+            KokoEmotionEngine.EmotionState.Concerned  => "стурбована",
+            KokoEmotionEngine.EmotionState.Protective => "захисна",
+            KokoEmotionEngine.EmotionState.Irritated  => "роздратована",
+            KokoEmotionEngine.EmotionState.Distant    => "відсторонена",
+            KokoEmotionEngine.EmotionState.Tender     => "ніжна",
+            KokoEmotionEngine.EmotionState.Focused    => "зосереджена",
+            KokoEmotionEngine.EmotionState.Proud      => "горда",
+            KokoEmotionEngine.EmotionState.Melancholy => "меланхолійна",
+            KokoEmotionEngine.EmotionState.Excited    => "збуджена",
+            KokoEmotionEngine.EmotionState.Nostalgic  => "ностальгійна",
+            KokoEmotionEngine.EmotionState.Anxious    => "тривожна",
+            KokoEmotionEngine.EmotionState.Hopeful    => "обережно оптимістична",
+            _                                         => "невизначена"
+        };
+
+        private static string DashboardBondLabel(KokoEmotionEngine.BondLevel bond) => bond switch
+        {
+            KokoEmotionEngine.BondLevel.Stranger => "чужий",
+            KokoEmotionEngine.BondLevel.Familiar => "знайомий",
+            KokoEmotionEngine.BondLevel.Known    => "відомий",
+            KokoEmotionEngine.BondLevel.Trusted  => "довірений",
+            KokoEmotionEngine.BondLevel.Intimate => "близький",
+            _                                    => "невизначений"
+        };
+
+        private static string DashboardSomaticLabel(string code) => code switch
+        {
+            "unknown"  => "сигнал тіла відсутній",
+            "wired"    => "перезбуджена",
+            "strained" => "напружена",
+            "tired"    => "низький заряд",
+            "calm"     => "стабільний спокій",
+            "focused"  => "робочий фокус",
+            _          => string.IsNullOrWhiteSpace(code) ? "невідомо" : code
+        };
+
+        private static string DashboardRegulationLabel(string code) => code switch
+        {
+            "protective_override" => "захисне перехоплення",
+            "pulse_spike"         => "стрибок пульсу",
+            "anger_contained"     => "стримане роздратування",
+            "combat_focus"        => "бойовий фокус",
+            "pressure_rise"       => "ріст тиску",
+            "low_power"           => "низький заряд",
+            "recovered_calm"      => "спокій відновлено",
+            "steady_calm"         => "рівний спокій",
+            "stable_loop"         => "стабільний цикл",
+            "clean_focus"         => "чистий фокус",
+            "unknown_body"        => "тіло мовчить",
+            "protect"             => "захищати",
+            "clamp"               => "затиснути імпульс",
+            "contain"             => "утримати",
+            "focus"               => "сфокусуватись",
+            "compress"            => "стиснути відповідь",
+            "conserve"            => "економити заряд",
+            "release"             => "відпустити напругу",
+            "baseline"            => "базовий режим",
+            _                     => string.IsNullOrWhiteSpace(code) ? "немає" : code
+        };
+
+        private static string DashboardThoughtForVault(string text)
+        {
+            var cleaned = CleanDashboardThought(text);
+            if (string.IsNullOrWhiteSpace(cleaned)) return "";
+
+            var replacements = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["Stable. No need to poke the machinery."] = "Стабільно. Немає потреби тикати в механізм.",
+                ["Low charge. Do not chase every spark."] = "Низький заряд. Не треба ганятись за кожною іскрою.",
+                ["Signal is clean. Work mode."] = "Сигнал чистий. Робочий режим.",
+                ["Back under control. Good. Pretend that was intentional."] = "Знову під контролем. Добре. Зробимо вигляд, що так і планувалось.",
+                ["Pulse jumped. Clamp output, narrow focus, no dramatic nonsense."] = "Пульс підскочив. Стиснути відповідь, звузити фокус, без театру.",
+                ["No useful body signal. Do not invent ghosts."] = "Корисного тілесного сигналу немає. Не вигадувати зайвого."
+            };
+
+            foreach (var pair in replacements)
+                cleaned = System.Text.RegularExpressions.Regex.Replace(
+                    cleaned,
+                    System.Text.RegularExpressions.Regex.Escape(pair.Key),
+                    pair.Value,
+                    System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
+            cleaned = System.Text.RegularExpressions.Regex.Replace(cleaned, @"\[somatic/([^\]]+)\]", m =>
+                $"[соматика/{DashboardRegulationLabel(m.Groups[1].Value)}]");
+            return cleaned.Trim();
+        }
+
+        private static string DashboardPriority(
+            KokoEmotionEngine.EmotionState emotion,
+            KokoSomaticSnapshot somatic,
+            KokoSelfRegulationFrame selfRegulation,
+            int openPatterns)
+        {
+            if (selfRegulation.ShouldProtect || emotion is KokoEmotionEngine.EmotionState.Protective)
+                return "захистити творця, зменшити шум і відповідати коротко та точно";
+            if (somatic.IsVeryElevated)
+                return "стиснути реакції, стабілізувати пульс і не розганяти драму";
+            if (somatic.IsLow || selfRegulation.ShouldPreferSilence)
+                return "економити заряд, не плодити зайві ініціативи";
+            if (emotion is KokoEmotionEngine.EmotionState.Focused || openPatterns > 0)
+                return "працювати по задачах і не розмазувати увагу";
+            return "тримати контекст, пам'ять і стан у робочому порядку";
+        }
+
+        private static string DashboardRiskLine(
+            KokoEmotionEngine.EmotionState emotion,
+            KokoSomaticSnapshot somatic,
+            KokoSelfRegulationFrame selfRegulation)
+        {
+            if (somatic.IsVeryElevated)
+                return "перезбудження: відповідь має бути коротшою, інакше система сама себе перегріє";
+            if (selfRegulation.ShouldSuppressSnark)
+                return "сарказм приглушено: зараз важливіша точність, а не демонстрація зубів";
+            if (somatic.IsLow)
+                return "низький заряд: не тягнути зайві гілки без потреби";
+            if (emotion is KokoEmotionEngine.EmotionState.Irritated or KokoEmotionEngine.EmotionState.Distant)
+                return "емоційна дистанція: перевірити контекст перед різкою відповіддю";
+            return "критичних ризиків немає, що майже підозріло";
+        }
+
         // ── Obsidian Sync ────────────────────────────────────────
         private void DashSyncToObsidian(bool forceDaily = false)
         {
@@ -4206,18 +4332,30 @@ tags: [kokonoe, live-core, diagnostics]
 
                 var now       = DateTime.Now;
                 var connPct   = (int)(emotion.ConnectionScore * 100);
-                var bondStr   = emotion.Bond.ToString();
-                var curStr    = emotion.Current.ToString();
+                var curState  = emotion.Current;
+                var bondStr   = DashboardBondLabel(emotion.Bond);
+                var curStr    = DashboardEmotionLabel(curState);
                 var todayMsgs = chats.GetMessagesFromDate(DateTime.Today).Count;
                 var factCount = memory.Facts.Count;
                 var patCount  = patterns.Patterns.Count;
                 var days      = (int)(now - new DateTime(2024, 4, 6)).TotalDays;
+                var somatic   = brain.GetSomaticSnapshot();
+                var selfReg   = brain.GetSelfRegulationFrame(somatic);
+                var previousEmotion = string.IsNullOrWhiteSpace(_dashLastEmotionSynced)
+                    ? "перший знімок після запуску"
+                    : _dashLastEmotionSynced;
 
                 // ── Write Kokonoe/Dashboard.md (overwrite, always fresh) ──
                 var thoughts  = brain.GetRecentThoughts(5);
-                var thoughtLines = thoughts.Any()
-                    ? string.Join("\n", thoughts.Select(t => $"- {t}"))
-                    : "- ...";
+                var thoughtLines = thoughts
+                    .Select(DashboardThoughtForVault)
+                    .Where(t => !string.IsNullOrWhiteSpace(t))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .Take(5)
+                    .Select(t => $"- {t}")
+                    .ToList();
+                if (thoughtLines.Count == 0)
+                    thoughtLines.Add("- Стан стабільний. Нічого героїчно ламати не довелось.");
 
                 var healthBlock = health != null
                     ? $"""
@@ -4226,6 +4364,17 @@ tags: [kokonoe, live-core, diagnostics]
 | Стрес    | {health.Stress ?? 0}/10 |
 """
                     : "| — | дані відсутні |";
+                var heartLine = somatic.Bpm > 0
+                    ? $"{somatic.Bpm:F0} bpm, база {somatic.BaselineBpm:F0}, зміна {somatic.BpmDelta:+0;-0;0}"
+                    : "немає сигналу";
+                var priority = DashboardPriority(curState, somatic, selfReg, patCount);
+                var riskLine = DashboardRiskLine(curState, somatic, selfReg);
+                var behavior = string.IsNullOrWhiteSpace(selfReg.BehaviorDirective)
+                    ? "звичайний режим: спостерігати, відповідати чітко, не вигадувати зайвого"
+                    : DashboardThoughtForVault(selfReg.BehaviorDirective);
+                var privateThought = string.IsNullOrWhiteSpace(selfReg.PrivateThought)
+                    ? "внутрішній сигнал рівний"
+                    : DashboardThoughtForVault(selfReg.PrivateThought);
 
                 var dashContent = $"""
 ---
@@ -4233,11 +4382,11 @@ updated: {now:yyyy-MM-dd HH:mm}
 tags: [kokonoe, dashboard, live]
 ---
 
-# KOKONOE // DASHBOARD LIVE
+# Живий дашборд Коконое
 
 > Оновлено: **{now:HH:mm}** · день **{days}** цього експерименту
 
-## Стан
+## Оперативний стан
 
 | Метрика           | Значення               |
 |-------------------|------------------------|
@@ -4247,6 +4396,31 @@ tags: [kokonoe, dashboard, live]
 | Фактів у пам'яті  | {factCount} |
 | Патернів          | {patCount} |
 
+## Соматичний контур
+
+| Сигнал | Значення |
+|--------|----------|
+| Тіло | {DashboardSomaticLabel(somatic.State)} |
+| Пульс | {heartLine} |
+| Напруга | {somatic.Strain:F2} |
+| Спокій | {somatic.Calm:F2} |
+| Реакція | {DashboardRegulationLabel(selfReg.Reaction)} |
+| Саморегуляція | {DashboardRegulationLabel(selfReg.Regulation)} |
+| Внутрішня думка | {privateThought} |
+| Поведінка | {behavior} |
+
+## Що змінилось
+
+- Попередній синхронізований стан: {previousEmotion}
+- Поточний стан: {curStr}
+- Ризик: {riskLine}
+
+## Наступна дія
+
+- Пріоритет: {priority}
+- Перед відповіддю: перевірити Obsidian-контекст, потім відповідати по суті.
+- Пам'ять: важливі факти не тримати в голові як декоративний мотлох, а записувати у правильні нотатки.
+
 ## Здоров'я творця
 
 | Показник | Оцінка |
@@ -4255,19 +4429,26 @@ tags: [kokonoe, dashboard, live]
 
 ## Останні думки
 
-{thoughtLines}
+{string.Join("\n", thoughtLines)}
 
 ## Посилання
 
 - [[Daily/{now:yyyy-MM-dd}]]
 - [[Kokonoe/Досьє]]
+- [[Kokonoe/Logs/Live Core]]
+- [[Kokonoe/Somatic Events]]
+- [[Kokonoe/Memory/Review]]
+- [[Kokonoe/Memory/Quality]]
+- [[Kokonoe/Tasks Queue]]
+- [[Kokonoe/Architecture/Health]]
+- [[Kokonoe/Architecture/Language Policy]]
 """;
                 obsidian.WriteNote("Kokonoe/Dashboard.md", dashContent);
 
                 // ── Append to daily note (throttled or on emotion change) ──
                 if (forceDaily)
                 {
-                    var emoji = curStr switch
+                    var emoji = emotion.Current.ToString() switch
                     {
                         "Calm"       => "🔵",
                         "Curious"    => "🟣",
@@ -4284,7 +4465,7 @@ tags: [kokonoe, dashboard, live]
                         "Excited"    => "🟢",
                         _            => "⚪"
                     };
-                    var line = $"\n> [{now:HH:mm}] {emoji} **DASHBOARD** · {curStr} ({connPct}%) · msg: {todayMsgs} · facts: {factCount}";
+                    var line = $"\n> [{now:HH:mm}] {emoji} **Дашборд** · {curStr} ({connPct}%) · повідомлень: {todayMsgs} · фактів: {factCount} · тіло: {DashboardSomaticLabel(somatic.State)}";
                     obsidian.AppendToDailyNote(line);
                     _dashLastEmotionSynced = curStr;
                 }
