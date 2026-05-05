@@ -147,6 +147,7 @@ namespace KokonoeAssistant
         private string   _dashLastEmotionSynced = "";
         private DispatcherTimer? _liveCoreTimer;
         private DateTime _liveCoreLastVaultScan = DateTime.MinValue;
+        private DateTime _lastObsidianPreflightAt = DateTime.MinValue;
         private int _liveCoreMemoryItems;
         private int _liveCoreReviewActions;
         private int _liveCoreOpenTasks;
@@ -283,6 +284,8 @@ namespace KokonoeAssistant
                 LiveCoreVaultText.Text = $"review {_liveCoreReviewActions} | tasks {_liveCoreOpenTasks}";
                 if (state.LastAutoVaultSyncAt > DateTime.MinValue)
                     LiveCoreVaultText.Text += $" | last {state.LastAutoVaultSyncAt:dd.MM HH:mm}";
+                if (_lastObsidianPreflightAt > DateTime.MinValue)
+                    LiveCoreVaultText.Text += $" | ctx {_lastObsidianPreflightAt:HH:mm:ss}";
             }
             catch (Exception ex)
             {
@@ -1483,7 +1486,10 @@ tags: [kokonoe, live-core, diagnostics]
             {
                 var preflight = BuildObsidianPreflightContext(userText);
                 if (!string.IsNullOrWhiteSpace(preflight))
+                {
+                    _lastObsidianPreflightAt = DateTime.Now;
                     parts.Add((preflight, 0));
+                }
             }
             catch { }
 
