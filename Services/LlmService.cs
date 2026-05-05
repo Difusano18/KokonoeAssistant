@@ -33,8 +33,8 @@ namespace KokonoeAssistant.Services
         // Constants for history management
         private const int MAX_HISTORY_ENTRIES = 30;
         private const int HISTORY_TRUNCATE_STEP = 10; // скільки видаляти коли перевищено ліміт
-        private const int MainMaxTokens = 1536;
-        private const int SystemMaxTokens = 512;
+        private const int MainMaxTokens = 8192;
+        private const int SystemMaxTokens = 1024;
 
         // Injected after construction
         public ObsidianMcpService?   Obsidian       { get; set; }
