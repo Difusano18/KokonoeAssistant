@@ -402,6 +402,7 @@
                                     <ColumnDefinition Width="1.1*"/>
                                     <ColumnDefinition Width="0.85*"/>
                                     <ColumnDefinition Width="1.1*"/>
+                                    <ColumnDefinition Width="Auto"/>
                                 </Grid.ColumnDefinitions>
 
                                 <StackPanel Grid.Column="0" Margin="0,0,12,0">
@@ -443,6 +444,13 @@
                                                Foreground="{DynamicResource AccentTextLight}" Margin="0,3,0,0"/>
                                     <TextBlock x:Name="LiveCoreVaultText" Text="review -- | tasks --"
                                                FontSize="10" Foreground="{DynamicResource Brush_8AC8A0}"/>
+                                </StackPanel>
+
+                                <StackPanel Grid.Column="4" Orientation="Horizontal" VerticalAlignment="Center" Margin="12,0,0,0">
+                                    <Button Content="Refresh" Style="{StaticResource BtnGhost}" Padding="8,4" Margin="0,0,4,0"
+                                            Click="LiveCoreRefresh_Click"/>
+                                    <Button Content="Snapshot" Style="{StaticResource BtnGhost}" Padding="8,4"
+                                            Click="LiveCoreSnapshot_Click"/>
                                 </StackPanel>
                             </Grid>
                         </Border>
@@ -2772,4 +2780,3 @@
         </Grid>
     </Border>
 </Window>
-

@@ -5,6 +5,7 @@ using System.ComponentModel;
 using System.IO;
 using System.Linq;
 using System.Runtime.CompilerServices;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
@@ -295,6 +296,73 @@ namespace KokonoeAssistant
                 }
                 catch { }
             }
+        }
+
+        private void LiveCoreRefresh_Click(object sender, RoutedEventArgs e)
+        {
+            UpdateLiveCorePanel(forceVaultScan: true);
+        }
+
+        private void LiveCoreSnapshot_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                UpdateLiveCorePanel(forceVaultScan: true);
+                var report = BuildLiveCoreSnapshotMarkdown();
+                var path = "Kokonoe/Logs/Live Core.md";
+                var existing = _obsidian.ReadNote(path);
+                if (string.IsNullOrWhiteSpace(existing))
+                {
+                    existing = """
+---
+type: live-core-log
+tags: [kokonoe, live-core, diagnostics]
+---
+
+# Live Core
+
+""";
+                }
+
+                _obsidian.WriteNote(path, existing.TrimEnd() + "\n\n" + report);
+                LiveCoreVaultText.Text = $"snapshot saved | {DateTime.Now:HH:mm}";
+            }
+            catch (Exception ex)
+            {
+                WMsgBox.Show(ex.Message, "Live Core", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        private string BuildLiveCoreSnapshotMarkdown()
+        {
+            var brain = ServiceContainer.BrainEngine;
+            var emotion = brain.Emotion;
+            var state = brain.State;
+            var heart = ServiceContainer.Heart;
+            var somatic = brain.GetSomaticSnapshot();
+            var selfReg = brain.GetSelfRegulationFrame(somatic);
+            var sb = new StringBuilder();
+
+            sb.AppendLine($"## {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
+            sb.AppendLine();
+            sb.AppendLine("| Layer | Value |");
+            sb.AppendLine("|---|---|");
+            sb.AppendLine($"| Emotion | {emotion.Current} / intensity {emotion.Data.Intensity:F2} / bond {emotion.Bond} |");
+            if (emotion.Secondary.HasValue)
+                sb.AppendLine($"| Secondary | {emotion.Secondary.Value} / {emotion.SecondaryIntensity:F2} |");
+            sb.AppendLine($"| Mood | {state.CurrentMood} / score {state.MoodScore:F2} / baseline {state.BaselineMood:F2} |");
+            sb.AppendLine($"| Body | {somatic.State} / {somatic.Label} |");
+            sb.AppendLine($"| Pulse | {heart.CurrentBpm:F0} bpm / baseline {heart.BaselineBpm:F0} / delta {heart.BpmDelta:+0;-0;0} |");
+            sb.AppendLine($"| Somatic load | strain {somatic.Strain:F2} / calm {somatic.Calm:F2} / volatility {somatic.Volatility:F2} |");
+            sb.AppendLine($"| Regulation | {selfReg.Reaction} -> {selfReg.Regulation} / control {selfReg.Control:F2} / drive {selfReg.Drive:F2} |");
+            sb.AppendLine($"| Memory sync | pending {state.PendingVaultExchangeCount}/5 / last {(state.LastAutoVaultSyncAt > DateTime.MinValue ? state.LastAutoVaultSyncAt.ToString("yyyy-MM-dd HH:mm") : "never")} |");
+            sb.AppendLine($"| Vault | memory {_liveCoreMemoryItems} / review {_liveCoreReviewActions} / tasks {_liveCoreOpenTasks} |");
+            if (!string.IsNullOrWhiteSpace(selfReg.PrivateThought))
+                sb.AppendLine($"| Private thought | {selfReg.PrivateThought.Replace("|", "/")} |");
+            if (!string.IsNullOrWhiteSpace(selfReg.BehaviorDirective))
+                sb.AppendLine($"| Behavior | {selfReg.BehaviorDirective.Replace("|", "/")} |");
+
+            return sb.ToString().TrimEnd();
         }
 
         private void SetupHeartUI()
