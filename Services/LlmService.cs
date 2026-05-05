@@ -706,7 +706,23 @@ Kokonoe: Стоп. Де ти зараз. Коли востаннє їв.
                             lock (_histLock) { while (_history.Count > checkpoint) _history.RemoveAt(_history.Count - 1); }
                             return "Зображення є, але vision-сервер повернув 500. Перевір Vision Model у Settings (рекомендовано: qwen2.5vl:7b-cloud або llama3.2-vision:11b-cloud).";
                         }
-                        return $"[LLM {(int)resp.StatusCode}]: {err[..Math.Min(300, err.Length)]}";
+                        if (isOllamaCloud && !isImageRequest && IsTransientServerError((int)resp.StatusCode))
+                        {
+                            var compactReply = await TryOllamaCloudCompactRetryAsync(targetUrl, targetModel, userText, ct);
+                            if (!string.IsNullOrWhiteSpace(compactReply))
+                            {
+                                lock (_histLock)
+                                {
+                                    _history.Add(new HistoryEntry("user", userText));
+                                    _history.Add(new HistoryEntry("assistant", compactReply));
+                                    if (_history.Count > MAX_HISTORY_ENTRIES)
+                                        _history.RemoveRange(0, Math.Min(HISTORY_TRUNCATE_STEP, _history.Count));
+                                }
+                                return compactReply;
+                            }
+                        }
+
+                        return BuildFriendlyLlmError((int)resp.StatusCode, err, isOllamaCloud ? "Ollama Cloud" : targetModel);
                     }
 
                     var respText = await resp.Content.ReadAsStringAsync(ct);
@@ -852,6 +868,100 @@ Kokonoe: Стоп. Де ти зараз. Коли востаннє їв.
         }
 
         // ── Build messages list for API ───────────────────────────
+
+        private static bool IsTransientServerError(int statusCode)
+        {
+            return statusCode == 500 || statusCode == 502 || statusCode == 503 || statusCode == 504;
+        }
+
+        private static string BuildCompactSystemContent()
+        {
+            return "You are Kokonoe Mercury from BlazBlue. Stay in character: blunt, dry, sharp, impatient, but useful. " +
+                   "Reply only in Ukrainian unless the user explicitly asks otherwise. Do not mention being an AI, model, or program. " +
+                   "Give the direct answer first. Keep it concise unless the user asks for detail.";
+        }
+
+        private static string BuildFriendlyLlmError(int statusCode, string rawError, string provider)
+        {
+            var shortError = string.IsNullOrWhiteSpace(rawError)
+                ? "no response body"
+                : rawError.Trim().Replace("\r", " ").Replace("\n", " ");
+            if (shortError.Length > 180)
+                shortError = shortError[..180] + "...";
+
+            if (IsTransientServerError(statusCode))
+                return $"Сервер моделі впав з HTTP {statusCode}. Ні, це не твій сон зламався, це {provider} подавився запитом. Я вже пробувала легший fallback; не вийшло. Повтори запит або перемкни модель у Settings. Деталь: {shortError}";
+
+            if (statusCode == 429)
+                return $"Ліміт запитів з'їдений. {provider} повернув HTTP 429. Почекай reset або перемкни ключ у Settings.";
+
+            return $"LLM-запит відхилено: HTTP {statusCode}. Деталь: {shortError}";
+        }
+
+        private async Task<string?> TryOllamaCloudCompactRetryAsync(string targetUrl, string targetModel, string userText, CancellationToken ct)
+        {
+            try
+            {
+                var compactBody = new
+                {
+                    model = targetModel,
+                    messages = new object[]
+                    {
+                        new { role = "system", content = BuildCompactSystemContent() },
+                        new { role = "user", content = userText }
+                    },
+                    max_tokens = 2048,
+                    temperature = DynamicTemperature,
+                    stream = false
+                };
+                var json = JsonConvert.SerializeObject(compactBody);
+                var attempts = OllamaPool != null ? Math.Max(1, OllamaPool.LiveKeyCount + 1) : 1;
+
+                for (var attempt = 0; attempt < attempts; attempt++)
+                {
+                    using var req = new HttpRequestMessage(HttpMethod.Post, targetUrl)
+                    {
+                        Content = new StringContent(json, Encoding.UTF8, "application/json")
+                    };
+
+                    var key = ResolveOllamaKey();
+                    if (!string.IsNullOrWhiteSpace(key))
+                        req.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", key);
+
+                    using var resp = await _http.SendAsync(req, ct);
+                    if (resp.IsSuccessStatusCode)
+                    {
+                        if (!string.IsNullOrWhiteSpace(key))
+                            OllamaPool?.RecordRequest(key);
+
+                        var text = await resp.Content.ReadAsStringAsync(ct);
+                        var obj = JObject.Parse(text);
+                        var message = obj["choices"]?[0]?["message"] as JObject;
+                        var content = message?["content"]?.ToString() ?? "";
+                        if (string.IsNullOrWhiteSpace(content))
+                            content = ExtractResponseFromReasoning(message?["reasoning_content"]?.ToString() ?? "");
+
+                        content = CleanGarbage(content);
+                        if (!string.IsNullOrWhiteSpace(content))
+                            return content;
+                    }
+
+                    if ((int)resp.StatusCode == 429 && OllamaPool != null && !string.IsNullOrWhiteSpace(key))
+                    {
+                        OllamaPool.MarkRateLimited(key);
+                        continue;
+                    }
+
+                    break;
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[LlmService] Compact retry failed: {ex.Message}");
+            }
+
+            return null;
+        }
 
         /// <summary>
         /// Build messages for OpenAI-compatible API (LM Studio)
