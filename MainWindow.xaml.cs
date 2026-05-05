@@ -1477,8 +1477,15 @@ tags: [kokonoe, live-core, diagnostics]
             // Тримаємо його компактним — максимум ~800 токенів (~3200 символів).
             // GetToolsDescription() ПРИБРАНО — опис тулзів вже є в TOOLS масиві LlmService.
 
-            const int MAX_CONTEXT_LENGTH = 3000;
+            const int MAX_CONTEXT_LENGTH = 5000;
             var parts = new List<(string content, int priority)>(); // priority: lower = more important
+            try
+            {
+                var preflight = BuildObsidianPreflightContext(userText);
+                if (!string.IsNullOrWhiteSpace(preflight))
+                    parts.Add((preflight, 0));
+            }
+            catch { }
 
             // 1. Релевантна пам'ять — НАЙВАЖЛИВІШЕ, бо це факти про користувача
             try
@@ -1689,6 +1696,87 @@ tags: [kokonoe, live-core, diagnostics]
         /// Обрізає текст на межі слова, не посеред символу.
         /// Шукає останній пробіл або перенос рядка перед limit.
         /// </summary>
+        private string? BuildObsidianPreflightContext(string? userText)
+        {
+            try
+            {
+                if (_obsidian == null) return null;
+
+                var sb = new StringBuilder();
+                sb.AppendLine("=== OBSIDIAN PREFLIGHT ===");
+                sb.AppendLine($"checked_at: {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
+                sb.AppendLine("rule: this vault context was checked before answering; prefer it over stale chat guesses.");
+
+                try
+                {
+                    var status = _obsidian.GetVaultStatus();
+                    sb.AppendLine($"vault: notes={status.TotalNotes}, filled={status.FilledNotes}, empty={status.EmptyNotes.Count}, orphan={status.OrphanNotes.Count}");
+                }
+                catch { }
+
+                var noteSnippets = new List<string>();
+                AddPreflightNote(noteSnippets, "Kokonoe/Memory/Facts.md", "Facts", 700);
+                AddPreflightNote(noteSnippets, "Kokonoe/Preferences.md", "Preferences", 500);
+                AddPreflightNote(noteSnippets, "Kokonoe/Tasks.md", "Tasks", 500);
+                AddPreflightNote(noteSnippets, "Kokonoe/Tasks Queue.md", "Task queue", 600);
+                AddPreflightNote(noteSnippets, $"Daily/{DateTime.Now:yyyy-MM-dd}.md", "Today", 650);
+                AddPreflightNote(noteSnippets, "Kokonoe/Logs/Somatic Events.md", "Recent somatic events", 650, tail: true);
+                AddPreflightNote(noteSnippets, "Kokonoe/Logs/Live Core.md", "Recent live core", 600, tail: true);
+
+                if (noteSnippets.Count > 0)
+                {
+                    sb.AppendLine();
+                    sb.AppendLine("## Always-loaded notes");
+                    foreach (var snippet in noteSnippets)
+                        sb.AppendLine(snippet);
+                }
+
+                if (!string.IsNullOrWhiteSpace(userText))
+                {
+                    var relevant = _obsidian.SearchSemantic(userText, 6)
+                        .Where(r => !string.IsNullOrWhiteSpace(r.Preview))
+                        .Take(6)
+                        .ToList();
+                    if (relevant.Count > 0)
+                    {
+                        sb.AppendLine();
+                        sb.AppendLine("## Query-relevant vault recall");
+                        foreach (var r in relevant)
+                        {
+                            var preview = SanitizeForLlm(r.Preview).Replace("\r", " ").Replace("\n", " ");
+                            sb.AppendLine($"- {r.Path}: {TruncateAtWordBoundary(preview, 260)}");
+                        }
+                    }
+                }
+
+                var result = SanitizeForLlm(sb.ToString().Trim());
+                return result.Length > 120 ? TruncateAtWordBoundary(result, 2600) : null;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[ObsidianPreflight] {ex.Message}");
+                return null;
+            }
+        }
+
+        private void AddPreflightNote(List<string> output, string path, string label, int maxChars, bool tail = false)
+        {
+            try
+            {
+                var content = _obsidian.ReadNote(path);
+                if (string.IsNullOrWhiteSpace(content)) return;
+
+                content = SanitizeForLlm(content.Trim());
+                if (tail && content.Length > maxChars)
+                    content = "...\n" + content[^maxChars..];
+                else
+                    content = TruncateAtWordBoundary(content, maxChars);
+
+                output.Add($"### {label} ({path})\n{content}");
+            }
+            catch { }
+        }
+
         private static string TruncateAtWordBoundary(string text, int limit)
         {
             if (text.Length <= limit) return text;
