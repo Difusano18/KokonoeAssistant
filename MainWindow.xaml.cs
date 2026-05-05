@@ -144,6 +144,11 @@ namespace KokonoeAssistant
         private readonly ObservableCollection<string>        _dashCuriosities = new();
         private DateTime _dashLastObsidianSync = DateTime.MinValue;
         private string   _dashLastEmotionSynced = "";
+        private DispatcherTimer? _liveCoreTimer;
+        private DateTime _liveCoreLastVaultScan = DateTime.MinValue;
+        private int _liveCoreMemoryItems;
+        private int _liveCoreReviewActions;
+        private int _liveCoreOpenTasks;
 
         // ── Session chat log (auto-saved to Obsidian) ─────────────
         // Created on first message, appended after every exchange.
@@ -225,6 +230,73 @@ namespace KokonoeAssistant
         private double _ecgPhase; // 0..1 within current beat
         private double _ecgLastBpm = 60;
 
+        private void StartLiveCoreMonitor()
+        {
+            UpdateLiveCorePanel(forceVaultScan: true);
+            if (_liveCoreTimer != null) return;
+
+            _liveCoreTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
+            _liveCoreTimer.Tick += (s, e) => UpdateLiveCorePanel();
+            _liveCoreTimer.Start();
+        }
+
+        private void UpdateLiveCorePanel(bool forceVaultScan = false)
+        {
+            try
+            {
+                var brain = ServiceContainer.BrainEngine;
+                var emotion = brain.Emotion;
+                var state = brain.State;
+                var heart = ServiceContainer.Heart;
+                var somatic = brain.GetSomaticSnapshot();
+                var selfReg = brain.GetSelfRegulationFrame(somatic);
+
+                LiveCoreEmotionText.Text = $"emotion: {emotion.Current.ToString().ToUpper()}";
+                LiveCoreEmotionText.Foreground = DashMakeBrush(emotion.Current);
+                LiveCoreBondText.Text = $"bond {emotion.Bond} | intensity {emotion.Data.Intensity:F2} | mood {state.MoodScore:F2}";
+
+                LiveCoreBodyText.Text = $"{somatic.State.ToUpper()} | {somatic.Label}";
+                LiveCoreRegulationText.Text = $"{selfReg.Reaction} -> {selfReg.Regulation} | control {selfReg.Control:F2}";
+
+                LiveCorePulseText.Text = heart.CurrentBpm > 0
+                    ? $"{heart.CurrentBpm:0} bpm | delta {heart.BpmDelta:+0;-0;0}"
+                    : "-- bpm";
+                LiveCoreStrainBar.Value = Math.Clamp(somatic.Strain * 100.0, 0, 100);
+
+                if (forceVaultScan || DateTime.Now - _liveCoreLastVaultScan > TimeSpan.FromSeconds(30))
+                {
+                    try
+                    {
+                        var quality = _obsidian.AnalyzeMemoryQuality();
+                        var queue = _obsidian.BuildTaskQueue();
+                        var review = _obsidian.BuildMemoryReview(quality, queue);
+                        _liveCoreMemoryItems = quality.NormalizedItems.Count;
+                        _liveCoreOpenTasks = queue.OpenTasks.Count;
+                        _liveCoreReviewActions = review.Actions.Count;
+                        _liveCoreLastVaultScan = DateTime.Now;
+                    }
+                    catch { }
+                }
+
+                LiveCoreMemoryText.Text = $"sync pending {state.PendingVaultExchangeCount}/5 | memory {_liveCoreMemoryItems}";
+                LiveCoreVaultText.Text = $"review {_liveCoreReviewActions} | tasks {_liveCoreOpenTasks}";
+                if (state.LastAutoVaultSyncAt > DateTime.MinValue)
+                    LiveCoreVaultText.Text += $" | last {state.LastAutoVaultSyncAt:dd.MM HH:mm}";
+            }
+            catch (Exception ex)
+            {
+                try
+                {
+                    LiveCoreEmotionText.Text = "emotion: offline";
+                    LiveCoreBodyText.Text = "somatic: offline";
+                    LiveCorePulseText.Text = "-- bpm";
+                    LiveCoreMemoryText.Text = "memory unavailable";
+                    LiveCoreVaultText.Text = ex.Message;
+                }
+                catch { }
+            }
+        }
+
         private void SetupHeartUI()
         {
             try
@@ -252,6 +324,7 @@ namespace KokonoeAssistant
                     PushHeartSample(bpm);
                     DrawHeartBpmGraph();
                     UpdateHeartStats(bpm);
+                    UpdateLiveCorePanel();
                     if (PulseTab.Visibility == Visibility.Visible)
                         UpdatePulseTabNumbers();
                 });
@@ -449,6 +522,7 @@ namespace KokonoeAssistant
 
                 SetLoadingProgress(75, "мозок...");
                 InitBrain();
+                StartLiveCoreMonitor();
 
                 TgMessagesList.ItemsSource = _tgMessages;
 
@@ -1283,6 +1357,7 @@ namespace KokonoeAssistant
                 }
 
                 UpdateEmotionDot();
+                UpdateLiveCorePanel();
 
                 try
                 {
@@ -6070,6 +6145,7 @@ tags: [kokonoe, dashboard, live]
             try
             {
                 StopEcgAnimation();
+                _liveCoreTimer?.Stop();
                 _llmCts?.Cancel();
                 _tgCts?.Cancel();
                 _tgUserCts?.Cancel();

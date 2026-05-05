@@ -387,12 +387,68 @@
                     <!-- ╔══════════ CHAT TAB ══════════╗ -->
                     <Grid x:Name="ChatTab" Background="Transparent">
                         <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
                             <RowDefinition Height="*"/>
                             <RowDefinition Height="Auto"/>
                         </Grid.RowDefinitions>
 
+                        <!-- Live state strip -->
+                        <Border Grid.Row="0" Background="{DynamicResource Brush_050D07}"
+                                BorderBrush="{DynamicResource AccentBgBorder2}" BorderThickness="0,0,0,1"
+                                Padding="16,9">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="1.15*"/>
+                                    <ColumnDefinition Width="1.1*"/>
+                                    <ColumnDefinition Width="0.85*"/>
+                                    <ColumnDefinition Width="1.1*"/>
+                                </Grid.ColumnDefinitions>
+
+                                <StackPanel Grid.Column="0" Margin="0,0,12,0">
+                                    <TextBlock Text="LIVE CORE" FontSize="9" FontFamily="Consolas" FontWeight="Bold"
+                                               Foreground="{DynamicResource AccentBase}"/>
+                                    <TextBlock x:Name="LiveCoreEmotionText" Text="emotion: loading"
+                                               FontSize="12" FontWeight="SemiBold"
+                                               Foreground="{DynamicResource AccentTextLight}" Margin="0,3,0,0"/>
+                                    <TextBlock x:Name="LiveCoreBondText" Text="bond -- | intensity --"
+                                               FontSize="10" Foreground="{DynamicResource Brush_8AC8A0}"/>
+                                </StackPanel>
+
+                                <StackPanel Grid.Column="1" Margin="0,0,12,0">
+                                    <TextBlock Text="BODY" FontSize="9" FontFamily="Consolas" FontWeight="Bold"
+                                               Foreground="{DynamicResource AccentBase}"/>
+                                    <TextBlock x:Name="LiveCoreBodyText" Text="somatic: loading"
+                                               FontSize="12" FontWeight="SemiBold"
+                                               Foreground="{DynamicResource AccentTextLight}" Margin="0,3,0,0"/>
+                                    <TextBlock x:Name="LiveCoreRegulationText" Text="regulation --"
+                                               FontSize="10" Foreground="{DynamicResource Brush_8AC8A0}"/>
+                                </StackPanel>
+
+                                <StackPanel Grid.Column="2" Margin="0,0,12,0">
+                                    <TextBlock Text="PULSE" FontSize="9" FontFamily="Consolas" FontWeight="Bold"
+                                               Foreground="{DynamicResource AccentBase}"/>
+                                    <TextBlock x:Name="LiveCorePulseText" Text="-- bpm"
+                                               FontSize="12" FontWeight="SemiBold"
+                                               Foreground="{DynamicResource AccentTextLight}" Margin="0,3,0,0"/>
+                                    <ProgressBar x:Name="LiveCoreStrainBar" Height="4" Minimum="0" Maximum="100"
+                                                 Value="0" Margin="0,5,0,0" Foreground="{DynamicResource AccentBase}"
+                                                 Background="{DynamicResource Brush_071209}" BorderThickness="0"/>
+                                </StackPanel>
+
+                                <StackPanel Grid.Column="3">
+                                    <TextBlock Text="MEMORY / VAULT" FontSize="9" FontFamily="Consolas" FontWeight="Bold"
+                                               Foreground="{DynamicResource AccentBase}"/>
+                                    <TextBlock x:Name="LiveCoreMemoryText" Text="sync pending --"
+                                               FontSize="12" FontWeight="SemiBold"
+                                               Foreground="{DynamicResource AccentTextLight}" Margin="0,3,0,0"/>
+                                    <TextBlock x:Name="LiveCoreVaultText" Text="review -- | tasks --"
+                                               FontSize="10" Foreground="{DynamicResource Brush_8AC8A0}"/>
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+
                         <!-- Messages -->
-                        <ScrollViewer x:Name="MessagesScroll" Grid.Row="0"
+                        <ScrollViewer x:Name="MessagesScroll" Grid.Row="1"
                                       VerticalScrollBarVisibility="Auto"
                                       HorizontalScrollBarVisibility="Disabled"
                                       Background="Transparent"
@@ -401,7 +457,7 @@
                         </ScrollViewer>
 
                         <!-- Input panel -->
-                        <Border Grid.Row="1" Background="{DynamicResource AccentBgDarker}"
+                        <Border Grid.Row="2" Background="{DynamicResource AccentBgDarker}"
                                 BorderBrush="{DynamicResource AccentBgBorder2}" BorderThickness="0,1,0,0"
                                 Padding="18,12,18,16">
                             <StackPanel>
@@ -2716,5 +2772,4 @@
         </Grid>
     </Border>
 </Window>
-
 
