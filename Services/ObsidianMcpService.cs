@@ -562,6 +562,7 @@ tags: [kokonoe, vault, architecture]
             sb.AppendLine("- [[Kokonoe/Project Log|Project Log]]");
             sb.AppendLine("- [[Kokonoe/Memory/Facts|Facts]]");
             sb.AppendLine("- [[Kokonoe/Memory/Quality|Memory Quality]]");
+            sb.AppendLine("- [[Kokonoe/Memory/Cleanup|Memory Cleanup]]");
             sb.AppendLine("- [[Kokonoe/Tasks Queue|Tasks Queue]]");
             sb.AppendLine();
             sb.AppendLine("## Status");
@@ -717,6 +718,50 @@ tags: [kokonoe, vault, architecture]
             return report;
         }
 
+        public MemoryCleanupResult CleanupDuplicateMemoryItems(bool dryRun = true)
+        {
+            var result = new MemoryCleanupResult { DryRun = dryRun, RanAt = DateTime.Now };
+            foreach (var path in new[]
+            {
+                "Kokonoe/Memory/Facts.md",
+                "Kokonoe/Project Log.md",
+                "Kokonoe/Preferences.md",
+                "Kokonoe/Tasks.md",
+                "Kokonoe/Relationship Notes.md"
+            })
+            {
+                var full = Resolve(path);
+                if (!File.Exists(full)) continue;
+
+                var lines = File.ReadAllLines(full, Encoding.UTF8).ToList();
+                var seen = new HashSet<string>();
+                var output = new List<string>();
+                var removed = new List<string>();
+
+                foreach (var line in lines)
+                {
+                    if (TryNormalizeMemoryListLine(line, out var normalized))
+                    {
+                        if (seen.Contains(normalized))
+                        {
+                            removed.Add(line.Trim());
+                            continue;
+                        }
+                        seen.Add(normalized);
+                    }
+                    output.Add(line);
+                }
+
+                if (removed.Count == 0) continue;
+                result.RemovedByPath[path] = removed;
+                if (!dryRun)
+                    File.WriteAllLines(full, output, Encoding.UTF8);
+            }
+
+            WriteMemoryCleanupReport(result);
+            return result;
+        }
+
         private static List<List<MemoryQualityItem>> FindSimilarMemoryGroups(List<MemoryQualityItem> items, double threshold, int maxGroups)
         {
             var groups = new List<List<MemoryQualityItem>>();
@@ -766,7 +811,34 @@ tags: [kokonoe, vault, architecture]
             sb.AppendLine();
             sb.AppendLine("## Similar Duplicates");
             AppendMemoryGroups(sb, report.SimilarGroups);
+            sb.AppendLine();
+            sb.AppendLine("## Cleanup");
+            sb.AppendLine("- Use `cleanup_memory_duplicates` with `dry_run: true` to preview exact duplicate removals.");
+            sb.AppendLine("- Use `dry_run: false` only after preview. Similar duplicates are reported, not auto-removed.");
             return sb.ToString();
+        }
+
+        private void WriteMemoryCleanupReport(MemoryCleanupResult result)
+        {
+            var sb = new StringBuilder();
+            sb.Append(BuildManagedFrontmatter("memory-cleanup"));
+            sb.AppendLine("# Memory Cleanup");
+            sb.AppendLine();
+            sb.AppendLine("## Summary");
+            sb.AppendLine($"- Dry run: {result.DryRun}");
+            sb.AppendLine($"- Duplicate lines detected: {result.TotalRemoved}");
+            sb.AppendLine();
+            sb.AppendLine("## Removed Candidates");
+            if (result.TotalRemoved == 0)
+                sb.AppendLine("- none");
+            foreach (var pair in result.RemovedByPath)
+            {
+                sb.AppendLine($"### {pair.Key}");
+                foreach (var line in pair.Value.Take(80))
+                    sb.AppendLine($"- `{line.Replace("`", "'")}`");
+            }
+
+            UpsertManagedNote("Kokonoe/Memory/Cleanup.md", sb.ToString(), new VaultMaintenanceResult());
         }
 
         private static void AppendMemoryGroups(StringBuilder sb, List<List<MemoryQualityItem>> groups)
@@ -873,6 +945,7 @@ tags: [kokonoe, vault, architecture]
             sb.AppendLine("- [[Kokonoe/Architecture/Health]]");
             sb.AppendLine("- [[Kokonoe/Architecture/Backlog]]");
             sb.AppendLine("- [[Kokonoe/Memory/Quality]]");
+            sb.AppendLine("- [[Kokonoe/Memory/Cleanup]]");
             sb.AppendLine("- [[Kokonoe/Tasks Queue]]");
             return sb.ToString();
         }
@@ -1271,6 +1344,19 @@ cleanup_empty — видалити порожні нотатки
             return items;
         }
 
+        private static bool TryNormalizeMemoryListLine(string line, out string normalized)
+        {
+            normalized = "";
+            var trimmed = line.Trim();
+            if (!trimmed.StartsWith("- ")) return false;
+            var item = trimmed[2..].Trim();
+            if (item.StartsWith("[x]", StringComparison.OrdinalIgnoreCase))
+                return false;
+            item = System.Text.RegularExpressions.Regex.Replace(item, @"^\[[^\]]+\]\s*", "").Trim();
+            normalized = NormalizeMemoryText(item);
+            return normalized.Length > 0;
+        }
+
         private static string NormalizeMemoryText(string text)
         {
             if (string.IsNullOrWhiteSpace(text)) return "";
@@ -1424,6 +1510,19 @@ cleanup_empty — видалити порожні нотатки
     }
 
     public record MemoryQualityItem(string Path, string Text, string Normalized);
+
+    public class MemoryCleanupResult
+    {
+        public DateTime RanAt { get; set; }
+        public bool DryRun { get; set; }
+        public Dictionary<string, List<string>> RemovedByPath { get; set; } = new();
+        public int TotalRemoved => RemovedByPath.Values.Sum(v => v.Count);
+
+        public override string ToString()
+        {
+            return $"Memory cleanup: {(DryRun ? "dry run" : "applied")}, {TotalRemoved} duplicate lines.";
+        }
+    }
 
     public class TaskQueueSnapshot
     {

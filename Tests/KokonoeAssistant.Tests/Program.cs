@@ -22,6 +22,7 @@ internal static class Program
             Run("Obsidian vault architecture maintenance", ObsidianVaultArchitectureMaintenance);
             Run("Obsidian unique memory append", ObsidianUniqueMemoryAppend);
             Run("Obsidian memory quality and task queue", ObsidianMemoryQualityAndTaskQueue);
+            Run("Obsidian memory duplicate cleanup", ObsidianMemoryDuplicateCleanup);
 
             Console.WriteLine($"PASS {_passed} tests");
             return 0;
@@ -312,6 +313,40 @@ internal static class Program
             AssertTrue(File.Exists(Path.Combine(dir, "Kokonoe", "Tasks Queue.md")), "task queue note should be created");
             AssertTrue(maintenance.MemoryDuplicateGroups >= 1, "maintenance should report duplicate groups");
             AssertTrue(maintenance.OpenTaskCount >= 1, "maintenance should report open tasks");
+        }
+        finally
+        {
+            try { Directory.Delete(dir, recursive: true); } catch { }
+        }
+    }
+
+    private static void ObsidianMemoryDuplicateCleanup()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "KokonoeAssistant.Tests", "vault-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            var obsidian = new ObsidianMcpService(dir);
+            obsidian.WriteNote("Kokonoe/Memory/Facts.md", """
+# Facts
+
+## sample
+- [auto-fact] User likes long answers.
+- [auto-fact] User likes long answers.
+- [x] User likes long answers.
+""");
+
+            var preview = obsidian.CleanupDuplicateMemoryItems(dryRun: true);
+            var before = File.ReadAllText(Path.Combine(dir, "Kokonoe", "Memory", "Facts.md"));
+            var applied = obsidian.CleanupDuplicateMemoryItems(dryRun: false);
+            var after = File.ReadAllText(Path.Combine(dir, "Kokonoe", "Memory", "Facts.md"));
+
+            AssertEqual(1, preview.TotalRemoved, "dry-run should find one duplicate active line");
+            AssertTrue(before.Split("[auto-fact]").Length - 1 == 2, "dry-run should not rewrite source note");
+            AssertEqual(1, applied.TotalRemoved, "apply should remove one duplicate active line");
+            AssertTrue(after.Split("[auto-fact]").Length - 1 == 1, "apply should leave one active fact");
+            AssertTrue(after.Contains("[x] User likes long answers."), "cleanup should not remove done checklist lines");
+            AssertTrue(File.Exists(Path.Combine(dir, "Kokonoe", "Memory", "Cleanup.md")), "cleanup report should be written");
         }
         finally
         {
