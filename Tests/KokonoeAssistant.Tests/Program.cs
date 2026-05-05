@@ -24,6 +24,7 @@ internal static class Program
             Run("Obsidian memory quality and task queue", ObsidianMemoryQualityAndTaskQueue);
             Run("Obsidian memory duplicate cleanup", ObsidianMemoryDuplicateCleanup);
             Run("Obsidian memory review suggestions", ObsidianMemoryReviewSuggestions);
+            Run("Obsidian preflight context loads vault before reply", ObsidianPreflightContextLoadsVaultBeforeReply);
 
             Console.WriteLine($"PASS {_passed} tests");
             return 0;
@@ -393,6 +394,58 @@ internal static class Program
             AssertTrue(review.Actions.Any(a => a.Action == "promote_to_preference"), "review should identify preference-like memory");
             AssertTrue(reviewNote.Contains("## merge"), "review note should render merge section");
             AssertTrue(maintenance.MemoryReviewActionCount >= 3, "maintenance should report review action count");
+        }
+        finally
+        {
+            try { Directory.Delete(dir, recursive: true); } catch { }
+        }
+    }
+
+    private static void ObsidianPreflightContextLoadsVaultBeforeReply()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "KokonoeAssistant.Tests", "vault-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            var obsidian = new ObsidianMcpService(dir);
+            obsidian.WriteNote("Kokonoe/Memory/Facts.md", """
+# Facts
+
+- [auto-fact] User wants persistent Obsidian context before every answer.
+""");
+            obsidian.WriteNote("Kokonoe/Preferences.md", """
+# Preferences
+
+- [preference] User likes long detailed answers.
+""");
+            obsidian.WriteNote($"Daily/{DateTime.Today:yyyy-MM-dd}.md", """
+# Today
+
+Kokonoe should check the vault before answering.
+""");
+            obsidian.WriteNote("Kokonoe/Logs/Somatic Events.md", """
+# Somatic Events
+
+## 2026-05-06 12:00:00 - pulse_spike
+- Body: wired
+- Private thought: Pulse jumped. Contain it.
+""");
+            obsidian.WriteNote("Project/Context.md", """
+# Context
+
+Persistent Obsidian context is now a core project requirement.
+""");
+
+            var context = new ObsidianPreflightContextService(obsidian)
+                .Build("контекст Obsidian перед відповіддю", now: DateTime.Today.AddHours(18));
+
+            AssertTrue(!string.IsNullOrWhiteSpace(context), "preflight context should be generated");
+            AssertTrue(context!.Contains("OBSIDIAN PREFLIGHT"), "preflight marker should be present");
+            AssertTrue(context.Contains("persistent Obsidian context before every answer"), "facts note should be included");
+            AssertTrue(context.Contains("long detailed answers"), "preferences note should be included");
+            AssertTrue(context.Contains("Kokonoe should check the vault"), "daily note should be included");
+            AssertTrue(context.Contains("pulse_spike"), "somatic events tail should be included");
+            AssertTrue(context.Contains("Query-relevant vault recall"), "query semantic recall should be included");
         }
         finally
         {
