@@ -230,6 +230,14 @@ internal static class Program
             AssertTrue(File.Exists(Path.Combine(dir, "Kokonoe", "Architecture", "Backlog.md")), "backlog should be created");
             AssertTrue(File.Exists(Path.Combine(dir, "Kokonoe", "Automation", "Obsidian Sync.md")), "automation note should be created");
             AssertTrue(File.ReadAllText(Path.Combine(dir, "Kokonoe", "Architecture", "Change Log.md")).Contains("Reason: test"), "change log should record reason");
+
+            var second = obsidian.MaintainKokonoeVaultArchitecture("test-inventory-settle");
+            AssertTrue(second.CreatedNotes.Count == 0, "second maintenance should not create managed notes again");
+
+            var stable = obsidian.MaintainKokonoeVaultArchitecture("test-idempotent-a");
+            stable = obsidian.MaintainKokonoeVaultArchitecture("test-idempotent-b");
+            AssertTrue(stable.CreatedNotes.Count == 0, "settled maintenance should not create managed notes again");
+            AssertTrue(File.ReadAllText(Path.Combine(dir, "Kokonoe", "Vault Index.md")).Contains("managed-by: Kokonoe"), "managed notes should keep ownership marker");
         }
         finally
         {

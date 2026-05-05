@@ -104,6 +104,10 @@ namespace KokonoeAssistant.Services
         public List<string> PendingVaultExchangeBuffer { get; set; } = new();
         public DateTime LastAutoVaultSyncAt { get; set; } = DateTime.MinValue;
         public string LastAutoVaultSyncSummary { get; set; } = "";
+        public DateTime LastVaultMaintenanceAt { get; set; } = DateTime.MinValue;
+        public string LastVaultMaintenanceReason { get; set; } = "";
+        public string LastVaultMaintenanceSummary { get; set; } = "";
+        public string LastVaultMaintenanceError { get; set; } = "";
     }
 
     public class ReactiveTrigger
@@ -377,8 +381,20 @@ namespace KokonoeAssistant.Services
                     .OrderByDescending(x => x.time)
                     .Take(3)
                     .ToList();
+                var vaultSyncLine = _state.LastAutoVaultSyncAt > DateTime.MinValue
+                    ? $"  Auto sync: {_state.LastAutoVaultSyncAt:dd.MM HH:mm}, pending exchanges: {_state.PendingVaultExchangeCount}/5"
+                    : "";
+                var vaultMaintenanceLine = _state.LastVaultMaintenanceAt > DateTime.MinValue
+                    ? $"  Architecture: {_state.LastVaultMaintenanceAt:dd.MM HH:mm} ({_state.LastVaultMaintenanceReason}) {_state.LastVaultMaintenanceSummary}"
+                    : "";
+                var vaultMaintenanceErrorLine = !string.IsNullOrWhiteSpace(_state.LastVaultMaintenanceError)
+                    ? $"  Architecture error: {_state.LastVaultMaintenanceError}"
+                    : "";
                 foreach (var n in recentNotes)
                     sb.AppendLine($"  {n.p} (змінено {n.time:dd.MM HH:mm})");
+                if (!string.IsNullOrEmpty(vaultSyncLine)) sb.AppendLine(vaultSyncLine);
+                if (!string.IsNullOrEmpty(vaultMaintenanceLine)) sb.AppendLine(vaultMaintenanceLine);
+                if (!string.IsNullOrEmpty(vaultMaintenanceErrorLine)) sb.AppendLine(vaultMaintenanceErrorLine);
             }
             catch { }
 
@@ -3366,12 +3382,7 @@ namespace KokonoeAssistant.Services
         {
             try
             {
-                try
-                {
-                    var maintenance = _obsidian.MaintainKokonoeVaultArchitecture("startup");
-                    Log(maintenance.ToString());
-                }
-                catch (Exception ex) { Log($"VaultMaintenance startup: {ex.Message}"); }
+                RunVaultMaintenance("startup", TimeSpan.FromHours(6));
 
                 var status = _obsidian.GetVaultInitStatus();
                 Log($"Vault status: {status.NoteCount} notes, {status.TotalLinks} links. Core: {status.HasCoreNote}");
@@ -3737,12 +3748,7 @@ CHAT:
                 }
 
                 WriteAutoVaultNotes(obj);
-                try
-                {
-                    var maintenance = _obsidian.MaintainKokonoeVaultArchitecture("auto-batch-sync");
-                    Log(maintenance.ToString());
-                }
-                catch (Exception ex) { Log($"AutoSyncVaultMaintenance: {ex.Message}"); }
+                RunVaultMaintenance("auto-batch-sync", TimeSpan.Zero);
 
                 lock (_lock)
                 {
@@ -3790,6 +3796,42 @@ CHAT:
 
             if (!string.IsNullOrWhiteSpace(reflection))
                 AppendOrCreate("Kokonoe/Рефлексія.md", "# Рефлексія\n", $"\n## {now:yyyy-MM-dd HH:mm}\n{reflection}\n");
+        }
+
+        private bool RunVaultMaintenance(string reason, TimeSpan cooldown)
+        {
+            try
+            {
+                lock (_lock)
+                {
+                    if (cooldown > TimeSpan.Zero &&
+                        _state.LastVaultMaintenanceAt > DateTime.MinValue &&
+                        DateTime.Now - _state.LastVaultMaintenanceAt < cooldown)
+                        return false;
+                }
+
+                var maintenance = _obsidian.MaintainKokonoeVaultArchitecture(reason);
+                lock (_lock)
+                {
+                    _state.LastVaultMaintenanceAt = DateTime.Now;
+                    _state.LastVaultMaintenanceReason = reason;
+                    _state.LastVaultMaintenanceSummary = maintenance.ToString();
+                    _state.LastVaultMaintenanceError = "";
+                    SaveState();
+                }
+                Log(maintenance.ToString());
+                return true;
+            }
+            catch (Exception ex)
+            {
+                lock (_lock)
+                {
+                    _state.LastVaultMaintenanceError = $"{reason}: {ex.Message}";
+                    SaveState();
+                }
+                Log($"VaultMaintenance {reason}: {ex.Message}");
+                return false;
+            }
         }
 
         private void WriteVaultFallback(List<string> batch, string reason)

@@ -234,6 +234,8 @@ tags: [{tagsLine}]
             {
                 var rel     = Path.GetRelativePath(_vault, file).Replace('\\', '/');
                 var content = File.ReadAllText(file, Encoding.UTF8).Trim();
+                if (IsKokonoeManagedNote(content))
+                    continue;
 
                 // "Порожня" = тільки frontmatter або взагалі нічого
                 var bodyOnly = System.Text.RegularExpressions.Regex.Replace(
@@ -259,7 +261,7 @@ tags: [{tagsLine}]
 
             return new VaultStatus
             {
-                TotalNotes   = allFiles.Count,
+                TotalNotes   = filledNotes.Count + emptyNotes.Count,
                 EmptyNotes   = emptyNotes,
                 OrphanNotes  = orphanNotes,
                 FilledNotes  = filledNotes.Count
@@ -418,7 +420,10 @@ tags: [{tagsLine}]
             var notesBefore = ListNotes();
             var status = GetVaultStatus();
             var init = GetVaultInitStatus();
-            var modifiedToday = GetNotesModifiedToday().Take(20).ToList();
+            var modifiedToday = GetNotesModifiedToday()
+                .Where(n => !IsKokonoeManagedPath(n))
+                .Take(20)
+                .ToList();
             var folders = ListFolders();
             var graph = GetNoteGraph();
             var isolated = GetIsolatedNotes().Take(30).ToList();
@@ -442,7 +447,8 @@ tags: [{tagsLine}]
             var full = Resolve(path);
             var existed = File.Exists(full);
             var current = existed ? File.ReadAllText(full, Encoding.UTF8) : null;
-            if (current == content) return;
+            if (current == content || (current != null && NormalizeManagedContent(current) == NormalizeManagedContent(content)))
+                return;
 
             Directory.CreateDirectory(Path.GetDirectoryName(full)!);
             File.WriteAllText(full, content, Encoding.UTF8);
@@ -451,6 +457,30 @@ tags: [{tagsLine}]
                 result.UpdatedNotes.Add(path);
             else
                 result.CreatedNotes.Add(path);
+        }
+
+        private static string NormalizeManagedContent(string content)
+        {
+            return System.Text.RegularExpressions.Regex.Replace(
+                content,
+                @"^updated:\s*.*$",
+                "updated: <normalized>",
+                System.Text.RegularExpressions.RegexOptions.Multiline);
+        }
+
+        private static bool IsKokonoeManagedNote(string content)
+        {
+            return System.Text.RegularExpressions.Regex.IsMatch(
+                content,
+                @"^managed-by:\s*Kokonoe\s*$",
+                System.Text.RegularExpressions.RegexOptions.Multiline | System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        }
+
+        private static bool IsKokonoeManagedPath(string path)
+        {
+            return path.StartsWith("Kokonoe/Architecture/", StringComparison.OrdinalIgnoreCase) ||
+                   path.Equals("Kokonoe/Vault Index.md", StringComparison.OrdinalIgnoreCase) ||
+                   path.StartsWith("Kokonoe/Automation/", StringComparison.OrdinalIgnoreCase);
         }
 
         private static string BuildManagedFrontmatter(string type)
@@ -666,6 +696,12 @@ cleanup_empty — видалити порожні нотатки
             {
                 var rel   = Path.GetRelativePath(_vault, file).Replace('\\', '/');
                 var title = Path.GetFileNameWithoutExtension(file);
+                try
+                {
+                    if (IsKokonoeManagedNote(File.ReadAllText(file, Encoding.UTF8)))
+                        continue;
+                }
+                catch { continue; }
                 if (!index.ContainsKey(title))
                     index[title] = rel;
             }
@@ -706,6 +742,8 @@ cleanup_empty — видалити порожні нотатки
                 try
                 {
                     var raw       = File.ReadAllText(file, Encoding.UTF8);
+                    if (IsKokonoeManagedNote(raw))
+                        continue;
                     var thisTitle = Path.GetFileNameWithoutExtension(file);
                     var fileAdded = 0;
 
@@ -784,6 +822,8 @@ cleanup_empty — видалити порожні нотатки
                     if (rel == path) continue;
 
                     var content = File.ReadAllText(file, Encoding.UTF8);
+                    if (IsKokonoeManagedNote(content))
+                        continue;
                     if (System.Text.RegularExpressions.Regex.IsMatch(
                             content, $@"\[\[{System.Text.RegularExpressions.Regex.Escape(targetTitle)}",
                             System.Text.RegularExpressions.RegexOptions.IgnoreCase))
@@ -867,8 +907,11 @@ cleanup_empty — видалити порожні нотатки
                 try
                 {
                     var key   = Path.GetRelativePath(_vault, file).Replace('\\', '/');
+                    var raw = File.ReadAllText(file, Encoding.UTF8);
+                    if (IsKokonoeManagedNote(raw))
+                        continue;
                     var links = new List<string>();
-                    foreach (System.Text.RegularExpressions.Match m in linkRegex.Matches(File.ReadAllText(file)))
+                    foreach (System.Text.RegularExpressions.Match m in linkRegex.Matches(raw))
                     {
                         var target = m.Groups[1].Value.Trim();
                         if (!string.IsNullOrEmpty(target)) links.Add(target);
