@@ -1475,6 +1475,25 @@ namespace KokonoeAssistant
             }
             catch { }
 
+            // 4.1 Relevant vault recall - direct Obsidian retrieval for the current message
+            try
+            {
+                if (!string.IsNullOrWhiteSpace(userText))
+                {
+                    var relevant = _obsidian.SearchSemantic(userText, 4)
+                        .Where(r => !string.IsNullOrWhiteSpace(r.Preview))
+                        .Take(4)
+                        .ToList();
+                    if (relevant.Count > 0)
+                    {
+                        var lines = relevant.Select(r =>
+                            $"- {r.Path}: {TruncateAtWordBoundary(SanitizeForLlm(r.Preview).Replace("\r", " ").Replace("\n", " "), 240)}");
+                        parts.Add(("=== RELEVANT OBSIDIAN MEMORY ===\n" + string.Join("\n", lines), 2));
+                    }
+                }
+            }
+            catch { }
+
             // 5. Прогноз (ML.NET) — настрій/енергія на завтра
             try
             {

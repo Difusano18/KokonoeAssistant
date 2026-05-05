@@ -3847,11 +3847,11 @@ CHAT:
                 : new List<string>();
             if (items.Count == 0) return;
 
-            var sb = new StringBuilder();
-            sb.AppendLine($"\n## {DateTime.Now:yyyy-MM-dd HH:mm}");
-            foreach (var item in items)
-                sb.AppendLine($"- [{label}] {item}");
-            AppendOrCreate(path, $"# {Path.GetFileNameWithoutExtension(path)}\n", sb.ToString());
+            try
+            {
+                _obsidian.AppendUniqueItemsToNote(path, $"# {Path.GetFileNameWithoutExtension(path)}\n", items, label);
+            }
+            catch (Exception ex) { Log($"AppendItemsToNote {path}: {ex.Message}"); }
         }
 
         private void AppendOrCreate(string path, string header, string content)

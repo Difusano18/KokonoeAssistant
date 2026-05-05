@@ -90,6 +90,50 @@ tags: [{tagsLine}]
             return full;
         }
 
+        public int AppendUniqueItemsToNote(string path, string header, IEnumerable<string> items, string label, double duplicateThreshold = 0.82)
+        {
+            var cleanItems = items
+                .Select(i => i.Trim())
+                .Where(i => !string.IsNullOrWhiteSpace(i))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            if (cleanItems.Count == 0) return 0;
+
+            var full = Resolve(path);
+            Directory.CreateDirectory(Path.GetDirectoryName(full)!);
+
+            var existing = File.Exists(full) ? File.ReadAllText(full, Encoding.UTF8) : "";
+            var existingItems = ExtractMarkdownListItems(existing)
+                .Select(NormalizeMemoryText)
+                .Where(i => i.Length > 0)
+                .ToList();
+
+            var accepted = new List<string>();
+            foreach (var item in cleanItems)
+            {
+                var normalized = NormalizeMemoryText(item);
+                if (normalized.Length == 0) continue;
+
+                var duplicate = existingItems.Any(e => e == normalized || TextSimilarity(e, normalized) >= duplicateThreshold) ||
+                                accepted.Select(NormalizeMemoryText).Any(e => e == normalized || TextSimilarity(e, normalized) >= duplicateThreshold);
+                if (!duplicate)
+                    accepted.Add(item);
+            }
+
+            if (accepted.Count == 0)
+                return 0;
+
+            var sb = new StringBuilder();
+            if (!File.Exists(full))
+                sb.AppendLine(header.TrimEnd());
+            sb.AppendLine($"\n## {DateTime.Now:yyyy-MM-dd HH:mm}");
+            foreach (var item in accepted)
+                sb.AppendLine($"- [{label}] {item}");
+
+            File.AppendAllText(full, sb.ToString(), Encoding.UTF8);
+            return accepted.Count;
+        }
+
         // ── DELETE ────────────────────────────────────────────────
 
         public string DeleteNote(string path)
@@ -848,8 +892,10 @@ cleanup_empty — видалити порожні нотатки
             var results = new List<SearchResult>();
             if (!Directory.Exists(_vault)) return results;
 
-            var queryWords = query.ToLower().Split(' ', StringSplitOptions.RemoveEmptyEntries)
-                .Where(w => w.Length > 2).ToHashSet();
+            var queryWords = System.Text.RegularExpressions.Regex
+                .Split(query.ToLowerInvariant(), @"[^\p{L}\p{N}]+")
+                .Where(w => w.Length > 2)
+                .ToHashSet();
             if (queryWords.Count == 0) return results;
 
             var files = SafeGetFiles(_vault);
@@ -857,7 +903,9 @@ cleanup_empty — видалити порожні нотатки
             {
                 try
                 {
-                    var content = File.ReadAllText(file);
+                    var content = File.ReadAllText(file, Encoding.UTF8);
+                    if (IsKokonoeManagedNote(content))
+                        continue;
                     var lower   = content.ToLower();
                     // TF: кількість співпадінь
                     var tf = queryWords.Sum(w => CountOccurrences(lower, w));
@@ -1018,6 +1066,42 @@ cleanup_empty — видалити порожні нотатки
             return allNotes
                 .Where(n => graph[n].Count == 0 && !hasIncoming.Contains(n))
                 .ToList();
+        }
+
+        private static List<string> ExtractMarkdownListItems(string content)
+        {
+            var items = new List<string>();
+            using var reader = new StringReader(content ?? "");
+            string? line;
+            while ((line = reader.ReadLine()) != null)
+            {
+                var trimmed = line.Trim();
+                if (!trimmed.StartsWith("- ")) continue;
+                var item = trimmed[2..].Trim();
+                item = System.Text.RegularExpressions.Regex.Replace(item, @"^\[[^\]]+\]\s*", "").Trim();
+                if (item.Length > 0) items.Add(item);
+            }
+            return items;
+        }
+
+        private static string NormalizeMemoryText(string text)
+        {
+            if (string.IsNullOrWhiteSpace(text)) return "";
+            var normalized = text.ToLowerInvariant();
+            normalized = System.Text.RegularExpressions.Regex.Replace(normalized, @"\[[^\]]+\]", " ");
+            normalized = System.Text.RegularExpressions.Regex.Replace(normalized, @"[^\p{L}\p{N}\s]+", " ");
+            normalized = System.Text.RegularExpressions.Regex.Replace(normalized, @"\s+", " ").Trim();
+            return normalized;
+        }
+
+        private static double TextSimilarity(string a, string b)
+        {
+            var aWords = NormalizeMemoryText(a).Split(' ', StringSplitOptions.RemoveEmptyEntries).Where(w => w.Length > 2).ToHashSet();
+            var bWords = NormalizeMemoryText(b).Split(' ', StringSplitOptions.RemoveEmptyEntries).Where(w => w.Length > 2).ToHashSet();
+            if (aWords.Count == 0 || bWords.Count == 0) return 0;
+            var intersection = aWords.Intersect(bWords).Count();
+            var union = aWords.Union(bWords).Count();
+            return union == 0 ? 0 : (double)intersection / union;
         }
 
         private string Resolve(string rel)

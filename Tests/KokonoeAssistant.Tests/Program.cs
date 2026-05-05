@@ -20,6 +20,7 @@ internal static class Program
             Run("Initiative reacts to protective override", InitiativeReactsToProtectiveOverride);
             Run("Inspector renders state report", InspectorRendersStateReport);
             Run("Obsidian vault architecture maintenance", ObsidianVaultArchitectureMaintenance);
+            Run("Obsidian unique memory append", ObsidianUniqueMemoryAppend);
 
             Console.WriteLine($"PASS {_passed} tests");
             return 0;
@@ -238,6 +239,39 @@ internal static class Program
             stable = obsidian.MaintainKokonoeVaultArchitecture("test-idempotent-b");
             AssertTrue(stable.CreatedNotes.Count == 0, "settled maintenance should not create managed notes again");
             AssertTrue(File.ReadAllText(Path.Combine(dir, "Kokonoe", "Vault Index.md")).Contains("managed-by: Kokonoe"), "managed notes should keep ownership marker");
+        }
+        finally
+        {
+            try { Directory.Delete(dir, recursive: true); } catch { }
+        }
+    }
+
+    private static void ObsidianUniqueMemoryAppend()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "KokonoeAssistant.Tests", "vault-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            var obsidian = new ObsidianMcpService(dir);
+            var first = obsidian.AppendUniqueItemsToNote(
+                "Kokonoe/Memory/Facts.md",
+                "# Facts\n",
+                new[]
+                {
+                    "User builds Kokonoe as a personal assistant",
+                    "User builds Kokonoe as a personal assistant"
+                },
+                "auto-fact");
+            var second = obsidian.AppendUniqueItemsToNote(
+                "Kokonoe/Memory/Facts.md",
+                "# Facts\n",
+                new[] { "The user builds Kokonoe as a personal assistant." },
+                "auto-fact");
+
+            AssertEqual(1, first, "first unique append should keep one item");
+            AssertEqual(0, second, "similar memory should be treated as duplicate");
+            var content = File.ReadAllText(Path.Combine(dir, "Kokonoe", "Memory", "Facts.md"));
+            AssertTrue(content.Split("[auto-fact]").Length - 1 == 1, "note should contain one auto-fact item");
         }
         finally
         {
