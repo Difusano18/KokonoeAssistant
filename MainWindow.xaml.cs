@@ -1494,6 +1494,21 @@ namespace KokonoeAssistant
             }
             catch { }
 
+            // 4.2 Managed task queue / memory health - compact operational state
+            try
+            {
+                var taskQueue = _obsidian.ReadNote("Kokonoe/Tasks Queue.md");
+                var memoryQuality = _obsidian.ReadNote("Kokonoe/Memory/Quality.md");
+                var ops = new List<string>();
+                if (!string.IsNullOrWhiteSpace(taskQueue))
+                    ops.Add(TruncateAtWordBoundary(SanitizeForLlm(taskQueue), 700));
+                if (!string.IsNullOrWhiteSpace(memoryQuality))
+                    ops.Add(TruncateAtWordBoundary(SanitizeForLlm(memoryQuality), 500));
+                if (ops.Count > 0)
+                    parts.Add(("=== KOKONOE MEMORY OPS ===\n" + string.Join("\n\n", ops), 6));
+            }
+            catch { }
+
             // 5. Прогноз (ML.NET) — настрій/енергія на завтра
             try
             {

@@ -471,17 +471,23 @@ tags: [{tagsLine}]
             var folders = ListFolders();
             var graph = GetNoteGraph();
             var isolated = GetIsolatedNotes().Take(30).ToList();
+            var memoryQuality = AnalyzeMemoryQuality();
+            var taskQueue = BuildTaskQueue();
 
             UpsertManagedNote("Kokonoe/Vault Index.md", BuildVaultIndex(status, init, folders, modifiedToday), result);
             UpsertManagedNote("Kokonoe/Architecture/Manifest.md", BuildVaultManifest(notesBefore, folders), result);
             UpsertManagedNote("Kokonoe/Architecture/Map.md", BuildVaultMap(graph), result);
             UpsertManagedNote("Kokonoe/Architecture/Health.md", BuildVaultHealth(status, init, isolated), result);
             UpsertManagedNote("Kokonoe/Architecture/Backlog.md", BuildVaultBacklog(status, init, isolated), result);
+            UpsertManagedNote("Kokonoe/Memory/Quality.md", BuildMemoryQualityNote(memoryQuality), result);
+            UpsertManagedNote("Kokonoe/Tasks Queue.md", BuildTaskQueueNote(taskQueue), result);
             UpsertManagedNote("Kokonoe/Automation/Obsidian Sync.md", BuildVaultAutomationNote(), result);
 
             var linkResult = RebuildLinks();
             result.LinkTouchedNotes = linkResult.changed;
             result.LinksAdded = linkResult.linksAdded;
+            result.MemoryDuplicateGroups = memoryQuality.DuplicateGroups.Count;
+            result.OpenTaskCount = taskQueue.OpenTasks.Count;
             AppendMaintenanceLog(result, status, init);
             return result;
         }
@@ -555,6 +561,8 @@ tags: [kokonoe, vault, architecture]
             sb.AppendLine("- [[Kokonoe/AutoMemory|Auto Memory]]");
             sb.AppendLine("- [[Kokonoe/Project Log|Project Log]]");
             sb.AppendLine("- [[Kokonoe/Memory/Facts|Facts]]");
+            sb.AppendLine("- [[Kokonoe/Memory/Quality|Memory Quality]]");
+            sb.AppendLine("- [[Kokonoe/Tasks Queue|Tasks Queue]]");
             sb.AppendLine();
             sb.AppendLine("## Status");
             sb.AppendLine($"- Notes: {status.TotalNotes}");
@@ -671,6 +679,181 @@ tags: [kokonoe, vault, architecture]
             return sb.ToString();
         }
 
+        public MemoryQualityReport AnalyzeMemoryQuality()
+        {
+            var report = new MemoryQualityReport { RanAt = DateTime.Now };
+            foreach (var path in new[]
+            {
+                "Kokonoe/Memory/Facts.md",
+                "Kokonoe/Project Log.md",
+                "Kokonoe/Preferences.md",
+                "Kokonoe/Tasks.md",
+                "Kokonoe/Relationship Notes.md",
+                "Kokonoe/AutoMemory.md"
+            })
+            {
+                var content = ReadNote(path);
+                if (string.IsNullOrWhiteSpace(content)) continue;
+
+                var items = ExtractMarkdownListItems(content);
+                report.NoteItemCounts[path] = items.Count;
+                foreach (var item in items)
+                {
+                    var normalized = NormalizeMemoryText(item);
+                    if (normalized.Length > 0)
+                        report.NormalizedItems.Add(new MemoryQualityItem(path, item, normalized));
+                }
+            }
+
+            report.DuplicateGroups = report.NormalizedItems
+                .GroupBy(i => i.Normalized)
+                .Where(g => g.Count() > 1)
+                .Select(g => g.ToList())
+                .OrderByDescending(g => g.Count)
+                .Take(30)
+                .ToList();
+
+            report.SimilarGroups = FindSimilarMemoryGroups(report.NormalizedItems, 0.78, 20);
+            return report;
+        }
+
+        private static List<List<MemoryQualityItem>> FindSimilarMemoryGroups(List<MemoryQualityItem> items, double threshold, int maxGroups)
+        {
+            var groups = new List<List<MemoryQualityItem>>();
+            var used = new HashSet<int>();
+            for (int i = 0; i < items.Count; i++)
+            {
+                if (used.Contains(i)) continue;
+                var group = new List<MemoryQualityItem> { items[i] };
+                for (int j = i + 1; j < items.Count; j++)
+                {
+                    if (used.Contains(j)) continue;
+                    if (items[i].Normalized != items[j].Normalized &&
+                        TextSimilarity(items[i].Normalized, items[j].Normalized) >= threshold)
+                    {
+                        group.Add(items[j]);
+                        used.Add(j);
+                    }
+                }
+
+                if (group.Count > 1)
+                {
+                    used.Add(i);
+                    groups.Add(group);
+                    if (groups.Count >= maxGroups) break;
+                }
+            }
+            return groups;
+        }
+
+        private string BuildMemoryQualityNote(MemoryQualityReport report)
+        {
+            var sb = new StringBuilder();
+            sb.Append(BuildManagedFrontmatter("memory-quality"));
+            sb.AppendLine("# Memory Quality");
+            sb.AppendLine();
+            sb.AppendLine("## Summary");
+            sb.AppendLine($"- Memory items scanned: {report.NormalizedItems.Count}");
+            sb.AppendLine($"- Exact duplicate groups: {report.DuplicateGroups.Count}");
+            sb.AppendLine($"- Similar duplicate groups: {report.SimilarGroups.Count}");
+            sb.AppendLine();
+            sb.AppendLine("## Note Sizes");
+            foreach (var pair in report.NoteItemCounts.OrderByDescending(p => p.Value))
+                sb.AppendLine($"- {pair.Key}: {pair.Value} items");
+            sb.AppendLine();
+            sb.AppendLine("## Exact Duplicates");
+            AppendMemoryGroups(sb, report.DuplicateGroups);
+            sb.AppendLine();
+            sb.AppendLine("## Similar Duplicates");
+            AppendMemoryGroups(sb, report.SimilarGroups);
+            return sb.ToString();
+        }
+
+        private static void AppendMemoryGroups(StringBuilder sb, List<List<MemoryQualityItem>> groups)
+        {
+            if (groups.Count == 0)
+            {
+                sb.AppendLine("- none");
+                return;
+            }
+
+            foreach (var group in groups.Take(20))
+            {
+                sb.AppendLine("- group:");
+                foreach (var item in group.Take(6))
+                    sb.AppendLine($"  - {item.Path}: {item.Text}");
+            }
+        }
+
+        public TaskQueueSnapshot BuildTaskQueue()
+        {
+            var snapshot = new TaskQueueSnapshot { RanAt = DateTime.Now };
+            foreach (var path in new[] { "Kokonoe/Tasks.md", "Kokonoe/Project Log.md", "Kokonoe/Architecture/Backlog.md" })
+            {
+                var content = ReadNote(path);
+                if (string.IsNullOrWhiteSpace(content)) continue;
+                foreach (var item in ExtractMarkdownListItems(content))
+                {
+                    if (IsDoneTask(item))
+                        snapshot.DoneTasks.Add(new TaskQueueItem(path, item));
+                    else if (LooksLikeTask(item))
+                        snapshot.OpenTasks.Add(new TaskQueueItem(path, item));
+                }
+            }
+
+            snapshot.OpenTasks = snapshot.OpenTasks
+                .GroupBy(t => NormalizeMemoryText(t.Text))
+                .Select(g => g.First())
+                .OrderBy(t => t.Path)
+                .ThenBy(t => t.Text)
+                .Take(120)
+                .ToList();
+            return snapshot;
+        }
+
+        private string BuildTaskQueueNote(TaskQueueSnapshot snapshot)
+        {
+            var sb = new StringBuilder();
+            sb.Append(BuildManagedFrontmatter("task-queue"));
+            sb.AppendLine("# Tasks Queue");
+            sb.AppendLine();
+            sb.AppendLine("## Summary");
+            sb.AppendLine($"- Open tasks: {snapshot.OpenTasks.Count}");
+            sb.AppendLine($"- Done tasks seen: {snapshot.DoneTasks.Count}");
+            sb.AppendLine();
+            sb.AppendLine("## Open");
+            if (snapshot.OpenTasks.Count == 0)
+                sb.AppendLine("- [x] No open tasks detected.");
+            foreach (var task in snapshot.OpenTasks)
+                sb.AppendLine($"- [ ] {task.Text} ({task.Path})");
+            return sb.ToString();
+        }
+
+        private static bool LooksLikeTask(string item)
+        {
+            var text = NormalizeMemoryText(item);
+            if (text.Length < 4) return false;
+            return item.Contains("[task]", StringComparison.OrdinalIgnoreCase) ||
+                   item.Contains("[ ]", StringComparison.OrdinalIgnoreCase) ||
+                   text.Contains("todo") ||
+                   text.Contains("task") ||
+                   text.Contains("зроб") ||
+                   text.Contains("реаліз") ||
+                   text.Contains("дод") ||
+                   text.Contains("fix") ||
+                   text.Contains("bug");
+        }
+
+        private static bool IsDoneTask(string item)
+        {
+            var text = NormalizeMemoryText(item);
+            return item.Contains("[x]", StringComparison.OrdinalIgnoreCase) ||
+                   text.Contains("done") ||
+                   text.Contains("completed") ||
+                   text.Contains("готово") ||
+                   text.Contains("зроблено");
+        }
+
         private static string BuildVaultAutomationNote()
         {
             var sb = new StringBuilder();
@@ -689,6 +872,8 @@ tags: [kokonoe, vault, architecture]
             sb.AppendLine("- [[Kokonoe/Architecture/Map]]");
             sb.AppendLine("- [[Kokonoe/Architecture/Health]]");
             sb.AppendLine("- [[Kokonoe/Architecture/Backlog]]");
+            sb.AppendLine("- [[Kokonoe/Memory/Quality]]");
+            sb.AppendLine("- [[Kokonoe/Tasks Queue]]");
             return sb.ToString();
         }
 
@@ -702,6 +887,8 @@ tags: [kokonoe, vault, architecture]
             sb.AppendLine($"- Updated notes: {result.UpdatedNotes.Count}");
             sb.AppendLine($"- Link touched notes: {result.LinkTouchedNotes}");
             sb.AppendLine($"- Links added: {result.LinksAdded}");
+            sb.AppendLine($"- Memory duplicate groups: {result.MemoryDuplicateGroups}");
+            sb.AppendLine($"- Open tasks: {result.OpenTaskCount}");
             sb.AppendLine($"- Notes: {status.TotalNotes}, orphans: {status.OrphanNotes.Count}, empty: {status.EmptyNotes.Count}");
             sb.AppendLine($"- Brain core: {(init.HasCoreNote ? init.CoreNotePath : "missing")}");
 
@@ -1218,10 +1405,32 @@ cleanup_empty — видалити порожні нотатки
         public List<string> UpdatedNotes { get; set; } = new();
         public int LinkTouchedNotes { get; set; }
         public int LinksAdded { get; set; }
+        public int MemoryDuplicateGroups { get; set; }
+        public int OpenTaskCount { get; set; }
 
         public override string ToString()
         {
-            return $"Vault maintenance: {CreatedFolders.Count} folders, {CreatedNotes.Count} created notes, {UpdatedNotes.Count} updated notes, {LinksAdded} links.";
+            return $"Vault maintenance: {CreatedFolders.Count} folders, {CreatedNotes.Count} created notes, {UpdatedNotes.Count} updated notes, {LinksAdded} links, {MemoryDuplicateGroups} duplicate groups, {OpenTaskCount} open tasks.";
         }
     }
+
+    public class MemoryQualityReport
+    {
+        public DateTime RanAt { get; set; }
+        public Dictionary<string, int> NoteItemCounts { get; set; } = new();
+        public List<MemoryQualityItem> NormalizedItems { get; set; } = new();
+        public List<List<MemoryQualityItem>> DuplicateGroups { get; set; } = new();
+        public List<List<MemoryQualityItem>> SimilarGroups { get; set; } = new();
+    }
+
+    public record MemoryQualityItem(string Path, string Text, string Normalized);
+
+    public class TaskQueueSnapshot
+    {
+        public DateTime RanAt { get; set; }
+        public List<TaskQueueItem> OpenTasks { get; set; } = new();
+        public List<TaskQueueItem> DoneTasks { get; set; } = new();
+    }
+
+    public record TaskQueueItem(string Path, string Text);
 }

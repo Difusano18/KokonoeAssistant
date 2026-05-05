@@ -21,6 +21,7 @@ internal static class Program
             Run("Inspector renders state report", InspectorRendersStateReport);
             Run("Obsidian vault architecture maintenance", ObsidianVaultArchitectureMaintenance);
             Run("Obsidian unique memory append", ObsidianUniqueMemoryAppend);
+            Run("Obsidian memory quality and task queue", ObsidianMemoryQualityAndTaskQueue);
 
             Console.WriteLine($"PASS {_passed} tests");
             return 0;
@@ -272,6 +273,45 @@ internal static class Program
             AssertEqual(0, second, "similar memory should be treated as duplicate");
             var content = File.ReadAllText(Path.Combine(dir, "Kokonoe", "Memory", "Facts.md"));
             AssertTrue(content.Split("[auto-fact]").Length - 1 == 1, "note should contain one auto-fact item");
+        }
+        finally
+        {
+            try { Directory.Delete(dir, recursive: true); } catch { }
+        }
+    }
+
+    private static void ObsidianMemoryQualityAndTaskQueue()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "KokonoeAssistant.Tests", "vault-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            var obsidian = new ObsidianMcpService(dir);
+            obsidian.WriteNote("Kokonoe/Memory/Facts.md", """
+# Facts
+
+## sample
+- [auto-fact] User likes long answers.
+- [auto-fact] User likes long answers.
+""");
+            obsidian.WriteNote("Kokonoe/Tasks.md", """
+# Tasks
+
+## sample
+- [task] Реалізувати кращу пам'ять Obsidian
+- [x] Готово: прибрати warnings
+""");
+
+            var quality = obsidian.AnalyzeMemoryQuality();
+            var queue = obsidian.BuildTaskQueue();
+            var maintenance = obsidian.MaintainKokonoeVaultArchitecture("test-memory-quality");
+
+            AssertTrue(quality.DuplicateGroups.Count >= 1, "quality report should detect duplicate memory items");
+            AssertTrue(queue.OpenTasks.Any(t => t.Text.Contains("пам'ять")), "task queue should include open task");
+            AssertTrue(File.Exists(Path.Combine(dir, "Kokonoe", "Memory", "Quality.md")), "memory quality note should be created");
+            AssertTrue(File.Exists(Path.Combine(dir, "Kokonoe", "Tasks Queue.md")), "task queue note should be created");
+            AssertTrue(maintenance.MemoryDuplicateGroups >= 1, "maintenance should report duplicate groups");
+            AssertTrue(maintenance.OpenTaskCount >= 1, "maintenance should report open tasks");
         }
         finally
         {
