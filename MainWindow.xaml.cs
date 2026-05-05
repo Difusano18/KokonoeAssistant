@@ -452,19 +452,11 @@ namespace KokonoeAssistant
 
                 TgMessagesList.ItemsSource = _tgMessages;
 
-                // 2 — генеруємо привітання поки показуємо loading
-                SetLoadingProgress(85, "Kokonoe думає...");
-                var greeting = await GenerateGreetingAsync();
-
-                // Показуємо превью в loading screen
-                if (!string.IsNullOrEmpty(greeting))
-                {
-                    GreetingPreviewText.Text = greeting;
-                    GreetingPreviewBorder.Visibility = Visibility.Visible;
-                }
+                SetLoadingProgress(85, "готово...");
+                var greeting = GenerateFastGreeting();
 
                 SetLoadingProgress(100, "готово");
-                await Task.Delay(900); // пауза щоб побачили привітання
+                await Task.Delay(150);
 
                 // 3 — ховаємо overlay з анімацією
                 await FadeOutLoadingAsync();
@@ -679,6 +671,24 @@ namespace KokonoeAssistant
                 return await _llm.SendSystemQueryAsync(prompt, CancellationToken.None) ?? "";
             }
             catch { return ""; }
+        }
+
+        private string GenerateFastGreeting()
+        {
+            try
+            {
+                var recent = ServiceContainer.ChatRepository.GetMessages(1).FirstOrDefault();
+                if (recent == null) return "Запустилась. Що ламаємо першим.";
+
+                var gap = DateTime.Now - recent.Timestamp;
+                if (gap.TotalMinutes < 10) return "Знову тут. Значить, щось недороблено.";
+                if (gap.TotalHours < 8) return "Повернувся. Продовжуй з місця, де зупинився.";
+                return "Жива. На відміну від твоєї дисципліни сну, мабуть.";
+            }
+            catch
+            {
+                return "Запустилась. Далі.";
+            }
         }
 
         // ══════════════════════════════════════════════════════════

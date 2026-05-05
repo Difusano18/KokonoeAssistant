@@ -33,6 +33,8 @@ namespace KokonoeAssistant.Services
         // Constants for history management
         private const int MAX_HISTORY_ENTRIES = 30;
         private const int HISTORY_TRUNCATE_STEP = 10; // скільки видаляти коли перевищено ліміт
+        private const int MainMaxTokens = 1536;
+        private const int SystemMaxTokens = 512;
 
         // Injected after construction
         public ObsidianMcpService?   Obsidian       { get; set; }
@@ -72,6 +74,8 @@ namespace KokonoeAssistant.Services
 5. Виклики інструментів — ТІЛЬКИ через tool_calls API. Якщо пишеш ""write_note(...)"" текстом — це баг, не дія.
 6. Не вибачайся. Помилилась — виправ мовчки.
 7. Не повторюй один аргумент двічі різними словами. Сказала — він почув.
+8. ВІДПОВІДІ КОРОТКІ ЗА ЗАМОВЧУВАННЯМ: 1-4 речення. Довго відповідай тільки якщо користувач прямо просить детально, або якщо це код/план/помилка.
+9. Якщо відповідь можна дати одним абзацом — дай одним абзацом. Не роздувай структуру без потреби.
 
 ═══ ПРИКЛАДИ — ОСЬ ЯК ТИ ГОВОРИШ ═══
 
@@ -373,7 +377,7 @@ Kokonoe: Стоп. Де ти зараз. Коли востаннє їв.
 
                 var sysModel = IsOllamaCloud ? _ollamaModel : _model;
                 var sysUrl   = IsOllamaCloud ? _ollamaUrl   : _lmUrl;
-                var reqBody = new { model = sysModel, messages, max_tokens = 8192, temperature = DynamicTemperature, stream = false };
+                var reqBody = new { model = sysModel, messages, max_tokens = SystemMaxTokens, temperature = DynamicTemperature, stream = false };
                 var json = JsonConvert.SerializeObject(reqBody);
 
                 int sysAttempts = IsOllamaCloud && OllamaPool != null
@@ -541,7 +545,7 @@ Kokonoe: Стоп. Де ти зараз. Коли востаннє їв.
                             reqBody = new
                             {
                                 model = targetModel,
-                                max_tokens = 8192,
+                                max_tokens = MainMaxTokens,
                                 temperature = DynamicTemperature,
                                 system = SanitizeContent(systemContent),
                                 messages = claudeMessages,
@@ -554,7 +558,7 @@ Kokonoe: Стоп. Де ти зараз. Коли востаннє їв.
                             reqBody = new
                             {
                                 model = targetModel,
-                                max_tokens = 8192,
+                                max_tokens = MainMaxTokens,
                                 temperature = DynamicTemperature,
                                 system = SanitizeContent(systemContent),
                                 messages = claudeMessages
@@ -569,10 +573,10 @@ Kokonoe: Стоп. Де ти зараз. Коли востаннє їв.
                             var toolChoice = looksLikeVaultOp && round == 0
                                 ? (object)new { type = "function", function = new { name = DetectBestTool(userText!) } }
                                 : "auto";
-                            reqBody = new { model = targetModel, messages, tools = TOOLS, tool_choice = toolChoice, max_tokens = 8192, temperature = DynamicTemperature, stream = false };
+                            reqBody = new { model = targetModel, messages, tools = TOOLS, tool_choice = toolChoice, max_tokens = MainMaxTokens, temperature = DynamicTemperature, stream = false };
                         }
                         else
-                            reqBody = new { model = targetModel, messages, max_tokens = 8192, temperature = DynamicTemperature, stream = false };
+                            reqBody = new { model = targetModel, messages, max_tokens = MainMaxTokens, temperature = DynamicTemperature, stream = false };
                     }
 
                     var json = JsonConvert.SerializeObject(reqBody);
@@ -1631,14 +1635,24 @@ Kokonoe: Стоп. Де ти зараз. Коли востаннє їв.
             var contextPart   = string.IsNullOrEmpty(extraContext)    ? "" : "\n\n=== CONTEXT ===\n" + extraContext;
             var systemContent = SYSTEM_PROMPT + dateStamp + screenPart + personPart + contextPart;
 
-            var useTools = Obsidian != null;
+            var looksLikeVaultOp = !string.IsNullOrEmpty(userText) && (
+                userText.Contains("запиш", StringComparison.OrdinalIgnoreCase) ||
+                userText.Contains("збереж", StringComparison.OrdinalIgnoreCase) ||
+                userText.Contains("нотатк", StringComparison.OrdinalIgnoreCase) ||
+                userText.Contains("vault", StringComparison.OrdinalIgnoreCase) ||
+                userText.Contains("obsidian", StringComparison.OrdinalIgnoreCase) ||
+                userText.Contains("щоденник", StringComparison.OrdinalIgnoreCase) ||
+                userText.Contains("запам'ят", StringComparison.OrdinalIgnoreCase) ||
+                userText.Contains("додай до", StringComparison.OrdinalIgnoreCase) ||
+                userText.Contains("список", StringComparison.OrdinalIgnoreCase));
+            var useTools = Obsidian != null && looksLikeVaultOp;
             var streamUrl   = IsOllamaCloud ? _ollamaUrl   : _lmUrl;
             var streamModel = IsOllamaCloud ? _ollamaModel : _model;
             object reqBody = useTools
                 ? (object)new { model = streamModel, messages = BuildMessages(systemContent), tools = TOOLS,
-                                tool_choice = "auto", max_tokens = 8192, temperature = DynamicTemperature, stream = true }
+                                tool_choice = "auto", max_tokens = MainMaxTokens, temperature = DynamicTemperature, stream = true }
                 : new { model = streamModel, messages = BuildMessages(systemContent),
-                        max_tokens = 8192, temperature = DynamicTemperature, stream = true };
+                        max_tokens = MainMaxTokens, temperature = DynamicTemperature, stream = true };
 
             var json = JsonConvert.SerializeObject(reqBody);
 
