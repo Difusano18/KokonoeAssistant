@@ -649,6 +649,7 @@
                             <Grid Grid.Column="2">
                                 <Grid.RowDefinitions>
                                     <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
                                     <RowDefinition Height="*"/>
                                     <RowDefinition Height="Auto"/>
                                 </Grid.RowDefinitions>
@@ -663,13 +664,56 @@
                                                 Padding="8,4" Margin="4,0,0,0" Click="DeleteNote_Click"/>
                                     </StackPanel>
                                 </Border>
-                                <TextBox x:Name="NoteEditor" Grid.Row="1"
+                                <Border Grid.Row="1" Background="{DynamicResource Brush_050D07}"
+                                        BorderBrush="{DynamicResource AccentBgBorder2}" BorderThickness="0,0,0,1" Padding="12,8">
+                                    <Grid>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                        </Grid.RowDefinitions>
+                                        <Grid Grid.Row="0">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel>
+                                                <TextBlock Text="MEMORY OPS" FontSize="9" FontWeight="Bold"
+                                                           Foreground="{DynamicResource AccentBase}" FontFamily="Consolas"/>
+                                                <TextBlock x:Name="MemoryOpsStatusLabel" Text="not loaded"
+                                                           FontSize="10" Foreground="{DynamicResource Brush_8AC8A0}" Margin="0,2,0,0"/>
+                                                <TextBlock x:Name="MemoryOpsDetailLabel" Text=""
+                                                           FontSize="9" Foreground="{DynamicResource Brush_1A3020}" Margin="0,2,0,0"/>
+                                            </StackPanel>
+                                            <WrapPanel Grid.Column="1" HorizontalAlignment="Right" VerticalAlignment="Center">
+                                                <Button Content="Refresh" Style="{StaticResource BtnGhost}" Padding="8,4" Margin="4,0,0,0"
+                                                        Click="MemoryOpsRefresh_Click"/>
+                                                <Button Content="Preview cleanup" Style="{StaticResource BtnGhost}" Padding="8,4" Margin="4,0,0,0"
+                                                        Click="MemoryOpsPreviewCleanup_Click"/>
+                                                <Button Content="Apply cleanup" Style="{StaticResource BtnGhost}" Padding="8,4" Margin="4,0,0,0"
+                                                        Click="MemoryOpsApplyCleanup_Click"/>
+                                            </WrapPanel>
+                                        </Grid>
+                                        <WrapPanel Grid.Row="1" Margin="0,8,0,0">
+                                            <Button Content="Quality" Style="{StaticResource BtnGhost}" Padding="8,4" Margin="0,0,4,0"
+                                                    Click="OpenMemoryQuality_Click"/>
+                                            <Button Content="Review" Style="{StaticResource BtnGhost}" Padding="8,4" Margin="0,0,4,0"
+                                                    Click="OpenMemoryReview_Click"/>
+                                            <Button Content="Cleanup" Style="{StaticResource BtnGhost}" Padding="8,4" Margin="0,0,4,0"
+                                                    Click="OpenMemoryCleanup_Click"/>
+                                            <Button Content="Tasks" Style="{StaticResource BtnGhost}" Padding="8,4" Margin="0,0,4,0"
+                                                    Click="OpenTasksQueue_Click"/>
+                                            <Button Content="Architecture" Style="{StaticResource BtnGhost}" Padding="8,4" Margin="0,0,4,0"
+                                                    Click="OpenVaultArchitecture_Click"/>
+                                        </WrapPanel>
+                                    </Grid>
+                                </Border>
+                                <TextBox x:Name="NoteEditor" Grid.Row="2"
                                          Style="{StaticResource InputBox}"
                                          AcceptsReturn="True" TextWrapping="Wrap"
                                          VerticalScrollBarVisibility="Auto"
                                          FontFamily="Consolas" FontSize="12"
                                          BorderThickness="0" Padding="16"/>
-                                <Border Grid.Row="2" Background="{DynamicResource AccentBgDarker}"
+                                <Border Grid.Row="3" Background="{DynamicResource AccentBgDarker}"
                                         BorderBrush="{DynamicResource AccentBgBorder2}" BorderThickness="0,1,0,0" Padding="12,5">
                                     <TextBlock x:Name="NoteStatsLabel" Foreground="{DynamicResource Brush_1A3020}" FontSize="10"/>
                                 </Border>
@@ -2672,7 +2716,5 @@
         </Grid>
     </Border>
 </Window>
-
-
 
 

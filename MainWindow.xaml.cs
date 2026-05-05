@@ -737,6 +737,7 @@ namespace KokonoeAssistant
                     TabBtnVault.Style = active;
                     _activeTab = "Vault";
                     RefreshNotesList();
+                    UpdateMemoryOpsPanel();
                     break;
                 case "TabBtnHealth":
                     HealthTab.Visibility = Visibility.Visible;
@@ -2665,6 +2666,137 @@ namespace KokonoeAssistant
         {
             RefreshNotesList();
             LoadVaultSidebar();
+            UpdateMemoryOpsPanel();
+        }
+
+        private void UpdateMemoryOpsPanel()
+        {
+            try
+            {
+                var quality = _obsidian.AnalyzeMemoryQuality();
+                var queue = _obsidian.BuildTaskQueue();
+                var review = _obsidian.BuildMemoryReview(quality, queue);
+                MemoryOpsStatusLabel.Text =
+                    $"items {quality.NormalizedItems.Count} | exact dup {quality.DuplicateGroups.Count} | similar {quality.SimilarGroups.Count} | tasks {queue.OpenTasks.Count} | review {review.Actions.Count}";
+
+                var state = ServiceContainer.BrainEngine?.State;
+                var detail = state == null
+                    ? "brain state unavailable"
+                    : $"pending batch {state.PendingVaultExchangeCount}/5";
+
+                if (state?.LastAutoVaultSyncAt > DateTime.MinValue)
+                    detail += $" | last sync {state.LastAutoVaultSyncAt:dd.MM HH:mm}";
+
+                MemoryOpsDetailLabel.Text = detail;
+            }
+            catch (Exception ex)
+            {
+                MemoryOpsStatusLabel.Text = "memory ops unavailable";
+                MemoryOpsDetailLabel.Text = ex.Message;
+            }
+        }
+
+        private void MemoryOpsRefresh_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var result = _obsidian.MaintainKokonoeVaultArchitecture("gui-memory-ops");
+                RefreshNotesList();
+                LoadVaultSidebar();
+                UpdateMemoryOpsPanel();
+                WMsgBox.Show(result.ToString(), "Memory Ops");
+            }
+            catch (Exception ex)
+            {
+                WMsgBox.Show(ex.Message, "Memory Ops", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        private void MemoryOpsPreviewCleanup_Click(object sender, RoutedEventArgs e)
+        {
+            RunMemoryCleanup(dryRun: true);
+        }
+
+        private void MemoryOpsApplyCleanup_Click(object sender, RoutedEventArgs e)
+        {
+            if (WMsgBox.Show(
+                    "Apply duplicate memory cleanup? Preview first if you want to inspect what will be removed.",
+                    "Memory Cleanup",
+                    MessageBoxButton.YesNo,
+                    MessageBoxImage.Warning) != MessageBoxResult.Yes)
+                return;
+
+            RunMemoryCleanup(dryRun: false);
+        }
+
+        private void RunMemoryCleanup(bool dryRun)
+        {
+            try
+            {
+                var result = _obsidian.CleanupDuplicateMemoryItems(dryRun);
+                RefreshNotesList();
+                LoadVaultSidebar();
+                UpdateMemoryOpsPanel();
+                OpenManagedVaultNote("Kokonoe/Memory/Cleanup.md");
+                WMsgBox.Show(result.ToString(), "Memory Cleanup");
+            }
+            catch (Exception ex)
+            {
+                WMsgBox.Show(ex.Message, "Memory Cleanup", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        private void OpenMemoryQuality_Click(object sender, RoutedEventArgs e)
+        {
+            OpenManagedVaultNote("Kokonoe/Memory/Quality.md");
+        }
+
+        private void OpenMemoryReview_Click(object sender, RoutedEventArgs e)
+        {
+            OpenManagedVaultNote("Kokonoe/Memory/Review.md");
+        }
+
+        private void OpenMemoryCleanup_Click(object sender, RoutedEventArgs e)
+        {
+            OpenManagedVaultNote("Kokonoe/Memory/Cleanup.md");
+        }
+
+        private void OpenTasksQueue_Click(object sender, RoutedEventArgs e)
+        {
+            OpenManagedVaultNote("Kokonoe/Tasks Queue.md");
+        }
+
+        private void OpenVaultArchitecture_Click(object sender, RoutedEventArgs e)
+        {
+            OpenManagedVaultNote("Kokonoe/Vault Index.md");
+        }
+
+        private void OpenManagedVaultNote(string path)
+        {
+            try
+            {
+                var content = _obsidian.ReadNote(path);
+                if (content == null)
+                {
+                    _obsidian.MaintainKokonoeVaultArchitecture("gui-open-managed-note");
+                    content = _obsidian.ReadNote(path);
+                }
+
+                if (content == null)
+                {
+                    WMsgBox.Show($"Note not found: {path}", "Vault", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    return;
+                }
+
+                _currentNotePath = path;
+                NoteEditor.Text = content;
+                NotePathLabel.Text = path;
+                UpdateNoteStats();
+            }
+            catch (Exception ex)
+            {
+                WMsgBox.Show(ex.Message, "Vault", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
         }
 
         // ══════════════════════════════════════════════════════════
