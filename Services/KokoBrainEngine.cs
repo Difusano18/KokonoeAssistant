@@ -101,6 +101,12 @@ namespace KokonoeAssistant.Services
         public DateTime LastSomaticVaultEventAt { get; set; } = DateTime.MinValue;
         public string LastSomaticVaultEventKey { get; set; } = "";
         public KokoSelfRegulationState SelfRegulation { get; set; } = new();
+        public DateTime LastPresenceAt { get; set; } = DateTime.MinValue;
+        public DateTime LastPresenceInterruptAt { get; set; } = DateTime.MinValue;
+        public string LastPresenceSummary { get; set; } = "";
+        public string LastPresenceSituation { get; set; } = "unknown";
+        public string LastPresenceTone { get; set; } = "default";
+        public List<string> PresenceTrace { get; set; } = new();
 
         public int PendingVaultExchangeCount { get; set; }
         public List<string> PendingVaultExchangeBuffer { get; set; } = new();
@@ -160,6 +166,7 @@ namespace KokonoeAssistant.Services
         public readonly KokoSomaticEngine Somatic;
         public readonly KokoSomaticSelfRegulationEngine SelfRegulator;
         public readonly KokoStateInspectorService Inspector;
+        public readonly KokoPresenceContinuityEngine Presence;
 
         // ── Зовнішні сервіси (опціональні) ───────────────────────────
         private EnhancedMemory?    _enhanced;
@@ -234,6 +241,7 @@ namespace KokonoeAssistant.Services
             Somatic = new KokoSomaticEngine();
             SelfRegulator = new KokoSomaticSelfRegulationEngine();
             Inspector = new KokoStateInspectorService();
+            Presence = new KokoPresenceContinuityEngine();
 
             // Підключити нові сервіси в LLM
             _llm.Memory    = Memory;
@@ -1607,6 +1615,7 @@ namespace KokonoeAssistant.Services
                 _state.TotalMessagesExchanged++;
                 _state.LastKnownUserActivity = "chatting";
                 ObserveShortTermIntent(content);
+                Presence.ObserveUserMessage(_state, content, DateTime.Now);
 
                 // Паттерни — записати активність
                 Patterns.RecordActivity(wasActive: true, messageCount: 1);
@@ -3133,6 +3142,25 @@ namespace KokonoeAssistant.Services
 
             var somatic = GetSomaticSnapshot();
             var selfRegulation = GetSelfRegulationFrame(somatic);
+            var presence = BuildPresenceFrame(now, autonomyLevel);
+            if (presence.ShouldInterrupt && presence.Priority >= 80)
+            {
+                _state.LastPresenceInterruptAt = now;
+                Initiative.RecordDecision(_state, new KokoInitiativeDecision
+                {
+                    ShouldAct = true,
+                    Trigger = presence.Trigger,
+                    StyleHint = presence.StyleHint,
+                    Reason = presence.SummaryUk,
+                    ExtraContext = presence.ExtraContext,
+                    Priority = presence.Priority,
+                    NextAllowedAt = now.AddHours(2)
+                }, now);
+                SaveState();
+                await SendSpontaneousAsync(presence.Trigger, MapInitiativeStyle(presence.StyleHint), presence.ExtraContext);
+                return;
+            }
+
             var decision = Initiative.Evaluate(now, _state, Emotion, Relationship, Memory, _chatRepo, initiativeBpmDeviation, somatic, selfRegulation, autonomyLevel);
             Initiative.RecordDecision(_state, decision, now);
 
@@ -3273,6 +3301,30 @@ namespace KokonoeAssistant.Services
             _ => SpontaneousStyle.Observation
         };
 
+        private KokoPresenceFrame BuildPresenceFrame(DateTime now, int autonomyLevel)
+        {
+            try
+            {
+                var messages = _chatRepo.GetMessages(40);
+                var frame = Presence.Evaluate(_state, messages, now, autonomyLevel);
+                _state.LastPresenceAt = now;
+                _state.LastPresenceSummary = frame.SummaryUk;
+                _state.LastPresenceSituation = frame.SituationKind;
+                _state.LastPresenceTone = frame.ToneHint;
+                return frame;
+            }
+            catch (Exception ex)
+            {
+                Log($"Presence frame failed: {ex.Message}");
+                return new KokoPresenceFrame
+                {
+                    SituationKind = "presence_error",
+                    SummaryUk = "Presence continuity failed; answer from immediate context only.",
+                    ExtraContext = "PRESENCE / CONTINUITY\nPresence continuity failed; use immediate chat context and current time.\n"
+                };
+            }
+        }
+
         private async Task SendSpontaneousAsync(string trigger,
             SpontaneousStyle style = SpontaneousStyle.Observation,
             string? extraContext = null)
@@ -3333,6 +3385,7 @@ namespace KokonoeAssistant.Services
             var noRepeat = recentSent.Count > 0
                 ? "\nВже надсилала (НЕ повторювати цю тему і тон):\n" + string.Join("\n", recentSent.Select(m => $"• {m}"))
                 : "";
+            var presenceBlock = BuildPresenceFrame(now2, AppSettings.Load().ProactiveAutonomyLevel).ExtraContext;
 
             // Кризова ситуація — окремий промпт
             if (trigger == "crisis" || style == SpontaneousStyle.CrisisSupport)
@@ -3364,6 +3417,8 @@ namespace KokonoeAssistant.Services
 {silenceInfo}{thoughtBlock}{memoryHint}{factHint}{noRepeat}
 
 {personalityBlock}
+
+{presenceBlock}
 
 {situationBlock}
 Якщо зараз нічого немає — відповідай лише: [мовчання]

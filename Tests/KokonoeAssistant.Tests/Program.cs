@@ -20,6 +20,9 @@ internal static class Program
             Run("Initiative reacts to protective override", InitiativeReactsToProtectiveOverride);
             Run("Initiative high autonomy asks curiosity sooner", InitiativeHighAutonomyAsksCuriositySooner);
             Run("Short term intent followup bypasses ordinary initiative", ShortTermIntentFollowupBypassesOrdinaryInitiative);
+            Run("Presence detects overdue course followup", PresenceDetectsOverdueCourseFollowup);
+            Run("Presence refuses stale sleep instruction after return", PresenceRefusesStaleSleepInstructionAfterReturn);
+            Run("Presence long silence can interrupt on high autonomy", PresenceLongSilenceCanInterruptOnHighAutonomy);
             Run("Inspector renders state report", InspectorRendersStateReport);
             Run("Obsidian vault architecture maintenance", ObsidianVaultArchitectureMaintenance);
             Run("Obsidian unique memory append", ObsidianUniqueMemoryAppend);
@@ -222,6 +225,89 @@ internal static class Program
 
         AssertTrue(ordinary.ShouldAct, "due short-term intent followup should outrank normal cooldown");
         AssertEqual("reactive_followup", ordinary.Trigger, "due intent followup should use reactive followup trigger");
+    }
+
+    private static void PresenceDetectsOverdueCourseFollowup()
+    {
+        using var ctx = TestContext.Create();
+        var now = new DateTime(2026, 5, 6, 18, 0, 0);
+        var state = new KokoInternalState();
+        state.ShortTermIntents.Add(new ShortTermIntent
+        {
+            Kind = "course",
+            Summary = "пішов на курси/заняття",
+            SourceText = "я піду на курси",
+            CreatedAt = now.AddHours(-3),
+            FollowUpAt = now.AddHours(-2),
+            ExpectedUntil = now.AddHours(-1)
+        });
+        ctx.Chat.InsertMessage(new ChatRepository.ChatMessage
+        {
+            Role = "user",
+            Content = "я піду на курси",
+            Timestamp = now.AddHours(-3)
+        });
+
+        var frame = new KokoPresenceContinuityEngine()
+            .Evaluate(state, ctx.Chat.GetMessages(10), now, autonomyLevel: 3);
+
+        AssertTrue(frame.ShouldInterrupt, "overdue course followup should interrupt at high autonomy");
+        AssertEqual("overdue_intent", frame.SituationKind, "course should be classified as overdue intent");
+        AssertTrue(frame.ExtraContext.Contains("курси"), "presence context should preserve the course event");
+    }
+
+    private static void PresenceRefusesStaleSleepInstructionAfterReturn()
+    {
+        using var ctx = TestContext.Create();
+        var now = new DateTime(2026, 5, 6, 10, 30, 0);
+        var state = new KokoInternalState();
+        state.ShortTermIntents.Add(new ShortTermIntent
+        {
+            Kind = "sleep",
+            Summary = "пішов спати",
+            SourceText = "я спать",
+            CreatedAt = now.AddHours(-9),
+            FollowUpAt = now.AddHours(-1),
+            ExpectedUntil = now.AddMinutes(-20),
+            ResolvedAt = now.AddMinutes(-5),
+            ResolutionText = "прокинувся"
+        });
+        ctx.Chat.InsertMessage(new ChatRepository.ChatMessage
+        {
+            Role = "user",
+            Content = "прокинувся",
+            Timestamp = now.AddMinutes(-5)
+        });
+
+        var frame = new KokoPresenceContinuityEngine()
+            .Evaluate(state, ctx.Chat.GetMessages(10), now, autonomyLevel: 3);
+
+        AssertEqual("returned_after_intent", frame.SituationKind, "resolved sleep should be treated as return");
+        AssertTrue(frame.ExtraContext.Contains("не кажи йому робити те, що вже в минулому"), "presence context should block stale sleep instruction");
+        AssertTrue(frame.ToneHint.Contains("do not tell him to sleep"), "tone should explicitly avoid telling him to sleep again");
+    }
+
+    private static void PresenceLongSilenceCanInterruptOnHighAutonomy()
+    {
+        using var ctx = TestContext.Create();
+        var now = new DateTime(2026, 5, 6, 20, 0, 0);
+        var state = new KokoInternalState
+        {
+            LastPresenceInterruptAt = now.AddHours(-9)
+        };
+        ctx.Chat.InsertMessage(new ChatRepository.ChatMessage
+        {
+            Role = "user",
+            Content = "я тут трохи пропаду",
+            Timestamp = now.AddHours(-7)
+        });
+
+        var frame = new KokoPresenceContinuityEngine()
+            .Evaluate(state, ctx.Chat.GetMessages(10), now, autonomyLevel: 3);
+
+        AssertTrue(frame.ShouldInterrupt, "long silence should be allowed to interrupt at high autonomy after cooldown");
+        AssertEqual("long_silence", frame.SituationKind, "seven hours should be long silence");
+        AssertEqual("presence_long_silence", frame.Trigger, "long silence should have a presence trigger");
     }
 
     private static void InspectorRendersStateReport()
