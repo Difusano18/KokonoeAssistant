@@ -107,6 +107,12 @@ namespace KokonoeAssistant.Services
         public string LastPresenceSituation { get; set; } = "unknown";
         public string LastPresenceTone { get; set; } = "default";
         public List<string> PresenceTrace { get; set; } = new();
+        public DateTime LastInternalDayAt { get; set; } = DateTime.MinValue;
+        public DateTime LastInternalDayVaultAt { get; set; } = DateTime.MinValue;
+        public string LastInternalDayPhase { get; set; } = "unknown";
+        public string LastInternalDaySummary { get; set; } = "";
+        public string LastInternalDayFocus { get; set; } = "";
+        public List<string> InternalDayTrace { get; set; } = new();
 
         public int PendingVaultExchangeCount { get; set; }
         public List<string> PendingVaultExchangeBuffer { get; set; } = new();
@@ -167,6 +173,7 @@ namespace KokonoeAssistant.Services
         public readonly KokoSomaticSelfRegulationEngine SelfRegulator;
         public readonly KokoStateInspectorService Inspector;
         public readonly KokoPresenceContinuityEngine Presence;
+        public readonly KokoInternalDayEngine InternalDay;
 
         // ── Зовнішні сервіси (опціональні) ───────────────────────────
         private EnhancedMemory?    _enhanced;
@@ -242,6 +249,7 @@ namespace KokonoeAssistant.Services
             SelfRegulator = new KokoSomaticSelfRegulationEngine();
             Inspector = new KokoStateInspectorService();
             Presence = new KokoPresenceContinuityEngine();
+            InternalDay = new KokoInternalDayEngine();
 
             // Підключити нові сервіси в LLM
             _llm.Memory    = Memory;
@@ -427,6 +435,15 @@ namespace KokonoeAssistant.Services
             sb.AppendLine($"Поганих снів підряд: {_state.ConsecutiveBadSleeps}");
             if (_state.Observations.Any())
                 sb.AppendLine("Спостереження: " + string.Join("; ", _state.Observations.TakeLast(3)));
+            try
+            {
+                var presence = BuildPresenceFrame(now, AppSettings.Load().ProactiveAutonomyLevel);
+                var internalDay = BuildInternalDayFrame(now, AppSettings.Load().ProactiveAutonomyLevel, presence, writeVault: false);
+                sb.AppendLine("\n--- ПРИСУТНІСТЬ І ВНУТРІШНІЙ ДЕНЬ ---");
+                sb.AppendLine(presence.ExtraContext);
+                sb.AppendLine(internalDay.PromptBlock);
+            }
+            catch { }
 
             // ── Календар ────────────────────────────────────────────────
             try
@@ -655,6 +672,8 @@ namespace KokonoeAssistant.Services
                 sb.AppendLine(Somatic.BuildPromptBlock(somatic));
                 sb.AppendLine(SelfRegulator.BuildPromptBlock(GetSelfRegulationFrame(somatic)));
                 sb.AppendLine(Initiative.BuildDebugBlock(_state));
+                sb.AppendLine(Presence.BuildDebugBlock(_state));
+                sb.AppendLine(InternalDay.BuildDebugBlock(_state));
             }
             catch { }
 
@@ -3143,6 +3162,7 @@ namespace KokonoeAssistant.Services
             var somatic = GetSomaticSnapshot();
             var selfRegulation = GetSelfRegulationFrame(somatic);
             var presence = BuildPresenceFrame(now, autonomyLevel);
+            var internalDay = BuildInternalDayFrame(now, autonomyLevel, presence);
             if (presence.ShouldInterrupt && presence.Priority >= 80)
             {
                 _state.LastPresenceInterruptAt = now;
@@ -3151,13 +3171,13 @@ namespace KokonoeAssistant.Services
                     ShouldAct = true,
                     Trigger = presence.Trigger,
                     StyleHint = presence.StyleHint,
-                    Reason = presence.SummaryUk,
-                    ExtraContext = presence.ExtraContext,
-                    Priority = presence.Priority,
+                    Reason = $"{presence.SummaryUk} | {internalDay.SummaryUk}",
+                    ExtraContext = presence.ExtraContext + "\n" + internalDay.PromptBlock,
+                    Priority = Math.Min(100, presence.Priority + Math.Max(0, internalDay.InitiativeBias / 3)),
                     NextAllowedAt = now.AddHours(2)
                 }, now);
                 SaveState();
-                await SendSpontaneousAsync(presence.Trigger, MapInitiativeStyle(presence.StyleHint), presence.ExtraContext);
+                await SendSpontaneousAsync(presence.Trigger, MapInitiativeStyle(presence.StyleHint), presence.ExtraContext + "\n" + internalDay.PromptBlock);
                 return;
             }
 
@@ -3325,6 +3345,44 @@ namespace KokonoeAssistant.Services
             }
         }
 
+        private KokoInternalDayFrame BuildInternalDayFrame(
+            DateTime now,
+            int autonomyLevel,
+            KokoPresenceFrame? presence = null,
+            bool writeVault = true)
+        {
+            try
+            {
+                presence ??= BuildPresenceFrame(now, autonomyLevel);
+                var somatic = GetSomaticSnapshot();
+                var frame = InternalDay.Evaluate(_state, presence, somatic, now, autonomyLevel);
+                InternalDay.Record(_state, frame, now);
+
+                if (writeVault && frame.ShouldWriteVaultStatus)
+                {
+                    try
+                    {
+                        _obsidian.WriteNote("Kokonoe/State/Internal Day.md",
+                            InternalDay.BuildVaultStatus(_state, frame, presence, now));
+                        _state.LastInternalDayVaultAt = now;
+                    }
+                    catch (Exception ex) { Log($"InternalDay vault write: {ex.Message}"); }
+                }
+
+                return frame;
+            }
+            catch (Exception ex)
+            {
+                Log($"Internal day failed: {ex.Message}");
+                return new KokoInternalDayFrame
+                {
+                    Phase = "internal_day_error",
+                    SummaryUk = "Internal day failed; use current time and immediate context.",
+                    PromptBlock = "INTERNAL DAY\nInternal day failed; use current time and immediate context.\n"
+                };
+            }
+        }
+
         private async Task SendSpontaneousAsync(string trigger,
             SpontaneousStyle style = SpontaneousStyle.Observation,
             string? extraContext = null)
@@ -3385,7 +3443,10 @@ namespace KokonoeAssistant.Services
             var noRepeat = recentSent.Count > 0
                 ? "\nВже надсилала (НЕ повторювати цю тему і тон):\n" + string.Join("\n", recentSent.Select(m => $"• {m}"))
                 : "";
-            var presenceBlock = BuildPresenceFrame(now2, AppSettings.Load().ProactiveAutonomyLevel).ExtraContext;
+            var presence = BuildPresenceFrame(now2, AppSettings.Load().ProactiveAutonomyLevel);
+            var internalDay = BuildInternalDayFrame(now2, AppSettings.Load().ProactiveAutonomyLevel, presence);
+            var presenceBlock = presence.ExtraContext;
+            var internalDayBlock = internalDay.PromptBlock;
 
             // Кризова ситуація — окремий промпт
             if (trigger == "crisis" || style == SpontaneousStyle.CrisisSupport)
@@ -3419,6 +3480,8 @@ namespace KokonoeAssistant.Services
 {personalityBlock}
 
 {presenceBlock}
+
+{internalDayBlock}
 
 {situationBlock}
 Якщо зараз нічого немає — відповідай лише: [мовчання]

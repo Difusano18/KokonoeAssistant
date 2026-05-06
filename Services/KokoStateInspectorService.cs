@@ -19,8 +19,15 @@ namespace KokonoeAssistant.Services
         public KokoSomaticSnapshot Somatic { get; set; } = new();
         public KokoSelfRegulationFrame SelfRegulation { get; set; } = new();
         public string LastInitiativeDecision { get; set; } = "";
+        public string LastPresenceSummary { get; set; } = "";
+        public string LastPresenceSituation { get; set; } = "";
+        public string LastInternalDaySummary { get; set; } = "";
+        public string LastInternalDayPhase { get; set; } = "";
+        public string LastInternalDayFocus { get; set; } = "";
         public string[] InitiativeLog { get; set; } = Array.Empty<string>();
         public string[] SelfRegulationLog { get; set; } = Array.Empty<string>();
+        public string[] PresenceTrace { get; set; } = Array.Empty<string>();
+        public string[] InternalDayTrace { get; set; } = Array.Empty<string>();
         public string[] CuriosityQueue { get; set; } = Array.Empty<string>();
         public string[] InnerMonologues { get; set; } = Array.Empty<string>();
         public object[] TopFacts { get; set; } = Array.Empty<object>();
@@ -53,8 +60,15 @@ namespace KokonoeAssistant.Services
                 Somatic = somatic,
                 SelfRegulation = selfRegulation,
                 LastInitiativeDecision = state.LastInitiativeDecision,
+                LastPresenceSummary = state.LastPresenceSummary,
+                LastPresenceSituation = state.LastPresenceSituation,
+                LastInternalDaySummary = state.LastInternalDaySummary,
+                LastInternalDayPhase = state.LastInternalDayPhase,
+                LastInternalDayFocus = state.LastInternalDayFocus,
                 InitiativeLog = initiativeLog,
                 SelfRegulationLog = selfRegulationLog,
+                PresenceTrace = state.PresenceTrace.TakeLast(10).Reverse().ToArray(),
+                InternalDayTrace = state.InternalDayTrace.TakeLast(10).Reverse().ToArray(),
                 CuriosityQueue = state.CuriosityQueue.TakeLast(12).Reverse().ToArray(),
                 InnerMonologues = state.InnerMonologues.TakeLast(12).Reverse().ToArray(),
                 TopFacts = memory.GetTopFacts(12)
@@ -107,7 +121,18 @@ namespace KokonoeAssistant.Services
             sb.AppendLine($"| емоція | {snapshot.Emotion} ({snapshot.EmotionIntensity:F2}) |");
             sb.AppendLine($"| зв'язок | {snapshot.Bond} / близькість {snapshot.ConnectionScore:P0} |");
             sb.AppendLine($"| ініціатива | {Escape(snapshot.LastInitiativeDecision)} |");
+            sb.AppendLine($"| presence | {Escape(snapshot.LastPresenceSummary)} |");
+            sb.AppendLine($"| внутрішній день | {Escape(snapshot.LastInternalDaySummary)} |");
             sb.AppendLine();
+
+            sb.AppendLine("## Присутність і день");
+            sb.AppendLine();
+            sb.AppendLine("| Presence | Фаза дня | Фокус |");
+            sb.AppendLine("|---|---|---|");
+            sb.AppendLine($"| {Escape(snapshot.LastPresenceSituation)} | {Escape(snapshot.LastInternalDayPhase)} | {Escape(snapshot.LastInternalDayFocus)} |");
+            sb.AppendLine();
+            AppendList(sb, "Сліди присутності", snapshot.PresenceTrace);
+            AppendList(sb, "Сліди внутрішнього дня", snapshot.InternalDayTrace);
 
             sb.AppendLine("## Стосунок");
             sb.AppendLine();

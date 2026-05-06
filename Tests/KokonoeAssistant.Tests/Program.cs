@@ -23,6 +23,8 @@ internal static class Program
             Run("Presence detects overdue course followup", PresenceDetectsOverdueCourseFollowup);
             Run("Presence refuses stale sleep instruction after return", PresenceRefusesStaleSleepInstructionAfterReturn);
             Run("Presence long silence can interrupt on high autonomy", PresenceLongSilenceCanInterruptOnHighAutonomy);
+            Run("Internal day shifts phase and writes vault status", InternalDayShiftsPhaseAndWritesVaultStatus);
+            Run("Internal day prefers silence at low power night", InternalDayPrefersSilenceAtLowPowerNight);
             Run("Inspector renders state report", InspectorRendersStateReport);
             Run("Obsidian vault architecture maintenance", ObsidianVaultArchitectureMaintenance);
             Run("Obsidian unique memory append", ObsidianUniqueMemoryAppend);
@@ -310,6 +312,61 @@ internal static class Program
         AssertEqual("presence_long_silence", frame.Trigger, "long silence should have a presence trigger");
     }
 
+    private static void InternalDayShiftsPhaseAndWritesVaultStatus()
+    {
+        var now = new DateTime(2026, 5, 7, 19, 30, 0);
+        var state = new KokoInternalState
+        {
+            LastInternalDayPhase = "deep_day",
+            LastInternalDayVaultAt = now.AddHours(-3)
+        };
+        var presence = new KokoPresenceFrame
+        {
+            SituationKind = "medium_silence",
+            SummaryUk = "Середня тиша: 2 год.",
+            LastUserText = "я відійду",
+            SilenceMinutes = 120
+        };
+
+        var engine = new KokoInternalDayEngine();
+        var frame = engine.Evaluate(
+            state,
+            presence,
+            new KokoSomaticSnapshot { State = "focused", Strain = 0.30, Calm = 0.70 },
+            now,
+            autonomyLevel: 3);
+        engine.Record(state, frame, now);
+        var note = engine.BuildVaultStatus(state, frame, presence, now);
+
+        AssertEqual("evening_review", frame.Phase, "19:30 should be evening review");
+        AssertTrue(frame.ShouldWriteVaultStatus, "phase shift and old vault status should request write");
+        AssertTrue(note.Contains("Внутрішній день Коконое"), "vault note should have Ukrainian title");
+        AssertTrue(note.Contains("вечірній огляд"), "vault note should include phase label");
+    }
+
+    private static void InternalDayPrefersSilenceAtLowPowerNight()
+    {
+        var now = new DateTime(2026, 5, 7, 3, 10, 0);
+        var state = new KokoInternalState();
+        var presence = new KokoPresenceFrame
+        {
+            SituationKind = "recent_contact",
+            SummaryUk = "Він писав недавно.",
+            SilenceMinutes = 8
+        };
+
+        var frame = new KokoInternalDayEngine().Evaluate(
+            state,
+            presence,
+            new KokoSomaticSnapshot { State = "tired", Strain = 0.20, Calm = 0.40 },
+            now,
+            autonomyLevel: 3);
+
+        AssertEqual("low_power_night", frame.Phase, "03:10 should be low power night");
+        AssertTrue(frame.ShouldPreferSilence, "low power night should prefer silence without strong reason");
+        AssertTrue(frame.PromptBlock.Contains("Перевага: мовчати"), "prompt block should carry silence preference");
+    }
+
     private static void InspectorRendersStateReport()
     {
         using var ctx = TestContext.Create();
@@ -321,10 +378,17 @@ internal static class Program
             PersonalityDailyMood = "focused",
             MoodScore = 0.64f,
             LastUserEmotionalTone = "seeking",
-            LastInitiativeDecision = "act:self_regulation_protect"
+            LastInitiativeDecision = "act:self_regulation_protect",
+            LastPresenceSummary = "Середня тиша: 2 год.",
+            LastPresenceSituation = "medium_silence",
+            LastInternalDaySummary = "Вечірній огляд: підбити хвости.",
+            LastInternalDayPhase = "evening_review",
+            LastInternalDayFocus = "підбивати підсумки"
         };
         internalState.CuriosityQueue.Add("What should I optimize next?");
         internalState.InnerMonologues.Add("[somatic/focus] Signal is clean. Work mode.");
+        internalState.PresenceTrace.Add("07.05 19:30 medium_silence");
+        internalState.InternalDayTrace.Add("07.05 19:30 evening_review");
 
         var somatic = new KokoSomaticSnapshot
         {
@@ -362,7 +426,9 @@ internal static class Program
 
         AssertTrue(markdown.Contains("Інспектор стану Коконое"), "markdown should have inspector title");
         AssertTrue(markdown.Contains("## Соматика"), "markdown should include somatic section");
+        AssertTrue(markdown.Contains("## Присутність і день"), "markdown should include presence/day section");
         AssertTrue(markdown.Contains("## Головні факти"), "markdown should include facts");
+        AssertTrue(json.Contains("\"LastInternalDayPhase\""), "json should include internal day phase");
         AssertTrue(json.Contains("\"Somatic\""), "json should include somatic object");
     }
 
