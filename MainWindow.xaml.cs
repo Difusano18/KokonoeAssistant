@@ -1759,6 +1759,21 @@ tags: [kokonoe, live-core, diagnostics]
             }
             catch { }
 
+            try
+            {
+                var intents = ServiceContainer.BrainEngine?.GetActiveShortTermIntents(4);
+                if (intents != null)
+                {
+                    foreach (var intent in intents)
+                    {
+                        var age = now - intent.CreatedAt;
+                        var due = now >= intent.FollowUpAt ? "follow-up уже доречний" : $"follow-up через {FormatGapUa(intent.FollowUpAt - now)}";
+                        sb.AppendLine($"Активний короткостроковий намір: {intent.Summary}; сказано {FormatGapUa(age)} тому; очікувано до {intent.ExpectedUntil:HH:mm}; {due}; джерело: \"{TruncateAtWordBoundary(SanitizeForLlm(intent.SourceText), 160)}\"");
+                    }
+                }
+            }
+            catch { }
+
             var lower = (userText ?? "").ToLowerInvariant();
             var isMorningNow = now.Hour is >= 5 and < 13;
             var saysWakeOrMorning = ContainsAny(lower, "ранку", "добрий ранок", "доброго ранку", "проснув", "прокинув", "поспав", "встав");
@@ -1776,6 +1791,7 @@ tags: [kokonoe, live-core, diagnostics]
             }
 
             sb.AppendLine("Правило: завжди звіряй поточний час і часовий розрив між повідомленнями перед порадою про сон.");
+            sb.AppendLine("Правило: якщо є активний короткостроковий намір, використовуй його для природного follow-up: курси вже закінчились, робота ще триває, прогулянка завершилась тощо.");
             return sb.ToString();
         }
 
@@ -5366,6 +5382,7 @@ tags: [kokonoe, dashboard, live]
                 if (_tgAwaitingNote)
                 {
                     _tgAwaitingNote = false;
+                    try { ServiceContainer.BrainEngine?.ProcessUserMessage(text); } catch { }
                     try { ServiceContainer.BrainEngine?.Memory?.RecordEpisode(text, "neutral", 0.6f); }
                     catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[ERROR] TG note memory: {ex.Message}"); }
                     try { _obsidian.AppendToDailyNote($"\n> 📝 [TG {DateTime.Now:HH:mm}] {text}"); }
@@ -5412,6 +5429,7 @@ tags: [kokonoe, dashboard, live]
                     AddMessageBubble(new ChatMessageVm { Role = "assistant", Content = reply });
                 });
                 try { await bot.SendMessage(chatId, reply, cancellationToken: ct); } catch { }
+                try { ServiceContainer.BrainEngine?.ProcessUserMessage(text); } catch { }
                 try
                 {
                     ServiceContainer.ChatRepository.InsertMessage(new ChatRepository.ChatMessage

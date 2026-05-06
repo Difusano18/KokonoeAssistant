@@ -110,6 +110,7 @@ namespace KokonoeAssistant.Services
         public string LastVaultMaintenanceReason { get; set; } = "";
         public string LastVaultMaintenanceSummary { get; set; } = "";
         public string LastVaultMaintenanceError { get; set; } = "";
+        public List<ShortTermIntent> ShortTermIntents { get; set; } = new();
     }
 
     public class ReactiveTrigger
@@ -118,6 +119,19 @@ namespace KokonoeAssistant.Services
         public string   Type    { get; set; } = ""; // anxious_followup, topic_followup, bad_pattern
         public string   Context { get; set; } = "";
         public DateTime FireAt  { get; set; }
+    }
+
+    public class ShortTermIntent
+    {
+        public string Id { get; set; } = Guid.NewGuid().ToString("N")[..8];
+        public string Kind { get; set; } = "";
+        public string Summary { get; set; } = "";
+        public string SourceText { get; set; } = "";
+        public DateTime CreatedAt { get; set; } = DateTime.Now;
+        public DateTime ExpectedUntil { get; set; } = DateTime.Now.AddHours(2);
+        public DateTime FollowUpAt { get; set; } = DateTime.Now.AddHours(1);
+        public DateTime? ResolvedAt { get; set; }
+        public string ResolutionText { get; set; } = "";
     }
 
     // ══════════════════════════════════════════════════════════════════
@@ -1581,6 +1595,7 @@ namespace KokonoeAssistant.Services
             {
                 _state.TotalMessagesExchanged++;
                 _state.LastKnownUserActivity = "chatting";
+                ObserveShortTermIntent(content);
 
                 // Паттерни — записати активність
                 Patterns.RecordActivity(wasActive: true, messageCount: 1);
@@ -1647,6 +1662,100 @@ namespace KokonoeAssistant.Services
             }
             catch (Exception ex) { Log($"ProcessUserMessage: {ex.Message}"); }
         }
+
+        private void ObserveShortTermIntent(string content)
+        {
+            if (string.IsNullOrWhiteSpace(content)) return;
+
+            var now = DateTime.Now;
+            _state.ShortTermIntents.RemoveAll(i =>
+                i.ResolvedAt.HasValue && now - i.ResolvedAt.Value > TimeSpan.FromDays(2));
+            _state.ShortTermIntents.RemoveAll(i =>
+                !i.ResolvedAt.HasValue && now - i.ExpectedUntil > TimeSpan.FromHours(12));
+
+            ResolveShortTermIntentsFromMessage(content, now);
+
+            var detected = DetectShortTermIntent(content, now);
+            if (detected == null) return;
+
+            var duplicate = _state.ShortTermIntents.Any(i =>
+                !i.ResolvedAt.HasValue &&
+                i.Kind == detected.Kind &&
+                string.Equals(i.Summary, detected.Summary, StringComparison.OrdinalIgnoreCase) &&
+                now - i.CreatedAt < TimeSpan.FromMinutes(30));
+            if (duplicate) return;
+
+            _state.ShortTermIntents.Add(detected);
+            if (_state.ShortTermIntents.Count > 12)
+                _state.ShortTermIntents.RemoveRange(0, _state.ShortTermIntents.Count - 12);
+
+            _state.PendingTriggers.RemoveAll(t => t.Type == "intent_followup" && t.FireAt > now);
+            _state.PendingTriggers.Add(new ReactiveTrigger
+            {
+                Type = "intent_followup",
+                FireAt = detected.FollowUpAt,
+                Context = $"Користувач сказав: «{detected.SourceText}». Намір: {detected.Summary}. Якщо він повернеться або мине час, доречно спитати коротко: «{BuildIntentQuestion(detected)}»"
+            });
+        }
+
+        private static ShortTermIntent? DetectShortTermIntent(string content, DateTime now)
+        {
+            var lower = content.ToLowerInvariant();
+            if (!ContainsAny(lower, "піду", "йду", "іду", "пішов", "буду", "зараз", "скоро")) return null;
+
+            if (ContainsAny(lower, "курс", "курси", "занят", "урок", "пара", "навчан"))
+                return BuildIntent("course", "пішов на курси/заняття", content, now, TimeSpan.FromHours(2), TimeSpan.FromHours(1));
+            if (ContainsAny(lower, "робот", "прац", "код", "проект"))
+                return BuildIntent("work", "зайнятий роботою/проєктом", content, now, TimeSpan.FromHours(3), TimeSpan.FromHours(1.5));
+            if (ContainsAny(lower, "магаз", "куп", "продукт"))
+                return BuildIntent("errand", "пішов у магазин/по справах", content, now, TimeSpan.FromHours(1.5), TimeSpan.FromMinutes(50));
+            if (ContainsAny(lower, "гуля", "прогуля", "вийду", "вулиц"))
+                return BuildIntent("walk", "пішов гуляти/на вулицю", content, now, TimeSpan.FromHours(2), TimeSpan.FromHours(1));
+            if (ContainsAny(lower, "спать", "спати", "сон", "ляга"))
+                return BuildIntent("sleep", "пішов спати", content, now, TimeSpan.FromHours(9), TimeSpan.FromHours(8));
+
+            if (ContainsAny(lower, "зайнят", "відійду", "афк", "не буду"))
+                return BuildIntent("busy", "буде зайнятий або відійде", content, now, TimeSpan.FromHours(2), TimeSpan.FromHours(1));
+
+            return null;
+        }
+
+        private static ShortTermIntent BuildIntent(string kind, string summary, string source, DateTime now, TimeSpan expectedFor, TimeSpan followAfter)
+            => new()
+            {
+                Kind = kind,
+                Summary = summary,
+                SourceText = source.Trim(),
+                CreatedAt = now,
+                ExpectedUntil = now + expectedFor,
+                FollowUpAt = now + followAfter
+            };
+
+        private void ResolveShortTermIntentsFromMessage(string content, DateTime now)
+        {
+            var lower = content.ToLowerInvariant();
+            var returned = ContainsAny(lower, "вернув", "повернув", "прийшов", "я тут", "закінчив", "закінчились", "вже вдома", "поспав", "проснув", "прокинув");
+            if (!returned) return;
+
+            foreach (var intent in _state.ShortTermIntents.Where(i => !i.ResolvedAt.HasValue))
+            {
+                intent.ResolvedAt = now;
+                intent.ResolutionText = content.Trim();
+            }
+        }
+
+        private static string BuildIntentQuestion(ShortTermIntent intent) => intent.Kind switch
+        {
+            "course" => "Курси вже закінчились, чи ти ще там героїчно страждаєш?",
+            "work" => "Робочий запій закінчився, чи ти ще закопаний у задачі?",
+            "errand" => "Ти вже повернувся зі справ, чи магазин тебе поглинув?",
+            "walk" => "Прогулянка закінчилась, чи ти ще десь блукаєш?",
+            "sleep" => "Ти вже прокинувся, чи організм нарешті переміг твої дурні графіки?",
+            _ => "Ти вже повернувся до нормального режиму, чи ще зайнятий?"
+        };
+
+        private static bool ContainsAny(string text, params string[] values)
+            => values.Any(v => text.Contains(v, StringComparison.OrdinalIgnoreCase));
 
         private void ExtractAndRememberFacts(string userMsg)
         {
@@ -3602,6 +3711,19 @@ namespace KokonoeAssistant.Services
             lock (_lock)
             {
                 return _state.InitiativeReasonLog.TakeLast(count).Reverse().ToList();
+            }
+        }
+
+        public IReadOnlyList<ShortTermIntent> GetActiveShortTermIntents(int count = 5)
+        {
+            lock (_lock)
+            {
+                var now = DateTime.Now;
+                return _state.ShortTermIntents
+                    .Where(i => !i.ResolvedAt.HasValue && i.ExpectedUntil >= now.AddMinutes(-30))
+                    .OrderByDescending(i => i.CreatedAt)
+                    .Take(count)
+                    .ToList();
             }
         }
 
