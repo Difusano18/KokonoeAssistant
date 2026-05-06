@@ -1470,7 +1470,7 @@ namespace KokonoeAssistant.Services
             catch (Exception ex) { Log($"AnalyzeRecentEmotions: {ex.Message}"); }
         }
 
-        private async Task CheckReactiveTriggersAsync()
+        private async Task<bool> CheckReactiveTriggersAsync()
         {
             var now  = DateTime.Now;
             var fire = _state.PendingTriggers
@@ -1478,12 +1478,12 @@ namespace KokonoeAssistant.Services
                 .OrderBy(t => t.FireAt)
                 .FirstOrDefault();
 
-            if (fire == null) return;
+            if (fire == null) return false;
 
             _state.PendingTriggers.Remove(fire);
             SaveState();
 
-            if (!EnsureTelegram()) return;
+            if (!EnsureTelegram()) return false;
 
             // Mood modifier — якщо настрій низький бути м'якшою
             var moodHint = _state.MoodScore < 0.35f
@@ -1507,25 +1507,36 @@ namespace KokonoeAssistant.Services
 Знайди щось цікаве пов'язане з цим і напиши йому — коментар, питання, спостереження.
 Природньо, не як нагадування. Тільки українська. Тільки текст.",
 
+                "intent_followup" => $@"Ти — Kokonoe. Це автоматичний follow-up за короткостроковим наміром користувача.
+Контекст: {fire.Context}
+{moodHint}
+
+Напиши йому сама, без очікування нового повідомлення. 1 коротке речення.
+Це має звучати природно: питання, підколка або сухий коментар.
+Не пояснюй, що це нагадування або автоматична перевірка.
+Тільки українська. Тільки текст.",
+
                 _ => null
             };
 
-            if (prompt == null) return;
+            if (prompt == null) return false;
 
             var msg = await CallLlmRawAsync(prompt);
-            if (string.IsNullOrWhiteSpace(msg)) return;
+            if (string.IsNullOrWhiteSpace(msg)) return false;
             msg = msg.Trim().Trim('"');
 
             try
             {
-                if (!await SendTgAndLog(msg, "reactive")) return;
+                if (!await SendTgAndLog(msg, "reactive")) return false;
                 _state.LastSpontaneousAt = DateTime.Now;
                 var _h3 = OnNewMessage; _h3?.Invoke("assistant", msg);
                 try { _chatRepo.InsertMessage(new ChatRepository.ChatMessage { Content = msg, Role = "assistant", Author = "Kokonoe", Timestamp = DateTime.Now }); } catch { }
                 SaveState();
                 Log($"Reactive trigger fired: {fire.Type}");
+                return true;
             }
             catch (Exception ex) { LogError($"TG reactive: {ex.Message}"); }
+            return false;
         }
 
         // ══════════════════════════════════════════════════════════════
@@ -2862,6 +2873,13 @@ namespace KokonoeAssistant.Services
                 _    => Math.Max(90, baseInterval)
             };
 
+            // Планувальник і реактивні follow-up не є "рандомною балаканиною".
+            // Якщо користувач сказав "йду на курси", follow-up має спрацювати за часом,
+            // навіть коли загальний антиспам ще не пустив би звичайну ініціативу.
+            await CheckSchedulerAsync();
+            if (await CheckReactiveTriggersAsync())
+                return;
+
             // ── ГЛОБАЛЬНИЙ COOLDOWN ─────────────────────────────────────
             // Не надсилати нічого якщо ще не минув мінімальний інтервал.
             // У живому режимі він нижчий, але все одно є, бо Telegram не смітник.
@@ -2891,12 +2909,6 @@ namespace KokonoeAssistant.Services
                 SaveState();
                 return;
             }
-
-            // Планувальник — найвищий пріоритет
-            await CheckSchedulerAsync();
-
-            // Реактивні тригери
-            await CheckReactiveTriggersAsync();
 
             // Screen context refresh
             _ = RefreshScreenContextAsync();

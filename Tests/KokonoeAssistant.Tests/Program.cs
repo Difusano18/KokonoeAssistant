@@ -19,6 +19,7 @@ internal static class Program
             Run("Initiative respects low-power silence", InitiativeRespectsLowPowerSilence);
             Run("Initiative reacts to protective override", InitiativeReactsToProtectiveOverride);
             Run("Initiative high autonomy asks curiosity sooner", InitiativeHighAutonomyAsksCuriositySooner);
+            Run("Short term intent followup bypasses ordinary initiative", ShortTermIntentFollowupBypassesOrdinaryInitiative);
             Run("Inspector renders state report", InspectorRendersStateReport);
             Run("Obsidian vault architecture maintenance", ObsidianVaultArchitectureMaintenance);
             Run("Obsidian unique memory append", ObsidianUniqueMemoryAppend);
@@ -193,6 +194,34 @@ internal static class Program
             autonomyLevel: 3);
         AssertTrue(active.ShouldAct, "high autonomy should allow earlier curiosity pings");
         AssertEqual("curiosity_ping", active.Trigger, "high autonomy should use the curiosity ping trigger");
+    }
+
+    private static void ShortTermIntentFollowupBypassesOrdinaryInitiative()
+    {
+        using var ctx = TestContext.Create();
+        var now = DateTime.Now;
+        var state = new KokoInternalState
+        {
+            LastSpontaneousAt = now.AddMinutes(-5)
+        };
+        state.PendingTriggers.Add(new ReactiveTrigger
+        {
+            Type = "intent_followup",
+            Context = "Користувач сказав: «я піду на курси». Намір: пішов на курси/заняття.",
+            FireAt = now.AddMinutes(-1)
+        });
+
+        var ordinary = new KokoInitiativeEngine().Evaluate(
+            now,
+            state,
+            ctx.Emotion,
+            ctx.Relationship,
+            ctx.Memory,
+            ctx.Chat,
+            autonomyLevel: 3);
+
+        AssertTrue(ordinary.ShouldAct, "due short-term intent followup should outrank normal cooldown");
+        AssertEqual("reactive_followup", ordinary.Trigger, "due intent followup should use reactive followup trigger");
     }
 
     private static void InspectorRendersStateReport()
