@@ -2922,44 +2922,6 @@ namespace KokonoeAssistant.Services
                 (now - _lastWeeklyDigestAt).TotalDays >= 6)
                 _ = WeeklyVaultDigestAsync();
 
-            // Поганий сон
-            if (_state.ConsecutiveBadSleeps >= 2 &&
-                (now - _state.LastSpontaneousAt).TotalHours > 6)
-            {
-                await SendSpontaneousAsync("bad_sleep", SpontaneousStyle.WarmCheck);
-                return;
-            }
-
-            // Pending thoughts
-            if (_state.PendingThoughts.Any())
-            {
-                await SendSpontaneousAsync("pending_thought", SpontaneousStyle.PendingThought);
-                return;
-            }
-
-            // Саморефлексія
-            if (_state.LastConversationEndAt > DateTime.MinValue &&
-                (now - _state.LastConversationEndAt).TotalMinutes >= 10 &&
-                _state.LastReflectionAt < _state.LastConversationEndAt)
-            {
-                await ReflectAfterConversationAsync();
-            }
-
-            // Авто-аналітика дня
-            if (now.Hour >= 20 && now.Hour < 21 &&
-                _state.LastDailyAnalyticsAt.Date < now.Date)
-            {
-                await SendDailyAnalyticsAsync();
-                return;
-            }
-
-            // Контекстні нагадування
-            if (now.Hour >= 10 && now.Hour < 20 &&
-                (now - _state.LastReminderCheckAt).TotalHours > 6)
-            {
-                await CheckAndSendReminderAsync();
-            }
-
             // BPM-based dynamic silence thresholds
             // Висока ЧСС (збуджена) → коротший поріг, пише раніше
             // Низька ЧСС (спокійна) → довший поріг, терпеливіша
@@ -2993,34 +2955,77 @@ namespace KokonoeAssistant.Services
                     var l1Threshold = Math.Max(25, l1Base + bpmMod);
                     if (silenceMin > l1Threshold && (now - _state.SilenceLevel1At).TotalHours > 2)
                     {
-                        var style = ChooseStyle(now, silenceMin);
-                        await SendSpontaneousAsync("silence_l1", style);
-                        _state.SilenceLevel1At = now;
-                        SaveState();
-                        return;
+                        if (await SendSilenceReactionAsync("silence_l1", silenceMin, lastUser.Content))
+                        {
+                            _state.SilenceLevel1At = now;
+                            SaveState();
+                            return;
+                        }
                     }
                     // Рівень 2: базово 3г, BPM може опустити до ~2г або підняти до ~4г
                     var l2Base = autonomyLevel >= 3 ? 110 : 180;
                     var l2Threshold = Math.Max(70, l2Base + bpmMod * 2);
                     if (silenceMin > l2Threshold && (now - _state.SilenceLevel2At).TotalHours > 4)
                     {
-                        await SendSpontaneousAsync("silence_l2", ChooseStyle(now, silenceMin));
-                        _state.SilenceLevel2At = now;
-                        SaveState();
-                        return;
+                        if (await SendSilenceReactionAsync("silence_l2", silenceMin, lastUser.Content))
+                        {
+                            _state.SilenceLevel2At = now;
+                            SaveState();
+                            return;
+                        }
                     }
                     // Рівень 3: 6г — не модифікуємо (вже критична тиша)
                     if (silenceMin > 360 && (now - _state.SilenceLevel3At).TotalHours > 8)
                     {
-                        await SendSpontaneousAsync("silence_l3", SpontaneousStyle.Observation);
-                        _state.SilenceLevel3At = now;
-                        SaveState();
-                        return;
+                        if (await SendSilenceReactionAsync("silence_l3", silenceMin, lastUser.Content))
+                        {
+                            _state.SilenceLevel3At = now;
+                            SaveState();
+                            return;
+                        }
                     }
                     // 12г+ — нічого. Вона не переслідує.
                 }
             }
             catch { }
+
+            // Поганий сон
+            if (_state.ConsecutiveBadSleeps >= 2 &&
+                (now - _state.LastSpontaneousAt).TotalHours > 6)
+            {
+                await SendSpontaneousAsync("bad_sleep", SpontaneousStyle.WarmCheck);
+                return;
+            }
+
+            // Pending thoughts нижче silence-рівнів. Старі думки не мають блокувати реакцію на реальну тишу.
+            if (_state.PendingThoughts.Any())
+            {
+                await SendSpontaneousAsync("pending_thought", SpontaneousStyle.PendingThought);
+                return;
+            }
+
+            // Саморефлексія
+            if (_state.LastConversationEndAt > DateTime.MinValue &&
+                (now - _state.LastConversationEndAt).TotalMinutes >= 10 &&
+                _state.LastReflectionAt < _state.LastConversationEndAt)
+            {
+                await ReflectAfterConversationAsync();
+            }
+
+            // Авто-аналітика дня
+            if (now.Hour >= 20 && now.Hour < 21 &&
+                _state.LastDailyAnalyticsAt.Date < now.Date)
+            {
+                await SendDailyAnalyticsAsync();
+                return;
+            }
+
+            // Контекстні нагадування
+            if (now.Hour >= 10 && now.Hour < 20 &&
+                (now - _state.LastReminderCheckAt).TotalHours > 6)
+            {
+                await CheckAndSendReminderAsync();
+            }
 
             // State-driven spontaneous — активний час (9-23), мінімум між повідомленнями BPM-чутливий
             var minInterval = Math.Max(15, baseInterval + bpmMod);
@@ -3040,6 +3045,77 @@ namespace KokonoeAssistant.Services
         // ══════════════════════════════════════════════════════════════
         // STATE-DRIVEN SPONTANEOUS — пише бо є внутрішня причина
         // ══════════════════════════════════════════════════════════════
+
+        private async Task<bool> SendSilenceReactionAsync(string level, double silenceMinutes, string? lastUserText)
+        {
+            if (!EnsureTelegram()) return false;
+
+            var hours = (int)(silenceMinutes / 60);
+            var mins = (int)(silenceMinutes % 60);
+            var silenceText = hours > 0 ? $"{hours} год {mins} хв" : $"{mins} хв";
+            var lastText = string.IsNullOrWhiteSpace(lastUserText)
+                ? "немає тексту"
+                : lastUserText.Trim()[..Math.Min(180, lastUserText.Trim().Length)];
+
+            var toneHint = level switch
+            {
+                "silence_l1" => "легкий укол або коротке спостереження; без паніки",
+                "silence_l2" => "помітно, що він зник; можна спитати конкретніше, але не драматизувати",
+                "silence_l3" => "довга тиша; сухо, уважно, трохи захисно, без істерики",
+                _ => "коротко і природно"
+            };
+
+            var prompt = $@"Ти — Kokonoe Mercury.
+Він не писав {silenceText}.
+Останнє повідомлення користувача: «{lastText}»
+Рівень реакції: {level}.
+Тон: {toneHint}.
+
+Напиши йому сама в Telegram. Це НЕ опціонально.
+1 коротке речення українською.
+Не кажи, що це автоматична перевірка.
+Не пиши «ти в порядку?» шаблонно.
+Можна підколоти, спитати, чи він живий/зайнятий/знову зник, але без трагедії.
+Тільки текст, без лапок.";
+
+            var msg = (await CallLlmRawAsync(prompt))?.Trim().Trim('"') ?? "";
+            if (string.IsNullOrWhiteSpace(msg) ||
+                msg.Contains("[мовчання]", StringComparison.OrdinalIgnoreCase) ||
+                msg.Contains("[молчание]", StringComparison.OrdinalIgnoreCase))
+            {
+                msg = level switch
+                {
+                    "silence_l1" => "Ти зник. Звісно, дуже оригінально. Де застряг?",
+                    "silence_l2" => "Тиша вже помітна. Ти зайнятий, чи просто тренуєш режим невидимки?",
+                    "silence_l3" => "Довго мовчиш. Якщо живий — подай сигнал, генію.",
+                    _ => "Ти зник. Пояснення буде, чи мені знову все вираховувати самій?"
+                };
+            }
+
+            if (!await SendTgAndLog(msg, level)) return false;
+
+            _state.LastSpontaneousAt = DateTime.Now;
+            _state.LastSpontaneousMsgs.Add(msg[..Math.Min(100, msg.Length)]);
+            if (_state.LastSpontaneousMsgs.Count > 5)
+                _state.LastSpontaneousMsgs.RemoveAt(0);
+
+            try
+            {
+                _chatRepo.InsertMessage(new ChatRepository.ChatMessage
+                {
+                    Content = msg,
+                    Role = "assistant",
+                    Author = "Kokonoe",
+                    Timestamp = DateTime.Now
+                });
+            }
+            catch { }
+
+            var handler = OnNewMessage; handler?.Invoke("assistant", msg);
+            Log($"Silence reaction sent: {level}, silence={silenceText}");
+            SaveState();
+            return true;
+        }
 
         private async Task TryStateTriggeredSpontaneous(DateTime now, int autonomyLevel)
         {
