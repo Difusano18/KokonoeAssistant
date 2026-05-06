@@ -269,7 +269,7 @@
                             <Button x:Name="TabBtnTools" Style="{StaticResource BtnNav}" Click="Tab_Click">
                                 <StackPanel Orientation="Horizontal">
                                     <TextBlock Text="◈" FontSize="13" VerticalAlignment="Center" Width="18"/>
-                                    <TextBlock Text="Dashboard" FontSize="11" VerticalAlignment="Center"
+                                        <TextBlock Text="Дашборд" FontSize="11" VerticalAlignment="Center"
                                                FontFamily="Segoe UI Variable, Segoe UI" Margin="8,0,0,0"/>
                                 </StackPanel>
                             </Button>
@@ -277,7 +277,7 @@
                             <Button x:Name="TabBtnMemory" Style="{StaticResource BtnNav}" Click="Tab_Click">
                                 <StackPanel Orientation="Horizontal">
                                     <TextBlock Text="🧠" FontSize="13" VerticalAlignment="Center" Width="18"/>
-                                    <TextBlock Text="Memory" FontSize="11" VerticalAlignment="Center"
+                                        <TextBlock Text="Пам'ять" FontSize="11" VerticalAlignment="Center"
                                                FontFamily="Segoe UI Variable, Segoe UI" Margin="8,0,0,0"/>
                                 </StackPanel>
                             </Button>
@@ -406,27 +406,27 @@
                                 </Grid.ColumnDefinitions>
 
                                 <StackPanel Grid.Column="0" Margin="0,0,12,0">
-                                    <TextBlock Text="LIVE CORE" FontSize="9" FontFamily="Consolas" FontWeight="Bold"
+                                    <TextBlock Text="ЖИВЕ ЯДРО" FontSize="9" FontFamily="Consolas" FontWeight="Bold"
                                                Foreground="{DynamicResource AccentBase}"/>
-                                    <TextBlock x:Name="LiveCoreEmotionText" Text="emotion: loading"
+                                    <TextBlock x:Name="LiveCoreEmotionText" Text="емоція: завантаження"
                                                FontSize="12" FontWeight="SemiBold"
                                                Foreground="{DynamicResource AccentTextLight}" Margin="0,3,0,0"/>
-                                    <TextBlock x:Name="LiveCoreBondText" Text="bond -- | intensity --"
+                                    <TextBlock x:Name="LiveCoreBondText" Text="зв'язок -- | сила --"
                                                FontSize="10" Foreground="{DynamicResource Brush_8AC8A0}"/>
                                 </StackPanel>
 
                                 <StackPanel Grid.Column="1" Margin="0,0,12,0">
-                                    <TextBlock Text="BODY" FontSize="9" FontFamily="Consolas" FontWeight="Bold"
+                                    <TextBlock Text="ТІЛО" FontSize="9" FontFamily="Consolas" FontWeight="Bold"
                                                Foreground="{DynamicResource AccentBase}"/>
-                                    <TextBlock x:Name="LiveCoreBodyText" Text="somatic: loading"
+                                    <TextBlock x:Name="LiveCoreBodyText" Text="соматика: завантаження"
                                                FontSize="12" FontWeight="SemiBold"
                                                Foreground="{DynamicResource AccentTextLight}" Margin="0,3,0,0"/>
-                                    <TextBlock x:Name="LiveCoreRegulationText" Text="regulation --"
+                                    <TextBlock x:Name="LiveCoreRegulationText" Text="саморегуляція --"
                                                FontSize="10" Foreground="{DynamicResource Brush_8AC8A0}"/>
                                 </StackPanel>
 
                                 <StackPanel Grid.Column="2" Margin="0,0,12,0">
-                                    <TextBlock Text="PULSE" FontSize="9" FontFamily="Consolas" FontWeight="Bold"
+                                    <TextBlock Text="ПУЛЬС" FontSize="9" FontFamily="Consolas" FontWeight="Bold"
                                                Foreground="{DynamicResource AccentBase}"/>
                                     <TextBlock x:Name="LiveCorePulseText" Text="-- bpm"
                                                FontSize="12" FontWeight="SemiBold"
@@ -437,19 +437,19 @@
                                 </StackPanel>
 
                                 <StackPanel Grid.Column="3">
-                                    <TextBlock Text="MEMORY / VAULT" FontSize="9" FontFamily="Consolas" FontWeight="Bold"
+                                    <TextBlock Text="ПАМ'ЯТЬ / VAULT" FontSize="9" FontFamily="Consolas" FontWeight="Bold"
                                                Foreground="{DynamicResource AccentBase}"/>
-                                    <TextBlock x:Name="LiveCoreMemoryText" Text="sync pending --"
+                                    <TextBlock x:Name="LiveCoreMemoryText" Text="синхронізація --"
                                                FontSize="12" FontWeight="SemiBold"
                                                Foreground="{DynamicResource AccentTextLight}" Margin="0,3,0,0"/>
-                                    <TextBlock x:Name="LiveCoreVaultText" Text="review -- | tasks --"
+                                    <TextBlock x:Name="LiveCoreVaultText" Text="огляд -- | задачі --"
                                                FontSize="10" Foreground="{DynamicResource Brush_8AC8A0}"/>
                                 </StackPanel>
 
                                 <StackPanel Grid.Column="4" Orientation="Horizontal" VerticalAlignment="Center" Margin="12,0,0,0">
-                                    <Button Content="Refresh" Style="{StaticResource BtnGhost}" Padding="8,4" Margin="0,0,4,0"
+                                    <Button Content="Оновити" Style="{StaticResource BtnGhost}" Padding="8,4" Margin="0,0,4,0"
                                             Click="LiveCoreRefresh_Click"/>
-                                    <Button Content="Snapshot" Style="{StaticResource BtnGhost}" Padding="8,4"
+                                    <Button Content="Знімок" Style="{StaticResource BtnGhost}" Padding="8,4"
                                             Click="LiveCoreSnapshot_Click"/>
                                 </StackPanel>
                             </Grid>
@@ -722,9 +722,9 @@
                                     <StackPanel Orientation="Horizontal">
                                         <TextBlock x:Name="NotePathLabel" Text="Виберіть нотатку"
                                                    Foreground="{DynamicResource Brush_2A4232}" FontSize="11" VerticalAlignment="Center"/>
-                                        <Button Content="💾 Save" Style="{StaticResource BtnGhost}"
+                                        <Button Content="💾 Зберегти" Style="{StaticResource BtnGhost}"
                                                 Padding="8,4" Margin="14,0,0,0" Click="SaveNote_Click"/>
-                                        <Button Content="🗑 Delete" Style="{StaticResource BtnGhost}"
+                                        <Button Content="🗑 Видалити" Style="{StaticResource BtnGhost}"
                                                 Padding="8,4" Margin="4,0,0,0" Click="DeleteNote_Click"/>
                                     </StackPanel>
                                 </Border>
@@ -741,32 +741,32 @@
                                                 <ColumnDefinition Width="Auto"/>
                                             </Grid.ColumnDefinitions>
                                             <StackPanel>
-                                                <TextBlock Text="MEMORY OPS" FontSize="9" FontWeight="Bold"
+                                                <TextBlock Text="ОПЕРАЦІЇ ПАМ'ЯТІ" FontSize="9" FontWeight="Bold"
                                                            Foreground="{DynamicResource AccentBase}" FontFamily="Consolas"/>
-                                                <TextBlock x:Name="MemoryOpsStatusLabel" Text="not loaded"
+                                                <TextBlock x:Name="MemoryOpsStatusLabel" Text="не завантажено"
                                                            FontSize="10" Foreground="{DynamicResource Brush_8AC8A0}" Margin="0,2,0,0"/>
                                                 <TextBlock x:Name="MemoryOpsDetailLabel" Text=""
                                                            FontSize="9" Foreground="{DynamicResource Brush_1A3020}" Margin="0,2,0,0"/>
                                             </StackPanel>
                                             <WrapPanel Grid.Column="1" HorizontalAlignment="Right" VerticalAlignment="Center">
-                                                <Button Content="Refresh" Style="{StaticResource BtnGhost}" Padding="8,4" Margin="4,0,0,0"
+                                                <Button Content="Оновити" Style="{StaticResource BtnGhost}" Padding="8,4" Margin="4,0,0,0"
                                                         Click="MemoryOpsRefresh_Click"/>
-                                                <Button Content="Preview cleanup" Style="{StaticResource BtnGhost}" Padding="8,4" Margin="4,0,0,0"
+                                                <Button Content="Перегляд чистки" Style="{StaticResource BtnGhost}" Padding="8,4" Margin="4,0,0,0"
                                                         Click="MemoryOpsPreviewCleanup_Click"/>
-                                                <Button Content="Apply cleanup" Style="{StaticResource BtnGhost}" Padding="8,4" Margin="4,0,0,0"
+                                                <Button Content="Застосувати чистку" Style="{StaticResource BtnGhost}" Padding="8,4" Margin="4,0,0,0"
                                                         Click="MemoryOpsApplyCleanup_Click"/>
                                             </WrapPanel>
                                         </Grid>
                                         <WrapPanel Grid.Row="1" Margin="0,8,0,0">
-                                            <Button Content="Quality" Style="{StaticResource BtnGhost}" Padding="8,4" Margin="0,0,4,0"
+                                            <Button Content="Якість" Style="{StaticResource BtnGhost}" Padding="8,4" Margin="0,0,4,0"
                                                     Click="OpenMemoryQuality_Click"/>
-                                            <Button Content="Review" Style="{StaticResource BtnGhost}" Padding="8,4" Margin="0,0,4,0"
+                                            <Button Content="Огляд" Style="{StaticResource BtnGhost}" Padding="8,4" Margin="0,0,4,0"
                                                     Click="OpenMemoryReview_Click"/>
-                                            <Button Content="Cleanup" Style="{StaticResource BtnGhost}" Padding="8,4" Margin="0,0,4,0"
+                                            <Button Content="Чистка" Style="{StaticResource BtnGhost}" Padding="8,4" Margin="0,0,4,0"
                                                     Click="OpenMemoryCleanup_Click"/>
-                                            <Button Content="Tasks" Style="{StaticResource BtnGhost}" Padding="8,4" Margin="0,0,4,0"
+                                            <Button Content="Задачі" Style="{StaticResource BtnGhost}" Padding="8,4" Margin="0,0,4,0"
                                                     Click="OpenTasksQueue_Click"/>
-                                            <Button Content="Architecture" Style="{StaticResource BtnGhost}" Padding="8,4" Margin="0,0,4,0"
+                                            <Button Content="Архітектура" Style="{StaticResource BtnGhost}" Padding="8,4" Margin="0,0,4,0"
                                                     Click="OpenVaultArchitecture_Click"/>
                                         </WrapPanel>
                                     </Grid>
@@ -983,9 +983,9 @@
                                 </Grid.ColumnDefinitions>
                                 <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
                                     <StackPanel VerticalAlignment="Center">
-                                        <TextBlock Text="Dashboard" FontSize="15" FontWeight="SemiBold"
+                                        <TextBlock Text="Живий дашборд" FontSize="15" FontWeight="SemiBold"
                                                    Foreground="{DynamicResource AccentTextLight}"/>
-                                        <TextBlock Text="Cognitive workspace" FontSize="10" FontFamily="Consolas"
+                                        <TextBlock Text="стан · пам'ять · тіло · задачі" FontSize="10" FontFamily="Consolas"
                                                    Foreground="{StaticResource DashMuted}" Margin="0,2,0,0"/>
                                     </StackPanel>
                                 </StackPanel>
@@ -1005,7 +1005,7 @@
                                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,4,0,0">
                                         <Border x:Name="HeartDot" Width="10" Height="10" CornerRadius="5"
                                                 Background="#FF4D6D" Margin="0,0,6,0"
-                                                ToolTip="Heart rate" VerticalAlignment="Center"
+                                                ToolTip="Пульс" VerticalAlignment="Center"
                                                 RenderTransformOrigin="0.5,0.5">
                                             <Border.RenderTransform>
                                                 <ScaleTransform x:Name="HeartScale" ScaleX="1" ScaleY="1"/>
@@ -1029,19 +1029,19 @@
                                     <StackPanel Orientation="Horizontal">
                                         <Border x:Name="DashTabNeuroBtn" Style="{StaticResource DashTabBtn}"
                                                 MouseDown="DashTabNeuro_Click">
-                                            <TextBlock Text="Neural" Style="{StaticResource DashTabText}"/>
+                                            <TextBlock Text="Стан" Style="{StaticResource DashTabText}"/>
                                         </Border>
                                         <Border x:Name="DashTabDevBtn" Style="{StaticResource DashTabBtn}"
                                                 MouseDown="DashTabDev_Click">
-                                            <TextBlock Text="Dev" Style="{StaticResource DashTabText}"/>
+                                            <TextBlock Text="Розробка" Style="{StaticResource DashTabText}"/>
                                         </Border>
                                         <Border x:Name="DashTabMemoryBtn" Style="{StaticResource DashTabBtn}"
                                                 MouseDown="DashTabMemory_Click">
-                                            <TextBlock Text="Memory" Style="{StaticResource DashTabText}"/>
+                                            <TextBlock Text="Пам'ять" Style="{StaticResource DashTabText}"/>
                                         </Border>
                                         <Border x:Name="DashTabSystemBtn" Style="{StaticResource DashTabBtn}"
                                                 MouseDown="DashTabSystem_Click">
-                                            <TextBlock Text="System" Style="{StaticResource DashTabText}"/>
+                                            <TextBlock Text="Система" Style="{StaticResource DashTabText}"/>
                                         </Border>
                                     </StackPanel>
                                 </Border>
@@ -1137,11 +1137,11 @@
                                                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
                                                     <Ellipse Width="7" Height="7" Fill="{StaticResource KokoPink}"
                                                              Margin="0,0,4,0" VerticalAlignment="Center"/>
-                                                    <TextBlock Text="actual" FontSize="7" Foreground="{StaticResource KokoPink}"
+                                                    <TextBlock Text="факт" FontSize="7" Foreground="{StaticResource KokoPink}"
                                                                VerticalAlignment="Center" Margin="0,0,10,0"/>
                                                     <Rectangle Width="8" Height="1.5" Fill="{StaticResource DashMuted}"
                                                                Margin="0,0,4,0" VerticalAlignment="Center"/>
-                                                    <TextBlock Text="baseline" FontSize="7" Foreground="{StaticResource DashMuted}"
+                                                    <TextBlock Text="база" FontSize="7" Foreground="{StaticResource DashMuted}"
                                                                VerticalAlignment="Center"/>
                                                 </StackPanel>
                                             </Grid>
@@ -1169,7 +1169,7 @@
                                                     <RowDefinition Height="*"/>
                                                     <RowDefinition Height="22"/>
                                                 </Grid.RowDefinitions>
-                                                <TextBlock Grid.Row="0" Text="Connection" Style="{StaticResource DashSmallLabel}" Margin="0,0,0,2"/>
+                                                <TextBlock Grid.Row="0" Text="Зв'язок" Style="{StaticResource DashSmallLabel}" Margin="0,0,0,2"/>
                                                 <Grid Grid.Row="1">
                                                     <Grid.ColumnDefinitions>
                                                         <ColumnDefinition Width="Auto"/>
@@ -1181,7 +1181,7 @@
                                                                FontSize="8" Foreground="{StaticResource KokoGreen}"
                                                                VerticalAlignment="Bottom" Margin="4,0,0,2"/>
                                                 </Grid>
-                                                <TextBlock Grid.Row="2" x:Name="DashKpiBondLabel" Text="KNOWN"
+                                                <TextBlock Grid.Row="2" x:Name="DashKpiBondLabel" Text="ВІДОМИЙ"
                                                            FontSize="7" Foreground="{StaticResource DashMuted}" Margin="0,1,0,0"/>
                                                 <Canvas Grid.Row="3" x:Name="DashKpiSparkConnection" Height="22"/>
                                             </Grid>
@@ -1206,7 +1206,7 @@
                                                                FontSize="8" Foreground="{StaticResource DashMuted}"
                                                                VerticalAlignment="Bottom" Margin="4,0,0,2"/>
                                                 </Grid>
-                                                <TextBlock Grid.Row="2" Text="messages" FontSize="7"
+                                                <TextBlock Grid.Row="2" Text="повідомлень" FontSize="7"
                                                            Foreground="{StaticResource DashMuted}" Margin="0,1,0,0"/>
                                                 <Canvas Grid.Row="3" x:Name="DashKpiSparkMessages" Height="22"/>
                                             </Grid>
@@ -1231,7 +1231,7 @@
                                                                FontSize="8" Foreground="{StaticResource DashMuted}"
                                                                VerticalAlignment="Bottom" Margin="4,0,0,2"/>
                                                 </Grid>
-                                                <TextBlock Grid.Row="2" Text="facts stored" FontSize="7"
+                                                <TextBlock Grid.Row="2" Text="фактів збережено" FontSize="7"
                                                            Foreground="{StaticResource DashMuted}" Margin="0,1,0,0"/>
                                                 <Canvas Grid.Row="3" x:Name="DashKpiSparkMemory" Height="22"/>
                                             </Grid>
@@ -1256,7 +1256,7 @@
                                                                FontSize="8" Foreground="{StaticResource DashMuted}"
                                                                VerticalAlignment="Bottom" Margin="4,0,0,2"/>
                                                 </Grid>
-                                                <TextBlock Grid.Row="2" x:Name="DashKpiPatternLabel" Text="patterns"
+                                                <TextBlock Grid.Row="2" x:Name="DashKpiPatternLabel" Text="патернів"
                                                            FontSize="7" Foreground="{StaticResource DashMuted}" Margin="0,1,0,0"/>
                                                 <Canvas Grid.Row="3" x:Name="DashKpiSparkPatterns" Height="22"/>
                                             </Grid>
@@ -1285,17 +1285,17 @@
                                                         <ColumnDefinition Width="*"/>
                                                     </Grid.ColumnDefinitions>
                                                     <StackPanel Grid.Column="0" HorizontalAlignment="Center">
-                                                        <TextBlock Text="MOOD" Style="{StaticResource DashSmallLabel}" HorizontalAlignment="Center"/>
+                                                        <TextBlock Text="НАСТРІЙ" Style="{StaticResource DashSmallLabel}" HorizontalAlignment="Center"/>
                                                         <TextBlock x:Name="DashHealthMood" Text="?" FontSize="22" FontWeight="Bold"
                                                                    Foreground="{StaticResource KokoCyan}" HorizontalAlignment="Center"/>
                                                     </StackPanel>
                                                     <StackPanel Grid.Column="1" HorizontalAlignment="Center">
-                                                        <TextBlock Text="ENERGY" Style="{StaticResource DashSmallLabel}" HorizontalAlignment="Center"/>
+                                                        <TextBlock Text="ЕНЕРГІЯ" Style="{StaticResource DashSmallLabel}" HorizontalAlignment="Center"/>
                                                         <TextBlock x:Name="DashHealthEnergy" Text="?" FontSize="22" FontWeight="Bold"
                                                                    Foreground="{StaticResource KokoGold}" HorizontalAlignment="Center"/>
                                                     </StackPanel>
                                                     <StackPanel Grid.Column="2" HorizontalAlignment="Center">
-                                                        <TextBlock Text="STRESS" Style="{StaticResource DashSmallLabel}" HorizontalAlignment="Center"/>
+                                                        <TextBlock Text="СТРЕС" Style="{StaticResource DashSmallLabel}" HorizontalAlignment="Center"/>
                                                         <TextBlock x:Name="DashHealthStress" Text="?" FontSize="22" FontWeight="Bold"
                                                                    Foreground="{StaticResource KokoRed}" HorizontalAlignment="Center"/>
                                                     </StackPanel>
@@ -1318,7 +1318,7 @@
                                                             <ColumnDefinition Width="*"/>
                                                             <ColumnDefinition Width="Auto"/>
                                                         </Grid.ColumnDefinitions>
-                                                        <TextBlock x:Name="DashEmotionValue" Text="CALM"
+                                                        <TextBlock x:Name="DashEmotionValue" Text="СПОКІЙНА"
                                                                    FontSize="22" FontWeight="Bold">
                                                             <TextBlock.Foreground><SolidColorBrush Color="#00CED1"/></TextBlock.Foreground>
                                                         </TextBlock>
@@ -1351,7 +1351,7 @@
                                                     <RowDefinition Height="14"/>
                                                 </Grid.RowDefinitions>
                                                 <Grid Grid.Row="0" Margin="0,0,0,6">
-                                                    <TextBlock Text="MOOD 24H // дрейф настрою"
+                                                    <TextBlock Text="НАСТРІЙ 24Г // дрейф стану"
                                                                Style="{StaticResource DashSecHdr}" VerticalAlignment="Center"/>
                                                     <TextBlock x:Name="DashMood24hLabel"
                                                                HorizontalAlignment="Right" FontSize="8"
@@ -1369,7 +1369,7 @@
                                                     <RowDefinition Height="14"/>
                                                 </Grid.RowDefinitions>
                                                 <Grid Grid.Row="0" Margin="0,0,0,6">
-                                                    <TextBlock Text="WEEKLY HEATMAP // 7×24"
+                                                    <TextBlock Text="ТИЖНЕВА МАПА // 7×24"
                                                                Style="{StaticResource DashSecHdr}" VerticalAlignment="Center"/>
                                                     <TextBlock x:Name="DashHeatmapLabel"
                                                                HorizontalAlignment="Right" FontSize="8"
@@ -1395,7 +1395,7 @@
                                                     <RowDefinition Height="*"/>
                                                 </Grid.RowDefinitions>
                                                 <Grid Grid.Row="0" Margin="0,0,0,6">
-                                                    <TextBlock Text="HEART BPM // останні 5 хв"
+                                                    <TextBlock Text="ПУЛЬС // останні 5 хв"
                                                                Style="{StaticResource DashSecHdr}" VerticalAlignment="Center"/>
                                                     <TextBlock x:Name="DashHeartBpmLabel" HorizontalAlignment="Right"
                                                                FontSize="9" FontFamily="Consolas"
@@ -1414,35 +1414,35 @@
                                                     <RowDefinition Height="Auto"/>
                                                     <RowDefinition Height="*"/>
                                                 </Grid.RowDefinitions>
-                                                <TextBlock Grid.Row="0" Text="CARDIAC STATS"
+                                                <TextBlock Grid.Row="0" Text="СТАТИСТИКА ПУЛЬСУ"
                                                            Style="{StaticResource DashSecHdr}" Margin="0,0,0,6"/>
                                                 <StackPanel Grid.Row="1">
                                                     <Grid Margin="0,2">
-                                                        <TextBlock Text="current" FontSize="10" Foreground="{StaticResource DashMuted}"/>
+                                                        <TextBlock Text="поточний" FontSize="10" Foreground="{StaticResource DashMuted}"/>
                                                         <TextBlock x:Name="DashHeartCurText" Text="--"
                                                                    HorizontalAlignment="Right" FontSize="12" FontFamily="Consolas"
                                                                    FontWeight="Bold" Foreground="#FF4D6D"/>
                                                     </Grid>
                                                     <Grid Margin="0,2">
-                                                        <TextBlock Text="baseline" FontSize="10" Foreground="{StaticResource DashMuted}"/>
+                                                        <TextBlock Text="база" FontSize="10" Foreground="{StaticResource DashMuted}"/>
                                                         <TextBlock x:Name="DashHeartBaseText" Text="--"
                                                                    HorizontalAlignment="Right" FontSize="11" FontFamily="Consolas"
                                                                    Foreground="{StaticResource KokoCyan}"/>
                                                     </Grid>
                                                     <Grid Margin="0,2">
-                                                        <TextBlock Text="min / max (5m)" FontSize="10" Foreground="{StaticResource DashMuted}"/>
+                                                        <TextBlock Text="мін / макс (5хв)" FontSize="10" Foreground="{StaticResource DashMuted}"/>
                                                         <TextBlock x:Name="DashHeartMinMaxText" Text="-- / --"
                                                                    HorizontalAlignment="Right" FontSize="11" FontFamily="Consolas"
                                                                    Foreground="#C8C8D0"/>
                                                     </Grid>
                                                     <Grid Margin="0,2">
-                                                        <TextBlock Text="HRV (RMSSD ms)" FontSize="10" Foreground="{StaticResource DashMuted}"/>
+                                                        <TextBlock Text="HRV (RMSSD мс)" FontSize="10" Foreground="{StaticResource DashMuted}"/>
                                                         <TextBlock x:Name="DashHeartHrvText" Text="--"
                                                                    HorizontalAlignment="Right" FontSize="11" FontFamily="Consolas"
                                                                    Foreground="{StaticResource KokoGold}"/>
                                                     </Grid>
                                                     <Grid Margin="0,2">
-                                                        <TextBlock Text="total beats" FontSize="10" Foreground="{StaticResource DashMuted}"/>
+                                                        <TextBlock Text="ударів у буфері" FontSize="10" Foreground="{StaticResource DashMuted}"/>
                                                         <TextBlock x:Name="DashHeartTotalText" Text="0"
                                                                    HorizontalAlignment="Right" FontSize="11" FontFamily="Consolas"
                                                                    Foreground="{StaticResource DashMuted}"/>
@@ -1480,7 +1480,7 @@
                                                     <RowDefinition Height="18"/>
                                                 </Grid.RowDefinitions>
                                                 <Grid Grid.Row="0" Margin="0,0,0,6">
-                                                    <TextBlock Text="GIT ACTIVITY &amp; VELOCITY (ОСТАННІЙ ТИЖДЕНЬ)"
+                                                    <TextBlock Text="АКТИВНІСТЬ GIT І ТЕМП (ОСТАННІЙ ТИЖДЕНЬ)"
                                                                Style="{StaticResource DashSecHdr}" VerticalAlignment="Center"/>
                                                     <TextBlock x:Name="DashGitVelocityLabel" HorizontalAlignment="Right"
                                                                FontSize="8" Foreground="{StaticResource KokoPurple}" VerticalAlignment="Center"/>
@@ -1527,11 +1527,11 @@
                                                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
                                                     <Ellipse Width="7" Height="7" Fill="{StaticResource KokoPurple}"
                                                              Margin="0,0,4,0" VerticalAlignment="Center"/>
-                                                    <TextBlock Text="actual" FontSize="7" Foreground="{StaticResource KokoPurple}"
+                                                    <TextBlock Text="факт" FontSize="7" Foreground="{StaticResource KokoPurple}"
                                                                VerticalAlignment="Center" Margin="0,0,10,0"/>
                                                     <Rectangle Width="8" Height="1.5" Fill="{StaticResource DashMuted}"
                                                                Margin="0,0,4,0" VerticalAlignment="Center"/>
-                                                    <TextBlock Text="ideal" FontSize="7" Foreground="{StaticResource DashMuted}"
+                                                    <TextBlock Text="ідеал" FontSize="7" Foreground="{StaticResource DashMuted}"
                                                                VerticalAlignment="Center"/>
                                                 </StackPanel>
                                             </Grid>
@@ -1619,7 +1619,7 @@
                                                                FontSize="8" Foreground="{StaticResource DashMuted}"
                                                                VerticalAlignment="Bottom" Margin="4,0,0,2"/>
                                                 </Grid>
-                                                <TextBlock Grid.Row="2" Text="memory confidence" FontSize="7" Foreground="{StaticResource DashMuted}" Margin="0,1,0,0"/>
+                                                <TextBlock Grid.Row="2" Text="довіра пам'яті" FontSize="7" Foreground="{StaticResource DashMuted}" Margin="0,1,0,0"/>
                                                 <Canvas Grid.Row="3" x:Name="DashDevKpiSparkCoverage" Height="22"/>
                                             </Grid>
                                         </Border>
@@ -1725,7 +1725,7 @@
                                                         BorderBrush="#1A1A2A" BorderThickness="1" CornerRadius="6"
                                                         Padding="12" Margin="0,0,5,5">
                                                     <StackPanel>
-                                                        <TextBlock Text="MINI APP" FontSize="9" Foreground="#5A5A6E"/>
+                                                        <TextBlock Text="МІНІДОДАТОК" FontSize="9" Foreground="#5A5A6E"/>
                                                         <TextBlock x:Name="DashSysMiniAppStatus" Text="—"
                                                                    FontSize="13" FontWeight="SemiBold"
                                                                    Foreground="{DynamicResource AccentBase}"

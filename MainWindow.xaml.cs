@@ -253,15 +253,15 @@ namespace KokonoeAssistant
                 var somatic = brain.GetSomaticSnapshot();
                 var selfReg = brain.GetSelfRegulationFrame(somatic);
 
-                LiveCoreEmotionText.Text = $"emotion: {emotion.Current.ToString().ToUpper()}";
+                LiveCoreEmotionText.Text = $"емоція: {DashboardEmotionLabel(emotion.Current)}".ToUpper();
                 LiveCoreEmotionText.Foreground = DashMakeBrush(emotion.Current);
-                LiveCoreBondText.Text = $"bond {emotion.Bond} | intensity {emotion.Data.Intensity:F2} | mood {state.MoodScore:F2}";
+                LiveCoreBondText.Text = $"зв'язок {DashboardBondLabel(emotion.Bond)} | сила {emotion.Data.Intensity:F2} | настрій {state.MoodScore:F2}";
 
-                LiveCoreBodyText.Text = $"{somatic.State.ToUpper()} | {somatic.Label}";
-                LiveCoreRegulationText.Text = $"{selfReg.Reaction} -> {selfReg.Regulation} | control {selfReg.Control:F2}";
+                LiveCoreBodyText.Text = $"{DashboardSomaticLabel(somatic.State).ToUpper()} | напруга {somatic.Strain:F2}";
+                LiveCoreRegulationText.Text = $"{DashboardRegulationLabel(selfReg.Reaction)} -> {DashboardRegulationLabel(selfReg.Regulation)} | контроль {selfReg.Control:F2}";
 
                 LiveCorePulseText.Text = heart.CurrentBpm > 0
-                    ? $"{heart.CurrentBpm:0} bpm | delta {heart.BpmDelta:+0;-0;0}"
+                    ? $"{heart.CurrentBpm:0} bpm | зміна {heart.BpmDelta:+0;-0;0}"
                     : "-- bpm";
                 LiveCoreStrainBar.Value = Math.Clamp(somatic.Strain * 100.0, 0, 100);
 
@@ -280,10 +280,10 @@ namespace KokonoeAssistant
                     catch { }
                 }
 
-                LiveCoreMemoryText.Text = $"sync pending {state.PendingVaultExchangeCount}/5 | memory {_liveCoreMemoryItems}";
-                LiveCoreVaultText.Text = $"review {_liveCoreReviewActions} | tasks {_liveCoreOpenTasks}";
+                LiveCoreMemoryText.Text = $"синхронізація {state.PendingVaultExchangeCount}/5 | пам'ять {_liveCoreMemoryItems}";
+                LiveCoreVaultText.Text = $"огляд {_liveCoreReviewActions} | задачі {_liveCoreOpenTasks}";
                 if (state.LastAutoVaultSyncAt > DateTime.MinValue)
-                    LiveCoreVaultText.Text += $" | last {state.LastAutoVaultSyncAt:dd.MM HH:mm}";
+                    LiveCoreVaultText.Text += $" | остання {state.LastAutoVaultSyncAt:dd.MM HH:mm}";
                 if (_lastObsidianPreflightAt > DateTime.MinValue)
                     LiveCoreVaultText.Text += $" | ctx {_lastObsidianPreflightAt:HH:mm:ss}";
             }
@@ -291,10 +291,10 @@ namespace KokonoeAssistant
             {
                 try
                 {
-                    LiveCoreEmotionText.Text = "emotion: offline";
-                    LiveCoreBodyText.Text = "somatic: offline";
+                    LiveCoreEmotionText.Text = "емоція: офлайн";
+                    LiveCoreBodyText.Text = "соматика: офлайн";
                     LiveCorePulseText.Text = "-- bpm";
-                    LiveCoreMemoryText.Text = "memory unavailable";
+                    LiveCoreMemoryText.Text = "пам'ять недоступна";
                     LiveCoreVaultText.Text = ex.Message;
                 }
                 catch { }
@@ -3450,7 +3450,7 @@ tags: [kokonoe, live-core, diagnostics]
                 var emotion = ServiceContainer.EmotionEngine;
                 var cur = emotion.Current;
 
-                DashCurrentMoodDisplay.Text = $"CURRENTLY: {cur}".ToUpper();
+                DashCurrentMoodDisplay.Text = $"СТАН: {DashboardEmotionLabel(cur)}".ToUpper();
                 DashCurrentMoodDisplay.Foreground = DashMakeBrush(cur);
 
                 DashMoodSubtext.Text = cur switch
@@ -3474,13 +3474,13 @@ tags: [kokonoe, live-core, diagnostics]
                     _                                         => "Все в межах норми."
                 };
 
-                DashEmotionValue.Text = cur.ToString().ToUpper();
+                DashEmotionValue.Text = DashboardEmotionLabel(cur).ToUpper();
                 DashEmotionValue.Foreground = DashMakeBrush(cur);
                 DashEmotionIntensity.Text = $"{emotion.Data.Intensity:F2}";
 
                 if (emotion.Secondary.HasValue && emotion.SecondaryIntensity > 0.15f)
                 {
-                    DashEmotionSecondary.Text = $"// {emotion.Secondary} ({emotion.SecondaryIntensity:F2})";
+                    DashEmotionSecondary.Text = $"// вторинна: {DashboardEmotionLabel(emotion.Secondary.Value)} ({emotion.SecondaryIntensity:F2})";
                     DashEmotionSecondary.Visibility = Visibility.Visible;
                 }
                 else DashEmotionSecondary.Visibility = Visibility.Collapsed;
@@ -3917,7 +3917,7 @@ tags: [kokonoe, live-core, diagnostics]
 
                 var connPct = (int)(emotion.ConnectionScore * 100);
                 var connStr = $"{connPct}%";
-                var bondStr = emotion.Bond.ToString().ToUpper();
+                var bondStr = DashboardBondLabel(emotion.Bond).ToUpper();
                 DashKpiConnection.Text = connStr;
                 DashKpiBondLabel.Text  = bondStr;
                 DashSideConnValue.Text = connStr;
@@ -3952,7 +3952,7 @@ tags: [kokonoe, live-core, diagnostics]
 
                 var patCount = patterns.Patterns.Count;
                 DashKpiPatterns.Text     = patCount.ToString();
-                DashKpiPatternLabel.Text = patCount switch { 0 => "no patterns", 1 => "pattern", _ => "patterns" };
+                DashKpiPatternLabel.Text = patCount switch { 0 => "патернів немає", 1 => "патерн", _ => "патернів" };
 
                 var connSpark = DashBuildConnSparkValues(emotion);
                 var msgSpark  = DashBuildDailyMsgSpark(chats);
@@ -4167,14 +4167,14 @@ tags: [kokonoe, live-core, diagnostics]
                 var selfReg = ServiceContainer.BrainEngine.GetSelfRegulationFrame();
                 if (!string.IsNullOrWhiteSpace(selfReg.BehaviorDirective))
                 {
-                    DashFooterComment.Text = $"self-reg: {selfReg.Regulation} · {selfReg.BehaviorDirective}";
+                    DashFooterComment.Text = $"саморегуляція: {DashboardRegulationLabel(selfReg.Regulation)} · {DashboardThoughtForVault(selfReg.BehaviorDirective)}";
                     return;
                 }
 
                 var initiative = ServiceContainer.BrainEngine.GetInitiativeReasonLog(1).FirstOrDefault();
                 if (!string.IsNullOrWhiteSpace(initiative))
                 {
-                    DashFooterComment.Text = $"initiative: {initiative}";
+                    DashFooterComment.Text = $"ініціатива: {DashboardThoughtForVault(initiative)}";
                     return;
                 }
 
@@ -4730,7 +4730,7 @@ tags: [kokonoe, dashboard, live]
                     DashSprintAxisCanvas.Children.Add(DashLabel($"д{d}", d / (double)sprintLen * DashW(DashSprintAxisCanvas, w), 2, 7,
                         MediaColor.FromRgb(74, 61, 92)));
 
-                DashSprintAxisCanvas.Children.Add(DashLabel($"// {sprintDay} actual", 0, 9, 7, MediaColor.FromRgb(155, 77, 202)));
+                DashSprintAxisCanvas.Children.Add(DashLabel($"// день {sprintDay}, факт", 0, 9, 7, MediaColor.FromRgb(155, 77, 202)));
             }
             catch { }
         }
@@ -4773,7 +4773,7 @@ tags: [kokonoe, dashboard, live]
                 var peakHr  = 0; var peakV = 0;
                 for (int h = 0; h < 24; h++) if (hourly[h] > peakV) { peakV = hourly[h]; peakHr = h; }
                 DashDevKpiFocus.Text      = peakV == 0 ? "—" : $"{peakHr:00}";
-                DashDevKpiFocusDelta.Text = peakV == 0 ? "no data" : $":00 ({peakV})";
+                DashDevKpiFocusDelta.Text = peakV == 0 ? "немає даних" : $":00 ({peakV})";
                 var focusSpark = hourly.Skip(Math.Max(0, peakHr - 3)).Take(7)
                                        .Select(v => (double)v).ToArray();
                 if (focusSpark.Length < 7) focusSpark = Enumerable.Repeat(0.0, 7).ToArray();
