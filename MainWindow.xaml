@@ -2729,6 +2729,10 @@
                                 <CheckBox x:Name="SP_Spont" VerticalAlignment="Center" Margin="0,0,8,0"/>
                                 <TextBlock Text="Спонтанні повідомлення" Style="{StaticResource SettingsLabel}" Margin="0"/>
                             </StackPanel>
+                            <TextBlock Text="Мін. інтервал спонтанних повідомлень (хв)" Style="{StaticResource SettingsLabel}"/>
+                            <TextBox x:Name="SP_SpontInterval" Style="{StaticResource SettingInput}" Margin="0,0,0,8"/>
+                            <TextBlock Text="Рівень автономності 0-3" Style="{StaticResource SettingsLabel}"/>
+                            <TextBox x:Name="SP_ProactiveLevel" Style="{StaticResource SettingInput}" Margin="0,0,0,16"/>
                             <StackPanel Orientation="Horizontal" Margin="0,0,0,16">
                                 <CheckBox x:Name="SP_Tray" VerticalAlignment="Center" Margin="0,0,8,0"/>
                                 <TextBlock Text="Мінімізувати в трей" Style="{StaticResource SettingsLabel}" Margin="0"/>

@@ -232,11 +232,10 @@ namespace KokonoeAssistant.Services
             _thinkTimer = new System.Threading.Timer(_ => _ = GuardedThinkAsync(), null,
                 TimeSpan.FromMinutes(5), TimeSpan.FromMinutes(90));
 
-            // Спонтанні перевірки кожні 45 хвилин
-            // SpontaneousCheckAsync має свої внутрішні cooldown-и (3г глобальний, silence levels)
-            // тому частіше перевіряти не має сенсу — вона і так пропустить якщо рано
+            // Спонтанні перевірки частіші за фактичні повідомлення:
+            // рішення все одно проходить через cooldown, настрій, соматику і Telegram guard.
             _spontaneousTimer = new System.Threading.Timer(_ => _ = GuardedSpontaneousAsync(), null,
-                TimeSpan.FromMinutes(8), TimeSpan.FromMinutes(45));
+                TimeSpan.FromMinutes(3), TimeSpan.FromMinutes(10));
         }
 
         // Reentrancy guards: skip tick if previous still running.
@@ -2744,16 +2743,24 @@ namespace KokonoeAssistant.Services
             if (!EnsureTelegram()) return;
 
             var now = DateTime.Now;
+            var autonomyLevel = Math.Clamp(s.ProactiveAutonomyLevel, 0, 3);
+            if (autonomyLevel <= 0) return;
+            var baseInterval = Math.Clamp(s.SpontaneousIntervalMins, 10, 240);
+            var globalCooldown = autonomyLevel switch
+            {
+                >= 3 => Math.Max(20, baseInterval),
+                2    => Math.Max(45, baseInterval),
+                _    => Math.Max(90, baseInterval)
+            };
 
             // ── ГЛОБАЛЬНИЙ COOLDOWN ─────────────────────────────────────
-            // Не надсилати нічого якщо менше 3 годин від останнього
-            // спонтанного (будь-якого типу). Виключення: ранковий/нічний
-            // привіт і CrisisSupport.
+            // Не надсилати нічого якщо ще не минув мінімальний інтервал.
+            // У живому режимі він нижчий, але все одно є, бо Telegram не смітник.
             var minsSinceLast = (now - _state.LastSpontaneousAt).TotalMinutes;
-            if (minsSinceLast < 180) return;
+            if (minsSinceLast < globalCooldown) return;
 
-            // Вночі (23:30–6:30) — взагалі мовчати крім кризи
-            if (now.Hour >= 23 || now.Hour < 6) return;
+            // Вночі — мовчати крім явно високого рівня автономності, кризи і нічного чекіну.
+            if ((now.Hour >= 23 || now.Hour < 6) && autonomyLevel < 3) return;
             // ────────────────────────────────────────────────────────────
 
             // Ранковий привіт (6:30–9:00, один раз на день)
@@ -2861,7 +2868,8 @@ namespace KokonoeAssistant.Services
                     var silenceMin = (now - lastUser.Timestamp).TotalMinutes;
 
                     // Рівень 1: базово 60хв, BPM може опустити до ~35хв або підняти до ~90хв
-                    var l1Threshold = Math.Max(35, 60 + bpmMod);
+                    var l1Base = autonomyLevel >= 3 ? 35 : 60;
+                    var l1Threshold = Math.Max(25, l1Base + bpmMod);
                     if (silenceMin > l1Threshold && (now - _state.SilenceLevel1At).TotalHours > 2)
                     {
                         var style = ChooseStyle(now, silenceMin);
@@ -2871,7 +2879,8 @@ namespace KokonoeAssistant.Services
                         return;
                     }
                     // Рівень 2: базово 3г, BPM може опустити до ~2г або підняти до ~4г
-                    var l2Threshold = Math.Max(90, 180 + bpmMod * 2);
+                    var l2Base = autonomyLevel >= 3 ? 110 : 180;
+                    var l2Threshold = Math.Max(70, l2Base + bpmMod * 2);
                     if (silenceMin > l2Threshold && (now - _state.SilenceLevel2At).TotalHours > 4)
                     {
                         await SendSpontaneousAsync("silence_l2", ChooseStyle(now, silenceMin));
@@ -2893,11 +2902,17 @@ namespace KokonoeAssistant.Services
             catch { }
 
             // State-driven spontaneous — активний час (9-23), мінімум між повідомленнями BPM-чутливий
-            var minInterval = Math.Max(30, s.SpontaneousIntervalMins + bpmMod);
+            var minInterval = Math.Max(15, baseInterval + bpmMod);
             if (now.Hour >= 9 && now.Hour < 23 &&
                 (now - _state.LastSpontaneousAt).TotalMinutes > minInterval)
             {
-                await TryStateTriggeredSpontaneous(now);
+                await TryStateTriggeredSpontaneous(now, autonomyLevel);
+            }
+            else if (autonomyLevel >= 3 &&
+                     (now.Hour >= 6 || now.Hour < 2) &&
+                     (now - _state.LastSpontaneousAt).TotalMinutes > Math.Max(20, minInterval))
+            {
+                await TryStateTriggeredSpontaneous(now, autonomyLevel);
             }
         }
 
@@ -2905,7 +2920,7 @@ namespace KokonoeAssistant.Services
         // STATE-DRIVEN SPONTANEOUS — пише бо є внутрішня причина
         // ══════════════════════════════════════════════════════════════
 
-        private async Task TryStateTriggeredSpontaneous(DateTime now)
+        private async Task TryStateTriggeredSpontaneous(DateTime now, int autonomyLevel)
         {
             var initiativeBpmDeviation = 0d;
             try
@@ -2921,7 +2936,7 @@ namespace KokonoeAssistant.Services
 
             var somatic = GetSomaticSnapshot();
             var selfRegulation = GetSelfRegulationFrame(somatic);
-            var decision = Initiative.Evaluate(now, _state, Emotion, Relationship, Memory, _chatRepo, initiativeBpmDeviation, somatic, selfRegulation);
+            var decision = Initiative.Evaluate(now, _state, Emotion, Relationship, Memory, _chatRepo, initiativeBpmDeviation, somatic, selfRegulation, autonomyLevel);
             Initiative.RecordDecision(_state, decision, now);
 
             if (!decision.ShouldAct)
@@ -2933,6 +2948,7 @@ namespace KokonoeAssistant.Services
             switch (decision.Trigger)
             {
                 case "curiosity":
+                case "curiosity_ping":
                     if (_state.CuriosityQueue.Count > 0)
                     {
                         _state.CuriosityQueue.RemoveAt(_state.CuriosityQueue.Count - 1);
@@ -2947,6 +2963,7 @@ namespace KokonoeAssistant.Services
                     _state.LastMonologueSentAt = now;
                     break;
                 case "pending":
+                case "pending_ping":
                     if (_state.PendingThoughts.Count > 0)
                         _state.PendingThoughts.RemoveAt(_state.PendingThoughts.Count - 1);
                     break;

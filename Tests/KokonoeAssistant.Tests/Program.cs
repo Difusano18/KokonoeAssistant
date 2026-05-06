@@ -18,6 +18,7 @@ internal static class Program
             Run("Self regulation protects vulnerable tone", SelfRegulationProtectsVulnerableTone);
             Run("Initiative respects low-power silence", InitiativeRespectsLowPowerSilence);
             Run("Initiative reacts to protective override", InitiativeReactsToProtectiveOverride);
+            Run("Initiative high autonomy asks curiosity sooner", InitiativeHighAutonomyAsksCuriositySooner);
             Run("Inspector renders state report", InspectorRendersStateReport);
             Run("Obsidian vault architecture maintenance", ObsidianVaultArchitectureMaintenance);
             Run("Obsidian unique memory append", ObsidianUniqueMemoryAppend);
@@ -159,6 +160,39 @@ internal static class Program
 
         AssertTrue(decision.ShouldAct, "protective override should create initiative");
         AssertEqual("self_regulation_protect", decision.Trigger, "protect trigger should win");
+    }
+
+    private static void InitiativeHighAutonomyAsksCuriositySooner()
+    {
+        using var ctx = TestContext.Create();
+        var now = DateTime.Now;
+        var state = new KokoInternalState
+        {
+            LastSpontaneousAt = now.AddMinutes(-40),
+            LastCuriosityAskAt = now.AddMinutes(-90)
+        };
+        state.CuriosityQueue.Add("Чому ти знову відкладаєш сон?");
+
+        var cautious = new KokoInitiativeEngine().Evaluate(
+            now,
+            state,
+            ctx.Emotion,
+            ctx.Relationship,
+            ctx.Memory,
+            ctx.Chat,
+            autonomyLevel: 2);
+        AssertTrue(!cautious.ShouldAct, "normal autonomy should wait for the longer curiosity cooldown");
+
+        var active = new KokoInitiativeEngine().Evaluate(
+            now,
+            state,
+            ctx.Emotion,
+            ctx.Relationship,
+            ctx.Memory,
+            ctx.Chat,
+            autonomyLevel: 3);
+        AssertTrue(active.ShouldAct, "high autonomy should allow earlier curiosity pings");
+        AssertEqual("curiosity_ping", active.Trigger, "high autonomy should use the curiosity ping trigger");
     }
 
     private static void InspectorRendersStateReport()

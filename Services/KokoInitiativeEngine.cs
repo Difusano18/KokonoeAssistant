@@ -35,9 +35,10 @@ namespace KokonoeAssistant.Services
             ChatRepository chatRepo,
             double bpmDeviation = 0,
             KokoSomaticSnapshot? somatic = null,
-            KokoSelfRegulationFrame? selfRegulation = null)
+            KokoSelfRegulationFrame? selfRegulation = null,
+            int autonomyLevel = 2)
         {
-            var candidates = BuildCandidates(now, state, emotion, relationship, memory, chatRepo, bpmDeviation, somatic, selfRegulation)
+            var candidates = BuildCandidates(now, state, emotion, relationship, memory, chatRepo, bpmDeviation, somatic, selfRegulation, autonomyLevel)
                 .OrderByDescending(c => c.Priority)
                 .ToList();
 
@@ -138,10 +139,12 @@ namespace KokonoeAssistant.Services
             ChatRepository chatRepo,
             double bpmDeviation,
             KokoSomaticSnapshot? somatic,
-            KokoSelfRegulationFrame? selfRegulation)
+            KokoSelfRegulationFrame? selfRegulation,
+            int autonomyLevel)
         {
             var currentEmotion = emotion.Current.ToString();
             var relationshipState = relationship.State;
+            autonomyLevel = Math.Clamp(autonomyLevel, 0, 3);
 
             if (state.PersonalityInCrisis)
             {
@@ -227,6 +230,21 @@ namespace KokonoeAssistant.Services
                     TimeSpan.FromHours(3));
             }
 
+            if (autonomyLevel >= 3 &&
+                state.CuriosityQueue.Count > 0 &&
+                (now - state.LastCuriosityAskAt).TotalMinutes > 55 &&
+                (now - state.LastSpontaneousAt).TotalMinutes > 25)
+            {
+                var q = state.CuriosityQueue[^1];
+                yield return new Candidate(
+                    "curiosity_ping",
+                    "jab",
+                    "high autonomy allows a quicker curiosity question",
+                    $"Ask this question because it is currently bothering you: \"{q}\". One short Ukrainian message. It can be a jab.",
+                    72 + (int)(relationshipState.Curiosity * 10),
+                    TimeSpan.FromMinutes(75));
+            }
+
             if (!string.IsNullOrEmpty(state.LastSentEmotionState) &&
                 state.LastSentEmotionState != currentEmotion &&
                 (now - state.LastSpontaneousAt).TotalMinutes > 45)
@@ -278,6 +296,20 @@ namespace KokonoeAssistant.Services
                     TimeSpan.FromHours(2));
             }
 
+            if (autonomyLevel >= 3 &&
+                state.PendingThoughts.Count > 0 &&
+                (now - state.LastSpontaneousAt).TotalMinutes > 25)
+            {
+                var thought = state.PendingThoughts[^1];
+                yield return new Candidate(
+                    "pending_ping",
+                    "pending",
+                    "high autonomy surfaces a pending thought without waiting for the long cooldown",
+                    $"Pending thought: \"{thought}\". Say it now if it still has teeth. One short Ukrainian message.",
+                    69,
+                    TimeSpan.FromMinutes(70));
+            }
+
             var agitated = emotion.Current is
                 KokoEmotionEngine.EmotionState.Excited or
                 KokoEmotionEngine.EmotionState.Irritated or
@@ -296,6 +328,22 @@ namespace KokonoeAssistant.Services
                     $"Current emotion is {currentEmotion}. Send one concrete, not-generic line.",
                     55,
                     TimeSpan.FromHours(1));
+            }
+
+            if (autonomyLevel >= 3 &&
+                (emotion.Current is KokoEmotionEngine.EmotionState.Playful
+                    or KokoEmotionEngine.EmotionState.Curious
+                    or KokoEmotionEngine.EmotionState.Irritated
+                    or KokoEmotionEngine.EmotionState.Excited) &&
+                (now - state.LastSpontaneousAt).TotalMinutes > 35)
+            {
+                yield return new Candidate(
+                    "mood_ping",
+                    emotion.Current == KokoEmotionEngine.EmotionState.Irritated ? "jab" : "observation",
+                    $"autonomous mood pressure: {currentEmotion}",
+                    $"Current mood is {currentEmotion}. Write one short, context-aware Ukrainian message: a question, jab, observation, or tiny provocation. Avoid generic check-ins.",
+                    58,
+                    TimeSpan.FromMinutes(80));
             }
 
             var lastUser = chatRepo.GetMessages(30)

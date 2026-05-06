@@ -198,6 +198,12 @@
                                    Text="Spontaneous messages"/>
                     </StackPanel>
 
+                    <TextBlock Text="Spontaneous interval (minutes)" Style="{StaticResource SettingsLabel}"/>
+                    <TextBox x:Name="SpontIntervalBox" Style="{StaticResource SettingInput}" Margin="0,0,0,8"/>
+
+                    <TextBlock Text="Proactive autonomy level (0-3)" Style="{StaticResource SettingsLabel}"/>
+                    <TextBox x:Name="ProactiveLevelBox" Style="{StaticResource SettingInput}" Margin="0,0,0,10"/>
+
                     <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
                         <CheckBox x:Name="TrayBox" VerticalAlignment="Center" Margin="0,0,8,0"/>
                         <TextBlock Text="Minimize to tray" Foreground="#9090A8"

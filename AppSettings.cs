@@ -77,6 +77,7 @@ namespace KokonoeAssistant
         // Spontaneous messages
         public bool SpontaneousEnabled      { get; set; } = true;
         public int  SpontaneousIntervalMins { get; set; } = 25;
+        public int  ProactiveAutonomyLevel  { get; set; } = 3; // 0=тихо, 1=обережно, 2=нормально, 3=живий режим
 
         // System
         public bool MinimizeToTray      { get; set; } = true;

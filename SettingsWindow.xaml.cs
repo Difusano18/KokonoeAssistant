@@ -42,6 +42,8 @@ namespace KokonoeAssistant
             TgPhoneBox.Text         = _settings.TgPhone;
             TgDmOnlyBox.IsChecked   = _settings.TgDmOnly;
             SpontBox.IsChecked     = _settings.SpontaneousEnabled;
+            SpontIntervalBox.Text   = _settings.SpontaneousIntervalMins.ToString();
+            ProactiveLevelBox.Text  = _settings.ProactiveAutonomyLevel.ToString();
             TrayBox.IsChecked      = _settings.MinimizeToTray;
             VoiceBox.IsChecked     = _settings.VoiceInputEnabled;
             TtsBox.IsChecked       = _settings.TtsEnabled;
@@ -129,6 +131,10 @@ namespace KokonoeAssistant
             if (int.TryParse(TgApiIdBox.Text.Trim(), out var apiId))
                 _settings.TgApiId = apiId;
             _settings.SpontaneousEnabled = SpontBox.IsChecked == true;
+            if (int.TryParse(SpontIntervalBox.Text.Trim(), out var spontMins))
+                _settings.SpontaneousIntervalMins = Math.Clamp(spontMins, 10, 240);
+            if (int.TryParse(ProactiveLevelBox.Text.Trim(), out var proactiveLevel))
+                _settings.ProactiveAutonomyLevel = Math.Clamp(proactiveLevel, 0, 3);
             _settings.MinimizeToTray     = TrayBox.IsChecked == true;
             _settings.VoiceInputEnabled  = VoiceBox.IsChecked == true;
             _settings.TtsEnabled         = TtsBox.IsChecked == true;
@@ -157,5 +163,4 @@ namespace KokonoeAssistant
         }
     }
 }
-
 

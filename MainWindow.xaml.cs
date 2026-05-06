@@ -6018,6 +6018,8 @@ tags: [kokonoe, dashboard, live]
             SP_OpenAiKey.Text       = s.OpenAiApiKey;
             SP_VaultPath.Text       = s.VaultPath;
             SP_Spont.IsChecked      = s.SpontaneousEnabled;
+            SP_SpontInterval.Text   = s.SpontaneousIntervalMins.ToString();
+            SP_ProactiveLevel.Text  = s.ProactiveAutonomyLevel.ToString();
             SP_Tray.IsChecked       = s.MinimizeToTray;
             SP_AccentColor.Text     = s.MatrixColor;
             UpdateColorPreview(s.MatrixColor);
@@ -6341,6 +6343,10 @@ tags: [kokonoe, dashboard, live]
             s.OpenAiApiKey       = SP_OpenAiKey.Text.Trim();
             s.VaultPath          = SP_VaultPath.Text.Trim();
             s.SpontaneousEnabled = SP_Spont.IsChecked == true;
+            if (int.TryParse(SP_SpontInterval.Text.Trim(), out var spontMins))
+                s.SpontaneousIntervalMins = Math.Clamp(spontMins, 10, 240);
+            if (int.TryParse(SP_ProactiveLevel.Text.Trim(), out var proactiveLevel))
+                s.ProactiveAutonomyLevel = Math.Clamp(proactiveLevel, 0, 3);
             s.MinimizeToTray     = SP_Tray.IsChecked == true;
             s.MatrixColor        = string.IsNullOrWhiteSpace(SP_AccentColor.Text) ? "#00E676" : SP_AccentColor.Text.Trim();
 
