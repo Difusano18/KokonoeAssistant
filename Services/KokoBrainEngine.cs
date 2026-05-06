@@ -113,6 +113,9 @@ namespace KokonoeAssistant.Services
         public string LastInternalDaySummary { get; set; } = "";
         public string LastInternalDayFocus { get; set; } = "";
         public List<string> InternalDayTrace { get; set; } = new();
+        public string LastAutonomyDecision { get; set; } = "";
+        public DateTime LastAutonomyDecisionAt { get; set; } = DateTime.MinValue;
+        public List<string> AutonomyDecisionLog { get; set; } = new();
 
         public int PendingVaultExchangeCount { get; set; }
         public List<string> PendingVaultExchangeBuffer { get; set; } = new();
@@ -174,6 +177,7 @@ namespace KokonoeAssistant.Services
         public readonly KokoStateInspectorService Inspector;
         public readonly KokoPresenceContinuityEngine Presence;
         public readonly KokoInternalDayEngine InternalDay;
+        public readonly KokoAutonomyDecisionEngine Autonomy;
 
         // ── Зовнішні сервіси (опціональні) ───────────────────────────
         private EnhancedMemory?    _enhanced;
@@ -250,6 +254,7 @@ namespace KokonoeAssistant.Services
             Inspector = new KokoStateInspectorService();
             Presence = new KokoPresenceContinuityEngine();
             InternalDay = new KokoInternalDayEngine();
+            Autonomy = new KokoAutonomyDecisionEngine();
 
             // Підключити нові сервіси в LLM
             _llm.Memory    = Memory;
@@ -486,6 +491,7 @@ namespace KokonoeAssistant.Services
             {
                 var patCtx = Patterns.BuildPatternContext(4);
                 if (!string.IsNullOrEmpty(patCtx)) sb.AppendLine("\n" + patCtx);
+                sb.AppendLine("\n" + Patterns.BuildRhythmContext(now));
                 var moodForecast = Patterns.PredictTodayMood();
                 if (!string.IsNullOrEmpty(moodForecast)) sb.AppendLine($"[Прогноз] {moodForecast}");
             }
@@ -674,6 +680,7 @@ namespace KokonoeAssistant.Services
                 sb.AppendLine(Initiative.BuildDebugBlock(_state));
                 sb.AppendLine(Presence.BuildDebugBlock(_state));
                 sb.AppendLine(InternalDay.BuildDebugBlock(_state));
+                sb.AppendLine(Autonomy.BuildDebugBlock(_state));
             }
             catch { }
 
@@ -3163,26 +3170,13 @@ namespace KokonoeAssistant.Services
             var selfRegulation = GetSelfRegulationFrame(somatic);
             var presence = BuildPresenceFrame(now, autonomyLevel);
             var internalDay = BuildInternalDayFrame(now, autonomyLevel, presence);
-            if (presence.ShouldInterrupt && presence.Priority >= 80)
-            {
-                _state.LastPresenceInterruptAt = now;
-                Initiative.RecordDecision(_state, new KokoInitiativeDecision
-                {
-                    ShouldAct = true,
-                    Trigger = presence.Trigger,
-                    StyleHint = presence.StyleHint,
-                    Reason = $"{presence.SummaryUk} | {internalDay.SummaryUk}",
-                    ExtraContext = presence.ExtraContext + "\n" + internalDay.PromptBlock,
-                    Priority = Math.Min(100, presence.Priority + Math.Max(0, internalDay.InitiativeBias / 3)),
-                    NextAllowedAt = now.AddHours(2)
-                }, now);
-                SaveState();
-                await SendSpontaneousAsync(presence.Trigger, MapInitiativeStyle(presence.StyleHint), presence.ExtraContext + "\n" + internalDay.PromptBlock);
-                return;
-            }
 
-            var decision = Initiative.Evaluate(now, _state, Emotion, Relationship, Memory, _chatRepo, initiativeBpmDeviation, somatic, selfRegulation, autonomyLevel);
-            Initiative.RecordDecision(_state, decision, now);
+            var initiative = Initiative.Evaluate(now, _state, Emotion, Relationship, Memory, _chatRepo, initiativeBpmDeviation, somatic, selfRegulation, autonomyLevel);
+            Initiative.RecordDecision(_state, initiative, now);
+
+            var rhythm = Patterns.BuildRhythmProfile(now);
+            var decision = Autonomy.Evaluate(now, _state, presence, internalDay, initiative, Relationship.State, somatic, rhythm, autonomyLevel);
+            Autonomy.RecordDecision(_state, decision, now);
 
             if (!decision.ShouldAct)
             {
@@ -3190,7 +3184,20 @@ namespace KokonoeAssistant.Services
                 return;
             }
 
-            switch (decision.Trigger)
+            if (decision.ConsumesPresenceInterrupt)
+                _state.LastPresenceInterruptAt = now;
+
+            if (decision.ConsumesInitiativeState)
+                ConsumeInitiativeState(decision.Trigger, now, initiativeEmotion);
+
+            SaveState();
+            await SendSpontaneousAsync(decision.Trigger, MapInitiativeStyle(decision.StyleHint), decision.ExtraContext);
+            return;
+        }
+
+        private void ConsumeInitiativeState(string trigger, DateTime now, string initiativeEmotion)
+        {
+            switch (trigger)
             {
                 case "curiosity":
                 case "curiosity_ping":
@@ -3216,10 +3223,6 @@ namespace KokonoeAssistant.Services
                     _state.PendingTriggers.RemoveAll(t => t.FireAt <= now);
                     break;
             }
-
-            SaveState();
-            await SendSpontaneousAsync(decision.Trigger, MapInitiativeStyle(decision.StyleHint), decision.ExtraContext);
-            return;
         }
 
 #if false

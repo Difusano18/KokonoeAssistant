@@ -24,10 +24,13 @@ namespace KokonoeAssistant.Services
         public string LastInternalDaySummary { get; set; } = "";
         public string LastInternalDayPhase { get; set; } = "";
         public string LastInternalDayFocus { get; set; } = "";
+        public string LastAutonomyDecision { get; set; } = "";
         public string[] InitiativeLog { get; set; } = Array.Empty<string>();
         public string[] SelfRegulationLog { get; set; } = Array.Empty<string>();
         public string[] PresenceTrace { get; set; } = Array.Empty<string>();
         public string[] InternalDayTrace { get; set; } = Array.Empty<string>();
+        public string[] AutonomyDecisionLog { get; set; } = Array.Empty<string>();
+        public object[] RelationshipEvents { get; set; } = Array.Empty<object>();
         public string[] CuriosityQueue { get; set; } = Array.Empty<string>();
         public string[] InnerMonologues { get; set; } = Array.Empty<string>();
         public object[] TopFacts { get; set; } = Array.Empty<object>();
@@ -65,10 +68,28 @@ namespace KokonoeAssistant.Services
                 LastInternalDaySummary = state.LastInternalDaySummary,
                 LastInternalDayPhase = state.LastInternalDayPhase,
                 LastInternalDayFocus = state.LastInternalDayFocus,
+                LastAutonomyDecision = state.LastAutonomyDecision,
                 InitiativeLog = initiativeLog,
                 SelfRegulationLog = selfRegulationLog,
                 PresenceTrace = state.PresenceTrace.TakeLast(10).Reverse().ToArray(),
                 InternalDayTrace = state.InternalDayTrace.TakeLast(10).Reverse().ToArray(),
+                AutonomyDecisionLog = state.AutonomyDecisionLog.TakeLast(10).Reverse().ToArray(),
+                RelationshipEvents = relationship.State.RecentEvents
+                    .TakeLast(8)
+                    .Reverse()
+                    .Select(e => new
+                    {
+                        e.When,
+                        e.Kind,
+                        e.Reason,
+                        e.Aftertaste,
+                        e.Trust,
+                        e.Intimacy,
+                        e.Friction,
+                        e.Protectiveness
+                    })
+                    .Cast<object>()
+                    .ToArray(),
                 CuriosityQueue = state.CuriosityQueue.TakeLast(12).Reverse().ToArray(),
                 InnerMonologues = state.InnerMonologues.TakeLast(12).Reverse().ToArray(),
                 TopFacts = memory.GetTopFacts(12)
@@ -121,6 +142,7 @@ namespace KokonoeAssistant.Services
             sb.AppendLine($"| емоція | {snapshot.Emotion} ({snapshot.EmotionIntensity:F2}) |");
             sb.AppendLine($"| зв'язок | {snapshot.Bond} / близькість {snapshot.ConnectionScore:P0} |");
             sb.AppendLine($"| ініціатива | {Escape(snapshot.LastInitiativeDecision)} |");
+            sb.AppendLine($"| автономність | {Escape(snapshot.LastAutonomyDecision)} |");
             sb.AppendLine($"| presence | {Escape(snapshot.LastPresenceSummary)} |");
             sb.AppendLine($"| внутрішній день | {Escape(snapshot.LastInternalDaySummary)} |");
             sb.AppendLine();
@@ -133,12 +155,17 @@ namespace KokonoeAssistant.Services
             sb.AppendLine();
             AppendList(sb, "Сліди присутності", snapshot.PresenceTrace);
             AppendList(sb, "Сліди внутрішнього дня", snapshot.InternalDayTrace);
+            AppendList(sb, "Журнал автономності", snapshot.AutonomyDecisionLog);
 
             sb.AppendLine("## Стосунок");
             sb.AppendLine();
             sb.AppendLine("| Довіра | Близькість | Тертя | Захист | Цікавість | Стабільність | Оцінка зв'язку | Післясмак |");
             sb.AppendLine("|---:|---:|---:|---:|---:|---:|---:|---|");
             sb.AppendLine($"| {snapshot.Relationship.Trust:F2} | {snapshot.Relationship.Intimacy:F2} | {snapshot.Relationship.Friction:F2} | {snapshot.Relationship.Protectiveness:F2} | {snapshot.Relationship.Curiosity:F2} | {snapshot.Relationship.Stability:F2} | {snapshot.Relationship.BondScore:F2} | {Escape(snapshot.Relationship.LastAftertaste)} |");
+            sb.AppendLine();
+            sb.AppendLine("### Події стосунку");
+            sb.AppendLine();
+            AppendJsonObjects(sb, snapshot.RelationshipEvents);
             sb.AppendLine();
 
             sb.AppendLine("## Соматика");

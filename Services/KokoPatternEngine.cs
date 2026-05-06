@@ -85,14 +85,18 @@ namespace KokonoeAssistant.Services
         /// <summary>Записати зразок активності (виклик після кожного повідомлення)</summary>
         public void RecordActivity(bool wasActive, string tone = "neutral", int messageCount = 1)
         {
+            RecordActivityAt(DateTime.Now, wasActive, tone, messageCount);
+        }
+
+        public void RecordActivityAt(DateTime when, bool wasActive, string tone = "neutral", int messageCount = 1)
+        {
             lock (_lock)
             {
-                var now = DateTime.Now;
                 _data.Samples.Add(new ActivitySample
                 {
-                    When         = now,
-                    Hour         = now.Hour,
-                    DayOfWeek    = (int)now.DayOfWeek,
+                    When         = when,
+                    Hour         = when.Hour,
+                    DayOfWeek    = (int)when.DayOfWeek,
                     WasActive    = wasActive,
                     Tone         = tone,
                     MessageCount = messageCount
@@ -393,6 +397,95 @@ namespace KokonoeAssistant.Services
             public string Description { get; set; } = ""; // "Після поганого сну настрій гірший"
             public float  Confidence  { get; set; } = 0.5f;
             public string Actionable  { get; set; } = ""; // "Краще не чіпати важкі теми вранці"
+        }
+
+        public sealed class RhythmProfile
+        {
+            public int Hour { get; set; }
+            public int DayOfWeek { get; set; }
+            public float CurrentSlotActivityRate { get; set; }
+            public int CurrentSlotSamples { get; set; }
+            public int[] ActiveHours { get; set; } = Array.Empty<int>();
+            public int[] QuietHours { get; set; } = Array.Empty<int>();
+            public string Recommendation { get; set; } = "";
+            public string Summary { get; set; } = "";
+        }
+
+        public RhythmProfile BuildRhythmProfile(DateTime? at = null)
+        {
+            lock (_lock)
+            {
+                var now = at ?? DateTime.Now;
+                var hour = now.Hour;
+                var dow = (int)now.DayOfWeek;
+
+                var slot = _data.Samples
+                    .Where(s => s.Hour == hour && s.DayOfWeek == dow)
+                    .ToList();
+                var slotRate = slot.Count == 0
+                    ? 0f
+                    : (float)slot.Count(s => s.WasActive) / slot.Count;
+
+                var byHour = _data.Samples
+                    .GroupBy(s => s.Hour)
+                    .Select(g => new
+                    {
+                        Hour = g.Key,
+                        Count = g.Count(),
+                        Rate = (float)g.Count(s => s.WasActive) / g.Count()
+                    })
+                    .Where(x => x.Count >= 3)
+                    .ToList();
+
+                var active = byHour
+                    .Where(x => x.Rate >= 0.60f)
+                    .OrderByDescending(x => x.Rate)
+                    .ThenBy(x => x.Hour)
+                    .Take(6)
+                    .Select(x => x.Hour)
+                    .ToArray();
+
+                var quiet = byHour
+                    .Where(x => x.Rate <= 0.25f)
+                    .OrderBy(x => x.Hour)
+                    .Take(8)
+                    .Select(x => x.Hour)
+                    .ToArray();
+
+                var recommendation = slot.Count < 3
+                    ? "недостатньо даних для цього слоту"
+                    : slotRate >= 0.65f
+                        ? "типово активний час; можна писати, якщо є зміст"
+                        : slotRate <= 0.25f
+                            ? "типово тихий час; краще не втручатися без причини"
+                            : "нейтральний час; рішення має йти від контексту";
+
+                return new RhythmProfile
+                {
+                    Hour = hour,
+                    DayOfWeek = dow,
+                    CurrentSlotActivityRate = slotRate,
+                    CurrentSlotSamples = slot.Count,
+                    ActiveHours = active,
+                    QuietHours = quiet,
+                    Recommendation = recommendation,
+                    Summary = $"Ритм {DayName(dow)} {hour}:00: активність {slotRate:P0} на {slot.Count} зразках; {recommendation}."
+                };
+            }
+        }
+
+        public string BuildRhythmContext(DateTime? at = null)
+        {
+            var r = BuildRhythmProfile(at);
+            var sb = new StringBuilder();
+            sb.AppendLine("=== РИТМ КОРИСТУВАЧА ===");
+            sb.AppendLine(r.Summary);
+            if (r.ActiveHours.Length > 0)
+                sb.AppendLine("Типово активні години: " + string.Join(", ", r.ActiveHours.Select(h => $"{h}:00")));
+            if (r.QuietHours.Length > 0)
+                sb.AppendLine("Типово тихі години: " + string.Join(", ", r.QuietHours.Select(h => $"{h}:00")));
+            sb.AppendLine("Правило: ритм лише модифікує рішення, а не замінює presence/context.");
+            return sb.ToString();
         }
 
         /// <summary>Знайти кореляції між паттернами (sleep→mood, topic→disappear)</summary>

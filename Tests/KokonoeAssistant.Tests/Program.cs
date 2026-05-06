@@ -25,6 +25,9 @@ internal static class Program
             Run("Presence long silence can interrupt on high autonomy", PresenceLongSilenceCanInterruptOnHighAutonomy);
             Run("Internal day shifts phase and writes vault status", InternalDayShiftsPhaseAndWritesVaultStatus);
             Run("Internal day prefers silence at low power night", InternalDayPrefersSilenceAtLowPowerNight);
+            Run("Autonomy pipeline gates weak initiative in quiet night", AutonomyPipelineGatesWeakInitiativeInQuietNight);
+            Run("Relationship records shift events", RelationshipRecordsShiftEvents);
+            Run("Pattern rhythm profile recommends quiet slot", PatternRhythmProfileRecommendsQuietSlot);
             Run("Inspector renders state report", InspectorRendersStateReport);
             Run("Obsidian vault architecture maintenance", ObsidianVaultArchitectureMaintenance);
             Run("Obsidian unique memory append", ObsidianUniqueMemoryAppend);
@@ -367,6 +370,101 @@ internal static class Program
         AssertTrue(frame.PromptBlock.Contains("Перевага: мовчати"), "prompt block should carry silence preference");
     }
 
+    private static void AutonomyPipelineGatesWeakInitiativeInQuietNight()
+    {
+        var now = new DateTime(2026, 5, 7, 3, 10, 0);
+        var state = new KokoInternalState();
+        var presence = new KokoPresenceFrame
+        {
+            SituationKind = "recent_contact",
+            SummaryUk = "Він писав недавно.",
+            SilenceMinutes = 8,
+            ShouldInterrupt = false
+        };
+        var internalDay = new KokoInternalDayFrame
+        {
+            Phase = "low_power_night",
+            SummaryUk = "Нічний мінімум: економити енергію.",
+            PromptBlock = "INTERNAL DAY\nПеревага: мовчати.\n",
+            ShouldPreferSilence = true,
+            InitiativeBias = -20
+        };
+        var initiative = new KokoInitiativeDecision
+        {
+            ShouldAct = true,
+            Trigger = "mood_ping",
+            StyleHint = "jab",
+            Reason = "weak mood pressure",
+            Priority = 58,
+            ExtraContext = "weak context"
+        };
+        var rhythm = new KokoPatternEngine.RhythmProfile
+        {
+            CurrentSlotSamples = 8,
+            CurrentSlotActivityRate = 0.10f,
+            Summary = "типово тихий слот"
+        };
+
+        var decision = new KokoAutonomyDecisionEngine().Evaluate(
+            now,
+            state,
+            presence,
+            internalDay,
+            initiative,
+            new KokoRelationshipState(),
+            new KokoSomaticSnapshot { State = "tired", Strain = 0.10, Calm = 0.50 },
+            rhythm,
+            autonomyLevel: 3);
+
+        AssertTrue(!decision.ShouldAct, "quiet low-power night should gate weak initiative");
+        AssertTrue(decision.SilenceReason.Contains("мовчати") || decision.SilenceReason.Contains("тихий"), "silence reason should explain the gate");
+    }
+
+    private static void RelationshipRecordsShiftEvents()
+    {
+        using var ctx = TestContext.Create();
+        ctx.Relationship.ObserveUserTone("vulnerable", crisis: false);
+        ctx.Relationship.ApplyReflection(new KokoConversationReflection
+        {
+            Reflection = "Користувач довірив важливу деталь.",
+            Aftertaste = "closer",
+            TrustDelta = 0.03f,
+            IntimacyDelta = 0.04f
+        });
+
+        var events = ctx.Relationship.GetRecentEvents(5);
+        var prompt = ctx.Relationship.BuildPromptBlock();
+
+        AssertTrue(events.Count >= 2, "relationship should keep recent shift events");
+        AssertTrue(events.Any(e => e.Kind == "reflection"), "reflection event should be recorded");
+        AssertTrue(prompt.Contains("recent_events="), "prompt should include relationship event trace");
+    }
+
+    private static void PatternRhythmProfileRecommendsQuietSlot()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "KokonoeAssistant.Tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            var patterns = new KokoPatternEngine(dir);
+            var mondayQuiet = new DateTime(2026, 5, 4, 3, 0, 0);
+            for (var i = 0; i < 6; i++)
+                patterns.RecordActivityAt(mondayQuiet.AddDays(-7 * i), wasActive: false, tone: "neutral", messageCount: 0);
+            for (var i = 0; i < 6; i++)
+                patterns.RecordActivityAt(mondayQuiet.AddDays(-7 * i).Date.AddHours(20), wasActive: true, tone: "neutral", messageCount: 3);
+
+            var profile = patterns.BuildRhythmProfile(mondayQuiet);
+
+            AssertTrue(profile.CurrentSlotSamples >= 6, "rhythm profile should use current slot samples");
+            AssertTrue(profile.CurrentSlotActivityRate <= 0.25f, "quiet slot should have low activity rate");
+            AssertTrue(profile.Recommendation.Contains("тихий"), "quiet slot should recommend not interrupting");
+        }
+        finally
+        {
+            try { Directory.Delete(dir, recursive: true); } catch { }
+        }
+    }
+
     private static void InspectorRendersStateReport()
     {
         using var ctx = TestContext.Create();
@@ -383,12 +481,14 @@ internal static class Program
             LastPresenceSituation = "medium_silence",
             LastInternalDaySummary = "Вечірній огляд: підбити хвости.",
             LastInternalDayPhase = "evening_review",
-            LastInternalDayFocus = "підбивати підсумки"
+            LastInternalDayFocus = "підбивати підсумки",
+            LastAutonomyDecision = "19:30 act:presence_long_silence src:presence p90"
         };
         internalState.CuriosityQueue.Add("What should I optimize next?");
         internalState.InnerMonologues.Add("[somatic/focus] Signal is clean. Work mode.");
         internalState.PresenceTrace.Add("07.05 19:30 medium_silence");
         internalState.InternalDayTrace.Add("07.05 19:30 evening_review");
+        internalState.AutonomyDecisionLog.Add("19:30 act:presence_long_silence src:presence p90");
 
         var somatic = new KokoSomaticSnapshot
         {
@@ -427,8 +527,10 @@ internal static class Program
         AssertTrue(markdown.Contains("Інспектор стану Коконое"), "markdown should have inspector title");
         AssertTrue(markdown.Contains("## Соматика"), "markdown should include somatic section");
         AssertTrue(markdown.Contains("## Присутність і день"), "markdown should include presence/day section");
+        AssertTrue(markdown.Contains("Журнал автономності"), "markdown should include autonomy log");
         AssertTrue(markdown.Contains("## Головні факти"), "markdown should include facts");
         AssertTrue(json.Contains("\"LastInternalDayPhase\""), "json should include internal day phase");
+        AssertTrue(json.Contains("\"LastAutonomyDecision\""), "json should include autonomy decision");
         AssertTrue(json.Contains("\"Somatic\""), "json should include somatic object");
     }
 

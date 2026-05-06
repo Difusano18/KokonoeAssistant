@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using Newtonsoft.Json;
 
 namespace KokonoeAssistant.Services
@@ -14,6 +16,7 @@ namespace KokonoeAssistant.Services
         public float Stability { get; set; } = 0.55f;
         public string LastAftertaste { get; set; } = "neutral";
         public string LastShiftReason { get; set; } = "";
+        public List<KokoRelationshipEvent> RecentEvents { get; set; } = new();
         public DateTime LastUpdatedUtc { get; set; } = DateTime.UtcNow;
 
         public float BondScore =>
@@ -21,6 +24,18 @@ namespace KokonoeAssistant.Services
                     Protectiveness * 0.12f + Curiosity * 0.10f - Friction * 0.20f);
 
         private static float Clamp01(float value) => Math.Clamp(value, 0f, 1f);
+    }
+
+    public sealed class KokoRelationshipEvent
+    {
+        public DateTime When { get; set; } = DateTime.Now;
+        public string Kind { get; set; } = "";
+        public string Reason { get; set; } = "";
+        public string Aftertaste { get; set; } = "";
+        public float Trust { get; set; }
+        public float Intimacy { get; set; }
+        public float Friction { get; set; }
+        public float Protectiveness { get; set; }
     }
 
     public sealed class KokoConversationReflection
@@ -94,6 +109,7 @@ namespace KokonoeAssistant.Services
                 }
 
                 _state.LastShiftReason = $"tone:{tone}";
+                AddEvent($"tone:{tone}", crisis ? "crisis/vulnerable signal" : "observed user tone", _state.LastAftertaste);
                 NormalizeAndSave();
             }
         }
@@ -112,7 +128,19 @@ namespace KokonoeAssistant.Services
                 if (!string.IsNullOrWhiteSpace(reflection.Aftertaste))
                     _state.LastAftertaste = reflection.Aftertaste.Trim();
                 _state.LastShiftReason = "reflection";
+                AddEvent("reflection", reflection.Reflection, _state.LastAftertaste);
                 NormalizeAndSave();
+            }
+        }
+
+        public IReadOnlyList<KokoRelationshipEvent> GetRecentEvents(int count = 8)
+        {
+            lock (_lock)
+            {
+                return _state.RecentEvents
+                    .OrderByDescending(e => e.When)
+                    .Take(count)
+                    .ToList();
             }
         }
 
@@ -125,9 +153,27 @@ namespace KokonoeAssistant.Services
 trust={_state.Trust:F2} intimacy={_state.Intimacy:F2} friction={_state.Friction:F2}
 protectiveness={_state.Protectiveness:F2} curiosity={_state.Curiosity:F2} stability={_state.Stability:F2}
 bond_score={_state.BondScore:F2} aftertaste={_state.LastAftertaste}
+recent_events={string.Join(" | ", _state.RecentEvents.TakeLast(4).Select(e => $"{e.When:dd.MM HH:mm}:{e.Kind}:{e.Aftertaste}"))}
 rule: this is persistent relationship state. Let it influence tone subtly; do not recite numbers.
 """;
             }
+        }
+
+        private void AddEvent(string kind, string reason, string aftertaste)
+        {
+            _state.RecentEvents.Add(new KokoRelationshipEvent
+            {
+                Kind = kind,
+                Reason = Trim(reason, 180),
+                Aftertaste = aftertaste,
+                Trust = _state.Trust,
+                Intimacy = _state.Intimacy,
+                Friction = _state.Friction,
+                Protectiveness = _state.Protectiveness
+            });
+
+            if (_state.RecentEvents.Count > 40)
+                _state.RecentEvents.RemoveRange(0, _state.RecentEvents.Count - 40);
         }
 
         private void NormalizeAndSave()
@@ -165,5 +211,11 @@ rule: this is persistent relationship state. Let it influence tone subtly; do no
 
         private static float ClampDelta(float value) => Math.Clamp(value, -0.15f, 0.15f);
         private static float Clamp01(float value) => Math.Clamp(value, 0f, 1f);
+        private static string Trim(string? text, int max)
+        {
+            text ??= "";
+            text = text.Replace("\r", " ").Replace("\n", " ").Trim();
+            return text.Length <= max ? text : text[..max].TrimEnd() + "...";
+        }
     }
 }
