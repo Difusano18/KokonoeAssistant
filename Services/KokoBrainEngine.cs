@@ -178,6 +178,7 @@ namespace KokonoeAssistant.Services
         public readonly KokoPresenceContinuityEngine Presence;
         public readonly KokoInternalDayEngine InternalDay;
         public readonly KokoAutonomyDecisionEngine Autonomy;
+        public readonly KokoSelfReviewEngine SelfReview;
 
         // ── Зовнішні сервіси (опціональні) ───────────────────────────
         private EnhancedMemory?    _enhanced;
@@ -255,6 +256,7 @@ namespace KokonoeAssistant.Services
             Presence = new KokoPresenceContinuityEngine();
             InternalDay = new KokoInternalDayEngine();
             Autonomy = new KokoAutonomyDecisionEngine();
+            SelfReview = new KokoSelfReviewEngine();
 
             // Підключити нові сервіси в LLM
             _llm.Memory    = Memory;
@@ -443,7 +445,7 @@ namespace KokonoeAssistant.Services
             try
             {
                 var presence = BuildPresenceFrame(now, AppSettings.Load().ProactiveAutonomyLevel);
-                var internalDay = BuildInternalDayFrame(now, AppSettings.Load().ProactiveAutonomyLevel, presence, writeVault: false);
+                var internalDay = BuildInternalDayFrame(now, AppSettings.Load().ProactiveAutonomyLevel, presence, writeVault: false, record: false);
                 sb.AppendLine("\n--- ПРИСУТНІСТЬ І ВНУТРІШНІЙ ДЕНЬ ---");
                 sb.AppendLine(presence.ExtraContext);
                 sb.AppendLine(internalDay.PromptBlock);
@@ -3352,14 +3354,16 @@ namespace KokonoeAssistant.Services
             DateTime now,
             int autonomyLevel,
             KokoPresenceFrame? presence = null,
-            bool writeVault = true)
+            bool writeVault = true,
+            bool record = true)
         {
             try
             {
                 presence ??= BuildPresenceFrame(now, autonomyLevel);
                 var somatic = GetSomaticSnapshot();
                 var frame = InternalDay.Evaluate(_state, presence, somatic, now, autonomyLevel);
-                InternalDay.Record(_state, frame, now);
+                if (record)
+                    InternalDay.Record(_state, frame, now);
 
                 if (writeVault && frame.ShouldWriteVaultStatus)
                 {
@@ -3744,6 +3748,73 @@ namespace KokonoeAssistant.Services
 
         public KokoInternalState State => _state;
         public void TriggerSpontaneous() => _ = SafeSpontaneousCheckAsync();
+
+        public KokoSelfReviewFrame BuildSelfReviewFrame(string? userText = null)
+        {
+            var now = DateTime.Now;
+            var autonomyLevel = Math.Clamp(AppSettings.Load().ProactiveAutonomyLevel, 0, 3);
+            var messages = _chatRepo.GetMessages(40);
+            var presence = BuildPresenceFrame(now, autonomyLevel);
+            var internalDay = BuildInternalDayFrame(now, autonomyLevel, presence, writeVault: false, record: false);
+            var rhythm = Patterns.BuildRhythmProfile(now);
+            return SelfReview.Evaluate(userText, _state, messages, presence, internalDay, rhythm, now);
+        }
+
+        public string BuildSelfReviewContext(string? userText = null)
+        {
+            try { return BuildSelfReviewFrame(userText).PromptBlock; }
+            catch (Exception ex)
+            {
+                Log($"SelfReview failed: {ex.Message}");
+                return "SELF-REVIEW BEFORE REPLY\nSelf-review failed; still verify current time, active intent, and immediate context before answering.\n";
+            }
+        }
+
+        public KokoTelemetrySnapshot BuildTelemetrySnapshot(string? userText = null)
+        {
+            var now = DateTime.Now;
+            var autonomyLevel = Math.Clamp(AppSettings.Load().ProactiveAutonomyLevel, 0, 3);
+            var presence = BuildPresenceFrame(now, autonomyLevel);
+            var internalDay = BuildInternalDayFrame(now, autonomyLevel, presence, writeVault: false, record: false);
+            var rhythm = Patterns.BuildRhythmProfile(now);
+            var somatic = GetSomaticSnapshot();
+            var selfReg = GetSelfRegulationFrame(somatic);
+            var review = SelfReview.Evaluate(userText, _state, _chatRepo.GetMessages(40), presence, internalDay, rhythm, now);
+            var relationship = Relationship.State;
+
+            return new KokoTelemetrySnapshot
+            {
+                CreatedAt = now,
+                Emotion = Emotion.Current.ToString(),
+                Bond = Emotion.Bond.ToString(),
+                MoodScore = _state.MoodScore,
+                Mood = _state.PersonalityDailyMood,
+                Somatic = $"{somatic.State} / strain {somatic.Strain:F2} / calm {somatic.Calm:F2}",
+                SelfRegulation = $"{selfReg.Reaction} -> {selfReg.Regulation} / control {selfReg.Control:F2}",
+                Presence = presence.SummaryUk,
+                InternalDay = internalDay.SummaryUk,
+                Autonomy = string.IsNullOrWhiteSpace(_state.LastAutonomyDecision) ? "none" : _state.LastAutonomyDecision,
+                Rhythm = rhythm.Summary,
+                Relationship = $"bond {relationship.BondScore:F2}, aftertaste {relationship.LastAftertaste}, protect {relationship.Protectiveness:F2}",
+                SelfReview = $"{review.RiskLevel}: {review.Summary}",
+                PendingVaultExchangeCount = _state.PendingVaultExchangeCount,
+                LastVaultSyncAt = _state.LastAutoVaultSyncAt,
+                ActiveIntentCount = _state.ShortTermIntents.Count(i => !i.ResolvedAt.HasValue),
+                ActiveIntents = _state.ShortTermIntents
+                    .Where(i => !i.ResolvedAt.HasValue)
+                    .OrderBy(i => i.FollowUpAt)
+                    .Take(6)
+                    .Select(i => $"{i.Kind}: {i.Summary} до {i.ExpectedUntil:dd.MM HH:mm}")
+                    .ToArray(),
+                AutonomyLog = _state.AutonomyDecisionLog.TakeLast(8).ToArray(),
+                PresenceTrace = _state.PresenceTrace.TakeLast(6).ToArray(),
+                InternalDayTrace = _state.InternalDayTrace.TakeLast(6).ToArray(),
+                RelationshipEvents = relationship.RecentEvents
+                    .TakeLast(6)
+                    .Select(e => $"{e.When:dd.MM HH:mm} {e.Kind}: {e.Aftertaste}")
+                    .ToArray()
+            };
+        }
 
         /// <summary>Оновити PersonalityHint і DynamicTemperature в LlmService перед відповіддю</summary>
         public void RefreshPersonalityHint()

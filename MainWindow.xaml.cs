@@ -252,6 +252,7 @@ namespace KokonoeAssistant
                 var heart = ServiceContainer.Heart;
                 var somatic = brain.GetSomaticSnapshot();
                 var selfReg = brain.GetSelfRegulationFrame(somatic);
+                var telemetry = brain.BuildTelemetrySnapshot();
 
                 LiveCoreEmotionText.Text = $"емоція: {DashboardEmotionLabel(emotion.Current)}".ToUpper();
                 LiveCoreEmotionText.Foreground = DashMakeBrush(emotion.Current);
@@ -264,6 +265,10 @@ namespace KokonoeAssistant
                     ? $"{heart.CurrentBpm:0} bpm | зміна {heart.BpmDelta:+0;-0;0}"
                     : "-- bpm";
                 LiveCoreStrainBar.Value = Math.Clamp(somatic.Strain * 100.0, 0, 100);
+
+                LiveCoreAutonomyText.Text = TrimLiveCoreLine(telemetry.Autonomy, 72);
+                LiveCorePresenceText.Text = TrimLiveCoreLine(telemetry.Presence, 86);
+                LiveCoreRhythmText.Text = TrimLiveCoreLine(telemetry.Rhythm, 86);
 
                 if (forceVaultScan || DateTime.Now - _liveCoreLastVaultScan > TimeSpan.FromSeconds(30))
                 {
@@ -294,6 +299,9 @@ namespace KokonoeAssistant
                     LiveCoreEmotionText.Text = "емоція: офлайн";
                     LiveCoreBodyText.Text = "соматика: офлайн";
                     LiveCorePulseText.Text = "-- bpm";
+                    LiveCoreAutonomyText.Text = "автономність недоступна";
+                    LiveCorePresenceText.Text = "";
+                    LiveCoreRhythmText.Text = "";
                     LiveCoreMemoryText.Text = "пам'ять недоступна";
                     LiveCoreVaultText.Text = ex.Message;
                 }
@@ -358,6 +366,12 @@ tags: [kokonoe, live-core, diagnostics]
             sb.AppendLine($"| Пульс | {heart.CurrentBpm:F0} bpm / база {heart.BaselineBpm:F0} / зміна {heart.BpmDelta:+0;-0;0} |");
             sb.AppendLine($"| Соматичне навантаження | strain {somatic.Strain:F2} / calm {somatic.Calm:F2} / volatility {somatic.Volatility:F2} |");
             sb.AppendLine($"| Саморегуляція | {LiveCoreCodeLabel(selfReg.Reaction)} -> {LiveCoreCodeLabel(selfReg.Regulation)} / контроль {selfReg.Control:F2} / імпульс {selfReg.Drive:F2} |");
+            var telemetry = brain.BuildTelemetrySnapshot();
+            sb.AppendLine($"| Автономність | {telemetry.Autonomy.Replace("|", "/")} |");
+            sb.AppendLine($"| Presence | {telemetry.Presence.Replace("|", "/")} |");
+            sb.AppendLine($"| Внутрішній день | {telemetry.InternalDay.Replace("|", "/")} |");
+            sb.AppendLine($"| Ритм | {telemetry.Rhythm.Replace("|", "/")} |");
+            sb.AppendLine($"| Self-review | {telemetry.SelfReview.Replace("|", "/")} |");
             sb.AppendLine($"| Синхронізація пам'яті | очікує {state.PendingVaultExchangeCount}/5 / остання {(state.LastAutoVaultSyncAt > DateTime.MinValue ? state.LastAutoVaultSyncAt.ToString("yyyy-MM-dd HH:mm") : "ніколи")} |");
             sb.AppendLine($"| Vault | пам'ять {_liveCoreMemoryItems} / огляд {_liveCoreReviewActions} / задачі {_liveCoreOpenTasks} |");
             if (!string.IsNullOrWhiteSpace(selfReg.PrivateThought))
@@ -366,6 +380,13 @@ tags: [kokonoe, live-core, diagnostics]
                 sb.AppendLine($"| Поведінка | {selfReg.BehaviorDirective.Replace("|", "/")} |");
 
             return sb.ToString().TrimEnd();
+        }
+
+        private static string TrimLiveCoreLine(string? text, int max)
+        {
+            if (string.IsNullOrWhiteSpace(text)) return "—";
+            text = text.Replace("\r", " ").Replace("\n", " ").Trim();
+            return text.Length <= max ? text : text[..max].TrimEnd() + "...";
         }
 
         private static string LiveCoreCodeLabel(string code) => code switch
@@ -1359,8 +1380,9 @@ tags: [kokonoe, live-core, diagnostics]
             var imgMime  = _imgMime;
             ClearPendingImage();
 
-            // Евристичний витяг фактів (без LLM — миттєво)
-            try { ServiceContainer.BrainEngine?.ExtractFactsFromMessageAsync(text); } catch { }
+            // Brain state must observe the user message before context is built,
+            // otherwise temporal/presence logic answers from the previous turn.
+            try { ServiceContainer.BrainEngine?.ProcessUserMessage(text); } catch { }
 
             // Thinking indicator
             AddThinkingBubble();
@@ -1469,9 +1491,6 @@ tags: [kokonoe, live-core, diagnostics]
 
                 if (AppSettings.Load().TtsEnabled) SpeakAsync(reply);
 
-                // Notify brain engines about the user message (patterns, memory, emotion)
-                try { ServiceContainer.BrainEngine?.ProcessUserMessage(text); } catch { }
-
                 // LLM-витяг фактів — тільки після відповіді, щоб не конкурувати за GPU
                 _ = Task.Run(async () =>
                 {
@@ -1511,6 +1530,14 @@ tags: [kokonoe, live-core, diagnostics]
                 var temporal = BuildTemporalAwarenessContext(userText);
                 if (!string.IsNullOrWhiteSpace(temporal))
                     parts.Add((temporal, 0));
+            }
+            catch { }
+
+            try
+            {
+                var selfReview = ServiceContainer.BrainEngine?.BuildSelfReviewContext(userText);
+                if (!string.IsNullOrWhiteSpace(selfReview))
+                    parts.Add((selfReview, 0));
             }
             catch { }
 
@@ -5419,6 +5446,7 @@ tags: [kokonoe, dashboard, live]
                 }
 
                 // ── Regular chat → LLM ──────────────────────────────
+                try { ServiceContainer.BrainEngine?.ProcessUserMessage(text); } catch { }
                 var reply = await _llm.SendAsync(text, null, "image/jpeg", BuildContext(text), ct);
                 reply = GuardTemporalReply(text, reply);
                 Dispatcher.Invoke(() =>
@@ -5429,7 +5457,6 @@ tags: [kokonoe, dashboard, live]
                     AddMessageBubble(new ChatMessageVm { Role = "assistant", Content = reply });
                 });
                 try { await bot.SendMessage(chatId, reply, cancellationToken: ct); } catch { }
-                try { ServiceContainer.BrainEngine?.ProcessUserMessage(text); } catch { }
                 try
                 {
                     ServiceContainer.ChatRepository.InsertMessage(new ChatRepository.ChatMessage

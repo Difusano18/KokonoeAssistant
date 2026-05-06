@@ -401,6 +401,7 @@
                                     <ColumnDefinition Width="1.15*"/>
                                     <ColumnDefinition Width="1.1*"/>
                                     <ColumnDefinition Width="0.85*"/>
+                                    <ColumnDefinition Width="1.25*"/>
                                     <ColumnDefinition Width="1.1*"/>
                                     <ColumnDefinition Width="Auto"/>
                                 </Grid.ColumnDefinitions>
@@ -436,7 +437,19 @@
                                                  Background="{DynamicResource Brush_071209}" BorderThickness="0"/>
                                 </StackPanel>
 
-                                <StackPanel Grid.Column="3">
+                                <StackPanel Grid.Column="3" Margin="0,0,12,0">
+                                    <TextBlock Text="АВТОНОМНІСТЬ" FontSize="9" FontFamily="Consolas" FontWeight="Bold"
+                                               Foreground="{DynamicResource AccentBase}"/>
+                                    <TextBlock x:Name="LiveCoreAutonomyText" Text="рішення --"
+                                               FontSize="12" FontWeight="SemiBold"
+                                               Foreground="{DynamicResource AccentTextLight}" Margin="0,3,0,0"/>
+                                    <TextBlock x:Name="LiveCorePresenceText" Text="presence --"
+                                               FontSize="10" Foreground="{DynamicResource Brush_8AC8A0}"/>
+                                    <TextBlock x:Name="LiveCoreRhythmText" Text="ритм --"
+                                               FontSize="9" Foreground="{DynamicResource Brush_1A3020}"/>
+                                </StackPanel>
+
+                                <StackPanel Grid.Column="4">
                                     <TextBlock Text="ПАМ'ЯТЬ / VAULT" FontSize="9" FontFamily="Consolas" FontWeight="Bold"
                                                Foreground="{DynamicResource AccentBase}"/>
                                     <TextBlock x:Name="LiveCoreMemoryText" Text="синхронізація --"
@@ -446,7 +459,7 @@
                                                FontSize="10" Foreground="{DynamicResource Brush_8AC8A0}"/>
                                 </StackPanel>
 
-                                <StackPanel Grid.Column="4" Orientation="Horizontal" VerticalAlignment="Center" Margin="12,0,0,0">
+                                <StackPanel Grid.Column="5" Orientation="Horizontal" VerticalAlignment="Center" Margin="12,0,0,0">
                                     <Button Content="Оновити" Style="{StaticResource BtnGhost}" Padding="8,4" Margin="0,0,4,0"
                                             Click="LiveCoreRefresh_Click"/>
                                     <Button Content="Знімок" Style="{StaticResource BtnGhost}" Padding="8,4"

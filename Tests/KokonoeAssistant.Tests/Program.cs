@@ -28,6 +28,7 @@ internal static class Program
             Run("Autonomy pipeline gates weak initiative in quiet night", AutonomyPipelineGatesWeakInitiativeInQuietNight);
             Run("Relationship records shift events", RelationshipRecordsShiftEvents);
             Run("Pattern rhythm profile recommends quiet slot", PatternRhythmProfileRecommendsQuietSlot);
+            Run("Self review blocks stale sleep replies", SelfReviewBlocksStaleSleepReplies);
             Run("Inspector renders state report", InspectorRendersStateReport);
             Run("Obsidian vault architecture maintenance", ObsidianVaultArchitectureMaintenance);
             Run("Obsidian unique memory append", ObsidianUniqueMemoryAppend);
@@ -463,6 +464,63 @@ internal static class Program
         {
             try { Directory.Delete(dir, recursive: true); } catch { }
         }
+    }
+
+    private static void SelfReviewBlocksStaleSleepReplies()
+    {
+        using var ctx = TestContext.Create();
+        var now = new DateTime(2026, 5, 7, 10, 30, 0);
+        var state = new KokoInternalState();
+        state.ShortTermIntents.Add(new ShortTermIntent
+        {
+            Kind = "sleep",
+            Summary = "пішов спати",
+            SourceText = "я спати",
+            CreatedAt = now.AddHours(-8),
+            FollowUpAt = now.AddHours(-1),
+            ExpectedUntil = now.AddMinutes(-30),
+            ResolvedAt = now.AddMinutes(-3),
+            ResolutionText = "прокинувся"
+        });
+        ctx.Chat.InsertMessage(new ChatRepository.ChatMessage
+        {
+            Role = "user",
+            Content = "прокинувся",
+            Timestamp = now.AddMinutes(-3)
+        });
+
+        var presence = new KokoPresenceFrame
+        {
+            SituationKind = "returned_after_intent",
+            SummaryUk = "Він уже повернувся після сну.",
+            LastUserText = "прокинувся",
+            SilenceMinutes = 3
+        };
+        var internalDay = new KokoInternalDayFrame
+        {
+            Phase = "work_ramp",
+            SummaryUk = "Робочий розгін: реагувати на повернення.",
+            PromptBlock = "INTERNAL DAY\n"
+        };
+        var rhythm = new KokoPatternEngine.RhythmProfile
+        {
+            CurrentSlotSamples = 5,
+            CurrentSlotActivityRate = 0.60f,
+            Summary = "типово нормальний слот"
+        };
+
+        var frame = new KokoSelfReviewEngine().Evaluate(
+            "прокинувся",
+            state,
+            ctx.Chat.GetMessages(10),
+            presence,
+            internalDay,
+            rhythm,
+            now);
+
+        AssertEqual("high", frame.RiskLevel, "wake-up after sleep should be high temporal risk");
+        AssertTrue(frame.PromptBlock.Contains("Заборонено казати"), "self-review should explicitly block stale sleep replies");
+        AssertTrue(frame.PromptBlock.Contains("не давай інструкцію в минуле"), "self-review should warn about past actions");
     }
 
     private static void InspectorRendersStateReport()

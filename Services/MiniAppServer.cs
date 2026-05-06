@@ -222,6 +222,7 @@ namespace KokonoeAssistant.Services
             var emo   = ServiceContainer.EmotionEngine;
             var brain = ServiceContainer.BrainEngine;
             var sched = brain?.Scheduler;
+            var telemetry = brain?.BuildTelemetrySnapshot();
             var resp = new
             {
                 ok      = true,
@@ -232,6 +233,7 @@ namespace KokonoeAssistant.Services
                 score   = brain?.State?.MoodScore,
                 monolog = brain?.State?.InnerMonologues?.LastOrDefault(),
                 pending = sched?.GetAll().Count,
+                telemetry,
                 ts      = DateTime.Now,
             };
             await WriteJson(ctx, resp);
