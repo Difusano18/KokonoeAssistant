@@ -1508,6 +1508,14 @@ tags: [kokonoe, live-core, diagnostics]
             var parts = new List<(string content, int priority)>(); // priority: lower = more important
             try
             {
+                var temporal = BuildTemporalAwarenessContext(userText);
+                if (!string.IsNullOrWhiteSpace(temporal))
+                    parts.Add((temporal, 0));
+            }
+            catch { }
+
+            try
+            {
                 var preflight = BuildObsidianPreflightContext(userText);
                 if (!string.IsNullOrWhiteSpace(preflight))
                 {
@@ -1720,6 +1728,83 @@ tags: [kokonoe, live-core, diagnostics]
             }
 
             return result;
+        }
+
+        private static string BuildTemporalAwarenessContext(string? userText)
+        {
+            var now = DateTime.Now;
+            var sb = new StringBuilder();
+            sb.AppendLine("=== ЧАСОВИЙ КОНТЕКСТ — КРИТИЧНО ===");
+            sb.AppendLine($"Поточний локальний час: {now:yyyy-MM-dd HH:mm}.");
+
+            try
+            {
+                var recent = ServiceContainer.ChatRepository.GetMessages(20)
+                    .OrderBy(m => m.Timestamp)
+                    .ToList();
+                var lastUserBeforeCurrent = recent
+                    .Where(m => m.Role == "user" &&
+                                !string.Equals((m.Content ?? "").Trim(), (userText ?? "").Trim(), StringComparison.Ordinal))
+                    .LastOrDefault();
+                var currentUser = recent.LastOrDefault(m => m.Role == "user");
+
+                if (lastUserBeforeCurrent != null)
+                {
+                    var gap = now - lastUserBeforeCurrent.Timestamp;
+                    sb.AppendLine($"Попереднє повідомлення користувача: {lastUserBeforeCurrent.Timestamp:yyyy-MM-dd HH:mm} ({FormatGapUa(gap)} тому): \"{TruncateAtWordBoundary(SanitizeForLlm(lastUserBeforeCurrent.Content ?? ""), 180)}\"");
+                }
+
+                if (currentUser != null)
+                    sb.AppendLine($"Поточне повідомлення користувача: {currentUser.Timestamp:yyyy-MM-dd HH:mm}: \"{TruncateAtWordBoundary(SanitizeForLlm(currentUser.Content ?? userText ?? ""), 180)}\"");
+            }
+            catch { }
+
+            var lower = (userText ?? "").ToLowerInvariant();
+            var isMorningNow = now.Hour is >= 5 and < 13;
+            var saysWakeOrMorning = ContainsAny(lower, "ранку", "добрий ранок", "доброго ранку", "проснув", "прокинув", "поспав", "встав");
+            var saysGoingSleep = ContainsAny(lower, "спать піду", "спати піду", "йду спати", "іду спати", "спокійної", "до ранку");
+
+            if (isMorningNow && saysWakeOrMorning)
+            {
+                sb.AppendLine("ВИСНОВОК: зараз ранок і користувач уже прокинувся/пише після сну.");
+                sb.AppendLine("ЗАБОРОНА: не кажи йому \"спи\", \"йди спати\", \"до ранку\" або подібне. Це застарілий контекст з минулої ночі.");
+                sb.AppendLine("Правильна реакція: визнай ранок/пробудження, можеш саркастично прокоментувати, але не відправляй його назад спати.");
+            }
+            else if (saysGoingSleep && (now.Hour is >= 21 or < 5))
+            {
+                sb.AppendLine("ВИСНОВОК: користувач прямо каже, що йде спати в нічний час. Коротке побажання сну доречне.");
+            }
+
+            sb.AppendLine("Правило: завжди звіряй поточний час і часовий розрив між повідомленнями перед порадою про сон.");
+            return sb.ToString();
+        }
+
+        private static string FormatGapUa(TimeSpan gap)
+        {
+            if (gap.TotalMinutes < 1) return "щойно";
+            if (gap.TotalHours < 1) return $"{(int)gap.TotalMinutes} хв";
+            if (gap.TotalDays < 1) return $"{(int)gap.TotalHours} год {(int)gap.Minutes} хв";
+            return $"{(int)gap.TotalDays} дн {(int)gap.Hours} год";
+        }
+
+        private static bool ContainsAny(string text, params string[] values)
+            => values.Any(v => text.Contains(v, StringComparison.OrdinalIgnoreCase));
+
+        private static string GuardTemporalReply(string userText, string reply)
+        {
+            if (string.IsNullOrWhiteSpace(reply)) return reply;
+
+            var now = DateTime.Now;
+            var userLower = userText.ToLowerInvariant();
+            var replyLower = reply.ToLowerInvariant();
+            var morningWake = now.Hour is >= 5 and < 13 &&
+                              ContainsAny(userLower, "ранку", "добрий ранок", "доброго ранку", "проснув", "прокинув", "поспав", "встав");
+            var wronglySendsToSleep = ContainsAny(replyLower, "спи", "йди спати", "іди спати", "до ранку", "лягай");
+
+            if (morningWake && wronglySendsToSleep)
+                return "Ранок уже настав, так що команду \"спи\" знімаю. Нарешті прокинувся — організм зробив щось корисне без моєї участі.";
+
+            return reply;
         }
 
         /// <summary>
@@ -5247,6 +5332,17 @@ tags: [kokonoe, dashboard, live]
                 if (msg.Text is not string text) return;
 
                 Dispatcher.Invoke(() => { _tgMessages.Add($"[{from}]: {text}"); TgScroll.ScrollToBottom(); });
+                try
+                {
+                    ServiceContainer.ChatRepository.InsertMessage(new ChatRepository.ChatMessage
+                    {
+                        Content = text,
+                        Role = "user",
+                        Author = $"TG:{from}",
+                        Timestamp = DateTime.Now
+                    });
+                }
+                catch { }
 
                 // ── Commands ────────────────────────────────────────
                 if (text.StartsWith("/start") || text == "/menu")
@@ -5307,6 +5403,7 @@ tags: [kokonoe, dashboard, live]
 
                 // ── Regular chat → LLM ──────────────────────────────
                 var reply = await _llm.SendAsync(text, null, "image/jpeg", BuildContext(text), ct);
+                reply = GuardTemporalReply(text, reply);
                 Dispatcher.Invoke(() =>
                 {
                     _tgMessages.Add($"[Kokonoe]: {reply}");
@@ -5315,6 +5412,17 @@ tags: [kokonoe, dashboard, live]
                     AddMessageBubble(new ChatMessageVm { Role = "assistant", Content = reply });
                 });
                 try { await bot.SendMessage(chatId, reply, cancellationToken: ct); } catch { }
+                try
+                {
+                    ServiceContainer.ChatRepository.InsertMessage(new ChatRepository.ChatMessage
+                    {
+                        Content = reply,
+                        Role = "assistant",
+                        Author = "Kokonoe",
+                        Timestamp = DateTime.Now
+                    });
+                }
+                catch { }
 
                 // Log TG exchange to vault archive
                 _ = Task.Run(() => ServiceContainer.ChatLogger.LogExchange("tg", text, reply));
