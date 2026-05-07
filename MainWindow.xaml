@@ -411,9 +411,13 @@
                                                Foreground="{DynamicResource AccentBase}"/>
                                     <TextBlock x:Name="LiveCoreEmotionText" Text="емоція: завантаження"
                                                FontSize="12" FontWeight="SemiBold"
-                                               Foreground="{DynamicResource AccentTextLight}" Margin="0,3,0,0"/>
+                                               Foreground="{DynamicResource AccentTextLight}" Margin="0,3,0,0"
+                                               TextWrapping="Wrap" TextTrimming="CharacterEllipsis"
+                                               ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"/>
                                     <TextBlock x:Name="LiveCoreBondText" Text="зв'язок -- | сила --"
-                                               FontSize="10" Foreground="{DynamicResource Brush_8AC8A0}"/>
+                                               FontSize="10" Foreground="{DynamicResource Brush_8AC8A0}"
+                                               TextWrapping="Wrap" TextTrimming="CharacterEllipsis"
+                                               ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"/>
                                 </StackPanel>
 
                                 <StackPanel Grid.Column="1" Margin="0,0,12,0">
@@ -421,9 +425,13 @@
                                                Foreground="{DynamicResource AccentBase}"/>
                                     <TextBlock x:Name="LiveCoreBodyText" Text="соматика: завантаження"
                                                FontSize="12" FontWeight="SemiBold"
-                                               Foreground="{DynamicResource AccentTextLight}" Margin="0,3,0,0"/>
+                                               Foreground="{DynamicResource AccentTextLight}" Margin="0,3,0,0"
+                                               TextWrapping="Wrap" TextTrimming="CharacterEllipsis"
+                                               ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"/>
                                     <TextBlock x:Name="LiveCoreRegulationText" Text="саморегуляція --"
-                                               FontSize="10" Foreground="{DynamicResource Brush_8AC8A0}"/>
+                                               FontSize="10" Foreground="{DynamicResource Brush_8AC8A0}"
+                                               TextWrapping="Wrap" TextTrimming="CharacterEllipsis"
+                                               ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"/>
                                 </StackPanel>
 
                                 <StackPanel Grid.Column="2" Margin="0,0,12,0">
@@ -431,7 +439,9 @@
                                                Foreground="{DynamicResource AccentBase}"/>
                                     <TextBlock x:Name="LiveCorePulseText" Text="-- bpm"
                                                FontSize="12" FontWeight="SemiBold"
-                                               Foreground="{DynamicResource AccentTextLight}" Margin="0,3,0,0"/>
+                                               Foreground="{DynamicResource AccentTextLight}" Margin="0,3,0,0"
+                                               TextWrapping="Wrap" TextTrimming="CharacterEllipsis"
+                                               ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"/>
                                     <ProgressBar x:Name="LiveCoreStrainBar" Height="4" Minimum="0" Maximum="100"
                                                  Value="0" Margin="0,5,0,0" Foreground="{DynamicResource AccentBase}"
                                                  Background="{DynamicResource Brush_071209}" BorderThickness="0"/>
@@ -442,11 +452,17 @@
                                                Foreground="{DynamicResource AccentBase}"/>
                                     <TextBlock x:Name="LiveCoreAutonomyText" Text="рішення --"
                                                FontSize="12" FontWeight="SemiBold"
-                                               Foreground="{DynamicResource AccentTextLight}" Margin="0,3,0,0"/>
+                                               Foreground="{DynamicResource AccentTextLight}" Margin="0,3,0,0"
+                                               TextWrapping="Wrap" TextTrimming="CharacterEllipsis"
+                                               ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"/>
                                     <TextBlock x:Name="LiveCorePresenceText" Text="presence --"
-                                               FontSize="10" Foreground="{DynamicResource Brush_8AC8A0}"/>
+                                               FontSize="10" Foreground="{DynamicResource Brush_8AC8A0}"
+                                               TextWrapping="Wrap" TextTrimming="CharacterEllipsis" MaxHeight="32"
+                                               ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"/>
                                     <TextBlock x:Name="LiveCoreRhythmText" Text="ритм --"
-                                               FontSize="9" Foreground="{DynamicResource Brush_1A3020}"/>
+                                               FontSize="9" Foreground="{DynamicResource Brush_1A3020}"
+                                               TextWrapping="Wrap" TextTrimming="CharacterEllipsis" MaxHeight="28"
+                                               ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"/>
                                 </StackPanel>
 
                                 <StackPanel Grid.Column="4">
@@ -454,9 +470,13 @@
                                                Foreground="{DynamicResource AccentBase}"/>
                                     <TextBlock x:Name="LiveCoreMemoryText" Text="синхронізація --"
                                                FontSize="12" FontWeight="SemiBold"
-                                               Foreground="{DynamicResource AccentTextLight}" Margin="0,3,0,0"/>
+                                               Foreground="{DynamicResource AccentTextLight}" Margin="0,3,0,0"
+                                               TextWrapping="Wrap" TextTrimming="CharacterEllipsis"
+                                               ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"/>
                                     <TextBlock x:Name="LiveCoreVaultText" Text="огляд -- | задачі --"
-                                               FontSize="10" Foreground="{DynamicResource Brush_8AC8A0}"/>
+                                               FontSize="10" Foreground="{DynamicResource Brush_8AC8A0}"
+                                               TextWrapping="Wrap" TextTrimming="CharacterEllipsis" MaxHeight="32"
+                                               ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"/>
                                 </StackPanel>
 
                                 <StackPanel Grid.Column="5" Orientation="Horizontal" VerticalAlignment="Center" Margin="12,0,0,0">

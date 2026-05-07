@@ -257,7 +257,7 @@ namespace KokonoeAssistant
                 LiveCoreEmotionText.Text = $"емоція: {DashboardEmotionLabel(emotion.Current)}".ToUpper();
                 LiveCoreEmotionText.Foreground = DashMakeBrush(emotion.Current);
                 var attachment = emotion.Attachment;
-                LiveCoreBondText.Text = $"зв'язок {DashboardBondLabel(emotion.Bond)} | довіра {attachment.Trust:F2} | прив'язаність {attachment.CompositeScore():F2} | настрій {state.MoodScore:F2}";
+                LiveCoreBondText.Text = $"довіра {attachment.Trust:F2} | прив'яз. {attachment.CompositeScore():F2} | настрій {state.MoodScore:F2}";
 
                 LiveCoreBodyText.Text = $"{DashboardSomaticLabel(somatic.State).ToUpper()} | напруга {somatic.Strain:F2}";
                 LiveCoreRegulationText.Text = $"{DashboardRegulationLabel(selfReg.Reaction)} -> {DashboardRegulationLabel(selfReg.Regulation)} | контроль {selfReg.Control:F2}";
@@ -267,9 +267,9 @@ namespace KokonoeAssistant
                     : "-- bpm";
                 LiveCoreStrainBar.Value = Math.Clamp(somatic.Strain * 100.0, 0, 100);
 
-                LiveCoreAutonomyText.Text = TrimLiveCoreLine(telemetry.AutonomyDebug, 72);
-                LiveCorePresenceText.Text = TrimLiveCoreLine($"{telemetry.Presence} | {telemetry.TimelineState} | state {telemetry.StateFreshness}", 110);
-                LiveCoreRhythmText.Text = TrimLiveCoreLine($"{telemetry.Rhythm} | LLM {telemetry.LlmStatus} | guard {telemetry.PostReplyGuard}", 86);
+                LiveCoreAutonomyText.Text = TrimLiveCoreLine(telemetry.AutonomyDebug, 54);
+                LiveCorePresenceText.Text = TrimLiveCoreLine($"{telemetry.Presence} | {telemetry.TimelineState} | state {telemetry.StateFreshness}", 76);
+                LiveCoreRhythmText.Text = TrimLiveCoreLine($"{telemetry.Rhythm} | LLM {telemetry.LlmStatus} | guard {telemetry.PostReplyGuard}", 64);
 
                 if (forceVaultScan || DateTime.Now - _liveCoreLastVaultScan > TimeSpan.FromSeconds(30))
                 {
@@ -289,11 +289,11 @@ namespace KokonoeAssistant
                 LiveCoreMemoryText.Text = $"синхронізація {state.PendingVaultExchangeCount}/5 | пам'ять {_liveCoreMemoryItems}";
                 LiveCoreVaultText.Text = $"огляд {_liveCoreReviewActions} | задачі {_liveCoreOpenTasks}";
                 if (state.LastAutoVaultSyncAt > DateTime.MinValue)
-                    LiveCoreVaultText.Text += $" | остання {state.LastAutoVaultSyncAt:dd.MM HH:mm}";
+                    LiveCoreVaultText.Text += $" | sync {state.LastAutoVaultSyncAt:dd.MM HH:mm}";
                 if (_lastObsidianPreflightAt > DateTime.MinValue)
                     LiveCoreVaultText.Text += $" | ctx {_lastObsidianPreflightAt:HH:mm:ss}";
                 if (!string.IsNullOrWhiteSpace(telemetry.ScenarioHealth))
-                    LiveCoreVaultText.Text += $" | checks {telemetry.ScenarioHealth}";
+                    LiveCoreVaultText.Text += $" | {telemetry.ScenarioHealth}";
             }
             catch (Exception ex)
             {
