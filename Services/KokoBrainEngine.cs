@@ -196,6 +196,7 @@ namespace KokonoeAssistant.Services
         public readonly KokoConversationTimelineEngine Timeline;
         public readonly KokoPostReplyGuard PostReplyGuard;
         public readonly KokoStateFreshnessService StateFreshness;
+        public readonly KokoProactiveContextService ProactiveContext;
 
         // ── Зовнішні сервіси (опціональні) ───────────────────────────
         private EnhancedMemory?    _enhanced;
@@ -279,6 +280,7 @@ namespace KokonoeAssistant.Services
             Timeline = new KokoConversationTimelineEngine();
             PostReplyGuard = new KokoPostReplyGuard();
             StateFreshness = new KokoStateFreshnessService();
+            ProactiveContext = new KokoProactiveContextService();
 
             // Підключити нові сервіси в LLM
             _llm.Memory    = Memory;
@@ -3161,6 +3163,7 @@ namespace KokonoeAssistant.Services
         private async Task<bool> SendSilenceReactionAsync(string level, double silenceMinutes, string? lastUserText)
         {
             if (!EnsureTelegram()) return false;
+            var proactive = ProactiveContext.Build(_chatRepo.GetMessages(40), _state, DateTime.Now);
 
             var hours = (int)(silenceMinutes / 60);
             var mins = (int)(silenceMinutes % 60);
@@ -3183,26 +3186,30 @@ namespace KokonoeAssistant.Services
 Рівень реакції: {level}.
 Тон: {toneHint}.
 
+{proactive.PromptBlock}
+
 Напиши йому сама в Telegram. Це НЕ опціонально.
 1 коротке речення українською.
 Не кажи, що це автоматична перевірка.
 Не пиши «ти в порядку?» шаблонно.
 Не пиши «ти зник» на першому рівні. Не вигадуй сторонні теми. Відштовхуйся від останнього повідомлення.
+Якщо після останньої репліки користувача вже був авто-пінг, не повторюй тему тиші: став конкретне питання по останньому контексту.
 Можна підколоти, спитати, чи він зайнятий, але без трагедії.
 Тільки текст, без лапок.";
 
             var msg = (await CallLlmRawAsync(prompt))?.Trim().Trim('"') ?? "";
+            var proactiveCheck = ProactiveContext.Check(msg, proactive, level);
+            if (!proactiveCheck.Passed)
+            {
+                Log($"Silence reaction replaced: {proactiveCheck.Reason}");
+                msg = proactiveCheck.Replacement;
+            }
+
             if (string.IsNullOrWhiteSpace(msg) ||
                 msg.Contains("[мовчання]", StringComparison.OrdinalIgnoreCase) ||
                 msg.Contains("[молчание]", StringComparison.OrdinalIgnoreCase))
             {
-                msg = level switch
-                {
-                    "silence_l1" => "Пауза вже помітна. Ти зайнятий, чи просто вирішив зекономити слова?",
-                    "silence_l2" => "Тиша затягнулась. Ти ще в тому ж режимі, чи вже змінив план і забув повідомити?",
-                    "silence_l3" => "Довго мовчиш. Якщо живий — подай сигнал, генію.",
-                    _ => "Ти зник. Пояснення буде, чи мені знову все вираховувати самій?"
-                };
+                msg = ProactiveContext.BuildFallback(proactive, level);
             }
 
             if (!await SendTgAndLog(msg, level)) return false;
@@ -3534,6 +3541,7 @@ namespace KokonoeAssistant.Services
             var internalDay = BuildInternalDayFrame(now2, AppSettings.Load().ProactiveAutonomyLevel, presence);
             var presenceBlock = presence.ExtraContext;
             var internalDayBlock = internalDay.PromptBlock;
+            var proactive = ProactiveContext.Build(_chatRepo.GetMessages(50), _state, now2);
 
             // Кризова ситуація — окремий промпт
             if (trigger == "crisis" || style == SpontaneousStyle.CrisisSupport)
@@ -3570,6 +3578,8 @@ namespace KokonoeAssistant.Services
 
 {internalDayBlock}
 
+{proactive.PromptBlock}
+
 {situationBlock}
 Якщо зараз нічого немає — відповідай лише: [мовчання]
 
@@ -3581,6 +3591,7 @@ namespace KokonoeAssistant.Services
 - Жива репліка = конкретна деталь з останнього контексту + твій сухий поворот. Не лабораторна декорація.
 - Якщо є активний намір або timed follow-up — пиши ТІЛЬКИ про нього. Не тягни випадкові спогади, фото, папки, проєкт або старі теми.
 - Не пиши «ти зник» якщо минуло менше 2 годин або якщо він сам назвав час повернення.
+- Якщо після останньої репліки користувача вже був твій авто-пінг, не повторюй ""пауза/тиша/зник"": або мовчи, або питай конкретно по останній темі.
 - Непередбачувано. Не шаблонно. Як людина що щось відчула і написала.";
 
             var msg = (await CallLlmRawAsync(prompt))?.Trim().Trim('"') ?? "";
@@ -3589,6 +3600,18 @@ namespace KokonoeAssistant.Services
             {
                 Log("Spontaneous: decided to stay silent");
                 return;
+            }
+            var proactiveCheck = ProactiveContext.Check(msg, proactive, trigger);
+            if (!proactiveCheck.Passed)
+            {
+                if (proactive.AssistantPingsAfterLastUser > 0 && !trigger.Contains("intent", StringComparison.OrdinalIgnoreCase))
+                {
+                    Log($"Spontaneous suppressed: {proactiveCheck.Reason}");
+                    return;
+                }
+
+                Log($"Spontaneous replaced: {proactiveCheck.Reason}");
+                msg = proactiveCheck.Replacement;
             }
 
             // Надіслати в Telegram

@@ -37,6 +37,8 @@ internal static class Program
             Run("Timeline summarizes returned state", TimelineSummarizesReturnedState);
             Run("Post reply guard blocks stale sleep", PostReplyGuardBlocksStaleSleep);
             Run("Post reply guard rejects staged decoration", PostReplyGuardRejectsStagedDecoration);
+            Run("Proactive guard replaces repeated generic silence", ProactiveGuardReplacesRepeatedGenericSilence);
+            Run("Proactive context anchors silence to last topic", ProactiveContextAnchorsSilenceToLastTopic);
             Run("Scenario simulation guards temporal continuity", ScenarioSimulationGuardsTemporalContinuity);
             Run("LLM diagnostics snapshot starts idle", LlmDiagnosticsSnapshotStartsIdle);
             Run("Inspector renders state report", InspectorRendersStateReport);
@@ -768,6 +770,49 @@ internal static class Program
         AssertTrue(!result.Passed, "guard should reject decorative staged replies for concrete timed intent");
         AssertTrue(result.ShouldRepair, "decorative staged reply should request repair");
         AssertTrue(result.Violations.Any(v => v.Contains("сценарна") || v.Contains("декоратив")), "violation should explain staged/decorative problem");
+    }
+
+    private static void ProactiveGuardReplacesRepeatedGenericSilence()
+    {
+        var now = new DateTime(2026, 5, 7, 16, 56, 0);
+        var messages = new[]
+        {
+            new ChatRepository.ChatMessage { Role = "user", Content = "вчу іспанську фразу", Timestamp = now.AddHours(-2) },
+            new ChatRepository.ChatMessage { Role = "assistant", Content = "Пауза вже помітна. Ти зайнятий?", Timestamp = now.AddMinutes(-50) }
+        };
+
+        var service = new KokoProactiveContextService();
+        var frame = service.Build(messages, new KokoInternalState(), now);
+        var check = service.Check("Тиша затягнулась. Ти ще в тому ж режимі?", frame, "silence_l2");
+
+        AssertTrue(!check.Passed, "second generic silence ping should be rejected");
+        AssertTrue(check.Replacement.Contains("іспанську") || check.Replacement.Contains("фразу"), "replacement should mention last concrete topic");
+        AssertTrue(!check.Replacement.Contains("Тиша затягнулась"), "replacement should not repeat the generic silence template");
+    }
+
+    private static void ProactiveContextAnchorsSilenceToLastTopic()
+    {
+        var now = new DateTime(2026, 5, 7, 15, 6, 0);
+        var messages = new[]
+        {
+            new ChatRepository.ChatMessage { Role = "user", Content = "піду на курси, буду десь через годину", Timestamp = now.AddMinutes(-95) }
+        };
+        var state = new KokoInternalState();
+        state.ShortTermIntents.Add(new ShortTermIntent
+        {
+            Kind = "course",
+            Summary = "пішов на курси",
+            SourceText = "піду на курси",
+            CreatedAt = now.AddMinutes(-95),
+            ExpectedUntil = now.AddMinutes(25),
+            FollowUpAt = now.AddMinutes(-5)
+        });
+
+        var frame = new KokoProactiveContextService().Build(messages, state, now);
+
+        AssertTrue(frame.AnchorUk.Contains("курс") || frame.ActiveIntentUk.Contains("курс"), "proactive context should anchor to course intent");
+        AssertTrue(frame.PromptBlock.Contains("Остання репліка користувача"), "prompt block should expose last user message");
+        AssertTrue(frame.PromptBlock.Contains("Авто-пінгів"), "prompt block should expose ping count");
     }
 
     private static void LlmDiagnosticsSnapshotStartsIdle()
