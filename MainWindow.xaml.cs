@@ -267,7 +267,7 @@ namespace KokonoeAssistant
                 LiveCoreStrainBar.Value = Math.Clamp(somatic.Strain * 100.0, 0, 100);
 
                 LiveCoreAutonomyText.Text = TrimLiveCoreLine(telemetry.AutonomyDebug, 72);
-                LiveCorePresenceText.Text = TrimLiveCoreLine($"{telemetry.Presence} | {telemetry.TimelineState}", 86);
+                LiveCorePresenceText.Text = TrimLiveCoreLine($"{telemetry.Presence} | {telemetry.TimelineState} | state {telemetry.StateFreshness}", 110);
                 LiveCoreRhythmText.Text = TrimLiveCoreLine($"{telemetry.Rhythm} | LLM {telemetry.LlmStatus} | guard {telemetry.PostReplyGuard}", 86);
 
                 if (forceVaultScan || DateTime.Now - _liveCoreLastVaultScan > TimeSpan.FromSeconds(30))
@@ -373,6 +373,7 @@ tags: [kokonoe, live-core, diagnostics]
             sb.AppendLine($"| Autonomy debug | {telemetry.AutonomyDebug.Replace("|", "/")} |");
             sb.AppendLine($"| Presence | {telemetry.Presence.Replace("|", "/")} |");
             sb.AppendLine($"| Timeline | {telemetry.Timeline.Replace("|", "/")} |");
+            sb.AppendLine($"| State freshness | {telemetry.StateFreshness.Replace("|", "/")} |");
             sb.AppendLine($"| Внутрішній день | {telemetry.InternalDay.Replace("|", "/")} |");
             sb.AppendLine($"| Ритм | {telemetry.Rhythm.Replace("|", "/")} |");
             sb.AppendLine($"| Self-review | {telemetry.SelfReview.Replace("|", "/")} |");

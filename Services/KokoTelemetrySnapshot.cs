@@ -18,6 +18,7 @@ namespace KokonoeAssistant.Services
         public string Rhythm { get; set; } = "";
         public string Timeline { get; set; } = "";
         public string TimelineState { get; set; } = "";
+        public string StateFreshness { get; set; } = "";
         public string Relationship { get; set; } = "";
         public string SelfReview { get; set; } = "";
         public string PostReplyGuard { get; set; } = "";

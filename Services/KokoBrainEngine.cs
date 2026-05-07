@@ -126,6 +126,9 @@ namespace KokonoeAssistant.Services
         public string LastTimelineState { get; set; } = "";
         public string LastPostReplyGuard { get; set; } = "";
         public DateTime LastPostReplyGuardAt { get; set; } = DateTime.MinValue;
+        public DateTime LastStateRefreshAt { get; set; } = DateTime.MinValue;
+        public string LastStateRefreshSummary { get; set; } = "";
+        public bool LastStateRefreshChanged { get; set; }
 
         public int PendingVaultExchangeCount { get; set; }
         public List<string> PendingVaultExchangeBuffer { get; set; } = new();
@@ -192,6 +195,7 @@ namespace KokonoeAssistant.Services
         public readonly KokoScenarioSimulationService Scenarios;
         public readonly KokoConversationTimelineEngine Timeline;
         public readonly KokoPostReplyGuard PostReplyGuard;
+        public readonly KokoStateFreshnessService StateFreshness;
 
         // ── Зовнішні сервіси (опціональні) ───────────────────────────
         private EnhancedMemory?    _enhanced;
@@ -222,6 +226,7 @@ namespace KokonoeAssistant.Services
         private int _thinkInFlight;
         private int _spontaneousInFlight;
         private int _vaultSyncInFlight;
+        private DateTime _lastVaultFreshnessCheckAt = DateTime.MinValue;
         private readonly object    _lock = new();
         private DateTime           _lastInAppSilenceMsgAt = DateTime.MinValue;
 
@@ -273,6 +278,7 @@ namespace KokonoeAssistant.Services
             Scenarios = new KokoScenarioSimulationService();
             Timeline = new KokoConversationTimelineEngine();
             PostReplyGuard = new KokoPostReplyGuard();
+            StateFreshness = new KokoStateFreshnessService();
 
             // Підключити нові сервіси в LLM
             _llm.Memory    = Memory;
@@ -2958,6 +2964,8 @@ namespace KokonoeAssistant.Services
             if (!EnsureTelegram()) return;
 
             var now = DateTime.Now;
+            RefreshTemporalState(now, "spontaneous");
+            EnsureVaultSyncFreshness("spontaneous");
             var autonomyLevel = Math.Clamp(s.ProactiveAutonomyLevel, 0, 3);
             if (autonomyLevel <= 0) return;
             var baseInterval = Math.Clamp(s.SpontaneousIntervalMins, 10, 240);
@@ -3827,6 +3835,7 @@ namespace KokonoeAssistant.Services
 
         public KokoSelfReviewFrame BuildSelfReviewFrame(string? userText = null)
         {
+            RefreshTemporalState(reason: "self-review");
             var now = DateTime.Now;
             var autonomyLevel = Math.Clamp(AppSettings.Load().ProactiveAutonomyLevel, 0, 3);
             var messages = _chatRepo.GetMessages(40);
@@ -3838,6 +3847,7 @@ namespace KokonoeAssistant.Services
 
         public KokoConversationTimelineFrame BuildTimelineFrame(string? userText = null)
         {
+            RefreshTemporalState(reason: "timeline");
             var now = DateTime.Now;
             var frame = Timeline.Build(_chatRepo.GetMessages(60), _state, now, userText);
             lock (_lock)
@@ -3884,8 +3894,58 @@ namespace KokonoeAssistant.Services
             }
         }
 
+        public KokoStateFreshnessResult RefreshTemporalState(DateTime? nowOverride = null, string reason = "runtime")
+        {
+            var now = nowOverride ?? DateTime.Now;
+            IReadOnlyList<ChatRepository.ChatMessage> messages;
+            try { messages = _chatRepo.GetMessages(80); }
+            catch { messages = Array.Empty<ChatRepository.ChatMessage>(); }
+
+            lock (_lock)
+            {
+                var result = StateFreshness.Refresh(_state, messages, now);
+                var shouldPersistStamp =
+                    result.Changed ||
+                    _state.LastStateRefreshAt <= DateTime.MinValue ||
+                    now - _state.LastStateRefreshAt >= TimeSpan.FromMinutes(10);
+
+                _state.LastStateRefreshAt = now;
+                _state.LastStateRefreshSummary = $"{reason}: {result.SummaryUk}";
+                _state.LastStateRefreshChanged = result.Changed;
+
+                if (shouldPersistStamp)
+                    SaveState();
+
+                return result;
+            }
+        }
+
+        public void EnsureVaultSyncFreshness(string reason = "runtime")
+        {
+            var now = DateTime.Now;
+            var shouldFlush = false;
+            lock (_lock)
+            {
+                if (_state.PendingVaultExchangeCount < 5 &&
+                    now - _lastVaultFreshnessCheckAt < TimeSpan.FromMinutes(2))
+                    return;
+
+                _lastVaultFreshnessCheckAt = now;
+                shouldFlush = KokoVaultSyncPolicy.ShouldFlush(
+                    _state.PendingVaultExchangeCount,
+                    _state.LastAutoVaultSyncAt,
+                    now,
+                    TimeSpan.FromMinutes(30));
+            }
+
+            if (shouldFlush)
+                _ = Task.Run(() => AutoSyncVaultBatchAsync(force: true, reason: reason));
+        }
+
         public KokoTelemetrySnapshot BuildTelemetrySnapshot(string? userText = null)
         {
+            RefreshTemporalState(reason: "telemetry");
+            EnsureVaultSyncFreshness("telemetry-freshness");
             var now = DateTime.Now;
             var autonomyLevel = Math.Clamp(AppSettings.Load().ProactiveAutonomyLevel, 0, 3);
             var presence = BuildPresenceFrame(now, autonomyLevel);
@@ -3918,6 +3978,7 @@ namespace KokonoeAssistant.Services
                 Rhythm = rhythm.Summary,
                 Timeline = timeline.SummaryUk,
                 TimelineState = timeline.CurrentState,
+                StateFreshness = string.IsNullOrWhiteSpace(_state.LastStateRefreshSummary) ? "none" : _state.LastStateRefreshSummary,
                 Relationship = $"bond {relationship.BondScore:F2}, aftertaste {relationship.LastAftertaste}, protect {relationship.Protectiveness:F2}",
                 SelfReview = $"{review.RiskLevel}: {review.Summary}",
                 PostReplyGuard = string.IsNullOrWhiteSpace(_state.LastPostReplyGuard) ? "none" : _state.LastPostReplyGuard,
@@ -4134,6 +4195,7 @@ namespace KokonoeAssistant.Services
 
         public IReadOnlyList<ShortTermIntent> GetActiveShortTermIntents(int count = 5)
         {
+            RefreshTemporalState(reason: "active-intents");
             lock (_lock)
             {
                 var now = DateTime.Now;
@@ -4338,11 +4400,10 @@ KOKONOE: {TrimForVaultBuffer(assistantText, 900)}
                 SaveState();
             }
 
-            if (_state.PendingVaultExchangeCount >= 5)
-                _ = Task.Run(AutoSyncVaultBatchAsync);
+            EnsureVaultSyncFreshness("new-exchange");
         }
 
-        private async Task AutoSyncVaultBatchAsync()
+        private async Task AutoSyncVaultBatchAsync(bool force = false, string reason = "batch")
         {
             if (Interlocked.CompareExchange(ref _vaultSyncInFlight, 1, 0) != 0) return;
 
@@ -4351,7 +4412,7 @@ KOKONOE: {TrimForVaultBuffer(assistantText, 900)}
             {
                 lock (_lock)
                 {
-                    if (_state.PendingVaultExchangeCount < 5 || _state.PendingVaultExchangeBuffer.Count == 0)
+                    if ((!force && _state.PendingVaultExchangeCount < 5) || _state.PendingVaultExchangeBuffer.Count == 0)
                         return;
                     batch = _state.PendingVaultExchangeBuffer.ToList();
                 }
@@ -4360,6 +4421,7 @@ KOKONOE: {TrimForVaultBuffer(assistantText, 900)}
 You are Kokonoe's background Obsidian archivist.
 Analyze the last chat exchanges and output ONLY valid JSON.
 Do not invent facts. If a section has nothing useful, use an empty array/string.
+Archive reason: {{reason}}.
 
 JSON schema:
 {
@@ -4380,6 +4442,7 @@ CHAT:
                 if (string.IsNullOrWhiteSpace(raw))
                 {
                     WriteVaultFallback(batch, "LLM returned nothing");
+                    MarkVaultBatchSynced("fallback: LLM returned nothing");
                     return;
                 }
 
@@ -4387,20 +4450,13 @@ CHAT:
                 if (obj == null)
                 {
                     WriteVaultFallback(batch, "JSON parse failed: " + TrimForVaultBuffer(raw, 600));
+                    MarkVaultBatchSynced("fallback: JSON parse failed");
                     return;
                 }
 
                 WriteAutoVaultNotes(obj);
                 RunVaultMaintenance("auto-batch-sync", TimeSpan.Zero);
-
-                lock (_lock)
-                {
-                    _state.PendingVaultExchangeCount = 0;
-                    _state.PendingVaultExchangeBuffer.Clear();
-                    _state.LastAutoVaultSyncAt = DateTime.Now;
-                    _state.LastAutoVaultSyncSummary = obj["summary"]?.ToString() ?? "";
-                    SaveState();
-                }
+                MarkVaultBatchSynced(obj["summary"]?.ToString() ?? "");
             }
             catch (Exception ex)
             {
@@ -4409,6 +4465,18 @@ CHAT:
             finally
             {
                 Interlocked.Exchange(ref _vaultSyncInFlight, 0);
+            }
+        }
+
+        private void MarkVaultBatchSynced(string summary)
+        {
+            lock (_lock)
+            {
+                _state.PendingVaultExchangeCount = 0;
+                _state.PendingVaultExchangeBuffer.Clear();
+                _state.LastAutoVaultSyncAt = DateTime.Now;
+                _state.LastAutoVaultSyncSummary = summary;
+                SaveState();
             }
         }
 

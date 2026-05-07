@@ -24,6 +24,9 @@ internal static class Program
             Run("Presence waits for return home intent", PresenceWaitsForReturnHomeIntent);
             Run("Autonomy blocks generic ping during active intent", AutonomyBlocksGenericPingDuringActiveIntent);
             Run("Presence refuses stale sleep instruction after return", PresenceRefusesStaleSleepInstructionAfterReturn);
+            Run("State freshness expires stale sleep intent", StateFreshnessExpiresStaleSleepIntent);
+            Run("State freshness closes intent on wake signal", StateFreshnessClosesIntentOnWakeSignal);
+            Run("Vault sync policy flushes stale partial batch", VaultSyncPolicyFlushesStalePartialBatch);
             Run("Presence long silence can interrupt on high autonomy", PresenceLongSilenceCanInterruptOnHighAutonomy);
             Run("Internal day shifts phase and writes vault status", InternalDayShiftsPhaseAndWritesVaultStatus);
             Run("Internal day prefers silence at low power night", InternalDayPrefersSilenceAtLowPowerNight);
@@ -371,6 +374,64 @@ internal static class Program
         AssertEqual("returned_after_intent", frame.SituationKind, "resolved sleep should be treated as return");
         AssertTrue(frame.ExtraContext.Contains("не кажи йому робити те, що вже в минулому"), "presence context should block stale sleep instruction");
         AssertTrue(frame.ToneHint.Contains("do not tell him to sleep"), "tone should explicitly avoid telling him to sleep again");
+    }
+
+    private static void StateFreshnessExpiresStaleSleepIntent()
+    {
+        var now = new DateTime(2026, 5, 7, 12, 30, 0);
+        var state = new KokoInternalState();
+        state.ShortTermIntents.Add(new ShortTermIntent
+        {
+            Kind = "sleep",
+            Summary = "пішов спати",
+            SourceText = "я спати",
+            CreatedAt = now.AddHours(-13),
+            FollowUpAt = now.AddHours(-5),
+            ExpectedUntil = now.AddHours(-3)
+        });
+        var messages = new[]
+        {
+            new ChatRepository.ChatMessage { Role = "user", Content = "я спати", Timestamp = now.AddHours(-13) }
+        };
+
+        var result = new KokoStateFreshnessService().Refresh(state, messages, now);
+
+        AssertTrue(result.Changed, "stale sleep should change state");
+        AssertTrue(result.ExpiredIntentCount == 1, "stale sleep should expire by time");
+        AssertTrue(state.ShortTermIntents.All(i => i.ResolvedAt.HasValue), "expired sleep should no longer be active");
+    }
+
+    private static void StateFreshnessClosesIntentOnWakeSignal()
+    {
+        var now = new DateTime(2026, 5, 7, 10, 24, 0);
+        var state = new KokoInternalState();
+        state.ShortTermIntents.Add(new ShortTermIntent
+        {
+            Kind = "sleep",
+            Summary = "пішов спати",
+            SourceText = "пішов спати",
+            CreatedAt = now.AddHours(-8),
+            FollowUpAt = now.AddMinutes(-30),
+            ExpectedUntil = now.AddHours(1)
+        });
+        var messages = new[]
+        {
+            new ChatRepository.ChatMessage { Role = "user", Content = "прокинувся, я тут", Timestamp = now.AddMinutes(-1) }
+        };
+
+        var result = new KokoStateFreshnessService().Refresh(state, messages, now);
+
+        AssertTrue(result.ResolvedIntentCount == 1, "wake signal should resolve active intent");
+        AssertTrue(state.ShortTermIntents[0].ResolvedAt == now, "resolved intent should get current timestamp");
+    }
+
+    private static void VaultSyncPolicyFlushesStalePartialBatch()
+    {
+        var now = new DateTime(2026, 5, 7, 14, 40, 0);
+
+        AssertTrue(KokoVaultSyncPolicy.ShouldFlush(5, now.AddMinutes(-1), now, TimeSpan.FromMinutes(30)), "five pending exchanges should flush immediately");
+        AssertTrue(KokoVaultSyncPolicy.ShouldFlush(4, now.AddMinutes(-31), now, TimeSpan.FromMinutes(30)), "stale partial batch should flush");
+        AssertTrue(!KokoVaultSyncPolicy.ShouldFlush(4, now.AddMinutes(-10), now, TimeSpan.FromMinutes(30)), "fresh partial batch should wait");
     }
 
     private static void PresenceLongSilenceCanInterruptOnHighAutonomy()
