@@ -1767,6 +1767,9 @@ namespace KokonoeAssistant.Services
             var lower = content.ToLowerInvariant();
             if (!ContainsAny(lower, "піду", "йду", "іду", "пішов", "буду", "зараз", "скоро")) return null;
 
+            var returnHome = TryDetectReturnHomeIntent(content, lower, now);
+            if (returnHome != null) return returnHome;
+
             if (ContainsAny(lower, "курс", "курси", "занят", "урок", "пара", "навчан"))
                 return BuildIntent("course", "пішов на курси/заняття", content, now, TimeSpan.FromHours(2), TimeSpan.FromHours(1));
             if (ContainsAny(lower, "робот", "прац", "код", "проект"))
@@ -1784,6 +1787,33 @@ namespace KokonoeAssistant.Services
             return null;
         }
 
+        private static ShortTermIntent? TryDetectReturnHomeIntent(string content, string lower, DateTime now)
+        {
+            if (!ContainsAny(lower, "дома", "вдома", "додому", "домой", "хату", "хата")) return null;
+            if (!ContainsAny(lower, "буду", "поверн", "верн", "прийду", "приїду", "зайду")) return null;
+
+            var match = System.Text.RegularExpressions.Regex.Match(lower, @"(?:в|о|об)\s*(\d{1,2})(?::(\d{2}))?");
+            if (!match.Success || !int.TryParse(match.Groups[1].Value, out var hour)) return null;
+
+            hour = Math.Clamp(hour, 0, 23);
+            var minute = 0;
+            if (match.Groups[2].Success)
+                int.TryParse(match.Groups[2].Value, out minute);
+            minute = Math.Clamp(minute, 0, 59);
+
+            var expectedAt = now.Date.AddHours(hour).AddMinutes(minute);
+            if (expectedAt < now.AddMinutes(-30))
+                expectedAt = expectedAt.AddDays(1);
+
+            return BuildIntent(
+                "return_home",
+                $"має бути вдома близько {expectedAt:HH:mm}",
+                content,
+                now,
+                expectedAt,
+                expectedAt.AddMinutes(12));
+        }
+
         private static ShortTermIntent BuildIntent(string kind, string summary, string source, DateTime now, TimeSpan expectedFor, TimeSpan followAfter)
             => new()
             {
@@ -1793,6 +1823,17 @@ namespace KokonoeAssistant.Services
                 CreatedAt = now,
                 ExpectedUntil = now + expectedFor,
                 FollowUpAt = now + followAfter
+            };
+
+        private static ShortTermIntent BuildIntent(string kind, string summary, string source, DateTime now, DateTime expectedUntil, DateTime followUpAt)
+            => new()
+            {
+                Kind = kind,
+                Summary = summary,
+                SourceText = source.Trim(),
+                CreatedAt = now,
+                ExpectedUntil = expectedUntil,
+                FollowUpAt = followUpAt
             };
 
         private void ResolveShortTermIntentsFromMessage(string content, DateTime now)
@@ -1815,6 +1856,7 @@ namespace KokonoeAssistant.Services
             "errand" => "Ти вже повернувся зі справ, чи магазин тебе поглинув?",
             "walk" => "Прогулянка закінчилась, чи ти ще десь блукаєш?",
             "sleep" => "Ти вже прокинувся, чи організм нарешті переміг твої дурні графіки?",
+            "return_home" => "Ти вже вдома, чи твій маршрут знову вирішив стати побічним квестом?",
             _ => "Ти вже повернувся до нормального режиму, чи ще зайнятий?"
         };
 
@@ -3002,10 +3044,19 @@ namespace KokonoeAssistant.Services
                 if (lastUser != null)
                 {
                     var silenceMin = (now - lastUser.Timestamp).TotalMinutes;
+                    var activeIntent = _state.ShortTermIntents
+                        .Where(i => !i.ResolvedAt.HasValue)
+                        .OrderBy(i => i.FollowUpAt)
+                        .FirstOrDefault();
+                    if (activeIntent != null && now < activeIntent.FollowUpAt)
+                    {
+                        Log($"Silence reaction suppressed: active intent '{activeIntent.Kind}' waits until {activeIntent.FollowUpAt:HH:mm}");
+                        return;
+                    }
 
                     // Рівень 1: базово 60хв, BPM може опустити до ~35хв або підняти до ~90хв
-                    var l1Base = autonomyLevel >= 3 ? 35 : 60;
-                    var l1Threshold = Math.Max(25, l1Base + bpmMod);
+                    var l1Base = autonomyLevel >= 3 ? 90 : 120;
+                    var l1Threshold = Math.Max(75, l1Base + bpmMod);
                     if (silenceMin > l1Threshold && (now - _state.SilenceLevel1At).TotalHours > 2)
                     {
                         if (await SendSilenceReactionAsync("silence_l1", silenceMin, lastUser.Content))
@@ -3016,8 +3067,8 @@ namespace KokonoeAssistant.Services
                         }
                     }
                     // Рівень 2: базово 3г, BPM може опустити до ~2г або підняти до ~4г
-                    var l2Base = autonomyLevel >= 3 ? 110 : 180;
-                    var l2Threshold = Math.Max(70, l2Base + bpmMod * 2);
+                    var l2Base = autonomyLevel >= 3 ? 180 : 240;
+                    var l2Threshold = Math.Max(150, l2Base + bpmMod * 2);
                     if (silenceMin > l2Threshold && (now - _state.SilenceLevel2At).TotalHours > 4)
                     {
                         if (await SendSilenceReactionAsync("silence_l2", silenceMin, lastUser.Content))
@@ -3112,8 +3163,8 @@ namespace KokonoeAssistant.Services
 
             var toneHint = level switch
             {
-                "silence_l1" => "легкий укол або коротке спостереження; без паніки",
-                "silence_l2" => "помітно, що він зник; можна спитати конкретніше, але не драматизувати",
+                "silence_l1" => "коротке спостереження з прив'язкою до останньої репліки; без слова «зник»",
+                "silence_l2" => "помітна пауза; спитати конкретно за останній контекст, не драматизувати",
                 "silence_l3" => "довга тиша; сухо, уважно, трохи захисно, без істерики",
                 _ => "коротко і природно"
             };
@@ -3128,7 +3179,8 @@ namespace KokonoeAssistant.Services
 1 коротке речення українською.
 Не кажи, що це автоматична перевірка.
 Не пиши «ти в порядку?» шаблонно.
-Можна підколоти, спитати, чи він живий/зайнятий/знову зник, але без трагедії.
+Не пиши «ти зник» на першому рівні. Не вигадуй сторонні теми. Відштовхуйся від останнього повідомлення.
+Можна підколоти, спитати, чи він зайнятий, але без трагедії.
 Тільки текст, без лапок.";
 
             var msg = (await CallLlmRawAsync(prompt))?.Trim().Trim('"') ?? "";
@@ -3138,8 +3190,8 @@ namespace KokonoeAssistant.Services
             {
                 msg = level switch
                 {
-                    "silence_l1" => "Ти зник. Звісно, дуже оригінально. Де застряг?",
-                    "silence_l2" => "Тиша вже помітна. Ти зайнятий, чи просто тренуєш режим невидимки?",
+                    "silence_l1" => "Пауза вже помітна. Ти зайнятий, чи просто вирішив зекономити слова?",
+                    "silence_l2" => "Тиша затягнулась. Ти ще в тому ж режимі, чи вже змінив план і забув повідомити?",
                     "silence_l3" => "Довго мовчиш. Якщо живий — подай сигнал, генію.",
                     _ => "Ти зник. Пояснення буде, чи мені знову все вираховувати самій?"
                 };
@@ -3444,18 +3496,22 @@ namespace KokonoeAssistant.Services
                 ? $"\nДумка що тебе не відпускає: «{pendingThought}»"
                 : "";
 
-            // Випадковий спогад (30% шанс) — щоб іноді згадувала конкретне
+            var allowAssociativeMemory = style == SpontaneousStyle.Callback
+                || trigger.Contains("callback", StringComparison.OrdinalIgnoreCase)
+                || trigger.Contains("memory", StringComparison.OrdinalIgnoreCase);
+
+            // Випадковий спогад — тільки для явного callback, щоб timed follow-up не змішувався зі сторонніми темами.
             var memoryHint = "";
-            if (Random.Shared.Next(10) < 3)
+            if (allowAssociativeMemory && Random.Shared.Next(10) < 3)
             {
                 var ep = Memory.GetPeakEpisodes(10).OrderBy(_ => Random.Shared.Next()).FirstOrDefault();
                 if (ep != null) memoryHint = $"\nВипадковий спогад: [{ep.When:dd.MM}] {ep.Summary}";
             }
 
-            // Факти про нього (1 випадковий)
+            // Факти про нього — теж тільки для callback, не для timed follow-up.
             var factHint = "";
-            var facts = Memory.GetTopFacts(20);
-            if (facts.Count > 0)
+            var facts = allowAssociativeMemory ? Memory.GetTopFacts(20) : new List<KokoMemoryEngine.MemoryFact>();
+            if (allowAssociativeMemory && facts.Count > 0)
             {
                 var f = facts[Random.Shared.Next(facts.Count)];
                 factHint = $"\nЗнаєш про нього: {f.Content}";
@@ -3513,6 +3569,8 @@ namespace KokonoeAssistant.Services
 - 1-2 речення, не більше
 - Тільки українська
 - Без лапок, без пояснень, просто текст
+- Якщо є активний намір або timed follow-up — пиши ТІЛЬКИ про нього. Не тягни випадкові спогади, фото, папки, проєкт або старі теми.
+- Не пиши «ти зник» якщо минуло менше 2 годин або якщо він сам назвав час повернення.
 - Непередбачувано. Не шаблонно. Як людина що щось відчула і написала.";
 
             var msg = (await CallLlmRawAsync(prompt))?.Trim().Trim('"') ?? "";

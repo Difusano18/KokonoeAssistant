@@ -139,6 +139,8 @@ namespace KokonoeAssistant.Services
                 "sleep" => "let him sleep unless he writes first; no nagging",
                 "course" when overdue => "ask whether the courses ended; dry, specific, mildly mocking",
                 "course" => "remember he is at courses; do not ask random nonsense",
+                "return_home" when overdue => "ask if he got home; specific, no generic disappearance complaint",
+                "return_home" => "he said when he will be home; wait until that time, do not nag early",
                 "work" => "work-aware, concise, do not break focus unless due",
                 _ => "specific follow-up, not generic checking"
             };

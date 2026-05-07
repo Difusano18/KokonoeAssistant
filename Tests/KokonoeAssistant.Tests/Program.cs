@@ -21,6 +21,8 @@ internal static class Program
             Run("Initiative high autonomy asks curiosity sooner", InitiativeHighAutonomyAsksCuriositySooner);
             Run("Short term intent followup bypasses ordinary initiative", ShortTermIntentFollowupBypassesOrdinaryInitiative);
             Run("Presence detects overdue course followup", PresenceDetectsOverdueCourseFollowup);
+            Run("Presence waits for return home intent", PresenceWaitsForReturnHomeIntent);
+            Run("Autonomy blocks generic ping during active intent", AutonomyBlocksGenericPingDuringActiveIntent);
             Run("Presence refuses stale sleep instruction after return", PresenceRefusesStaleSleepInstructionAfterReturn);
             Run("Presence long silence can interrupt on high autonomy", PresenceLongSilenceCanInterruptOnHighAutonomy);
             Run("Internal day shifts phase and writes vault status", InternalDayShiftsPhaseAndWritesVaultStatus);
@@ -264,6 +266,79 @@ internal static class Program
         AssertTrue(frame.ShouldInterrupt, "overdue course followup should interrupt at high autonomy");
         AssertEqual("overdue_intent", frame.SituationKind, "course should be classified as overdue intent");
         AssertTrue(frame.ExtraContext.Contains("курси"), "presence context should preserve the course event");
+    }
+
+    private static void PresenceWaitsForReturnHomeIntent()
+    {
+        using var ctx = TestContext.Create();
+        var now = new DateTime(2026, 5, 7, 11, 57, 0);
+        var state = new KokoInternalState();
+        state.ShortTermIntents.Add(new ShortTermIntent
+        {
+            Kind = "return_home",
+            Summary = "має бути вдома близько 12:00",
+            SourceText = "Буду в 12 дома крч",
+            CreatedAt = now.AddMinutes(-35),
+            FollowUpAt = now.Date.AddHours(12).AddMinutes(12),
+            ExpectedUntil = now.Date.AddHours(12)
+        });
+        ctx.Chat.InsertMessage(new ChatRepository.ChatMessage
+        {
+            Role = "user",
+            Content = "Буду в 12 дома крч",
+            Timestamp = now.AddMinutes(-35)
+        });
+
+        var frame = new KokoPresenceContinuityEngine()
+            .Evaluate(state, ctx.Chat.GetMessages(10), now, autonomyLevel: 3);
+
+        AssertEqual("active_absence", frame.SituationKind, "return-home intent should stay active before the stated time");
+        AssertTrue(!frame.ShouldInterrupt, "presence should not interrupt before the stated return-home follow-up");
+        AssertTrue(frame.ToneHint.Contains("wait until that time"), "tone should explicitly avoid early nagging");
+    }
+
+    private static void AutonomyBlocksGenericPingDuringActiveIntent()
+    {
+        var now = new DateTime(2026, 5, 7, 11, 57, 0);
+        var state = new KokoInternalState();
+        var presence = new KokoPresenceFrame
+        {
+            SituationKind = "active_absence",
+            SummaryUk = "Активний намір: має бути вдома близько 12:00.",
+            ShouldInterrupt = false,
+            NextUsefulAt = now.Date.AddHours(12).AddMinutes(12),
+            SilenceMinutes = 35
+        };
+        var internalDay = new KokoInternalDayFrame
+        {
+            Phase = "work_ramp",
+            SummaryUk = "робочий день",
+            PromptBlock = "INTERNAL DAY\n",
+            ShouldPreferSilence = false
+        };
+        var initiative = new KokoInitiativeDecision
+        {
+            ShouldAct = true,
+            Trigger = "curiosity_ping",
+            StyleHint = "jab",
+            Reason = "generic curiosity",
+            Priority = 80,
+            ExtraContext = "generic"
+        };
+
+        var decision = new KokoAutonomyDecisionEngine().Evaluate(
+            now,
+            state,
+            presence,
+            internalDay,
+            initiative,
+            new KokoRelationshipState(),
+            new KokoSomaticSnapshot { State = "focused", Calm = 0.30, Strain = 0.20 },
+            new KokoPatternEngine.RhythmProfile { CurrentSlotSamples = 5, CurrentSlotActivityRate = 0.50f, Summary = "active slot" },
+            autonomyLevel: 3);
+
+        AssertTrue(!decision.ShouldAct, "generic initiative should be blocked while a timed user intent is active");
+        AssertTrue(decision.SilenceReason.Contains("активний намір") || decision.SilenceReason.Contains("active"), "silence reason should mention active intent");
     }
 
     private static void PresenceRefusesStaleSleepInstructionAfterReturn()

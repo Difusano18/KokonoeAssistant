@@ -51,7 +51,7 @@ namespace KokonoeAssistant.Services
                 return Wait("no_candidate", "немає достатньої причини втручатися");
 
             var strongest = candidates[0];
-            var silenceGate = BuildSilenceGate(internalDay, strongest, rhythm, autonomyLevel);
+            var silenceGate = BuildSilenceGate(presence, internalDay, strongest, rhythm, autonomyLevel);
             if (silenceGate != null)
                 return Wait(strongest.Trigger, silenceGate);
 
@@ -175,10 +175,13 @@ namespace KokonoeAssistant.Services
             }
         }
 
-        private static string? BuildSilenceGate(KokoInternalDayFrame internalDay, Candidate strongest, KokoPatternEngine.RhythmProfile rhythm, int autonomyLevel)
+        private static string? BuildSilenceGate(KokoPresenceFrame presence, KokoInternalDayFrame internalDay, Candidate strongest, KokoPatternEngine.RhythmProfile rhythm, int autonomyLevel)
         {
             if (autonomyLevel <= 0)
                 return "автономність вимкнена";
+
+            if (presence.SituationKind == "active_absence" && strongest.Source != "presence")
+                return $"є активний намір користувача; чекати до {presence.NextUsefulAt:HH:mm}, не вигадувати generic ping";
 
             if (internalDay.ShouldPreferSilence && strongest.Priority < 86)
                 return $"внутрішній день просить мовчати; найсильніший кандидат {strongest.Trigger} має лише p{strongest.Priority}";
