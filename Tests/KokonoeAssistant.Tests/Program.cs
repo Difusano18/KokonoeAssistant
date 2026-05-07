@@ -39,6 +39,8 @@ internal static class Program
             Run("Post reply guard rejects staged decoration", PostReplyGuardRejectsStagedDecoration);
             Run("Proactive guard replaces repeated generic silence", ProactiveGuardReplacesRepeatedGenericSilence);
             Run("Proactive context anchors silence to last topic", ProactiveContextAnchorsSilenceToLastTopic);
+            Run("Startup greeting avoids dead canned replies", StartupGreetingAvoidsDeadCannedReplies);
+            Run("Startup greeting sanitizes dry return line", StartupGreetingSanitizesDryReturnLine);
             Run("Scenario simulation guards temporal continuity", ScenarioSimulationGuardsTemporalContinuity);
             Run("LLM diagnostics snapshot starts idle", LlmDiagnosticsSnapshotStartsIdle);
             Run("Inspector renders state report", InspectorRendersStateReport);
@@ -813,6 +815,40 @@ internal static class Program
         AssertTrue(frame.AnchorUk.Contains("курс") || frame.ActiveIntentUk.Contains("курс"), "proactive context should anchor to course intent");
         AssertTrue(frame.PromptBlock.Contains("Остання репліка користувача"), "prompt block should expose last user message");
         AssertTrue(frame.PromptBlock.Contains("Авто-пінгів"), "prompt block should expose ping count");
+    }
+
+    private static void StartupGreetingAvoidsDeadCannedReplies()
+    {
+        var now = new DateTime(2026, 5, 7, 17, 5, 0);
+        var messages = new[]
+        {
+            new ChatRepository.ChatMessage { Role = "user", Content = "авто відповіді дивні і тупі", Timestamp = now.AddMinutes(-15) },
+            new ChatRepository.ChatMessage { Role = "assistant", Content = "Фікшу авто-пінги", Timestamp = now.AddMinutes(-12) }
+        };
+
+        var service = new KokoStartupGreetingService();
+        var frame = service.BuildFrame(messages, now);
+        var fallback = service.BuildFallback(frame);
+
+        AssertTrue(!fallback.Contains("Знову тут"), "startup fallback should avoid dead canned opening");
+        AssertTrue(!fallback.Contains("де тебе носило"), "startup fallback should avoid generic return jab");
+        AssertTrue(fallback.Contains("авто") || fallback.Contains("пінг"), "startup fallback should preserve last concrete topic");
+    }
+
+    private static void StartupGreetingSanitizesDryReturnLine()
+    {
+        var now = new DateTime(2026, 5, 7, 17, 5, 0);
+        var messages = new[]
+        {
+            new ChatRepository.ChatMessage { Role = "user", Content = "покращи реакції при вході", Timestamp = now.AddMinutes(-20) }
+        };
+
+        var service = new KokoStartupGreetingService();
+        var frame = service.BuildFrame(messages, now);
+        var sanitized = service.Sanitize("Знову тут. Значить, щось недороблено.", frame);
+
+        AssertTrue(!sanitized.Contains("Знову тут"), "sanitizer should replace canned startup greeting");
+        AssertTrue(sanitized.Contains("покращи") || sanitized.Contains("реакції") || sanitized.Contains("вході"), "sanitized greeting should use last topic");
     }
 
     private static void LlmDiagnosticsSnapshotStartsIdle()

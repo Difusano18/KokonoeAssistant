@@ -653,7 +653,7 @@ tags: [kokonoe, live-core, diagnostics]
                 TgMessagesList.ItemsSource = _tgMessages;
 
                 SetLoadingProgress(85, "готово...");
-                var greeting = GenerateFastGreeting();
+                var greeting = await GenerateStartupGreetingWithFallbackAsync();
 
                 SetLoadingProgress(100, "готово");
                 await Task.Delay(150);
@@ -808,39 +808,20 @@ tags: [kokonoe, live-core, diagnostics]
             MatrixCanvas.Children.Clear();
         }
 
-        private async Task<string> GenerateGreetingAsync()
+        private async Task<string> GenerateStartupGreetingWithFallbackAsync()
         {
             try
             {
                 var now = DateTime.Now;
+                var service = new Services.KokoStartupGreetingService();
 
                 // Беремо останні повідомлення З timestamp
                 var recent = new List<Services.ChatRepository.ChatMessage>();
-                try { recent = ServiceContainer.ChatRepository.GetMessages(10).OrderBy(x => x.Timestamp).TakeLast(6).ToList(); }
+                try { recent = ServiceContainer.ChatRepository.GetMessages(12).OrderBy(x => x.Timestamp).TakeLast(8).ToList(); }
                 catch { }
 
-                // Розраховуємо gap від останнього повідомлення
-                var lastMsgAt = recent.Count > 0 ? recent[^1].Timestamp : (DateTime?)null;
-                var gapMinutes = lastMsgAt.HasValue ? (now - lastMsgAt.Value).TotalMinutes : (double?)null;
-
-                var gapDesc = gapMinutes switch
-                {
-                    null                => "невідомо коли було закрито",
-                    < 5                 => "щойно закрив і одразу відкрив",
-                    < 30                => $"{(int)gapMinutes.Value} хвилин тому",
-                    < 90                => $"~{(int)(gapMinutes.Value / 60)} годину тому",
-                    < 60 * 6            => $"~{(int)(gapMinutes.Value / 60)} години тому",
-                    < 60 * 16           => $"~{(int)(gapMinutes.Value / 60)} годин тому (скоріш за все спав)",
-                    _                   => $"~{(int)(gapMinutes.Value / 60)} годин тому (давно)"
-                };
-
-                var recentCtx = "";
-                if (recent.Count > 0)
-                {
-                    var lines = recent.Select(m =>
-                        $"[{m.Timestamp:HH:mm}] {(m.Role == "user" ? "Він" : "Ти")}: {(m.Content.Length > 150 ? m.Content[..150] + "…" : m.Content)}");
-                    recentCtx = $"Остання сесія (з часовими мітками):\n{string.Join("\n", lines)}\n";
-                }
+                var frame = service.BuildFrame(recent, now);
+                var fallback = service.BuildFallback(frame);
 
                 var brainObs = "";
                 try
@@ -851,43 +832,32 @@ tags: [kokonoe, live-core, diagnostics]
                 }
                 catch { }
 
-                // Підказка залежно від gap
-                var gapHint = gapMinutes switch
-                {
-                    null   => "Немає попередньої сесії. Перший запуск або чистий старт.",
-                    < 5    => "Він тільки-но перезапустив — скоріш за все технічна причина. Одне коротке речення, без привітань.",
-                    < 60   => "Він відкрив через короткий час. Якщо в кінці сесії було щось незавершене — прокоментуй. Без 'привіт'.",
-                    < 60*8 => "Пройшло кілька годин. Можливо він займався справами. НЕ питай чи спав — він явно не спав. Відповідай на останній контекст розмови, якщо він є.",
-                    _      => "Пройшло багато часу — він спав або був далеко. Якщо є незавершена тема з останньої сесії — підніми її. Не кажи банальних 'привіт' і не питай 'ти спав?'."
-                };
+                var prompt = $@"{frame.PromptBlock}
+{brainObs}
+Напиши стартову репліку. Вона має відчуватись як повернення до живої роботи, а не системний ping.
+Тільки текст.";
 
-                var prompt = $@"Зараз {now:HH:mm}, {now:dd MMMM yyyy}.
-Додаток був закритий: {gapDesc}.
+                var task = _llm.SendSystemQueryAsync(prompt, CancellationToken.None);
+                var completed = await Task.WhenAny(task, Task.Delay(2500));
+                if (completed != task)
+                    return fallback;
 
-{recentCtx}{brainObs}
-ІНСТРУКЦІЯ: {gapHint}
-Напиши 1-2 речення в своєму стилі. Тільки текст, без лапок.";
-
-                return await _llm.SendSystemQueryAsync(prompt, CancellationToken.None) ?? "";
+                return service.Sanitize(await task, frame);
             }
-            catch { return ""; }
+            catch { return GenerateFastGreeting(); }
         }
 
         private string GenerateFastGreeting()
         {
             try
             {
-                var recent = ServiceContainer.ChatRepository.GetMessages(1).FirstOrDefault();
-                if (recent == null) return "Запустилась. Що ламаємо першим.";
-
-                var gap = DateTime.Now - recent.Timestamp;
-                if (gap.TotalMinutes < 10) return "Знову тут. Значить, щось недороблено.";
-                if (gap.TotalHours < 8) return "Повернувся. Продовжуй з місця, де зупинився.";
-                return "Жива. На відміну від твоєї дисципліни сну, мабуть.";
+                var recent = ServiceContainer.ChatRepository.GetMessages(8);
+                var service = new Services.KokoStartupGreetingService();
+                return service.BuildFallback(service.BuildFrame(recent, DateTime.Now));
             }
             catch
             {
-                return "Запустилась. Далі.";
+                return "Я на місці. Давай, показуй що сьогодні добиваємо.";
             }
         }
 
@@ -5329,9 +5299,6 @@ tags: [kokonoe, dashboard, live]
 
                 // Перший думательний цикл через 60 секунд після запуску
                 brain.TriggerThink();
-
-                // Якщо пропустив 8+ годин — показати що пропустив
-                _ = brain.WhatDidIMissAsync();
 
                 // Оновити emotion dot з поточним станом
                 Dispatcher.InvokeAsync(UpdateEmotionDot, DispatcherPriority.Background);
