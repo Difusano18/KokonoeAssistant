@@ -29,6 +29,8 @@ internal static class Program
             Run("Relationship records shift events", RelationshipRecordsShiftEvents);
             Run("Pattern rhythm profile recommends quiet slot", PatternRhythmProfileRecommendsQuietSlot);
             Run("Self review blocks stale sleep replies", SelfReviewBlocksStaleSleepReplies);
+            Run("Scenario simulation guards temporal continuity", ScenarioSimulationGuardsTemporalContinuity);
+            Run("LLM diagnostics snapshot starts idle", LlmDiagnosticsSnapshotStartsIdle);
             Run("Inspector renders state report", InspectorRendersStateReport);
             Run("Obsidian vault architecture maintenance", ObsidianVaultArchitectureMaintenance);
             Run("Obsidian unique memory append", ObsidianUniqueMemoryAppend);
@@ -521,6 +523,27 @@ internal static class Program
         AssertEqual("high", frame.RiskLevel, "wake-up after sleep should be high temporal risk");
         AssertTrue(frame.PromptBlock.Contains("Заборонено казати"), "self-review should explicitly block stale sleep replies");
         AssertTrue(frame.PromptBlock.Contains("не давай інструкцію в минуле"), "self-review should warn about past actions");
+    }
+
+    private static void ScenarioSimulationGuardsTemporalContinuity()
+    {
+        var results = new KokoScenarioSimulationService()
+            .RunCoreChecks(new DateTime(2026, 5, 7, 12, 0, 0), autonomyLevel: 3);
+
+        AssertEqual(3, results.Count, "core scenario suite should cover three continuity risks");
+        AssertTrue(results.All(r => r.Passed), "all core scenario invariants should pass");
+        AssertTrue(results.Any(r => r.Name == "sleep_wake_temporal_guard"), "sleep wake guard should be present");
+        AssertTrue(results.Any(r => r.Name == "course_overdue_followup"), "course follow-up guard should be present");
+        AssertTrue(results.Any(r => r.Name == "quiet_night_gate"), "quiet night gate should be present");
+    }
+
+    private static void LlmDiagnosticsSnapshotStartsIdle()
+    {
+        var diag = new LlmService().GetDiagnosticsSnapshot();
+
+        AssertEqual("idle", diag.Status, "diagnostics should start idle before any request");
+        AssertEqual(0L, diag.TotalRequests, "diagnostics should not invent requests");
+        AssertTrue(diag.ConsecutiveFailures == 0, "diagnostics should not start in failure state");
     }
 
     private static void InspectorRendersStateReport()

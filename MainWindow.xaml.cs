@@ -268,7 +268,7 @@ namespace KokonoeAssistant
 
                 LiveCoreAutonomyText.Text = TrimLiveCoreLine(telemetry.Autonomy, 72);
                 LiveCorePresenceText.Text = TrimLiveCoreLine(telemetry.Presence, 86);
-                LiveCoreRhythmText.Text = TrimLiveCoreLine(telemetry.Rhythm, 86);
+                LiveCoreRhythmText.Text = TrimLiveCoreLine($"{telemetry.Rhythm} | LLM {telemetry.LlmStatus}", 86);
 
                 if (forceVaultScan || DateTime.Now - _liveCoreLastVaultScan > TimeSpan.FromSeconds(30))
                 {
@@ -291,6 +291,8 @@ namespace KokonoeAssistant
                     LiveCoreVaultText.Text += $" | остання {state.LastAutoVaultSyncAt:dd.MM HH:mm}";
                 if (_lastObsidianPreflightAt > DateTime.MinValue)
                     LiveCoreVaultText.Text += $" | ctx {_lastObsidianPreflightAt:HH:mm:ss}";
+                if (!string.IsNullOrWhiteSpace(telemetry.ScenarioHealth))
+                    LiveCoreVaultText.Text += $" | checks {telemetry.ScenarioHealth}";
             }
             catch (Exception ex)
             {
@@ -372,6 +374,10 @@ tags: [kokonoe, live-core, diagnostics]
             sb.AppendLine($"| Внутрішній день | {telemetry.InternalDay.Replace("|", "/")} |");
             sb.AppendLine($"| Ритм | {telemetry.Rhythm.Replace("|", "/")} |");
             sb.AppendLine($"| Self-review | {telemetry.SelfReview.Replace("|", "/")} |");
+            sb.AppendLine($"| LLM | {telemetry.LlmStatus.Replace("|", "/")} / {telemetry.LlmProvider} / {telemetry.LlmModel} |");
+            if (!string.IsNullOrWhiteSpace(telemetry.LlmLastError))
+                sb.AppendLine($"| LLM error | {telemetry.LlmLastError.Replace("|", "/")} |");
+            sb.AppendLine($"| Core checks | {telemetry.ScenarioHealth.Replace("|", "/")} |");
             sb.AppendLine($"| Синхронізація пам'яті | очікує {state.PendingVaultExchangeCount}/5 / остання {(state.LastAutoVaultSyncAt > DateTime.MinValue ? state.LastAutoVaultSyncAt.ToString("yyyy-MM-dd HH:mm") : "ніколи")} |");
             sb.AppendLine($"| Vault | пам'ять {_liveCoreMemoryItems} / огляд {_liveCoreReviewActions} / задачі {_liveCoreOpenTasks} |");
             if (!string.IsNullOrWhiteSpace(selfReg.PrivateThought))

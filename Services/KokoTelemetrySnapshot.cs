@@ -17,6 +17,17 @@ namespace KokonoeAssistant.Services
         public string Rhythm { get; set; } = "";
         public string Relationship { get; set; } = "";
         public string SelfReview { get; set; } = "";
+        public string LlmStatus { get; set; } = "";
+        public string LlmProvider { get; set; } = "";
+        public string LlmModel { get; set; } = "";
+        public string LlmLastError { get; set; } = "";
+        public string LlmLastFallback { get; set; } = "";
+        public DateTime LlmLastRequestAt { get; set; } = DateTime.MinValue;
+        public DateTime LlmLastSuccessAt { get; set; } = DateTime.MinValue;
+        public DateTime LlmLastErrorAt { get; set; } = DateTime.MinValue;
+        public long LlmLastLatencyMs { get; set; }
+        public int LlmConsecutiveFailures { get; set; }
+        public string ScenarioHealth { get; set; } = "";
         public int PendingVaultExchangeCount { get; set; }
         public DateTime LastVaultSyncAt { get; set; } = DateTime.MinValue;
         public int ActiveIntentCount { get; set; }
@@ -25,5 +36,6 @@ namespace KokonoeAssistant.Services
         public string[] PresenceTrace { get; set; } = Array.Empty<string>();
         public string[] InternalDayTrace { get; set; } = Array.Empty<string>();
         public string[] RelationshipEvents { get; set; } = Array.Empty<string>();
+        public string[] ScenarioFindings { get; set; } = Array.Empty<string>();
     }
 }

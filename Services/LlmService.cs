@@ -36,6 +36,22 @@ namespace KokonoeAssistant.Services
         private const int MainMaxTokens = 8192;
         private const int SystemMaxTokens = 1024;
 
+        private readonly object _diagLock = new();
+        private DateTime _diagLastRequestAt = DateTime.MinValue;
+        private DateTime _diagLastSuccessAt = DateTime.MinValue;
+        private DateTime _diagLastErrorAt = DateTime.MinValue;
+        private string _diagProvider = "";
+        private string _diagModel = "";
+        private string _diagChannel = "";
+        private int? _diagLastStatusCode;
+        private string _diagLastError = "";
+        private string _diagLastFallback = "";
+        private long _diagLastLatencyMs;
+        private int _diagInFlight;
+        private int _diagConsecutiveFailures;
+        private long _diagTotalRequests;
+        private long _diagTotalFailures;
+
         // Injected after construction
         public ObsidianMcpService?   Obsidian       { get; set; }
         public HealthService?        Health         { get; set; }
@@ -342,6 +358,109 @@ Kokonoe: Стоп. Де ти зараз. Коли востаннє їв.
 
         public int HistoryCount { get { lock (_histLock) { return _history.Count; } } }
 
+        public LlmDiagnosticsSnapshot GetDiagnosticsSnapshot()
+        {
+            lock (_diagLock)
+            {
+                var status = "idle";
+                if (_diagInFlight > 0) status = "pending";
+                else if (_diagConsecutiveFailures >= 3) status = "failing";
+                else if (_diagConsecutiveFailures > 0) status = "warning";
+                else if (_diagLastSuccessAt > DateTime.MinValue) status = "ok";
+
+                return new LlmDiagnosticsSnapshot
+                {
+                    CreatedAt = DateTime.Now,
+                    Status = status,
+                    Provider = _diagProvider,
+                    Model = _diagModel,
+                    Channel = _diagChannel,
+                    LastStatusCode = _diagLastStatusCode,
+                    LastError = _diagLastError,
+                    LastFallback = _diagLastFallback,
+                    LastRequestAt = _diagLastRequestAt,
+                    LastSuccessAt = _diagLastSuccessAt,
+                    LastErrorAt = _diagLastErrorAt,
+                    LastLatencyMs = _diagLastLatencyMs,
+                    InFlight = _diagInFlight,
+                    ConsecutiveFailures = _diagConsecutiveFailures,
+                    TotalRequests = _diagTotalRequests,
+                    TotalFailures = _diagTotalFailures
+                };
+            }
+        }
+
+        private string ActiveProviderLabel()
+        {
+            if (IsClaude) return "Claude";
+            if (IsOllamaCloud) return "Ollama Cloud";
+            return string.IsNullOrWhiteSpace(_provider) ? "OpenAI-compatible" : _provider;
+        }
+
+        private string ActiveModelLabel(bool imageRequest = false)
+        {
+            if (imageRequest && !string.IsNullOrWhiteSpace(_visionModel)) return _visionModel;
+            if (IsClaude) return _claudeModel;
+            if (IsOllamaCloud) return _ollamaModel;
+            return _model;
+        }
+
+        private void RecordLlmRequest(string provider, string model, string channel)
+        {
+            lock (_diagLock)
+            {
+                _diagProvider = provider;
+                _diagModel = model;
+                _diagChannel = channel;
+                _diagLastRequestAt = DateTime.Now;
+                _diagInFlight++;
+                _diagTotalRequests++;
+                _diagLastFallback = "";
+            }
+        }
+
+        private void RecordLlmSuccess(string provider, string model, string channel, Stopwatch elapsed, string fallback = "")
+        {
+            lock (_diagLock)
+            {
+                _diagProvider = provider;
+                _diagModel = model;
+                _diagChannel = channel;
+                _diagLastSuccessAt = DateTime.Now;
+                _diagLastLatencyMs = elapsed.ElapsedMilliseconds;
+                _diagLastStatusCode = 200;
+                _diagLastError = "";
+                _diagLastFallback = fallback;
+                _diagConsecutiveFailures = 0;
+                _diagInFlight = Math.Max(0, _diagInFlight - 1);
+            }
+        }
+
+        private void RecordLlmFailure(string provider, string model, string channel, int? statusCode, string error, Stopwatch elapsed, string fallback = "")
+        {
+            lock (_diagLock)
+            {
+                _diagProvider = provider;
+                _diagModel = model;
+                _diagChannel = channel;
+                _diagLastErrorAt = DateTime.Now;
+                _diagLastLatencyMs = elapsed.ElapsedMilliseconds;
+                _diagLastStatusCode = statusCode;
+                _diagLastError = TrimDiagnosticError(error);
+                _diagLastFallback = fallback;
+                _diagConsecutiveFailures++;
+                _diagTotalFailures++;
+                _diagInFlight = Math.Max(0, _diagInFlight - 1);
+            }
+        }
+
+        private static string TrimDiagnosticError(string? error)
+        {
+            if (string.IsNullOrWhiteSpace(error)) return "";
+            var text = error.Trim().Replace("\r", " ").Replace("\n", " ");
+            return text.Length <= 220 ? text : text[..220] + "...";
+        }
+
         public LlmService()
         {
             var s = AppSettings.Load();
@@ -355,6 +474,8 @@ Kokonoe: Стоп. Де ти зараз. Коли востаннє їв.
             _ollamaModel = s.OllamaModel;
             _visionModel = s.VisionModel;
             _visionUrl = s.VisionUrl;
+            _diagProvider = ActiveProviderLabel();
+            _diagModel = ActiveModelLabel();
         }
 
         public void ReloadSettings()
@@ -371,6 +492,11 @@ Kokonoe: Стоп. Де ти зараз. Коли востаннє їв.
             _visionModel = s.VisionModel;
             _visionUrl = s.VisionUrl;
             OllamaPool?.ReloadSettings();
+            lock (_diagLock)
+            {
+                _diagProvider = ActiveProviderLabel();
+                _diagModel = ActiveModelLabel();
+            }
         }
 
         private bool IsOllamaCloud => _provider.Equals("ollama-cloud", StringComparison.OrdinalIgnoreCase);
@@ -384,6 +510,12 @@ Kokonoe: Стоп. Де ти зараз. Коли востаннє їв.
         /// </summary>
         public async Task<string?> SendSystemQueryAsync(string prompt, CancellationToken ct = default)
         {
+            var diagWatch = Stopwatch.StartNew();
+            var diagProvider = ActiveProviderLabel();
+            var diagModel = ActiveModelLabel();
+            const string diagChannel = "system";
+            RecordLlmRequest(diagProvider, diagModel, diagChannel);
+
             try
             {
                 var dateStamp = $"\n\n=== ДАТА/ЧАС ===\nСьогодні: {DateTime.Now:dddd, dd MMMM yyyy}, {DateTime.Now:HH:mm}";
@@ -435,15 +567,25 @@ Kokonoe: Стоп. Де ти зараз. Коли востаннє їв.
                 }
 
                 if (resp == null || !resp.IsSuccessStatusCode)
+                {
+                    var status = resp == null ? (int?)null : (int)resp.StatusCode;
+                    var error = resp == null ? "no live key/response" : await resp.Content.ReadAsStringAsync(ct);
+                    RecordLlmFailure(diagProvider, diagModel, diagChannel, status, error, diagWatch, "system_query");
                     return null;
+                }
 
                 var respText = await resp.Content.ReadAsStringAsync(ct);
                 var respObj = JObject.Parse(respText);
                 var reply = respObj["choices"]?[0]?["message"]?["content"]?.ToString();
 
+                RecordLlmSuccess(diagProvider, diagModel, diagChannel, diagWatch);
                 return CleanGarbage(reply ?? "");
             }
-            catch { return null; }
+            catch (Exception ex)
+            {
+                RecordLlmFailure(diagProvider, diagModel, diagChannel, null, ex.Message, diagWatch, "system_exception");
+                return null;
+            }
         }
 
         public void RestoreHistory(IEnumerable<(string role, string content)> messages, int maxMessages = 25, string? memoryPrefix = null)
@@ -474,6 +616,12 @@ Kokonoe: Стоп. Де ти зараз. Коли востаннє їв.
             // Checkpoint: зберігаємо стан історії для можливого відкату
             int checkpoint;
             lock (_histLock) { checkpoint = _history.Count; }
+            var diagWatch = Stopwatch.StartNew();
+            var isImageDiagnosticRequest = imageBytes != null && imageBytes.Length > 0;
+            var diagProvider = ActiveProviderLabel();
+            var diagModel = ActiveModelLabel(isImageDiagnosticRequest);
+            var diagChannel = isImageDiagnosticRequest ? "chat:image" : "chat";
+            RecordLlmRequest(diagProvider, diagModel, diagChannel);
 
             try
             {
@@ -671,6 +819,7 @@ Kokonoe: Стоп. Де ти зараз. Коли востаннє їв.
                             if (isImageErr)
                             {
                                 lock (_histLock) { while (_history.Count > checkpoint) _history.RemoveAt(_history.Count - 1); }
+                                RecordLlmFailure(diagProvider, diagModel, diagChannel, (int)resp.StatusCode, errBody, diagWatch, "vision_rejected");
                                 return "Зображення є, але vision-модель його відхилила. Перевір Vision Model у Settings (рекомендовано: qwen2.5vl:7b-cloud або llama3.2-vision:11b-cloud).";
                             }
                             // Tools fallback + image: strip image тихо і продовжуємо (tools вже відвалились — не image-проблема)
@@ -696,6 +845,7 @@ Kokonoe: Стоп. Де ти зараз. Коли востаннє їв.
                             var msg = cd.HasValue
                                 ? $"Усі Ollama Cloud-ключі на cooldown. Найближчий reset через ~{(int)Math.Ceiling(cd.Value.TotalMinutes)} хв."
                                 : "Усі Ollama Cloud-ключі вичерпані або порожні. Додай ключ у Settings → Ollama Cloud.";
+                            RecordLlmFailure(diagProvider, diagModel, diagChannel, null, msg, diagWatch, "pool_cooldown");
                             return $"[Pool] {msg}";
                         }
 
@@ -704,6 +854,7 @@ Kokonoe: Стоп. Де ти зараз. Коли востаннє їв.
                         if ((int)resp.StatusCode == 500 && isOllamaCloud && isImageRequest && imageHistoryIdx >= 0)
                         {
                             lock (_histLock) { while (_history.Count > checkpoint) _history.RemoveAt(_history.Count - 1); }
+                            RecordLlmFailure(diagProvider, diagModel, diagChannel, (int)resp.StatusCode, err, diagWatch, "vision_500");
                             return "Зображення є, але vision-сервер повернув 500. Перевір Vision Model у Settings (рекомендовано: qwen2.5vl:7b-cloud або llama3.2-vision:11b-cloud).";
                         }
                         if (isOllamaCloud && !isImageRequest && IsTransientServerError((int)resp.StatusCode))
@@ -718,10 +869,12 @@ Kokonoe: Стоп. Де ти зараз. Коли востаннє їв.
                                     if (_history.Count > MAX_HISTORY_ENTRIES)
                                         _history.RemoveRange(0, Math.Min(HISTORY_TRUNCATE_STEP, _history.Count));
                                 }
+                                RecordLlmSuccess(diagProvider, diagModel, diagChannel, diagWatch, "compact_retry");
                                 return compactReply;
                             }
                         }
 
+                        RecordLlmFailure(diagProvider, diagModel, diagChannel, (int)resp.StatusCode, err, diagWatch, "friendly_error");
                         return BuildFriendlyLlmError((int)resp.StatusCode, err, isOllamaCloud ? "Ollama Cloud" : targetModel);
                     }
 
@@ -821,6 +974,7 @@ Kokonoe: Стоп. Де ти зараз. Коли востаннє їв.
                             if (_history.Count > MAX_HISTORY_ENTRIES)
                                 _history.RemoveRange(0, HISTORY_TRUNCATE_STEP);
                         }
+                        RecordLlmSuccess(diagProvider, diagModel, diagChannel, diagWatch);
                         return reply;
                     }
 
@@ -850,12 +1004,14 @@ Kokonoe: Стоп. Де ти зараз. Коли востаннє їв.
                 {
                     while (_history.Count > checkpoint) _history.RemoveAt(_history.Count - 1);
                 }
+                RecordLlmFailure(diagProvider, diagModel, diagChannel, null, "tool loop exhausted", diagWatch, "tool_loop");
                 return "[Kokonoe]: щось пішло не так з інструментами.";
             }
             catch (OperationCanceledException)
             {
                 // Rollback to checkpoint
                 lock (_histLock) { while (_history.Count > checkpoint) _history.RemoveAt(_history.Count - 1); }
+                RecordLlmFailure(diagProvider, diagModel, diagChannel, null, "cancelled", diagWatch, "cancelled");
                 return "[скасовано]";
             }
             catch (Exception ex)
@@ -863,6 +1019,7 @@ Kokonoe: Стоп. Де ти зараз. Коли востаннє їв.
                 // Rollback to checkpoint
                 lock (_histLock) { while (_history.Count > checkpoint) _history.RemoveAt(_history.Count - 1); }
                 System.Diagnostics.Debug.WriteLine($"[LlmService] {ex}");
+                RecordLlmFailure(diagProvider, diagModel, diagChannel, null, ex.Message, diagWatch, "exception");
                 return $"[Помилка]: {ex.Message}";
             }
         }

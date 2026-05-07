@@ -179,6 +179,7 @@ namespace KokonoeAssistant.Services
         public readonly KokoInternalDayEngine InternalDay;
         public readonly KokoAutonomyDecisionEngine Autonomy;
         public readonly KokoSelfReviewEngine SelfReview;
+        public readonly KokoScenarioSimulationService Scenarios;
 
         // ── Зовнішні сервіси (опціональні) ───────────────────────────
         private EnhancedMemory?    _enhanced;
@@ -257,6 +258,7 @@ namespace KokonoeAssistant.Services
             InternalDay = new KokoInternalDayEngine();
             Autonomy = new KokoAutonomyDecisionEngine();
             SelfReview = new KokoSelfReviewEngine();
+            Scenarios = new KokoScenarioSimulationService();
 
             // Підключити нові сервіси в LLM
             _llm.Memory    = Memory;
@@ -3781,6 +3783,9 @@ namespace KokonoeAssistant.Services
             var selfReg = GetSelfRegulationFrame(somatic);
             var review = SelfReview.Evaluate(userText, _state, _chatRepo.GetMessages(40), presence, internalDay, rhythm, now);
             var relationship = Relationship.State;
+            var llmDiag = _llm.GetDiagnosticsSnapshot();
+            var scenarioResults = Scenarios.RunCoreChecks(now, autonomyLevel);
+            var scenarioPassed = scenarioResults.Count(r => r.Passed);
 
             return new KokoTelemetrySnapshot
             {
@@ -3797,6 +3802,17 @@ namespace KokonoeAssistant.Services
                 Rhythm = rhythm.Summary,
                 Relationship = $"bond {relationship.BondScore:F2}, aftertaste {relationship.LastAftertaste}, protect {relationship.Protectiveness:F2}",
                 SelfReview = $"{review.RiskLevel}: {review.Summary}",
+                LlmStatus = $"{llmDiag.Status} / {llmDiag.Channel} / {llmDiag.LastLatencyMs}ms",
+                LlmProvider = llmDiag.Provider,
+                LlmModel = llmDiag.Model,
+                LlmLastError = llmDiag.LastError,
+                LlmLastFallback = llmDiag.LastFallback,
+                LlmLastRequestAt = llmDiag.LastRequestAt,
+                LlmLastSuccessAt = llmDiag.LastSuccessAt,
+                LlmLastErrorAt = llmDiag.LastErrorAt,
+                LlmLastLatencyMs = llmDiag.LastLatencyMs,
+                LlmConsecutiveFailures = llmDiag.ConsecutiveFailures,
+                ScenarioHealth = $"{scenarioPassed}/{scenarioResults.Count} базові сценарії пройдено",
                 PendingVaultExchangeCount = _state.PendingVaultExchangeCount,
                 LastVaultSyncAt = _state.LastAutoVaultSyncAt,
                 ActiveIntentCount = _state.ShortTermIntents.Count(i => !i.ResolvedAt.HasValue),
@@ -3812,6 +3828,9 @@ namespace KokonoeAssistant.Services
                 RelationshipEvents = relationship.RecentEvents
                     .TakeLast(6)
                     .Select(e => $"{e.When:dd.MM HH:mm} {e.Kind}: {e.Aftertaste}")
+                    .ToArray(),
+                ScenarioFindings = scenarioResults
+                    .Select(r => $"{(r.Passed ? "ok" : "fail")} {r.Name}: {r.Summary}")
                     .ToArray()
             };
         }
