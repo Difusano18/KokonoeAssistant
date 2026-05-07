@@ -116,6 +116,16 @@ namespace KokonoeAssistant.Services
         public string LastAutonomyDecision { get; set; } = "";
         public DateTime LastAutonomyDecisionAt { get; set; } = DateTime.MinValue;
         public List<string> AutonomyDecisionLog { get; set; } = new();
+        public bool LastAutonomyShouldAct { get; set; }
+        public string LastAutonomySource { get; set; } = "";
+        public string LastAutonomyTrigger { get; set; } = "";
+        public string LastAutonomyReason { get; set; } = "";
+        public string LastAutonomySilenceReason { get; set; } = "";
+        public int LastAutonomyPriority { get; set; }
+        public string LastTimelineSummary { get; set; } = "";
+        public string LastTimelineState { get; set; } = "";
+        public string LastPostReplyGuard { get; set; } = "";
+        public DateTime LastPostReplyGuardAt { get; set; } = DateTime.MinValue;
 
         public int PendingVaultExchangeCount { get; set; }
         public List<string> PendingVaultExchangeBuffer { get; set; } = new();
@@ -180,6 +190,8 @@ namespace KokonoeAssistant.Services
         public readonly KokoAutonomyDecisionEngine Autonomy;
         public readonly KokoSelfReviewEngine SelfReview;
         public readonly KokoScenarioSimulationService Scenarios;
+        public readonly KokoConversationTimelineEngine Timeline;
+        public readonly KokoPostReplyGuard PostReplyGuard;
 
         // ── Зовнішні сервіси (опціональні) ───────────────────────────
         private EnhancedMemory?    _enhanced;
@@ -259,6 +271,8 @@ namespace KokonoeAssistant.Services
             Autonomy = new KokoAutonomyDecisionEngine();
             SelfReview = new KokoSelfReviewEngine();
             Scenarios = new KokoScenarioSimulationService();
+            Timeline = new KokoConversationTimelineEngine();
+            PostReplyGuard = new KokoPostReplyGuard();
 
             // Підключити нові сервіси в LLM
             _llm.Memory    = Memory;
@@ -3762,6 +3776,44 @@ namespace KokonoeAssistant.Services
             return SelfReview.Evaluate(userText, _state, messages, presence, internalDay, rhythm, now);
         }
 
+        public KokoConversationTimelineFrame BuildTimelineFrame(string? userText = null)
+        {
+            var now = DateTime.Now;
+            var frame = Timeline.Build(_chatRepo.GetMessages(60), _state, now, userText);
+            lock (_lock)
+            {
+                _state.LastTimelineSummary = frame.SummaryUk;
+                _state.LastTimelineState = frame.CurrentState;
+            }
+            return frame;
+        }
+
+        public string BuildTimelineContext(string? userText = null)
+        {
+            try { return BuildTimelineFrame(userText).PromptBlock; }
+            catch (Exception ex)
+            {
+                Log($"Timeline failed: {ex.Message}");
+                return "CONVERSATION TIMELINE\nTimeline failed; use current time and latest user message.\n";
+            }
+        }
+
+        public KokoPostReplyGuardResult EvaluatePostReplyGuard(string userText, string reply)
+        {
+            var now = DateTime.Now;
+            var timeline = BuildTimelineFrame(userText);
+            var result = PostReplyGuard.Evaluate(userText, reply, _state, _chatRepo.GetMessages(60), timeline, now);
+            lock (_lock)
+            {
+                _state.LastPostReplyGuardAt = now;
+                _state.LastPostReplyGuard = result.Passed
+                    ? $"ok: {result.Summary}"
+                    : $"{result.RiskLevel}: {string.Join("; ", result.Violations)}";
+                SaveState();
+            }
+            return result;
+        }
+
         public string BuildSelfReviewContext(string? userText = null)
         {
             try { return BuildSelfReviewFrame(userText).PromptBlock; }
@@ -3786,6 +3838,7 @@ namespace KokonoeAssistant.Services
             var llmDiag = _llm.GetDiagnosticsSnapshot();
             var scenarioResults = Scenarios.RunCoreChecks(now, autonomyLevel);
             var scenarioPassed = scenarioResults.Count(r => r.Passed);
+            var timeline = Timeline.Build(_chatRepo.GetMessages(60), _state, now, userText);
 
             return new KokoTelemetrySnapshot
             {
@@ -3799,9 +3852,15 @@ namespace KokonoeAssistant.Services
                 Presence = presence.SummaryUk,
                 InternalDay = internalDay.SummaryUk,
                 Autonomy = string.IsNullOrWhiteSpace(_state.LastAutonomyDecision) ? "none" : _state.LastAutonomyDecision,
+                AutonomyDebug = _state.LastAutonomyShouldAct
+                    ? $"пише: {_state.LastAutonomyTrigger} / {_state.LastAutonomySource} / p{_state.LastAutonomyPriority} / {_state.LastAutonomyReason}"
+                    : $"мовчить: {_state.LastAutonomyTrigger} / {_state.LastAutonomySilenceReason}",
                 Rhythm = rhythm.Summary,
+                Timeline = timeline.SummaryUk,
+                TimelineState = timeline.CurrentState,
                 Relationship = $"bond {relationship.BondScore:F2}, aftertaste {relationship.LastAftertaste}, protect {relationship.Protectiveness:F2}",
                 SelfReview = $"{review.RiskLevel}: {review.Summary}",
+                PostReplyGuard = string.IsNullOrWhiteSpace(_state.LastPostReplyGuard) ? "none" : _state.LastPostReplyGuard,
                 LlmStatus = $"{llmDiag.Status} / {llmDiag.Channel} / {llmDiag.LastLatencyMs}ms",
                 LlmProvider = llmDiag.Provider,
                 LlmModel = llmDiag.Model,

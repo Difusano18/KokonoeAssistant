@@ -266,9 +266,9 @@ namespace KokonoeAssistant
                     : "-- bpm";
                 LiveCoreStrainBar.Value = Math.Clamp(somatic.Strain * 100.0, 0, 100);
 
-                LiveCoreAutonomyText.Text = TrimLiveCoreLine(telemetry.Autonomy, 72);
-                LiveCorePresenceText.Text = TrimLiveCoreLine(telemetry.Presence, 86);
-                LiveCoreRhythmText.Text = TrimLiveCoreLine($"{telemetry.Rhythm} | LLM {telemetry.LlmStatus}", 86);
+                LiveCoreAutonomyText.Text = TrimLiveCoreLine(telemetry.AutonomyDebug, 72);
+                LiveCorePresenceText.Text = TrimLiveCoreLine($"{telemetry.Presence} | {telemetry.TimelineState}", 86);
+                LiveCoreRhythmText.Text = TrimLiveCoreLine($"{telemetry.Rhythm} | LLM {telemetry.LlmStatus} | guard {telemetry.PostReplyGuard}", 86);
 
                 if (forceVaultScan || DateTime.Now - _liveCoreLastVaultScan > TimeSpan.FromSeconds(30))
                 {
@@ -370,10 +370,13 @@ tags: [kokonoe, live-core, diagnostics]
             sb.AppendLine($"| Саморегуляція | {LiveCoreCodeLabel(selfReg.Reaction)} -> {LiveCoreCodeLabel(selfReg.Regulation)} / контроль {selfReg.Control:F2} / імпульс {selfReg.Drive:F2} |");
             var telemetry = brain.BuildTelemetrySnapshot();
             sb.AppendLine($"| Автономність | {telemetry.Autonomy.Replace("|", "/")} |");
+            sb.AppendLine($"| Autonomy debug | {telemetry.AutonomyDebug.Replace("|", "/")} |");
             sb.AppendLine($"| Presence | {telemetry.Presence.Replace("|", "/")} |");
+            sb.AppendLine($"| Timeline | {telemetry.Timeline.Replace("|", "/")} |");
             sb.AppendLine($"| Внутрішній день | {telemetry.InternalDay.Replace("|", "/")} |");
             sb.AppendLine($"| Ритм | {telemetry.Rhythm.Replace("|", "/")} |");
             sb.AppendLine($"| Self-review | {telemetry.SelfReview.Replace("|", "/")} |");
+            sb.AppendLine($"| Post-reply guard | {telemetry.PostReplyGuard.Replace("|", "/")} |");
             sb.AppendLine($"| LLM | {telemetry.LlmStatus.Replace("|", "/")} / {telemetry.LlmProvider} / {telemetry.LlmModel} |");
             if (!string.IsNullOrWhiteSpace(telemetry.LlmLastError))
                 sb.AppendLine($"| LLM error | {telemetry.LlmLastError.Replace("|", "/")} |");
@@ -1407,6 +1410,7 @@ tags: [kokonoe, live-core, diagnostics]
                 });
 
                 string reply;
+                TextBlock? finalReplyTb = null;
 
                 // Build context on background thread (file I/O can be slow)
                 var contextTask = Task.Run(() => BuildContext(text));
@@ -1445,6 +1449,7 @@ tags: [kokonoe, live-core, diagnostics]
                         replyVm.Content = reply;
                         if (streamTb != null)
                             await Dispatcher.InvokeAsync(() => streamTb.Text = reply, DispatcherPriority.Render);
+                        finalReplyTb = streamTb;
                     }
                     else
                     {
@@ -1461,7 +1466,10 @@ tags: [kokonoe, live-core, diagnostics]
                         RemoveThinkingBubble();
                         if (streamTb == null) streamTb = AddMessageBubble(replyVm);
                         if (streamTb != null)
+                        {
                             await TypeIntoAsync(streamTb, reply, _llmCts?.Token ?? default);
+                            finalReplyTb = streamTb;
+                        }
                         else
                             replyVm.Content = reply;
                     }
@@ -1474,9 +1482,20 @@ tags: [kokonoe, live-core, diagnostics]
                     var replyVm = new ChatMessageVm { Role = "assistant", Content = "" };
                     var replyTb = AddMessageBubble(replyVm);
                     if (replyTb != null)
+                    {
                         await TypeIntoAsync(replyTb, reply, _llmCts?.Token ?? default);
+                        finalReplyTb = replyTb;
+                    }
                     else
                         replyVm.Content = reply;
+                }
+
+                var guardedReply = await GuardAndRepairReplyAsync(text, reply, await contextTask, _llmCts?.Token ?? default);
+                if (!string.Equals(guardedReply, reply, StringComparison.Ordinal))
+                {
+                    reply = guardedReply;
+                    if (finalReplyTb != null)
+                        await Dispatcher.InvokeAsync(() => finalReplyTb.Text = reply, DispatcherPriority.Render);
                 }
 
                 UpdateEmotionDot();
@@ -1544,6 +1563,14 @@ tags: [kokonoe, live-core, diagnostics]
                 var selfReview = ServiceContainer.BrainEngine?.BuildSelfReviewContext(userText);
                 if (!string.IsNullOrWhiteSpace(selfReview))
                     parts.Add((selfReview, 0));
+            }
+            catch { }
+
+            try
+            {
+                var timeline = ServiceContainer.BrainEngine?.BuildTimelineContext(userText);
+                if (!string.IsNullOrWhiteSpace(timeline))
+                    parts.Add((timeline, 0));
             }
             catch { }
 
@@ -1854,6 +1881,50 @@ tags: [kokonoe, live-core, diagnostics]
                 return "Ранок уже настав, так що команду \"спи\" знімаю. Нарешті прокинувся — організм зробив щось корисне без моєї участі.";
 
             return reply;
+        }
+
+        private async Task<string> GuardAndRepairReplyAsync(
+            string userText,
+            string reply,
+            string? context,
+            CancellationToken ct)
+        {
+            try
+            {
+                var brain = ServiceContainer.BrainEngine;
+                if (brain == null) return GuardTemporalReply(userText, reply);
+
+                var guard = brain.EvaluatePostReplyGuard(userText, reply);
+                if (guard.Passed) return reply;
+                if (!string.IsNullOrWhiteSpace(guard.HardReplacement))
+                    return guard.HardReplacement!;
+                if (!guard.ShouldRepair || string.IsNullOrWhiteSpace(guard.RepairInstruction))
+                    return GuardTemporalReply(userText, reply);
+
+                var repairPrompt = guard.RepairInstruction +
+                                   "\n\nДодатковий контекст:\n" +
+                                   TrimForPrompt(context, 2600);
+                var repaired = await _llm.SendSystemQueryAsync(repairPrompt, ct);
+                if (string.IsNullOrWhiteSpace(repaired))
+                    return GuardTemporalReply(userText, reply);
+
+                var secondGuard = brain.EvaluatePostReplyGuard(userText, repaired);
+                if (!secondGuard.Passed && !string.IsNullOrWhiteSpace(secondGuard.HardReplacement))
+                    return secondGuard.HardReplacement!;
+
+                return secondGuard.Passed ? repaired.Trim() : GuardTemporalReply(userText, reply);
+            }
+            catch
+            {
+                return GuardTemporalReply(userText, reply);
+            }
+        }
+
+        private static string TrimForPrompt(string? text, int max)
+        {
+            if (string.IsNullOrWhiteSpace(text)) return "";
+            text = text.Trim();
+            return text.Length <= max ? text : text[..max] + "...";
         }
 
         /// <summary>
@@ -5453,8 +5524,9 @@ tags: [kokonoe, dashboard, live]
 
                 // ── Regular chat → LLM ──────────────────────────────
                 try { ServiceContainer.BrainEngine?.ProcessUserMessage(text); } catch { }
-                var reply = await _llm.SendAsync(text, null, "image/jpeg", BuildContext(text), ct);
-                reply = GuardTemporalReply(text, reply);
+                var tgContext = BuildContext(text);
+                var reply = await _llm.SendAsync(text, null, "image/jpeg", tgContext, ct);
+                reply = await GuardAndRepairReplyAsync(text, reply, tgContext, ct);
                 Dispatcher.Invoke(() =>
                 {
                     _tgMessages.Add($"[Kokonoe]: {reply}");

@@ -14,9 +14,13 @@ namespace KokonoeAssistant.Services
         public string Presence { get; set; } = "";
         public string InternalDay { get; set; } = "";
         public string Autonomy { get; set; } = "";
+        public string AutonomyDebug { get; set; } = "";
         public string Rhythm { get; set; } = "";
+        public string Timeline { get; set; } = "";
+        public string TimelineState { get; set; } = "";
         public string Relationship { get; set; } = "";
         public string SelfReview { get; set; } = "";
+        public string PostReplyGuard { get; set; } = "";
         public string LlmStatus { get; set; } = "";
         public string LlmProvider { get; set; } = "";
         public string LlmModel { get; set; } = "";

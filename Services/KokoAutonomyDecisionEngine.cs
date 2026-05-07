@@ -77,6 +77,12 @@ namespace KokonoeAssistant.Services
 
             state.LastAutonomyDecision = line;
             state.LastAutonomyDecisionAt = now;
+            state.LastAutonomyShouldAct = decision.ShouldAct;
+            state.LastAutonomySource = decision.Source;
+            state.LastAutonomyTrigger = decision.Trigger;
+            state.LastAutonomyReason = decision.Reason;
+            state.LastAutonomySilenceReason = decision.SilenceReason;
+            state.LastAutonomyPriority = decision.Priority;
             state.AutonomyDecisionLog.Add(line);
             if (state.AutonomyDecisionLog.Count > 60)
                 state.AutonomyDecisionLog.RemoveRange(0, state.AutonomyDecisionLog.Count - 60);

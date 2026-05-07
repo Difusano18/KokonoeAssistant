@@ -29,6 +29,8 @@ internal static class Program
             Run("Relationship records shift events", RelationshipRecordsShiftEvents);
             Run("Pattern rhythm profile recommends quiet slot", PatternRhythmProfileRecommendsQuietSlot);
             Run("Self review blocks stale sleep replies", SelfReviewBlocksStaleSleepReplies);
+            Run("Timeline summarizes returned state", TimelineSummarizesReturnedState);
+            Run("Post reply guard blocks stale sleep", PostReplyGuardBlocksStaleSleep);
             Run("Scenario simulation guards temporal continuity", ScenarioSimulationGuardsTemporalContinuity);
             Run("LLM diagnostics snapshot starts idle", LlmDiagnosticsSnapshotStartsIdle);
             Run("Inspector renders state report", InspectorRendersStateReport);
@@ -535,6 +537,68 @@ internal static class Program
         AssertTrue(results.Any(r => r.Name == "sleep_wake_temporal_guard"), "sleep wake guard should be present");
         AssertTrue(results.Any(r => r.Name == "course_overdue_followup"), "course follow-up guard should be present");
         AssertTrue(results.Any(r => r.Name == "quiet_night_gate"), "quiet night gate should be present");
+    }
+
+    private static void TimelineSummarizesReturnedState()
+    {
+        var now = new DateTime(2026, 5, 7, 10, 30, 0);
+        var state = new KokoInternalState();
+        state.ShortTermIntents.Add(new ShortTermIntent
+        {
+            Kind = "sleep",
+            Summary = "пішов спати",
+            SourceText = "я спати",
+            CreatedAt = now.AddHours(-8),
+            FollowUpAt = now.AddHours(-1),
+            ExpectedUntil = now.AddMinutes(-30),
+            ResolvedAt = now.AddMinutes(-2),
+            ResolutionText = "прокинувся"
+        });
+        var messages = new[]
+        {
+            new ChatRepository.ChatMessage { Role = "user", Content = "я спати", Timestamp = now.AddHours(-8) },
+            new ChatRepository.ChatMessage { Role = "user", Content = "прокинувся", Timestamp = now.AddMinutes(-2) }
+        };
+
+        var frame = new KokoConversationTimelineEngine().Build(messages, state, now, "прокинувся");
+
+        AssertTrue(frame.CurrentState.Contains("повернувся") || frame.CurrentState.Contains("закритий"), "timeline should summarize returned state");
+        AssertTrue(frame.PromptBlock.Contains("CONVERSATION TIMELINE"), "timeline should render prompt block");
+        AssertTrue(frame.PromptBlock.Contains("не старій репліці"), "timeline should warn against stale replies");
+    }
+
+    private static void PostReplyGuardBlocksStaleSleep()
+    {
+        var now = new DateTime(2026, 5, 7, 10, 30, 0);
+        var state = new KokoInternalState();
+        state.ShortTermIntents.Add(new ShortTermIntent
+        {
+            Kind = "sleep",
+            Summary = "пішов спати",
+            SourceText = "я спати",
+            CreatedAt = now.AddHours(-8),
+            FollowUpAt = now.AddHours(-1),
+            ExpectedUntil = now.AddMinutes(-30),
+            ResolvedAt = now.AddMinutes(-2),
+            ResolutionText = "прокинувся"
+        });
+        var messages = new[]
+        {
+            new ChatRepository.ChatMessage { Role = "user", Content = "прокинувся", Timestamp = now.AddMinutes(-2) }
+        };
+        var timeline = new KokoConversationTimelineEngine().Build(messages, state, now, "прокинувся");
+
+        var result = new KokoPostReplyGuard().Evaluate(
+            "прокинувся",
+            "Спи. До ранку.",
+            state,
+            messages,
+            timeline,
+            now);
+
+        AssertTrue(!result.Passed, "guard should reject stale sleep instruction");
+        AssertTrue(!string.IsNullOrWhiteSpace(result.HardReplacement), "guard should provide hard replacement for stale sleep");
+        AssertTrue(result.Violations.Any(v => v.Contains("спати")), "violation should explain stale sleep problem");
     }
 
     private static void LlmDiagnosticsSnapshotStartsIdle()
