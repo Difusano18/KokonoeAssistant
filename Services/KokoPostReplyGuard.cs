@@ -58,6 +58,12 @@ namespace KokonoeAssistant.Services
             if (LooksMostlyEnglish(reply))
                 violations.Add("відповідь виглядає переважно англійською");
 
+            if (LooksOverStaged(reply))
+                violations.Add("відповідь звучить як сценарна ремарка, а не жива репліка");
+
+            if (LooksDecorativeInsteadOfContextual(userText, reply))
+                violations.Add("відповідь тягне декоративний образ замість конкретної реакції на контекст");
+
             if (LooksGeneric(userText, reply))
                 violations.Add("відповідь занадто шаблонна для наявного контексту");
 
@@ -112,6 +118,9 @@ Timeline:
 - не згадуй guard/rewrite/перевірку;
 - відповідай найновішому стану timeline;
 - якщо була стара дія, не наказуй її повторити.
+- не використовуй декоративні ремарки в *зірочках*, якщо користувач сам не почав roleplay;
+- не вигадуй лабораторні/екранні/тілесні образи замість відповіді на конкретний контекст;
+- зроби репліку живою: конкретна деталь з останнього повідомлення + один природний поворот тону.
 """;
         }
 
@@ -132,6 +141,42 @@ Timeline:
             if (ContainsAny((userText ?? "").ToLowerInvariant(), "курс", "спати", "прокин", "проект", "obsidian"))
                 return ContainsAny(lower, "як справи", "що нового", "ага", "ясно", "добре");
             return false;
+        }
+
+        private static bool LooksOverStaged(string reply)
+        {
+            var starPairs = reply.Count(c => c == '*') / 2;
+            if (starPairs <= 0) return false;
+
+            var stageChars = 0;
+            var inside = false;
+            foreach (var ch in reply)
+            {
+                if (ch == '*')
+                {
+                    inside = !inside;
+                    continue;
+                }
+                if (inside) stageChars++;
+            }
+
+            return starPairs >= 1 && (stageChars > 22 || stageChars > reply.Length / 4);
+        }
+
+        private static bool LooksDecorativeInsteadOfContextual(string userText, string reply)
+        {
+            var userLower = (userText ?? "").ToLowerInvariant();
+            var replyLower = reply.ToLowerInvariant();
+            var concreteUserContext = ContainsAny(userLower,
+                "буду", "дома", "вдома", "курс", "спати", "прокин", "проект", "код", "obsidian");
+            if (!concreteUserContext) return false;
+
+            var decorative = ContainsAny(replyLower,
+                "графік", "монітор", "лаборатор", "датчик", "екран", "блима", "панель", "система");
+            var contextEcho = ContainsAny(replyLower,
+                "дома", "вдома", "12", "курс", "сон", "прокин", "проект", "код", "obsidian");
+
+            return decorative && !contextEcho;
         }
 
         private static bool LooksMostlyEnglish(string text)

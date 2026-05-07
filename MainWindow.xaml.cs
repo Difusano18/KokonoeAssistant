@@ -1558,6 +1558,8 @@ tags: [kokonoe, live-core, diagnostics]
             }
             catch { }
 
+            parts.Add((BuildLiveResponseStyleContext(userText), 0));
+
             try
             {
                 var selfReview = ServiceContainer.BrainEngine?.BuildSelfReviewContext(userText);
@@ -1788,6 +1790,25 @@ tags: [kokonoe, live-core, diagnostics]
             }
 
             return result;
+        }
+
+        private static string BuildLiveResponseStyleContext(string? userText)
+        {
+            var trimmed = userText?.Trim() ?? "";
+            var concrete = !string.IsNullOrWhiteSpace(trimmed)
+                ? $"Останній вхід користувача: «{trimmed[..Math.Min(220, trimmed.Length)]}»."
+                : "Останній вхід користувача порожній або службовий.";
+
+            return $"""
+LIVE RESPONSE STYLE
+{concrete}
+Правила живої відповіді:
+- спершу реагуй на конкретику останнього повідомлення, не на абстрактний настрій;
+- не починай з декоративної ремарки в *зірочках*, якщо користувач сам не почав roleplay;
+- не вигадуй «монітор блимає», «датчики», «лабораторію», «тіло реагує» без прямої причини;
+- допускається суха іронія, але вона має бути прив'язана до події, часу, наміру або питання;
+- краще одна точна фраза, ніж театральна сцена з трьома шарами декорацій.
+""";
         }
 
         private static string BuildTemporalAwarenessContext(string? userText)

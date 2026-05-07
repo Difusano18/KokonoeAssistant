@@ -33,6 +33,7 @@ internal static class Program
             Run("Self review blocks stale sleep replies", SelfReviewBlocksStaleSleepReplies);
             Run("Timeline summarizes returned state", TimelineSummarizesReturnedState);
             Run("Post reply guard blocks stale sleep", PostReplyGuardBlocksStaleSleep);
+            Run("Post reply guard rejects staged decoration", PostReplyGuardRejectsStagedDecoration);
             Run("Scenario simulation guards temporal continuity", ScenarioSimulationGuardsTemporalContinuity);
             Run("LLM diagnostics snapshot starts idle", LlmDiagnosticsSnapshotStartsIdle);
             Run("Inspector renders state report", InspectorRendersStateReport);
@@ -674,6 +675,38 @@ internal static class Program
         AssertTrue(!result.Passed, "guard should reject stale sleep instruction");
         AssertTrue(!string.IsNullOrWhiteSpace(result.HardReplacement), "guard should provide hard replacement for stale sleep");
         AssertTrue(result.Violations.Any(v => v.Contains("спати")), "violation should explain stale sleep problem");
+    }
+
+    private static void PostReplyGuardRejectsStagedDecoration()
+    {
+        var now = new DateTime(2026, 5, 7, 11, 57, 0);
+        var state = new KokoInternalState();
+        state.ShortTermIntents.Add(new ShortTermIntent
+        {
+            Kind = "return_home",
+            Summary = "має бути вдома близько 12:00",
+            SourceText = "Буду в 12 дома крч",
+            CreatedAt = now.AddMinutes(-35),
+            FollowUpAt = now.Date.AddHours(12).AddMinutes(12),
+            ExpectedUntil = now.Date.AddHours(12)
+        });
+        var messages = new[]
+        {
+            new ChatRepository.ChatMessage { Role = "user", Content = "Буду в 12 дома крч", Timestamp = now.AddMinutes(-35) }
+        };
+        var timeline = new KokoConversationTimelineEngine().Build(messages, state, now, "Буду в 12 дома крч");
+
+        var result = new KokoPostReplyGuard().Evaluate(
+            "Буду в 12 дома крч",
+            "*графік на моніторі коротко блимає, поки я переглядаю нове фото* Знову ця зелена папка?",
+            state,
+            messages,
+            timeline,
+            now);
+
+        AssertTrue(!result.Passed, "guard should reject decorative staged replies for concrete timed intent");
+        AssertTrue(result.ShouldRepair, "decorative staged reply should request repair");
+        AssertTrue(result.Violations.Any(v => v.Contains("сценарна") || v.Contains("декоратив")), "violation should explain staged/decorative problem");
     }
 
     private static void LlmDiagnosticsSnapshotStartsIdle()
