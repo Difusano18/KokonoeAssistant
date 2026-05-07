@@ -3978,6 +3978,7 @@ namespace KokonoeAssistant.Services
             var selfReg = GetSelfRegulationFrame(somatic);
             var review = SelfReview.Evaluate(userText, _state, _chatRepo.GetMessages(40), presence, internalDay, rhythm, now);
             var relationship = Relationship.State;
+            var attachment = Emotion.Attachment;
             var llmDiag = _llm.GetDiagnosticsSnapshot();
             var scenarioResults = Scenarios.RunCoreChecks(now, autonomyLevel);
             var scenarioPassed = scenarioResults.Count(r => r.Passed);
@@ -4003,6 +4004,7 @@ namespace KokonoeAssistant.Services
                 TimelineState = timeline.CurrentState,
                 StateFreshness = string.IsNullOrWhiteSpace(_state.LastStateRefreshSummary) ? "none" : _state.LastStateRefreshSummary,
                 Relationship = $"bond {relationship.BondScore:F2}, aftertaste {relationship.LastAftertaste}, protect {relationship.Protectiveness:F2}",
+                Attachment = $"trust {attachment.Trust:F2}, intimacy {attachment.Intimacy:F2}, reliability {attachment.Reliability:F2}, reciprocity {attachment.Reciprocity:F2}, vitality {attachment.Vitality:F2}",
                 SelfReview = $"{review.RiskLevel}: {review.Summary}",
                 PostReplyGuard = string.IsNullOrWhiteSpace(_state.LastPostReplyGuard) ? "none" : _state.LastPostReplyGuard,
                 LlmStatus = $"{llmDiag.Status} / {llmDiag.Channel} / {llmDiag.LastLatencyMs}ms",

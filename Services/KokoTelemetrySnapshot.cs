@@ -20,6 +20,7 @@ namespace KokonoeAssistant.Services
         public string TimelineState { get; set; } = "";
         public string StateFreshness { get; set; } = "";
         public string Relationship { get; set; } = "";
+        public string Attachment { get; set; } = "";
         public string SelfReview { get; set; } = "";
         public string PostReplyGuard { get; set; } = "";
         public string LlmStatus { get; set; } = "";

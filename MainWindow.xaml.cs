@@ -256,7 +256,8 @@ namespace KokonoeAssistant
 
                 LiveCoreEmotionText.Text = $"емоція: {DashboardEmotionLabel(emotion.Current)}".ToUpper();
                 LiveCoreEmotionText.Foreground = DashMakeBrush(emotion.Current);
-                LiveCoreBondText.Text = $"зв'язок {DashboardBondLabel(emotion.Bond)} | сила {emotion.Data.Intensity:F2} | настрій {state.MoodScore:F2}";
+                var attachment = emotion.Attachment;
+                LiveCoreBondText.Text = $"зв'язок {DashboardBondLabel(emotion.Bond)} | довіра {attachment.Trust:F2} | прив'язаність {attachment.CompositeScore():F2} | настрій {state.MoodScore:F2}";
 
                 LiveCoreBodyText.Text = $"{DashboardSomaticLabel(somatic.State).ToUpper()} | напруга {somatic.Strain:F2}";
                 LiveCoreRegulationText.Text = $"{DashboardRegulationLabel(selfReg.Reaction)} -> {DashboardRegulationLabel(selfReg.Regulation)} | контроль {selfReg.Control:F2}";
@@ -354,6 +355,7 @@ tags: [kokonoe, live-core, diagnostics]
             var heart = ServiceContainer.Heart;
             var somatic = brain.GetSomaticSnapshot();
             var selfReg = brain.GetSelfRegulationFrame(somatic);
+            var telemetry = brain.BuildTelemetrySnapshot();
             var sb = new StringBuilder();
 
             sb.AppendLine($"## {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
@@ -361,6 +363,7 @@ tags: [kokonoe, live-core, diagnostics]
             sb.AppendLine("| Шар | Значення |");
             sb.AppendLine("|---|---|");
             sb.AppendLine($"| Емоція | {emotion.Current} / інтенсивність {emotion.Data.Intensity:F2} / зв'язок {emotion.Bond} |");
+            sb.AppendLine($"| Прив'язаність | {telemetry.Attachment.Replace("|", "/")} |");
             if (emotion.Secondary.HasValue)
                 sb.AppendLine($"| Вторинна емоція | {emotion.Secondary.Value} / {emotion.SecondaryIntensity:F2} |");
             sb.AppendLine($"| Настрій | {state.CurrentMood} / оцінка {state.MoodScore:F2} / база {state.BaselineMood:F2} |");
@@ -368,7 +371,6 @@ tags: [kokonoe, live-core, diagnostics]
             sb.AppendLine($"| Пульс | {heart.CurrentBpm:F0} bpm / база {heart.BaselineBpm:F0} / зміна {heart.BpmDelta:+0;-0;0} |");
             sb.AppendLine($"| Соматичне навантаження | strain {somatic.Strain:F2} / calm {somatic.Calm:F2} / volatility {somatic.Volatility:F2} |");
             sb.AppendLine($"| Саморегуляція | {LiveCoreCodeLabel(selfReg.Reaction)} -> {LiveCoreCodeLabel(selfReg.Regulation)} / контроль {selfReg.Control:F2} / імпульс {selfReg.Drive:F2} |");
-            var telemetry = brain.BuildTelemetrySnapshot();
             sb.AppendLine($"| Автономність | {telemetry.Autonomy.Replace("|", "/")} |");
             sb.AppendLine($"| Autonomy debug | {telemetry.AutonomyDebug.Replace("|", "/")} |");
             sb.AppendLine($"| Presence | {telemetry.Presence.Replace("|", "/")} |");
@@ -4115,10 +4117,14 @@ LIVE RESPONSE STYLE
                 var connPct = (int)(emotion.ConnectionScore * 100);
                 var connStr = $"{connPct}%";
                 var bondStr = DashboardBondLabel(emotion.Bond).ToUpper();
+                var att = emotion.Attachment;
                 DashKpiConnection.Text = connStr;
                 DashKpiBondLabel.Text  = bondStr;
                 DashSideConnValue.Text = connStr;
                 DashSideBondLabel.Text = bondStr;
+                DashSideAttachmentText.Text =
+                    $"trust {(int)(att.Trust * 100)} · intimacy {(int)(att.Intimacy * 100)} · reliability {(int)(att.Reliability * 100)}\n" +
+                    $"reciprocity {(int)(att.Reciprocity * 100)} · vitality {(int)(att.Vitality * 100)}";
 
                 try
                 {
@@ -4127,6 +4133,8 @@ LIVE RESPONSE STYLE
                     DashSideConnValue.Text = $"{connStr}/{relPct}%";
                     if (!string.IsNullOrWhiteSpace(rel.LastAftertaste))
                         DashSideBondLabel.Text = $"{bondStr} · {rel.LastAftertaste.ToUpper()}";
+                    DashSideAttachmentText.Text +=
+                        $"\nrel trust {(int)(rel.Trust * 100)} · protect {(int)(rel.Protectiveness * 100)} · friction {(int)(rel.Friction * 100)}";
                 }
                 catch { }
 
