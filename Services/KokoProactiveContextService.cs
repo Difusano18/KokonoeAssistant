@@ -86,7 +86,7 @@ namespace KokonoeAssistant.Services
             var last = string.IsNullOrWhiteSpace(frame.LastUserText) ? "останнього сигналу" : $"«{frame.LastUserText}»";
 
             if (frame.AssistantPingsAfterLastUser > 0)
-                return $"Я вже пінгувала паузу. Тепер конкретно: {last} ще актуально, чи ти вже переключився і, звісно, не повідомив?";
+                return $"Добре, без другого кола про тишу. {last} ще актуально, чи ти вже переключився і, звісно, вирішив не витрачати зайві символи?";
 
             if (!string.IsNullOrWhiteSpace(frame.ActiveIntentUk))
                 return $"Ти казав {last}. Минуло {frame.SilenceTextUk}; {frame.ActiveIntentUk}. Це ще в силі, чи план уже мутував?";

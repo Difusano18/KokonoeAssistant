@@ -790,6 +790,7 @@ internal static class Program
         AssertTrue(!check.Passed, "second generic silence ping should be rejected");
         AssertTrue(check.Replacement.Contains("іспанську") || check.Replacement.Contains("фразу"), "replacement should mention last concrete topic");
         AssertTrue(!check.Replacement.Contains("Тиша затягнулась"), "replacement should not repeat the generic silence template");
+        AssertTrue(!check.Replacement.Contains("пінгувала"), "replacement should not expose internal ping mechanics");
     }
 
     private static void ProactiveContextAnchorsSilenceToLastTopic()

@@ -38,6 +38,7 @@ using WpfRect      = System.Windows.Shapes.Rectangle;
 using WpfFF        = System.Windows.Media.FontFamily;
 using WpfSz        = System.Windows.Size;
 using WpfOri       = System.Windows.Controls.Orientation;
+using WinForms     = System.Windows.Forms;
 
 namespace KokonoeAssistant
 {
@@ -151,6 +152,8 @@ namespace KokonoeAssistant
         private int _liveCoreMemoryItems;
         private int _liveCoreReviewActions;
         private int _liveCoreOpenTasks;
+        private WinForms.NotifyIcon? _notifyIcon;
+        private CancellationTokenSource? _noticeCts;
 
         // ── Session chat log (auto-saved to Obsidian) ─────────────
         // Created on first message, appended after every exchange.
@@ -203,11 +206,137 @@ namespace KokonoeAssistant
             Marshal.StructureToPtr(mmi, lParam, true);
         }
 
+        private void ShowKokonoeMessageNotice(string content)
+        {
+            var text = TrimNotificationText(content, 180);
+            KokoNoticeText.Text = text;
+            KokoNoticeBorder.Visibility = Visibility.Visible;
+            KokoNoticeBorder.BeginAnimation(OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(140)));
+
+            _noticeCts?.Cancel();
+            var cts = new CancellationTokenSource();
+            _noticeCts = cts;
+            _ = HideKokonoeNoticeLaterAsync(cts.Token);
+
+            if (!IsActive || WindowState == WindowState.Minimized)
+            {
+                FlashTaskbar();
+                ShowBalloonNotification(text);
+            }
+        }
+
+        private async Task HideKokonoeNoticeLaterAsync(CancellationToken token)
+        {
+            try
+            {
+                await Task.Delay(6500, token);
+                await Dispatcher.InvokeAsync(() =>
+                {
+                    var fade = new DoubleAnimation(1, 0, TimeSpan.FromMilliseconds(220));
+                    fade.Completed += (_, _) =>
+                    {
+                        if (!token.IsCancellationRequested)
+                            KokoNoticeBorder.Visibility = Visibility.Collapsed;
+                    };
+                    KokoNoticeBorder.BeginAnimation(OpacityProperty, fade);
+                });
+            }
+            catch (TaskCanceledException) { }
+        }
+
+        private void ShowBalloonNotification(string text)
+        {
+            try
+            {
+                _notifyIcon ??= CreateNotifyIcon();
+                _notifyIcon.BalloonTipTitle = "Kokonoe";
+                _notifyIcon.BalloonTipText = text;
+                _notifyIcon.ShowBalloonTip(5000);
+            }
+            catch { }
+        }
+
+        private WinForms.NotifyIcon CreateNotifyIcon()
+        {
+            var iconPath = Path.Combine(AppContext.BaseDirectory, "Logo", "Logo_icon.ico");
+            if (!File.Exists(iconPath))
+                iconPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Logo", "Logo_icon.ico");
+
+            var icon = File.Exists(iconPath)
+                ? new System.Drawing.Icon(iconPath)
+                : System.Drawing.SystemIcons.Information;
+
+            var notify = new WinForms.NotifyIcon
+            {
+                Icon = icon,
+                Text = "Kokonoe",
+                Visible = true
+            };
+            notify.DoubleClick += (_, _) =>
+            {
+                Dispatcher.Invoke(() =>
+                {
+                    if (WindowState == WindowState.Minimized)
+                        WindowState = WindowState.Normal;
+                    Activate();
+                    Focus();
+                });
+            };
+            return notify;
+        }
+
+        private void FlashTaskbar()
+        {
+            try
+            {
+                KokoTaskbarInfo.ProgressState = System.Windows.Shell.TaskbarItemProgressState.Indeterminate;
+                _ = Task.Delay(5000).ContinueWith(_ =>
+                    Dispatcher.InvokeAsync(() => KokoTaskbarInfo.ProgressState = System.Windows.Shell.TaskbarItemProgressState.None));
+
+                var hwnd = new WindowInteropHelper(this).Handle;
+                if (hwnd == IntPtr.Zero) return;
+
+                var info = new FLASHWINFO
+                {
+                    cbSize = Convert.ToUInt32(Marshal.SizeOf<FLASHWINFO>()),
+                    hwnd = hwnd,
+                    dwFlags = FLASHW_TRAY | FLASHW_TIMERNOFG,
+                    uCount = 5,
+                    dwTimeout = 0
+                };
+                FlashWindowEx(ref info);
+            }
+            catch { }
+        }
+
+        private static string TrimNotificationText(string? text, int max)
+        {
+            if (string.IsNullOrWhiteSpace(text)) return "";
+            text = text.Replace("\r", " ").Replace("\n", " ").Trim();
+            return text.Length <= max ? text : text[..max].TrimEnd() + "...";
+        }
+
         [StructLayout(LayoutKind.Sequential)] private struct POINT { public int x, y; }
         [StructLayout(LayoutKind.Sequential)] private struct MINMAXINFO
         {
             public POINT ptReserved, ptMaxSize, ptMaxPosition, ptMinTrackSize, ptMaxTrackSize;
         }
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct FLASHWINFO
+        {
+            public uint cbSize;
+            public IntPtr hwnd;
+            public uint dwFlags;
+            public uint uCount;
+            public uint dwTimeout;
+        }
+
+        private const uint FLASHW_TRAY = 0x00000002;
+        private const uint FLASHW_TIMERNOFG = 0x0000000C;
+
+        [DllImport("user32.dll")]
+        private static extern bool FlashWindowEx(ref FLASHWINFO pwfi);
         // ──────────────────────────────────────────────────────────────
 
         private void Window_Loaded(object sender, RoutedEventArgs e)
@@ -5291,6 +5420,8 @@ tags: [kokonoe, dashboard, live]
                     Dispatcher.InvokeAsync(() =>
                     {
                         AddMessageBubble(new ChatMessageVm { Role = role, Content = content });
+                        if (role == "assistant")
+                            ShowKokonoeMessageNotice(content);
                         ScrollToBottom();
                     });
                 };
@@ -6666,6 +6797,7 @@ tags: [kokonoe, dashboard, live]
             try { ServiceContainer.BrainEngine?.RecordClose(); } catch { }
             try { _tunnel?.Stop(); }   catch { }
             try { _miniApp?.Stop(); }  catch { }
+            try { _notifyIcon?.Dispose(); } catch { }
             try { ServiceContainer.Heart?.Dispose(); } catch { }
             base.OnClosed(e);
         }

@@ -13,6 +13,10 @@
         Loaded="Window_Loaded"
         Icon="Logo/Logo_icon.ico">
 
+    <Window.TaskbarItemInfo>
+        <shell:TaskbarItemInfo x:Name="KokoTaskbarInfo"/>
+    </Window.TaskbarItemInfo>
+
     <shell:WindowChrome.WindowChrome>
         <shell:WindowChrome ResizeBorderThickness="6" CaptionHeight="0"
                             GlassFrameThickness="0" UseAeroCaptionButtons="False"/>
@@ -130,7 +134,7 @@
             BorderBrush="{DynamicResource AccentBgBorder1}" BorderThickness="0,1,0,0"
             ClipToBounds="True">
 
-        <Grid>
+        <Grid x:Name="RootGrid">
             <Grid.RowDefinitions>
                 <RowDefinition Height="36"/>
                 <RowDefinition Height="*"/>
@@ -2815,6 +2819,27 @@
                                 Cursor="Hand"/>
                     </Border>
                 </Grid>
+            </Border>
+            <Border x:Name="KokoNoticeBorder" Grid.RowSpan="3"
+                    Width="360" HorizontalAlignment="Right" VerticalAlignment="Top"
+                    Margin="0,52,22,0" Padding="14,12"
+                    Background="#F00B1A12" BorderBrush="{DynamicResource AccentBase}"
+                    BorderThickness="1" CornerRadius="6"
+                    Visibility="Collapsed" Opacity="0"
+                    Panel.ZIndex="999">
+                <Border.Effect>
+                    <DropShadowEffect Color="#00E676" ShadowDepth="0" BlurRadius="14" Opacity="0.35"/>
+                </Border.Effect>
+                <StackPanel>
+                    <TextBlock x:Name="KokoNoticeTitle" Text="Kokonoe"
+                               FontSize="11" FontWeight="Bold" FontFamily="Consolas"
+                               Foreground="{DynamicResource AccentBase}"/>
+                    <TextBlock x:Name="KokoNoticeText" Text=""
+                               Margin="0,4,0,0" FontSize="12"
+                               Foreground="{DynamicResource AccentTextLight}"
+                               TextWrapping="Wrap" MaxHeight="70"
+                               TextTrimming="CharacterEllipsis"/>
+                </StackPanel>
             </Border>
         </Grid>
 
