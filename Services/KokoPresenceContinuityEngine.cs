@@ -124,9 +124,11 @@ namespace KokonoeAssistant.Services
             frame.Trigger = overdue ? "presence_intent_overdue" : "presence_intent_followup";
             frame.StyleHint = intent.Kind == "sleep" ? "warm" : "callback";
             frame.Priority = overdue ? 94 : followDue ? 88 : 42;
-            frame.ShouldInterrupt = autonomyLevel >= 3
-                ? followDue
-                : overdue && intent.Kind != "sleep";
+            frame.ShouldInterrupt = intent.Kind == "sleep"
+                ? false
+                : autonomyLevel >= 3
+                    ? followDue
+                    : overdue;
             frame.NextUsefulAt = followDue ? now : intent.FollowUpAt;
 
             var timeText = until.TotalMinutes >= 0

@@ -24,6 +24,7 @@ internal static class Program
             Run("Presence waits for return home intent", PresenceWaitsForReturnHomeIntent);
             Run("Autonomy blocks generic ping during active intent", AutonomyBlocksGenericPingDuringActiveIntent);
             Run("Presence refuses stale sleep instruction after return", PresenceRefusesStaleSleepInstructionAfterReturn);
+            Run("Presence never interrupts active sleep intent", PresenceNeverInterruptsActiveSleepIntent);
             Run("State freshness expires stale sleep intent", StateFreshnessExpiresStaleSleepIntent);
             Run("State freshness closes intent on wake signal", StateFreshnessClosesIntentOnWakeSignal);
             Run("Vault sync policy flushes stale partial batch", VaultSyncPolicyFlushesStalePartialBatch);
@@ -39,6 +40,7 @@ internal static class Program
             Run("Post reply guard rejects staged decoration", PostReplyGuardRejectsStagedDecoration);
             Run("Proactive guard replaces repeated generic silence", ProactiveGuardReplacesRepeatedGenericSilence);
             Run("Proactive context anchors silence to last topic", ProactiveContextAnchorsSilenceToLastTopic);
+            Run("Proactive context stays silent after goodbye sleep", ProactiveContextStaysSilentAfterGoodbyeSleep);
             Run("Startup greeting avoids dead canned replies", StartupGreetingAvoidsDeadCannedReplies);
             Run("Startup greeting sanitizes dry return line", StartupGreetingSanitizesDryReturnLine);
             Run("Scenario simulation guards temporal continuity", ScenarioSimulationGuardsTemporalContinuity);
@@ -378,6 +380,35 @@ internal static class Program
         AssertEqual("returned_after_intent", frame.SituationKind, "resolved sleep should be treated as return");
         AssertTrue(frame.ExtraContext.Contains("не кажи йому робити те, що вже в минулому"), "presence context should block stale sleep instruction");
         AssertTrue(frame.ToneHint.Contains("do not tell him to sleep"), "tone should explicitly avoid telling him to sleep again");
+    }
+
+    private static void PresenceNeverInterruptsActiveSleepIntent()
+    {
+        using var ctx = TestContext.Create();
+        var now = new DateTime(2026, 5, 8, 16, 27, 0);
+        var state = new KokoInternalState();
+        state.ShortTermIntents.Add(new ShortTermIntent
+        {
+            Kind = "sleep",
+            Summary = "пішов спати/попрощався",
+            SourceText = "Бай бай",
+            CreatedAt = now.AddHours(-8),
+            FollowUpAt = now.AddMinutes(-5),
+            ExpectedUntil = now.AddHours(2)
+        });
+        ctx.Chat.InsertMessage(new ChatRepository.ChatMessage
+        {
+            Role = "user",
+            Content = "Бай бай",
+            Timestamp = now.AddHours(-8)
+        });
+
+        var frame = new KokoPresenceContinuityEngine()
+            .Evaluate(state, ctx.Chat.GetMessages(10), now, autonomyLevel: 3);
+
+        AssertEqual("due_intent_followup", frame.SituationKind, "sleep may be due but should stay non-interrupting");
+        AssertTrue(!frame.ShouldInterrupt, "sleep intent should never proactively interrupt");
+        AssertTrue(frame.ToneHint.Contains("let him sleep") || frame.ToneHint.Contains("do not tell him to sleep"), "tone should preserve sleep quiet rule");
     }
 
     private static void StateFreshnessExpiresStaleSleepIntent()
@@ -816,6 +847,33 @@ internal static class Program
         AssertTrue(frame.AnchorUk.Contains("курс") || frame.ActiveIntentUk.Contains("курс"), "proactive context should anchor to course intent");
         AssertTrue(frame.PromptBlock.Contains("Остання репліка користувача"), "prompt block should expose last user message");
         AssertTrue(frame.PromptBlock.Contains("Авто-пінгів"), "prompt block should expose ping count");
+    }
+
+    private static void ProactiveContextStaysSilentAfterGoodbyeSleep()
+    {
+        var now = new DateTime(2026, 5, 8, 16, 27, 0);
+        var messages = new[]
+        {
+            new ChatRepository.ChatMessage { Role = "user", Content = "Бай бай", Timestamp = now.AddHours(-8) }
+        };
+        var state = new KokoInternalState();
+        state.ShortTermIntents.Add(new ShortTermIntent
+        {
+            Kind = "sleep",
+            Summary = "пішов спати/попрощався",
+            SourceText = "Бай бай",
+            CreatedAt = now.AddHours(-8),
+            ExpectedUntil = now.AddHours(2),
+            FollowUpAt = now.AddMinutes(-5)
+        });
+
+        var service = new KokoProactiveContextService();
+        var frame = service.Build(messages, state, now);
+        var check = service.Check("Добре, без другого кола про тишу. «Бай бай» ще актуально?", frame, "silence_l2");
+
+        AssertTrue(frame.ShouldStaySilentForSleep, "goodbye sleep context should request silence");
+        AssertTrue(!check.Passed, "proactive reply should be blocked during sleep/goodbye");
+        AssertEqual("[мовчання]", check.Replacement, "blocked sleep reply should turn into silence marker");
     }
 
     private static void StartupGreetingAvoidsDeadCannedReplies()

@@ -12,6 +12,7 @@ namespace KokonoeAssistant.Services
         public string SilenceTextUk { get; set; } = "";
         public string AnchorUk { get; set; } = "";
         public string ActiveIntentUk { get; set; } = "";
+        public bool ShouldStaySilentForSleep { get; set; }
         public int AssistantPingsAfterLastUser { get; set; }
         public string[] RecentAssistantPings { get; set; } = Array.Empty<string>();
         public string PromptBlock { get; set; } = "";
@@ -55,6 +56,9 @@ namespace KokonoeAssistant.Services
             };
             frame.SilenceTextUk = FormatDuration(TimeSpan.FromMinutes(frame.SilenceMinutes));
             frame.AnchorUk = BuildAnchor(frame.LastUserText, activeIntent);
+            frame.ShouldStaySilentForSleep =
+                activeIntent?.Kind == "sleep" ||
+                (LooksLikeSleepOrGoodbye(frame.LastUserText.ToLowerInvariant()) && frame.SilenceMinutes < 12 * 60);
             frame.PromptBlock = BuildPromptBlock(frame);
             return frame;
         }
@@ -62,6 +66,8 @@ namespace KokonoeAssistant.Services
         public KokoProactiveReplyCheck Check(string? reply, KokoProactiveContextFrame frame, string level)
         {
             var text = (reply ?? "").Trim();
+            if (frame.ShouldStaySilentForSleep)
+                return Fail("sleep/goodbye context should stay silent", "[мовчання]");
             if (string.IsNullOrWhiteSpace(text))
                 return Fail("empty", BuildFallback(frame, level));
 
@@ -114,6 +120,7 @@ PROACTIVE CONTEXT
 Минуло: {frame.SilenceTextUk}
 Якір контексту: {NullDash(frame.AnchorUk)}
 Активний намір: {NullDash(frame.ActiveIntentUk)}
+Сон / goodbye режим: {(frame.ShouldStaySilentForSleep ? "так, мовчати" : "ні")}
 Авто-пінгів після останньої репліки користувача: {frame.AssistantPingsAfterLastUser}
 Останні авто-пінги:
 {recent}
@@ -140,6 +147,8 @@ PROACTIVE CONTEXT
                 return "повернення додому";
             if (ContainsAny(lower, "сон", "спат", "сплю", "ляга"))
                 return "сон";
+            if (LooksLikeSleepOrGoodbye(lower))
+                return "прощання/сон";
             if (ContainsAny(lower, "код", "проект", "тест", "коміт", "github", "obsidian"))
                 return "проект";
             return Trim(lastUserText, 90);
@@ -171,6 +180,12 @@ PROACTIVE CONTEXT
 
         private static bool ContainsAny(string text, params string[] values)
             => values.Any(v => text.Contains(v, StringComparison.OrdinalIgnoreCase));
+
+        private static bool LooksLikeSleepOrGoodbye(string lower)
+            => ContainsAny(lower,
+                "бай бай", "бай-бай", "баю бай", "баю-бай", "бувай", "пока",
+                "добраніч", "доброй ночи", "спокійної", "спокойной",
+                "я спать", "я спати", "піду спати", "пішов спати", "лягаю");
 
         private static string NullDash(string value) => string.IsNullOrWhiteSpace(value) ? "-" : value;
 

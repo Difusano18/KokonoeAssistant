@@ -1533,6 +1533,9 @@ namespace KokonoeAssistant.Services
         private async Task<bool> CheckReactiveTriggersAsync()
         {
             var now  = DateTime.Now;
+            if (ShouldSuppressProactiveForSleep(now))
+                return false;
+
             var fire = _state.PendingTriggers
                 .Where(t => t.FireAt <= now)
                 .OrderBy(t => t.FireAt)
@@ -1762,17 +1765,23 @@ namespace KokonoeAssistant.Services
                 _state.ShortTermIntents.RemoveRange(0, _state.ShortTermIntents.Count - 12);
 
             _state.PendingTriggers.RemoveAll(t => t.Type == "intent_followup" && t.FireAt > now);
-            _state.PendingTriggers.Add(new ReactiveTrigger
+            if (detected.Kind != "sleep")
             {
-                Type = "intent_followup",
-                FireAt = detected.FollowUpAt,
-                Context = $"Користувач сказав: «{detected.SourceText}». Намір: {detected.Summary}. Якщо він повернеться або мине час, доречно спитати коротко: «{BuildIntentQuestion(detected)}»"
-            });
+                _state.PendingTriggers.Add(new ReactiveTrigger
+                {
+                    Type = "intent_followup",
+                    FireAt = detected.FollowUpAt,
+                    Context = $"Користувач сказав: «{detected.SourceText}». Намір: {detected.Summary}. Якщо він повернеться або мине час, доречно спитати коротко: «{BuildIntentQuestion(detected)}»"
+                });
+            }
         }
 
         private static ShortTermIntent? DetectShortTermIntent(string content, DateTime now)
         {
             var lower = content.ToLowerInvariant();
+            if (LooksLikeSleepOrGoodbye(lower))
+                return BuildIntent("sleep", "пішов спати/попрощався", content, now, TimeSpan.FromHours(10), TimeSpan.FromHours(12));
+
             if (!ContainsAny(lower, "піду", "йду", "іду", "пішов", "буду", "зараз", "скоро")) return null;
 
             var returnHome = TryDetectReturnHomeIntent(content, lower, now);
@@ -1870,6 +1879,23 @@ namespace KokonoeAssistant.Services
 
         private static bool ContainsAny(string text, params string[] values)
             => values.Any(v => text.Contains(v, StringComparison.OrdinalIgnoreCase));
+
+        private static bool LooksLikeSleepOrGoodbye(string lower)
+            => ContainsAny(lower,
+                "бай бай", "бай-бай", "баю бай", "баю-бай", "бувай", "пока",
+                "добраніч", "доброй ночи", "спокійної", "спокойной",
+                "я спать", "я спати", "піду спати", "пішов спати", "лягаю");
+
+        private bool ShouldSuppressProactiveForSleep(DateTime now)
+        {
+            lock (_lock)
+            {
+                return _state.ShortTermIntents.Any(i =>
+                    !i.ResolvedAt.HasValue &&
+                    i.Kind == "sleep" &&
+                    now < i.ExpectedUntil.AddHours(2));
+            }
+        }
 
         private void ExtractAndRememberFacts(string userMsg)
         {
@@ -2844,6 +2870,7 @@ namespace KokonoeAssistant.Services
             if (OnNewMessage == null) return;
 
             var now = DateTime.Now;
+            if (ShouldSuppressProactiveForSleep(now)) return;
             // Cooldown: один раз на день
             if (_lastInAppSilenceMsgAt.Date >= now.Date) return;
             // Якщо WhatDidIMiss або інший спонтанний вже надсилав сьогодні — не дублювати
@@ -2970,6 +2997,7 @@ namespace KokonoeAssistant.Services
             EnsureVaultSyncFreshness("spontaneous");
             var autonomyLevel = Math.Clamp(s.ProactiveAutonomyLevel, 0, 3);
             if (autonomyLevel <= 0) return;
+            if (ShouldSuppressProactiveForSleep(now)) return;
             var baseInterval = Math.Clamp(s.SpontaneousIntervalMins, 10, 240);
             var globalCooldown = autonomyLevel switch
             {
@@ -3164,6 +3192,8 @@ namespace KokonoeAssistant.Services
         {
             if (!EnsureTelegram()) return false;
             var proactive = ProactiveContext.Build(_chatRepo.GetMessages(40), _state, DateTime.Now);
+            if (proactive.ShouldStaySilentForSleep)
+                return false;
 
             var hours = (int)(silenceMinutes / 60);
             var mins = (int)(silenceMinutes % 60);
@@ -3542,6 +3572,11 @@ namespace KokonoeAssistant.Services
             var presenceBlock = presence.ExtraContext;
             var internalDayBlock = internalDay.PromptBlock;
             var proactive = ProactiveContext.Build(_chatRepo.GetMessages(50), _state, now2);
+            if (proactive.ShouldStaySilentForSleep)
+            {
+                Log("Spontaneous suppressed: sleep/goodbye context is active");
+                return;
+            }
 
             // Кризова ситуація — окремий промпт
             if (trigger == "crisis" || style == SpontaneousStyle.CrisisSupport)
