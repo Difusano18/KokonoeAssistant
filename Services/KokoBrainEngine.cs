@@ -3194,6 +3194,11 @@ namespace KokonoeAssistant.Services
             var proactive = ProactiveContext.Build(_chatRepo.GetMessages(40), _state, DateTime.Now);
             if (proactive.ShouldStaySilentForSleep)
                 return false;
+            if (proactive.AssistantPingsAfterLastUser > 0)
+            {
+                Log("Silence reaction suppressed: assistant already replied after the last user message");
+                return false;
+            }
 
             var hours = (int)(silenceMinutes / 60);
             var mins = (int)(silenceMinutes % 60);
@@ -3239,7 +3244,8 @@ namespace KokonoeAssistant.Services
                 msg.Contains("[мовчання]", StringComparison.OrdinalIgnoreCase) ||
                 msg.Contains("[молчание]", StringComparison.OrdinalIgnoreCase))
             {
-                msg = ProactiveContext.BuildFallback(proactive, level);
+                Log("Silence reaction suppressed: proactive guard requested silence");
+                return false;
             }
 
             if (!await SendTgAndLog(msg, level)) return false;

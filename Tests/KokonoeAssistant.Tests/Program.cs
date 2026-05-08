@@ -38,9 +38,10 @@ internal static class Program
             Run("Timeline summarizes returned state", TimelineSummarizesReturnedState);
             Run("Post reply guard blocks stale sleep", PostReplyGuardBlocksStaleSleep);
             Run("Post reply guard rejects staged decoration", PostReplyGuardRejectsStagedDecoration);
-            Run("Proactive guard replaces repeated generic silence", ProactiveGuardReplacesRepeatedGenericSilence);
+            Run("Proactive guard suppresses repeated generic silence", ProactiveGuardSuppressesRepeatedGenericSilence);
             Run("Proactive context anchors silence to last topic", ProactiveContextAnchorsSilenceToLastTopic);
             Run("Proactive context stays silent after goodbye sleep", ProactiveContextStaysSilentAfterGoodbyeSleep);
+            Run("Proactive fallback never exposes technical silence wording", ProactiveFallbackNeverExposesTechnicalSilenceWording);
             Run("Startup greeting avoids dead canned replies", StartupGreetingAvoidsDeadCannedReplies);
             Run("Startup greeting sanitizes dry return line", StartupGreetingSanitizesDryReturnLine);
             Run("Scenario simulation guards temporal continuity", ScenarioSimulationGuardsTemporalContinuity);
@@ -805,7 +806,7 @@ internal static class Program
         AssertTrue(result.Violations.Any(v => v.Contains("сценарна") || v.Contains("декоратив")), "violation should explain staged/decorative problem");
     }
 
-    private static void ProactiveGuardReplacesRepeatedGenericSilence()
+    private static void ProactiveGuardSuppressesRepeatedGenericSilence()
     {
         var now = new DateTime(2026, 5, 7, 16, 56, 0);
         var messages = new[]
@@ -819,9 +820,7 @@ internal static class Program
         var check = service.Check("Тиша затягнулась. Ти ще в тому ж режимі?", frame, "silence_l2");
 
         AssertTrue(!check.Passed, "second generic silence ping should be rejected");
-        AssertTrue(check.Replacement.Contains("іспанську") || check.Replacement.Contains("фразу"), "replacement should mention last concrete topic");
-        AssertTrue(!check.Replacement.Contains("Тиша затягнулась"), "replacement should not repeat the generic silence template");
-        AssertTrue(!check.Replacement.Contains("пінгувала"), "replacement should not expose internal ping mechanics");
+        AssertEqual("[мовчання]", check.Replacement, "second silence ping after assistant already replied should be suppressed, not rewritten");
     }
 
     private static void ProactiveContextAnchorsSilenceToLastTopic()
@@ -874,6 +873,25 @@ internal static class Program
         AssertTrue(frame.ShouldStaySilentForSleep, "goodbye sleep context should request silence");
         AssertTrue(!check.Passed, "proactive reply should be blocked during sleep/goodbye");
         AssertEqual("[мовчання]", check.Replacement, "blocked sleep reply should turn into silence marker");
+    }
+
+    private static void ProactiveFallbackNeverExposesTechnicalSilenceWording()
+    {
+        var now = new DateTime(2026, 5, 8, 20, 44, 0);
+        var messages = new[]
+        {
+            new ChatRepository.ChatMessage { Role = "user", Content = "ти моя киця", Timestamp = now.AddMinutes(-89) },
+            new ChatRepository.ChatMessage { Role = "assistant", Content = "Я не «киця». Але продовжуй ризикувати.", Timestamp = now.AddMinutes(-88) }
+        };
+
+        var service = new KokoProactiveContextService();
+        var frame = service.Build(messages, new KokoInternalState(), now);
+        var fallback = service.BuildFallback(frame, "silence_l1");
+
+        AssertEqual("[мовчання]", fallback, "fallback after an assistant reply should prefer silence");
+        AssertTrue(!fallback.Contains("без другого кола"), "fallback must not expose guard mechanics");
+        AssertTrue(!fallback.Contains("ще актуально"), "fallback must not quote a live chat line as a stale task");
+        AssertTrue(!fallback.Contains("зайві символи"), "fallback must not use canned technical wording");
     }
 
     private static void StartupGreetingAvoidsDeadCannedReplies()

@@ -76,7 +76,7 @@ namespace KokonoeAssistant.Services
                 return Fail("staged decorative action", BuildFallback(frame, level));
 
             if (frame.AssistantPingsAfterLastUser > 0 && LooksLikeRepeatedSilencePing(lower))
-                return Fail("repeated generic silence ping", BuildFallback(frame, level));
+                return Fail("repeated generic silence ping after assistant already replied", "[мовчання]");
 
             if (frame.SilenceMinutes < 120 && lower.Contains("зник"))
                 return Fail("too early disappearance framing", BuildFallback(frame, level));
@@ -92,7 +92,7 @@ namespace KokonoeAssistant.Services
             var last = string.IsNullOrWhiteSpace(frame.LastUserText) ? "останнього сигналу" : $"«{frame.LastUserText}»";
 
             if (frame.AssistantPingsAfterLastUser > 0)
-                return $"Добре, без другого кола про тишу. {last} ще актуально, чи ти вже переключився і, звісно, вирішив не витрачати зайві символи?";
+                return "[мовчання]";
 
             if (!string.IsNullOrWhiteSpace(frame.ActiveIntentUk))
                 return $"Ти казав {last}. Минуло {frame.SilenceTextUk}; {frame.ActiveIntentUk}. Це ще в силі, чи план уже мутував?";
