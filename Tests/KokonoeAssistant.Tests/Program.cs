@@ -44,6 +44,7 @@ internal static class Program
             Run("Proactive fallback never exposes technical silence wording", ProactiveFallbackNeverExposesTechnicalSilenceWording);
             Run("Screen awareness parses vision JSON", ScreenAwarenessParsesVisionJson);
             Run("Screen awareness suppresses repeated comments", ScreenAwarenessSuppressesRepeatedComments);
+            Run("Screen awareness redacts private identifiers", ScreenAwarenessRedactsPrivateIdentifiers);
             Run("Startup greeting avoids dead canned replies", StartupGreetingAvoidsDeadCannedReplies);
             Run("Startup greeting sanitizes dry return line", StartupGreetingSanitizesDryReturnLine);
             Run("Scenario simulation guards temporal continuity", ScenarioSimulationGuardsTemporalContinuity);
@@ -943,6 +944,25 @@ internal static class Program
             cooldownMinutes: 5,
             commentsEnabled: true);
         AssertTrue(!repeated.ShouldSend, "screen comment should avoid repeating same line");
+    }
+
+    private static void ScreenAwarenessRedactsPrivateIdentifiers()
+    {
+        var service = new KokoScreenAwarenessService();
+        var parsed = service.Parse("""
+{
+  "summary_uk": "відкрита сторінка акаунта test.user@example.com з ключем abcdefghijklmnopqrstuvwxyz123456",
+  "activity_uk": "active",
+  "should_comment": true,
+  "comment_uk": "Ну так, сторінка test.user@example.com і токен abcdefghijklmnopqrstuvwxyz123456, геніально.",
+  "importance": 0.8
+}
+""");
+
+        AssertTrue(!parsed.SummaryUk.Contains("test.user@example.com"), "screen summary should redact email");
+        AssertTrue(!parsed.CommentUk.Contains("test.user@example.com"), "screen comment should redact email");
+        AssertTrue(!parsed.SummaryUk.Contains("abcdefghijklmnopqrstuvwxyz123456"), "screen summary should redact long token");
+        AssertTrue(!parsed.CommentUk.Contains("abcdefghijklmnopqrstuvwxyz123456"), "screen comment should redact long token");
     }
 
     private static void StartupGreetingAvoidsDeadCannedReplies()

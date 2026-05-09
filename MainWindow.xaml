@@ -2715,7 +2715,7 @@
                             <!-- Vision Model -->
                             <TextBlock Text="Vision Модель" Style="{StaticResource SettingsLabel}"/>
                             <TextBox x:Name="SP_VisionModelBox" Style="{StaticResource SettingInput}" Margin="0,0,0,4"/>
-                            <TextBlock Text="Vision модель для фото. Рекомендовані (cloud): llama3.2-vision:11b-cloud, qwen2.5vl:7b-cloud, qwen2.5vl:72b-cloud (найкраща). Порожньо — основна модель."
+                            <TextBlock Text="Vision модель для фото. Для поточного Ollama Cloud працює: qwen3-vl:235b-instruct. Порожньо — буде використано дефолтну vision-модель."
                                        Foreground="#3A3A4E" FontFamily="Segoe UI Variable, Segoe UI" FontSize="10"
                                        Margin="0,0,0,16" TextWrapping="Wrap"/>
 

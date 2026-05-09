@@ -36,7 +36,7 @@ namespace KokonoeAssistant
         public string OllamaModel  { get; set; } = "gpt-oss:120b-cloud";
 
         // Vision model — використовується замість основної коли є вкладене зображення
-        public string VisionModel  { get; set; } = "llama3.2-vision:11b-cloud";
+        public string VisionModel  { get; set; } = "qwen3-vl:235b-instruct";
         // Vision URL — якщо заповнений, image requests йдуть сюди (локальний Ollama/LM Studio), а не на OllamaUrl
         // Порожньо = той самий OllamaUrl, але з VisionModel
         public string VisionUrl    { get; set; } = "";

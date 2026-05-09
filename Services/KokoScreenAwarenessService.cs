@@ -49,6 +49,7 @@ namespace KokonoeAssistant.Services
 - Відповідай ТІЛЬКИ valid JSON без markdown.
 - Пиши українською.
 - Не переписуй приватні рядки, ключі, паролі, токени або довгі повідомлення з екрана.
+- Не згадуй email, username, API keys, телефони, адреси, chat id, токени, назви акаунтів або приватні ідентифікатори. Узагальнюй: "сторінка налаштувань", "панель акаунта", "чат", "редактор".
 - Не коментуй просто заради коментаря. Коментар потрібен тільки якщо на екрані є помітна дія, помилка, довга застійна ситуація, зміна заняття, навчання, код, гра, Telegram/чат або щось реально варте реакції.
 - Якщо це майже той самий екран і немає нової думки, постав should_comment=false.
 - comment_uk має бути 1 коротке речення в її стилі: живо, сухо, без технічних слів типу "скріншот проаналізовано".
@@ -79,10 +80,10 @@ JSON schema:
                 var obj = JObject.Parse(json);
                 return new KokoScreenAwarenessAnalysis
                 {
-                    SummaryUk = Trim(obj["summary_uk"]?.ToString(), 180),
+                    SummaryUk = RedactSensitive(Trim(obj["summary_uk"]?.ToString(), 180)),
                     ActivityUk = Trim(obj["activity_uk"]?.ToString(), 120),
                     ShouldComment = obj["should_comment"]?.Value<bool>() == true,
-                    CommentUk = CleanComment(obj["comment_uk"]?.ToString()),
+                    CommentUk = RedactSensitive(CleanComment(obj["comment_uk"]?.ToString())),
                     Importance = Math.Clamp(obj["importance"]?.Value<double>() ?? 0, 0, 1),
                     Raw = raw
                 };
@@ -152,6 +153,26 @@ JSON schema:
             while (text.Contains("  ", StringComparison.Ordinal)) text = text.Replace("  ", " ");
             if (text.StartsWith("[") && text.EndsWith("]")) return "";
             return Trim(text, 260);
+        }
+
+        private static string RedactSensitive(string text)
+        {
+            if (string.IsNullOrWhiteSpace(text)) return "";
+            text = System.Text.RegularExpressions.Regex.Replace(
+                text,
+                @"[A-Z0-9._%+\-]+@[A-Z0-9.\-]+\.[A-Z]{2,}",
+                "[email]",
+                System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            text = System.Text.RegularExpressions.Regex.Replace(
+                text,
+                @"\b[A-Za-z0-9_\-]{24,}\b",
+                "[private]",
+                System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            text = System.Text.RegularExpressions.Regex.Replace(
+                text,
+                @"\+?\d[\d\s().\-]{8,}\d",
+                "[phone/id]");
+            return text.Trim();
         }
 
         private static bool LooksTechnical(string text)

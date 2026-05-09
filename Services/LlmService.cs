@@ -472,7 +472,7 @@ Kokonoe: Стоп. Де ти зараз. Коли востаннє їв.
             _ollamaApiKey = s.OllamaApiKey;
             _ollamaUrl = s.OllamaUrl;
             _ollamaModel = s.OllamaModel;
-            _visionModel = s.VisionModel;
+            _visionModel = NormalizeVisionModel(s);
             _visionUrl = s.VisionUrl;
             _diagProvider = ActiveProviderLabel();
             _diagModel = ActiveModelLabel();
@@ -489,7 +489,7 @@ Kokonoe: Стоп. Де ти зараз. Коли востаннє їв.
             _ollamaApiKey = s.OllamaApiKey;
             _ollamaUrl = s.OllamaUrl;
             _ollamaModel = s.OllamaModel;
-            _visionModel = s.VisionModel;
+            _visionModel = NormalizeVisionModel(s);
             _visionUrl = s.VisionUrl;
             OllamaPool?.ReloadSettings();
             lock (_diagLock)
@@ -501,6 +501,16 @@ Kokonoe: Стоп. Де ти зараз. Коли востаннє їв.
 
         private bool IsOllamaCloud => _provider.Equals("ollama-cloud", StringComparison.OrdinalIgnoreCase);
         private bool IsClaude => _provider.Equals("claude", StringComparison.OrdinalIgnoreCase);
+
+        private static string NormalizeVisionModel(AppSettings settings)
+        {
+            if (!string.IsNullOrWhiteSpace(settings.VisionModel))
+                return settings.VisionModel.Trim();
+
+            return settings.LlmProvider.Equals("ollama-cloud", StringComparison.OrdinalIgnoreCase)
+                ? "qwen3-vl:235b-instruct"
+                : "";
+        }
 
         public void ClearHistory() { lock (_histLock) { _history.Clear(); } }
 
@@ -958,7 +968,7 @@ Kokonoe: Стоп. Де ти зараз. Коли востаннє їв.
                             {
                                 lock (_histLock) { while (_history.Count > checkpoint) _history.RemoveAt(_history.Count - 1); }
                                 RecordLlmFailure(diagProvider, diagModel, diagChannel, (int)resp.StatusCode, errBody, diagWatch, "vision_rejected");
-                                return "Зображення є, але vision-модель його відхилила. Перевір Vision Model у Settings (рекомендовано: qwen2.5vl:7b-cloud або llama3.2-vision:11b-cloud).";
+                                return "Зображення є, але vision-модель його відхилила. Перевір Vision Model у Settings (для твого Ollama Cloud зараз працює: qwen3-vl:235b-instruct).";
                             }
                             // Tools fallback + image: strip image тихо і продовжуємо (tools вже відвалились — не image-проблема)
                             if (toolsFailedFallback)
@@ -993,7 +1003,7 @@ Kokonoe: Стоп. Де ти зараз. Коли востаннє їв.
                         {
                             lock (_histLock) { while (_history.Count > checkpoint) _history.RemoveAt(_history.Count - 1); }
                             RecordLlmFailure(diagProvider, diagModel, diagChannel, (int)resp.StatusCode, err, diagWatch, "vision_500");
-                            return "Зображення є, але vision-сервер повернув 500. Перевір Vision Model у Settings (рекомендовано: qwen2.5vl:7b-cloud або llama3.2-vision:11b-cloud).";
+                            return "Зображення є, але vision-сервер повернув 500. Перевір Vision Model у Settings (для твого Ollama Cloud зараз працює: qwen3-vl:235b-instruct).";
                         }
                         if (isOllamaCloud && !isImageRequest && IsTransientServerError((int)resp.StatusCode))
                         {
