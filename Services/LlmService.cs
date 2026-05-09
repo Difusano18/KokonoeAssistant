@@ -588,6 +588,144 @@ Kokonoe: Стоп. Де ти зараз. Коли востаннє їв.
             }
         }
 
+        public async Task<string?> SendSystemVisionQueryAsync(
+            string prompt,
+            byte[] imageBytes,
+            string imageMime = "image/jpeg",
+            CancellationToken ct = default)
+        {
+            var diagWatch = Stopwatch.StartNew();
+            var diagProvider = ActiveProviderLabel();
+            var diagModel = ActiveModelLabel(imageRequest: true);
+            const string diagChannel = "system:image";
+            RecordLlmRequest(diagProvider, diagModel, diagChannel);
+
+            try
+            {
+                if (imageBytes == null || imageBytes.Length == 0)
+                    return null;
+
+                var dateStamp = $"\n\n=== ДАТА/ЧАС ===\nСьогодні: {DateTime.Now:dddd, dd MMMM yyyy}, {DateTime.Now:HH:mm}";
+                var systemContent = SYSTEM_PROMPT + dateStamp;
+                var b64 = Convert.ToBase64String(imageBytes);
+
+                object imageBlock = IsClaude
+                    ? new { type = "image", source = new { type = "base64", media_type = imageMime, data = b64 } }
+                    : new { type = "image_url", image_url = new { url = $"data:{imageMime};base64,{b64}" } };
+
+                object userContent = new object[]
+                {
+                    new { type = "text", text = prompt },
+                    imageBlock
+                };
+
+                var targetModel = IsClaude ? _claudeModel : (IsOllamaCloud ? _ollamaModel : _model);
+                var targetUrl = IsClaude ? CLAUDE_API_URL : (IsOllamaCloud ? _ollamaUrl : _lmUrl);
+                if (!string.IsNullOrWhiteSpace(_visionModel))
+                    targetModel = _visionModel;
+                if (!IsClaude && !string.IsNullOrWhiteSpace(_visionUrl))
+                    targetUrl = _visionUrl;
+
+                object reqBody;
+                if (IsClaude)
+                {
+                    reqBody = new
+                    {
+                        model = targetModel,
+                        max_tokens = SystemMaxTokens,
+                        temperature = DynamicTemperature,
+                        system = SanitizeContent(systemContent),
+                        messages = new[]
+                        {
+                            new { role = "user", content = userContent }
+                        }
+                    };
+                }
+                else
+                {
+                    reqBody = new
+                    {
+                        model = targetModel,
+                        messages = new object[]
+                        {
+                            new { role = "system", content = SanitizeContent(systemContent) },
+                            new { role = "user", content = userContent }
+                        },
+                        max_tokens = SystemMaxTokens,
+                        temperature = DynamicTemperature,
+                        stream = false
+                    };
+                }
+
+                var json = JsonConvert.SerializeObject(reqBody);
+                int attempts = IsOllamaCloud && OllamaPool != null
+                    ? Math.Max(1, OllamaPool.LiveKeyCount + 1) : 1;
+                HttpResponseMessage? resp = null;
+                string? ollamaKey = null;
+
+                for (int attempt = 0; attempt < attempts; attempt++)
+                {
+                    using var req = new HttpRequestMessage(HttpMethod.Post, targetUrl)
+                    {
+                        Content = new StringContent(json, Encoding.UTF8, "application/json")
+                    };
+
+                    if (IsClaude && !string.IsNullOrWhiteSpace(_claudeApiKey))
+                    {
+                        req.Headers.Add("x-api-key", _claudeApiKey);
+                        req.Headers.Add("anthropic-version", "2023-06-01");
+                    }
+                    else if (IsOllamaCloud)
+                    {
+                        ollamaKey = ResolveOllamaKey();
+                        if (!string.IsNullOrEmpty(ollamaKey))
+                            req.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", ollamaKey);
+                    }
+
+                    resp = await _http.SendAsync(req, ct);
+                    if (resp.IsSuccessStatusCode)
+                    {
+                        if (IsOllamaCloud && !string.IsNullOrEmpty(ollamaKey))
+                            OllamaPool?.RecordRequest(ollamaKey);
+                        break;
+                    }
+
+                    if (IsOllamaCloud && (int)resp.StatusCode == 429
+                        && OllamaPool != null && !string.IsNullOrEmpty(ollamaKey))
+                    {
+                        OllamaPool.MarkRateLimited(ollamaKey);
+                        resp.Dispose();
+                        resp = null;
+                        continue;
+                    }
+
+                    break;
+                }
+
+                if (resp == null || !resp.IsSuccessStatusCode)
+                {
+                    var status = resp == null ? (int?)null : (int)resp.StatusCode;
+                    var error = resp == null ? "no live key/response" : await resp.Content.ReadAsStringAsync(ct);
+                    RecordLlmFailure(diagProvider, diagModel, diagChannel, status, error, diagWatch, "system_vision");
+                    return null;
+                }
+
+                var respText = await resp.Content.ReadAsStringAsync(ct);
+                var respObj = JObject.Parse(respText);
+                var reply = IsClaude
+                    ? respObj["content"]?.FirstOrDefault()?["text"]?.ToString()
+                    : respObj["choices"]?[0]?["message"]?["content"]?.ToString();
+
+                RecordLlmSuccess(diagProvider, diagModel, diagChannel, diagWatch);
+                return CleanGarbage(reply ?? "");
+            }
+            catch (Exception ex)
+            {
+                RecordLlmFailure(diagProvider, diagModel, diagChannel, null, ex.Message, diagWatch, "system_vision_exception");
+                return null;
+            }
+        }
+
         public void RestoreHistory(IEnumerable<(string role, string content)> messages, int maxMessages = 25, string? memoryPrefix = null)
         {
             lock (_histLock)

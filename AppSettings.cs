@@ -79,6 +79,12 @@ namespace KokonoeAssistant
         public int  SpontaneousIntervalMins { get; set; } = 25;
         public int  ProactiveAutonomyLevel  { get; set; } = 3; // 0=тихо, 1=обережно, 2=нормально, 3=живий режим
 
+        // Screen awareness
+        public bool ScreenAwarenessEnabled { get; set; } = true;
+        public bool ScreenAwarenessSendComments { get; set; } = true;
+        public int  ScreenAwarenessIntervalMins { get; set; } = 5;
+        public int  ScreenAwarenessCommentCooldownMins { get; set; } = 5;
+
         // System
         public bool MinimizeToTray      { get; set; } = true;
         public int  MemoryUpdateEveryN  { get; set; } = 6;

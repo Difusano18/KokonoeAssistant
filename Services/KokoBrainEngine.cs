@@ -139,6 +139,13 @@ namespace KokonoeAssistant.Services
         public string LastVaultMaintenanceSummary { get; set; } = "";
         public string LastVaultMaintenanceError { get; set; } = "";
         public List<ShortTermIntent> ShortTermIntents { get; set; } = new();
+        public DateTime LastScreenAwarenessAt { get; set; } = DateTime.MinValue;
+        public DateTime LastScreenAwarenessCommentAt { get; set; } = DateTime.MinValue;
+        public string LastScreenAwarenessHash { get; set; } = "";
+        public string LastScreenAwarenessSummary { get; set; } = "";
+        public string LastScreenAwarenessActivity { get; set; } = "";
+        public string LastScreenAwarenessComment { get; set; } = "";
+        public string LastScreenAwarenessWindow { get; set; } = "";
     }
 
     public class ReactiveTrigger
@@ -197,6 +204,7 @@ namespace KokonoeAssistant.Services
         public readonly KokoPostReplyGuard PostReplyGuard;
         public readonly KokoStateFreshnessService StateFreshness;
         public readonly KokoProactiveContextService ProactiveContext;
+        public readonly KokoScreenAwarenessService ScreenAwareness;
 
         // ── Зовнішні сервіси (опціональні) ───────────────────────────
         private EnhancedMemory?    _enhanced;
@@ -204,6 +212,7 @@ namespace KokonoeAssistant.Services
         private GoalService?       _goalService;
         private HabitService?      _habitService;
         private ContextAnalyzer?   _contextAnalyzer;
+        private readonly ActivityAnalyzer _screenActivityAnalyzer = new();
 
         // Screen context cache
         private string   _cachedScreenContext     = "";
@@ -221,11 +230,13 @@ namespace KokonoeAssistant.Services
         private KokoInternalState  _state;
         private readonly System.Threading.Timer _thinkTimer;
         private readonly System.Threading.Timer _spontaneousTimer;
+        private readonly System.Threading.Timer _screenAwarenessTimer;
         private bool               _disposed;
         // Семафор: тільки один фоновий LLM-запит за раз (щоб не забивати чергу)
         private readonly SemaphoreSlim _bgLlmSemaphore = new(1, 1);
         private int _thinkInFlight;
         private int _spontaneousInFlight;
+        private int _screenAwarenessInFlight;
         private int _vaultSyncInFlight;
         private DateTime _lastVaultFreshnessCheckAt = DateTime.MinValue;
         private readonly object    _lock = new();
@@ -281,6 +292,7 @@ namespace KokonoeAssistant.Services
             PostReplyGuard = new KokoPostReplyGuard();
             StateFreshness = new KokoStateFreshnessService();
             ProactiveContext = new KokoProactiveContextService();
+            ScreenAwareness = new KokoScreenAwarenessService();
 
             // Підключити нові сервіси в LLM
             _llm.Memory    = Memory;
@@ -297,6 +309,9 @@ namespace KokonoeAssistant.Services
             // рішення все одно проходить через cooldown, настрій, соматику і Telegram guard.
             _spontaneousTimer = new System.Threading.Timer(_ => _ = GuardedSpontaneousAsync(), null,
                 TimeSpan.FromMinutes(3), TimeSpan.FromMinutes(10));
+
+            _screenAwarenessTimer = new System.Threading.Timer(_ => _ = GuardedScreenAwarenessAsync(), null,
+                TimeSpan.FromSeconds(45), TimeSpan.FromMinutes(1));
         }
 
         // Reentrancy guards: skip tick if previous still running.
@@ -320,6 +335,17 @@ namespace KokonoeAssistant.Services
             }
             try { await SafeSpontaneousCheckAsync(); }
             finally { Interlocked.Exchange(ref _spontaneousInFlight, 0); }
+        }
+
+        private async Task GuardedScreenAwarenessAsync()
+        {
+            if (Interlocked.CompareExchange(ref _screenAwarenessInFlight, 1, 0) != 0)
+            {
+                Log("ScreenAwareness skipped — previous tick still in flight");
+                return;
+            }
+            try { await SafeScreenAwarenessAsync(); }
+            finally { Interlocked.Exchange(ref _screenAwarenessInFlight, 0); }
         }
 
         public void SetTelegram(TelegramBotClient bot, long chatId)
@@ -2657,6 +2683,142 @@ namespace KokonoeAssistant.Services
             catch (Exception ex) { Log($"RefreshScreenContext: {ex.Message}"); }
         }
 
+        private async Task SafeScreenAwarenessAsync()
+        {
+            var settings = AppSettings.Load();
+            if (!settings.ScreenAwarenessEnabled) return;
+
+            var now = DateTime.Now;
+            var interval = Math.Clamp(settings.ScreenAwarenessIntervalMins, 1, 60);
+            if ((now - _state.LastScreenAwarenessAt).TotalMinutes < interval) return;
+
+            if (ShouldSuppressProactiveForSleep(now))
+            {
+                Log("ScreenAwareness suppressed: sleep/goodbye context is active");
+                return;
+            }
+
+            if (!await _bgLlmSemaphore.WaitAsync(0))
+            {
+                Log("ScreenAwareness skipped: background LLM is busy");
+                return;
+            }
+
+            try
+            {
+                byte[] screenshot;
+                try
+                {
+                    screenshot = await Task.Run(() => ServiceContainer.PcControl.TakeScreenshot());
+                }
+                catch (Exception ex)
+                {
+                    Log($"ScreenAwareness capture failed: {ex.Message}");
+                    return;
+                }
+
+                if (screenshot.Length == 0) return;
+
+                var activity = _screenActivityAnalyzer.AnalyzeScreenshot(screenshot);
+                var hash = _screenActivityAnalyzer.GenerateScreenshotHash(screenshot);
+                var prompt = ScreenAwareness.BuildVisionPrompt(
+                    activity,
+                    _state.LastScreenAwarenessSummary,
+                    _state.LastScreenAwarenessComment,
+                    now);
+
+                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(90));
+                var raw = await _llm.SendSystemVisionQueryAsync(prompt, screenshot, "image/jpeg", cts.Token);
+                var analysis = ScreenAwareness.Parse(raw);
+                var context = ScreenAwareness.BuildCompactContext(analysis, activity);
+
+                lock (_lock)
+                {
+                    _state.LastScreenAwarenessAt = now;
+                    _state.LastScreenAwarenessHash = hash;
+                    _state.LastScreenAwarenessSummary = analysis.SummaryUk;
+                    _state.LastScreenAwarenessActivity = analysis.ActivityUk;
+                    _state.LastScreenAwarenessWindow = activity.ActiveWindowTitle ?? "";
+                    _state.LastKnownUserActivity = string.IsNullOrWhiteSpace(analysis.SummaryUk)
+                        ? (activity.ActiveWindowTitle ?? "")
+                        : analysis.SummaryUk;
+                    if (!string.IsNullOrWhiteSpace(analysis.SummaryUk))
+                    {
+                        _state.Observations.Add($"screen {now:HH:mm}: {analysis.SummaryUk}");
+                        if (_state.Observations.Count > 40)
+                            _state.Observations.RemoveRange(0, _state.Observations.Count - 40);
+                    }
+                }
+
+                _cachedScreenContext = context;
+                _screenContextCachedAt = now;
+                _llm.ScreenCtx = context;
+                _stateEngine?.UpdateVisualMonitoringState(
+                    activity.IsActive ? "ACTIVE" : "IDLE",
+                    activity.ActiveWindowTitle ?? "",
+                    activity.PixelDifferencePercentage,
+                    false, "", 0.0,
+                    analysis.ActivityUk,
+                    activity.IsActive ? "Active" : "Idle");
+
+                var decision = ScreenAwareness.DecideComment(
+                    analysis,
+                    now,
+                    _state.LastScreenAwarenessCommentAt,
+                    _state.LastScreenAwarenessComment,
+                    settings.ScreenAwarenessCommentCooldownMins,
+                    settings.ScreenAwarenessSendComments);
+
+                if (!decision.ShouldSend)
+                {
+                    SaveState();
+                    Log($"ScreenAwareness observed: {analysis.SummaryUk} ({decision.Reason})");
+                    return;
+                }
+
+                if (!await SendTgAndLog(decision.Message, "screen_awareness"))
+                {
+                    SaveState();
+                    return;
+                }
+
+                _state.LastScreenAwarenessCommentAt = now;
+                _state.LastScreenAwarenessComment = decision.Message;
+                _state.LastSpontaneousAt = now;
+                _state.LastSpontaneousMsgs.Add(decision.Message[..Math.Min(100, decision.Message.Length)]);
+                if (_state.LastSpontaneousMsgs.Count > 5)
+                    _state.LastSpontaneousMsgs.RemoveAt(0);
+
+                try
+                {
+                    _chatRepo.InsertMessage(new ChatRepository.ChatMessage
+                    {
+                        Content = decision.Message,
+                        Role = "assistant",
+                        Author = "Kokonoe",
+                        Timestamp = now
+                    });
+                }
+                catch { }
+
+                OnNewMessage?.Invoke("assistant", decision.Message);
+                SaveState();
+                Log($"ScreenAwareness comment sent: {decision.Message[..Math.Min(80, decision.Message.Length)]}");
+            }
+            catch (OperationCanceledException)
+            {
+                Log("ScreenAwareness timed out");
+            }
+            catch (Exception ex)
+            {
+                Log($"ScreenAwareness error: {ex.Message}");
+            }
+            finally
+            {
+                _bgLlmSemaphore.Release();
+            }
+        }
+
         // ── DAILY BRIEFING ────────────────────────────────────────────
 
         /// <summary>Щоранковий брифінг — о 8:00 в TG</summary>
@@ -4683,6 +4845,7 @@ CHAT:
             _disposed = true;
             _thinkTimer.Dispose();
             _spontaneousTimer.Dispose();
+            _screenAwarenessTimer.Dispose();
             _bgLlmSemaphore.Dispose();
         }
     }

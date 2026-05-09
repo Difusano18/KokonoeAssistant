@@ -42,6 +42,8 @@ internal static class Program
             Run("Proactive context anchors silence to last topic", ProactiveContextAnchorsSilenceToLastTopic);
             Run("Proactive context stays silent after goodbye sleep", ProactiveContextStaysSilentAfterGoodbyeSleep);
             Run("Proactive fallback never exposes technical silence wording", ProactiveFallbackNeverExposesTechnicalSilenceWording);
+            Run("Screen awareness parses vision JSON", ScreenAwarenessParsesVisionJson);
+            Run("Screen awareness suppresses repeated comments", ScreenAwarenessSuppressesRepeatedComments);
             Run("Startup greeting avoids dead canned replies", StartupGreetingAvoidsDeadCannedReplies);
             Run("Startup greeting sanitizes dry return line", StartupGreetingSanitizesDryReturnLine);
             Run("Scenario simulation guards temporal continuity", ScenarioSimulationGuardsTemporalContinuity);
@@ -892,6 +894,55 @@ internal static class Program
         AssertTrue(!fallback.Contains("без другого кола"), "fallback must not expose guard mechanics");
         AssertTrue(!fallback.Contains("ще актуально"), "fallback must not quote a live chat line as a stale task");
         AssertTrue(!fallback.Contains("зайві символи"), "fallback must not use canned technical wording");
+    }
+
+    private static void ScreenAwarenessParsesVisionJson()
+    {
+        var service = new KokoScreenAwarenessService();
+        var parsed = service.Parse("""
+{
+  "summary_uk": "відкритий редактор коду, користувач працює над проектом",
+  "activity_uk": "active: змінився код",
+  "should_comment": true,
+  "comment_uk": "Ти нарешті дістався до коду. Не зламай його театрально.",
+  "importance": 0.7
+}
+""");
+
+        AssertTrue(parsed.ShouldComment, "vision JSON should preserve comment decision");
+        AssertTrue(parsed.SummaryUk.Contains("редактор") || parsed.SummaryUk.Contains("код"), "summary should be parsed");
+        AssertTrue(parsed.CommentUk.Contains("код"), "comment should be parsed");
+        AssertTrue(parsed.Importance > 0.6, "importance should be parsed");
+    }
+
+    private static void ScreenAwarenessSuppressesRepeatedComments()
+    {
+        var service = new KokoScreenAwarenessService();
+        var now = new DateTime(2026, 5, 9, 12, 0, 0);
+        var analysis = new KokoScreenAwarenessAnalysis
+        {
+            ShouldComment = true,
+            CommentUk = "Ти знову завис над тим самим кодом. Дуже несподівано.",
+            Importance = 0.8
+        };
+
+        var cooldown = service.DecideComment(
+            analysis,
+            now,
+            now.AddMinutes(-3),
+            "",
+            cooldownMinutes: 5,
+            commentsEnabled: true);
+        AssertTrue(!cooldown.ShouldSend, "screen comment should respect cooldown");
+
+        var repeated = service.DecideComment(
+            analysis,
+            now,
+            now.AddMinutes(-20),
+            "Ти знову завис над тим самим кодом. Дуже несподівано.",
+            cooldownMinutes: 5,
+            commentsEnabled: true);
+        AssertTrue(!repeated.ShouldSend, "screen comment should avoid repeating same line");
     }
 
     private static void StartupGreetingAvoidsDeadCannedReplies()
