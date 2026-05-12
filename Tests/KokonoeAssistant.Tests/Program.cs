@@ -39,6 +39,8 @@ internal static class Program
             Run("Timeline summarizes returned state", TimelineSummarizesReturnedState);
             Run("Post reply guard blocks stale sleep", PostReplyGuardBlocksStaleSleep);
             Run("Post reply guard rejects staged decoration", PostReplyGuardRejectsStagedDecoration);
+            Run("Post reply guard blocks duplicate replies", PostReplyGuardBlocksDuplicateReplies);
+            Run("Post reply guard protects short affection", PostReplyGuardProtectsShortAffection);
             Run("Proactive guard suppresses repeated generic silence", ProactiveGuardSuppressesRepeatedGenericSilence);
             Run("Proactive context anchors silence to last topic", ProactiveContextAnchorsSilenceToLastTopic);
             Run("Proactive context stays silent after goodbye sleep", ProactiveContextStaysSilentAfterGoodbyeSleep);
@@ -843,6 +845,43 @@ internal static class Program
         AssertTrue(!result.Passed, "guard should reject decorative staged replies for concrete timed intent");
         AssertTrue(result.ShouldRepair, "decorative staged reply should request repair");
         AssertTrue(result.Violations.Any(v => v.Contains("сценарна") || v.Contains("декоратив")), "violation should explain staged/decorative problem");
+    }
+
+    private static void PostReplyGuardBlocksDuplicateReplies()
+    {
+        var now = new DateTime(2026, 5, 12, 19, 16, 0);
+        var state = new KokoInternalState();
+        var repeated = "*коротка пауза*\n\nСпробували зайти з іншого боку, коли факти стали занадто болючими? Ризикливий хід. Але... я це зафіксувала. Тепер повернися в реальність.";
+        var messages = new[]
+        {
+            new ChatRepository.ChatMessage { Role = "assistant", Content = repeated, Timestamp = now.AddMinutes(-6) },
+            new ChatRepository.ChatMessage { Role = "user", Content = "що", Timestamp = now }
+        };
+        var timeline = new KokoConversationTimelineEngine().Build(messages, state, now, "що");
+
+        var result = new KokoPostReplyGuard().Evaluate("що", repeated, state, messages, timeline, now);
+
+        AssertTrue(!result.Passed, "guard should reject exact repeated assistant reply");
+        AssertTrue(!string.IsNullOrWhiteSpace(result.HardReplacement), "duplicate reply should use hard replacement");
+        AssertTrue(result.Violations.Any(v => v.Contains("повторює")), "violation should mention duplicate");
+    }
+
+    private static void PostReplyGuardProtectsShortAffection()
+    {
+        var now = new DateTime(2026, 5, 12, 19, 10, 0);
+        var state = new KokoInternalState();
+        var badReply = "*коротка пауза*\n\nСпробували зайти з іншого боку, коли факти стали занадто болючими? Ризикливий хід. Але... я це зафіксувала. Тепер повернися в реальність.";
+        var messages = new[]
+        {
+            new ChatRepository.ChatMessage { Role = "user", Content = "люблю", Timestamp = now }
+        };
+        var timeline = new KokoConversationTimelineEngine().Build(messages, state, now, "люблю");
+
+        var result = new KokoPostReplyGuard().Evaluate("люблю", badReply, state, messages, timeline, now);
+
+        AssertTrue(!result.Passed, "guard should reject stale repair text for short affection");
+        AssertTrue(!string.IsNullOrWhiteSpace(result.HardReplacement), "short affection should get hard replacement instead of repair loop");
+        AssertTrue(result.Violations.Any(v => v.Contains("емоційн")), "violation should mention emotional short reply");
     }
 
     private static void ProactiveGuardSuppressesRepeatedGenericSilence()

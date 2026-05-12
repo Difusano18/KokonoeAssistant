@@ -67,11 +67,29 @@ namespace KokonoeAssistant.Services
             if (LooksGeneric(userText, reply))
                 violations.Add("відповідь занадто шаблонна для наявного контексту");
 
+            var shortAffection = IsShortAffection(userLower);
+            var shortConfusion = IsShortConfusion(userLower);
+            if (shortAffection && LooksLikeMisreadAffection(replyLower))
+                violations.Add("коротку емоційну репліку прочитано як технічний випад або факт");
+            if (shortConfusion && LooksLikeHostileStaleRepair(replyLower))
+                violations.Add("відповідь на коротке уточнення продовжує стару зламану репліку");
+            if (RepeatsRecentAssistant(reply, messages))
+                violations.Add("відповідь дослівно повторює нещодавню репліку");
+
             if (violations.Count == 0)
                 return Pass("post-reply guard passed");
 
             var hardReplacement = violations.Any(v => v.Contains("спати", StringComparison.OrdinalIgnoreCase))
                 ? "Стоп. Команду \"спи\" знято: ти вже повернувся. Кажи, скільки реально поспав, і я перестану вдавати годинник без батарейки."
+                : null;
+            hardReplacement ??= shortAffection
+                ? "Почула. Не роздувай, але записала: це було не службове повідомлення."
+                : null;
+            hardReplacement ??= shortConfusion
+                ? "Так, це була зламана відповідь. Скидаю контекст: постав нормальне питання, і цього разу без театру з повтором."
+                : null;
+            hardReplacement ??= violations.Any(v => v.Contains("дослівно повторює", StringComparison.OrdinalIgnoreCase))
+                ? "Залипла на попередній репліці. Скидаю повтор: сформулюй ще раз, що саме треба, і я відповім по суті."
                 : null;
 
             return new KokoPostReplyGuardResult
@@ -141,6 +159,58 @@ Timeline:
             if (ContainsAny((userText ?? "").ToLowerInvariant(), "курс", "спати", "прокин", "проект", "obsidian"))
                 return ContainsAny(lower, "як справи", "що нового", "ага", "ясно", "добре");
             return false;
+        }
+
+        private static bool IsShortAffection(string userLower)
+        {
+            var normalized = NormalizeCompact(userLower);
+            return normalized is "люблю" or "люблютебе" or "кохаю" or "кохаютебе"
+                || normalized is "сумую" or "обіймаю";
+        }
+
+        private static bool IsShortConfusion(string userLower)
+        {
+            var normalized = NormalizeCompact(userLower);
+            return normalized is "що" or "шо" or "чого" or "всм" or "всенсі" or "вчомусенс";
+        }
+
+        private static bool LooksLikeMisreadAffection(string replyLower)
+            => ContainsAny(replyLower, "факт", "зафіксу", "випад", "болюч", "ризиклив", "реальн", "припини");
+
+        private static bool LooksLikeHostileStaleRepair(string replyLower)
+            => ContainsAny(replyLower, "щойно сказала", "зафіксувала", "твій випад", "короткий замик", "припини це");
+
+        private static bool RepeatsRecentAssistant(string reply, IReadOnlyList<ChatRepository.ChatMessage> messages)
+        {
+            var normalizedReply = NormalizeForRepeat(reply);
+            if (normalizedReply.Length < 24) return false;
+
+            return messages
+                .Where(m => string.Equals(m.Role, "assistant", StringComparison.OrdinalIgnoreCase))
+                .OrderByDescending(m => m.Timestamp)
+                .Take(5)
+                .Any(m =>
+                {
+                    var previous = NormalizeForRepeat(m.Content);
+                    if (previous.Length < 24) return false;
+                    if (previous == normalizedReply) return true;
+                    var min = Math.Min(previous.Length, normalizedReply.Length);
+                    var max = Math.Max(previous.Length, normalizedReply.Length);
+                    return min >= 60 && max - min <= 20 &&
+                           previous[..min].Equals(normalizedReply[..min], StringComparison.Ordinal);
+                });
+        }
+
+        private static string NormalizeCompact(string text)
+            => new(text.Where(char.IsLetterOrDigit).ToArray());
+
+        private static string NormalizeForRepeat(string text)
+        {
+            var chars = text
+                .ToLowerInvariant()
+                .Where(c => !char.IsWhiteSpace(c))
+                .ToArray();
+            return new string(chars);
         }
 
         private static bool LooksOverStaged(string reply)
