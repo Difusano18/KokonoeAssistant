@@ -105,12 +105,7 @@ JSON schema:
             bool commentsEnabled,
             bool screenChanged = true,
             bool isActive = true,
-            string activeWindowTitle = "",
-            DateTime lastJabAt = default,
-            DateTime jabDate = default,
-            int jabCountToday = 0,
-            int jabCooldownMinutes = 60,
-            int dailyJabLimit = 4)
+            string activeWindowTitle = "")
         {
             if (!commentsEnabled)
                 return No("comments disabled", "silence");
@@ -142,19 +137,6 @@ JSON schema:
             var cooldown = Math.Clamp(passiveChatWindow ? Math.Max(cooldownMinutes, 30) : cooldownMinutes, 1, 180);
             if ((now - lastCommentAt).TotalMinutes < cooldown)
                 return No("comment cooldown");
-
-            if (kind == "jab")
-            {
-                dailyJabLimit = Math.Clamp(dailyJabLimit, 0, 12);
-                jabCooldownMinutes = Math.Clamp(jabCooldownMinutes, 15, 360);
-
-                var todayCount = jabDate.Date == now.Date ? jabCountToday : 0;
-                if (dailyJabLimit <= 0 || todayCount >= dailyJabLimit)
-                    return No("daily jab limit", "jab");
-
-                if ((now - lastJabAt).TotalMinutes < jabCooldownMinutes)
-                    return No("jab cooldown", "jab");
-            }
 
             if (LooksTechnical(comment))
                 return No("technical wording");

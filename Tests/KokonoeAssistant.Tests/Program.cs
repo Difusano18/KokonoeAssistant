@@ -47,7 +47,6 @@ internal static class Program
             Run("Screen awareness suppresses repeated comments", ScreenAwarenessSuppressesRepeatedComments);
             Run("Screen awareness redacts private identifiers", ScreenAwarenessRedactsPrivateIdentifiers);
             Run("Screen awareness allows rare passive jab", ScreenAwarenessAllowsRarePassiveJab);
-            Run("Screen awareness enforces daily jab limit", ScreenAwarenessEnforcesDailyJabLimit);
             Run("Screen awareness blocks sensitive screens", ScreenAwarenessBlocksSensitiveScreens);
             Run("Startup greeting avoids dead canned replies", StartupGreetingAvoidsDeadCannedReplies);
             Run("Startup greeting sanitizes dry return line", StartupGreetingSanitizesDryReturnLine);
@@ -1016,49 +1015,11 @@ internal static class Program
             commentsEnabled: true,
             screenChanged: false,
             isActive: false,
-            activeWindowTitle: "Telegram",
-            lastJabAt: now.AddHours(-2),
-            jabDate: now.Date,
-            jabCountToday: 0,
-            jabCooldownMinutes: 60,
-            dailyJabLimit: 4);
+            activeWindowTitle: "Telegram");
 
         AssertTrue(decision.ShouldSend, "passive chat should allow a rare jab");
         AssertTrue(decision.CountsAsJab, "passive chat comment should be counted as a jab");
         AssertEqual("jab", decision.Kind, "passive chat should be classified as jab");
-    }
-
-    private static void ScreenAwarenessEnforcesDailyJabLimit()
-    {
-        var service = new KokoScreenAwarenessService();
-        var now = new DateTime(2026, 5, 12, 13, 0, 0);
-        var analysis = new KokoScreenAwarenessAnalysis
-        {
-            SummaryUk = "youtube idle scroll",
-            ActivityUk = "idle same",
-            ShouldComment = true,
-            CommentUk = "Ще один екран без руху. Справді видатна стратегія.",
-            Importance = 0.8
-        };
-
-        var decision = service.DecideComment(
-            analysis,
-            now,
-            now.AddHours(-2),
-            "",
-            cooldownMinutes: 30,
-            commentsEnabled: true,
-            screenChanged: false,
-            isActive: false,
-            activeWindowTitle: "YouTube",
-            lastJabAt: now.AddHours(-2),
-            jabDate: now.Date,
-            jabCountToday: 4,
-            jabCooldownMinutes: 60,
-            dailyJabLimit: 4);
-
-        AssertTrue(!decision.ShouldSend, "daily jab limit should suppress more passive jabs");
-        AssertEqual("daily jab limit", decision.Reason, "decision should expose jab limit reason");
     }
 
     private static void ScreenAwarenessBlocksSensitiveScreens()

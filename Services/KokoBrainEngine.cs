@@ -146,9 +146,6 @@ namespace KokonoeAssistant.Services
         public string LastScreenAwarenessActivity { get; set; } = "";
         public string LastScreenAwarenessComment { get; set; } = "";
         public string LastScreenAwarenessWindow { get; set; } = "";
-        public DateTime LastScreenAwarenessJabAt { get; set; } = DateTime.MinValue;
-        public DateTime ScreenAwarenessJabDate { get; set; } = DateTime.MinValue;
-        public int ScreenAwarenessJabCount { get; set; }
         public DateTime ScreenAwarenessObserveOnlyUntil { get; set; } = DateTime.MinValue;
     }
 
@@ -2796,12 +2793,7 @@ namespace KokonoeAssistant.Services
                     settings.ScreenAwarenessSendComments && now >= _state.ScreenAwarenessObserveOnlyUntil,
                     screenChanged,
                     activity.IsActive,
-                    activity.ActiveWindowTitle ?? "",
-                    _state.LastScreenAwarenessJabAt,
-                    _state.ScreenAwarenessJabDate,
-                    _state.ScreenAwarenessJabDate.Date == now.Date ? _state.ScreenAwarenessJabCount : 0,
-                    settings.ScreenAwarenessJabCooldownMins,
-                    settings.ScreenAwarenessDailyJabLimit);
+                    activity.ActiveWindowTitle ?? "");
 
                 if (!decision.ShouldSend)
                 {
@@ -2818,16 +2810,6 @@ namespace KokonoeAssistant.Services
 
                 _state.LastScreenAwarenessCommentAt = now;
                 _state.LastScreenAwarenessComment = decision.Message;
-                if (decision.CountsAsJab)
-                {
-                    if (_state.ScreenAwarenessJabDate.Date != now.Date)
-                    {
-                        _state.ScreenAwarenessJabDate = now.Date;
-                        _state.ScreenAwarenessJabCount = 0;
-                    }
-                    _state.LastScreenAwarenessJabAt = now;
-                    _state.ScreenAwarenessJabCount++;
-                }
                 _state.LastSpontaneousAt = now;
                 _state.LastSpontaneousMsgs.Add(decision.Message[..Math.Min(100, decision.Message.Length)]);
                 if (_state.LastSpontaneousMsgs.Count > 5)
