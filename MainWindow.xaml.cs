@@ -6273,9 +6273,9 @@ tags: [kokonoe, dashboard, live]
 
             try
             {
-                // Використовуємо ІЗОЛЬОВАНИЙ режим — без доступу до емоцій, пам'яті, особистих даних
-                // SendTgAsync має власний system prompt без емоцій та особистих даних
-                var raw = await _llm.SendTgAsync(prompt, _tgUserCts.Token);
+                try { ServiceContainer.BrainEngine?.ProcessUserMessage($"[TG {msg.Sender}]: {msg.Text}"); } catch { }
+                var sharedContext = ServiceContainer.BrainEngine?.BuildUnifiedExternalContext("telegram") ?? "";
+                var raw = await _llm.SendTgAsync(prompt, sharedContext, _tgUserCts.Token);
                 if (string.IsNullOrWhiteSpace(raw)) return;
                 var reply = CleanTgReply(raw);
 

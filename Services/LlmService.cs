@@ -2356,13 +2356,14 @@ Kokonoe: Стоп. Де ти зараз. Коли востаннє їв.
 
         public async Task<string> SendTgAsync(
             string userText,
+            string? extraContext = null,
             CancellationToken ct = default)
         {
-            // Telegram-режим: БЕЗ історії, БЕЗ інструментів, БЕЗ емоцій
-            // Кожне повідомлення — окремий запит без контексту
-
             var dateStamp = $"\n\n=== ДАТА/ЧАС ===\nСьогодні: {DateTime.Now:dddd, dd MMMM yyyy}, {DateTime.Now:HH:mm}";
-            var systemContent = TG_SYSTEM_PROMPT + dateStamp;
+            var continuity = string.IsNullOrWhiteSpace(extraContext)
+                ? ""
+                : "\n\n=== SHARED CONTINUITY ===\n" + extraContext.Trim();
+            var systemContent = TG_SYSTEM_PROMPT + dateStamp + continuity;
 
             // Формуємо простий запит без історії
             var messages = new List<object>
@@ -2384,7 +2385,7 @@ Kokonoe: Стоп. Де ти зараз. Коли востаннє їв.
                     model = targetModel,
                     max_tokens = 512,
                     temperature = 0.5,
-                    system = TG_SYSTEM_PROMPT,
+                    system = systemContent,
                     messages = new[] { new { role = "user", content = userText } }
                 };
             }

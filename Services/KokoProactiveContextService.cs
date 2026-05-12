@@ -13,6 +13,9 @@ namespace KokonoeAssistant.Services
         public string AnchorUk { get; set; } = "";
         public string ActiveIntentUk { get; set; } = "";
         public bool ShouldStaySilentForSleep { get; set; }
+        public bool HasNaturalTrigger { get; set; }
+        public int TriggerScore { get; set; }
+        public string TriggerReasonUk { get; set; } = "";
         public int AssistantPingsAfterLastUser { get; set; }
         public string[] RecentAssistantPings { get; set; } = Array.Empty<string>();
         public string PromptBlock { get; set; } = "";
@@ -56,6 +59,10 @@ namespace KokonoeAssistant.Services
             };
             frame.SilenceTextUk = FormatDuration(TimeSpan.FromMinutes(frame.SilenceMinutes));
             frame.AnchorUk = BuildAnchor(frame.LastUserText, activeIntent);
+            var trigger = EvaluateNaturalTrigger(frame, state, now, activeIntent);
+            frame.HasNaturalTrigger = trigger.Score >= 2;
+            frame.TriggerScore = trigger.Score;
+            frame.TriggerReasonUk = trigger.Reason;
             frame.ShouldStaySilentForSleep =
                 activeIntent?.Kind == "sleep" ||
                 (LooksLikeSleepOrGoodbye(frame.LastUserText.ToLowerInvariant()) && frame.SilenceMinutes < 12 * 60);
@@ -68,6 +75,8 @@ namespace KokonoeAssistant.Services
             var text = (reply ?? "").Trim();
             if (frame.ShouldStaySilentForSleep)
                 return Fail("sleep/goodbye context should stay silent", "[мовчання]");
+            if (!frame.HasNaturalTrigger && level.StartsWith("silence", StringComparison.OrdinalIgnoreCase))
+                return Fail("no natural trigger", "[мовчання]");
             if (string.IsNullOrWhiteSpace(text))
                 return Fail("empty", BuildFallback(frame, level));
 
@@ -152,6 +161,39 @@ PROACTIVE CONTEXT
             if (ContainsAny(lower, "код", "проект", "тест", "коміт", "github", "obsidian"))
                 return "проект";
             return Trim(lastUserText, 90);
+        }
+
+        private static (int Score, string Reason) EvaluateNaturalTrigger(
+            KokoProactiveContextFrame frame,
+            KokoInternalState state,
+            DateTime now,
+            ShortTermIntent? activeIntent)
+        {
+            var score = 0;
+            var reasons = new List<string>();
+            if (activeIntent != null && now >= activeIntent.FollowUpAt)
+            {
+                score += 3;
+                reasons.Add($"follow-up: {activeIntent.Kind}");
+            }
+            if (!string.IsNullOrWhiteSpace(frame.AnchorUk))
+            {
+                score += 1;
+                reasons.Add("anchored context");
+            }
+            if (frame.SilenceMinutes >= 120)
+            {
+                score += frame.SilenceMinutes >= 360 ? 2 : 1;
+                reasons.Add("meaningful silence");
+            }
+            if (state.PendingThoughts.Count > 0 || state.CuriosityQueue.Count > 0)
+            {
+                score += 1;
+                reasons.Add("unfinished thought");
+            }
+            if (frame.AssistantPingsAfterLastUser > 0)
+                score -= 2;
+            return (Math.Max(0, score), string.Join("; ", reasons));
         }
 
         private static bool LooksStaged(string lower)

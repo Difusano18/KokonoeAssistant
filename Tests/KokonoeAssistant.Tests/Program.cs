@@ -60,8 +60,12 @@ internal static class Program
             Run("Obsidian memory duplicate cleanup", ObsidianMemoryDuplicateCleanup);
             Run("Obsidian memory review suggestions", ObsidianMemoryReviewSuggestions);
             Run("Obsidian normalizes malformed frontmatter", ObsidianNormalizesMalformedFrontmatter);
+            Run("Obsidian vault doctor repairs phantom graph links", ObsidianVaultDoctorRepairsPhantomGraphLinks);
             Run("Obsidian rebuild links preserves frontmatter", ObsidianRebuildLinksPreservesFrontmatter);
             Run("Obsidian rebuild links skips suppressed actor names", ObsidianRebuildLinksSkipsSuppressedActorNames);
+            Run("State reconciliation closes stale intent from external activity", StateReconciliationClosesStaleIntentFromExternalActivity);
+            Run("Screen awareness classifies modes", ScreenAwarenessClassifiesModes);
+            Run("Proactive context requires natural trigger for silence ping", ProactiveContextRequiresNaturalTriggerForSilencePing);
             Run("Obsidian preflight context loads vault before reply", ObsidianPreflightContextLoadsVaultBeforeReply);
 
             Console.WriteLine($"PASS {_passed} tests");
@@ -1487,6 +1491,93 @@ created: [[2026-05-12]] 13:40
         AssertTrue(normalized.Contains("date: 2026-05-12"), "normalizer should turn wiki-link date into scalar date");
         AssertTrue(normalized.Contains("created: 2026-05-12 13:40"), "normalizer should preserve created time while removing wiki link");
         AssertTrue(!normalized.Contains("[["), "frontmatter normalizer should remove wiki links from metadata");
+    }
+
+    private static void ObsidianVaultDoctorRepairsPhantomGraphLinks()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "KokonoeAssistant.Tests", "vault-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            var obsidian = new ObsidianMcpService(dir);
+            File.WriteAllText(Path.Combine(dir, "Kokonoe.md"), "");
+            obsidian.WriteNote("Daily.md", "");
+            obsidian.WriteNote("Notes/sample.md", """
+---
+type: chat-log
+tags: [[[kokonoe]], chat]
+---
+
+# Sample
+
+[[Kokonoe]] saw [[Daily/]] and [[MissingTarget]].
+""");
+
+            var report = obsidian.RunVaultDoctor(repair: true);
+            var sample = obsidian.ReadNote("Notes/sample.md") ?? "";
+
+            AssertTrue(report.SuppressedActorLinkCount == 1, "doctor should detect suppressed actor links");
+            AssertTrue(report.FolderWikiLinkCount == 1, "doctor should detect folder wiki-links");
+            AssertTrue(!File.Exists(Path.Combine(dir, "Kokonoe.md")), "doctor should delete empty root Kokonoe note");
+            AssertTrue(File.Exists(Path.Combine(dir, "Daily.md")), "doctor should keep/fill non-root empty notes");
+            AssertTrue(!sample.Contains("[[Kokonoe]]"), "doctor should remove Kokonoe wiki-link");
+            AssertTrue(sample.Contains("`Daily/`"), "doctor should convert folder wiki-link to code path");
+            AssertTrue(sample.Contains("tags: [kokonoe, chat]"), "doctor should normalize malformed frontmatter");
+        }
+        finally
+        {
+            try { Directory.Delete(dir, recursive: true); } catch { }
+        }
+    }
+
+    private static void StateReconciliationClosesStaleIntentFromExternalActivity()
+    {
+        var now = DateTime.Today.AddHours(14);
+        var state = new KokoInternalState();
+        state.ShortTermIntents.Add(new ShortTermIntent
+        {
+            Kind = "course",
+            Summary = "пішов на курси",
+            CreatedAt = now.AddHours(-3),
+            ExpectedUntil = now.AddHours(-1),
+            FollowUpAt = now.AddMinutes(-30)
+        });
+
+        var result = new KokoStateFreshnessService().Refresh(
+            state,
+            Array.Empty<ChatRepository.ChatMessage>(),
+            now,
+            new KokoStateReconciliationSignals
+            {
+                Channel = "telegram",
+                ScreenMode = "telegram",
+                ScreenSummary = "активний чат",
+                LastDesktopActivityAt = now.AddMinutes(-5)
+            });
+
+        AssertTrue(result.ResolvedIntentCount == 1, "external activity should close stale course intent");
+        AssertTrue(state.ShortTermIntents[0].ResolvedAt.HasValue, "intent should be resolved");
+    }
+
+    private static void ScreenAwarenessClassifiesModes()
+    {
+        AssertEqual("coding", KokoScreenAwarenessService.NormalizeMode("", "Visual Studio build exception"), "coding mode");
+        AssertEqual("obsidian", KokoScreenAwarenessService.NormalizeMode("", "Obsidian graph vault"), "obsidian mode");
+        AssertEqual("private", KokoScreenAwarenessService.NormalizeMode("", "API key token settings"), "private mode");
+    }
+
+    private static void ProactiveContextRequiresNaturalTriggerForSilencePing()
+    {
+        var now = DateTime.Today.AddHours(12);
+        var messages = new[]
+        {
+            new ChatRepository.ChatMessage { Role = "user", Content = "ок", Timestamp = now.AddMinutes(-30) }
+        };
+        var frame = new KokoProactiveContextService().Build(messages, new KokoInternalState(), now);
+        var check = new KokoProactiveContextService().Check("Тиша якась.", frame, "silence_l1");
+
+        AssertTrue(!frame.HasNaturalTrigger, "short weak silence should not be a natural trigger");
+        AssertTrue(!check.Passed, "silence ping should be blocked without natural trigger");
     }
 
     private static void ObsidianPreflightContextLoadsVaultBeforeReply()

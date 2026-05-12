@@ -14,12 +14,21 @@ namespace KokonoeAssistant.Services
         public string SummaryUk { get; set; } = "";
     }
 
+    public sealed class KokoStateReconciliationSignals
+    {
+        public string Channel { get; set; } = "";
+        public string ScreenMode { get; set; } = "";
+        public string ScreenSummary { get; set; } = "";
+        public DateTime LastDesktopActivityAt { get; set; } = DateTime.MinValue;
+    }
+
     public sealed class KokoStateFreshnessService
     {
         public KokoStateFreshnessResult Refresh(
             KokoInternalState state,
             IReadOnlyList<ChatRepository.ChatMessage> messages,
-            DateTime now)
+            DateTime now,
+            KokoStateReconciliationSignals? signals = null)
         {
             var result = new KokoStateFreshnessResult();
 
@@ -33,6 +42,9 @@ namespace KokonoeAssistant.Services
                 result.ResolvedIntentCount += ResolveFromLatestUserSignal(state, lastUser, now);
                 result.ResolvedIntentCount += ResolveStaleIntentFromLaterUserActivity(state, lastUser, now);
             }
+
+            if (signals != null)
+                result.ResolvedIntentCount += ResolveFromExternalSignals(state, signals, now);
 
             result.ExpiredIntentCount += ExpireOverdueIntents(state, now);
 
@@ -51,6 +63,38 @@ namespace KokonoeAssistant.Services
             result.Changed = result.ResolvedIntentCount > 0 || result.ExpiredIntentCount > 0 || result.RemovedIntentCount > 0;
             result.SummaryUk = BuildSummary(result, lastUser, now);
             return result;
+        }
+
+        private static int ResolveFromExternalSignals(KokoInternalState state, KokoStateReconciliationSignals signals, DateTime now)
+        {
+            var mode = (signals.ScreenMode ?? "").ToLowerInvariant();
+            var summary = (signals.ScreenSummary ?? "").ToLowerInvariant();
+            var channel = (signals.Channel ?? "").ToLowerInvariant();
+            var desktopActive = signals.LastDesktopActivityAt > DateTime.MinValue &&
+                                now - signals.LastDesktopActivityAt < TimeSpan.FromMinutes(20);
+            var activeNonAwayScreen = desktopActive || ContainsAny(mode, "coding", "obsidian", "telegram", "browser", "game", "desktop") ||
+                                      ContainsAny(summary, "код", "obsidian", "telegram", "браузер", "гра", "вікно", "редактор");
+
+            if (!activeNonAwayScreen && channel != "telegram" && channel != "desktop")
+                return 0;
+
+            var count = 0;
+            foreach (var intent in state.ShortTermIntents.Where(i => !i.ResolvedAt.HasValue).ToList())
+            {
+                if (intent.Kind == "sleep" && !ContainsAny(mode + " " + summary, "telegram", "desktop", "chat"))
+                    continue;
+
+                if (now < intent.ExpectedUntil.AddMinutes(10) && !desktopActive)
+                    continue;
+
+                if (intent.Kind is "course" or "return_home" or "errand" or "walk" or "busy" or "work" or "sleep")
+                {
+                    intent.ResolvedAt = now;
+                    intent.ResolutionText = $"auto-state-reconcile: {channel}/{mode} activity superseded stale {intent.Kind} intent";
+                    count++;
+                }
+            }
+            return count;
         }
 
         private static int ResolveFromLatestUserSignal(KokoInternalState state, ChatRepository.ChatMessage lastUser, DateTime now)
@@ -157,7 +201,7 @@ namespace KokonoeAssistant.Services
 
         private static bool LooksLikeReturnOrWakeSignal(string lower)
             => ContainsAny(lower,
-                "прокин", "проснув", "поспав", "встав", "я тут",
+                "прокин", "проснув", "поспав", "встав", "я тут","ранку",
                 "вернув", "повернув", "прийшов", "прийшла", "вже вдома",
                 "закінчив", "закінчились", "закінчилося", "приїхав", "доїхав");
 

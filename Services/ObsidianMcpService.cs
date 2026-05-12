@@ -399,6 +399,77 @@ tags: [{SanitizeTagsLine(tagsLine)}]
             };
         }
 
+        public VaultDoctorReport RunVaultDoctor(bool repair = false)
+        {
+            var report = new VaultDoctorReport { RanAt = DateTime.Now, RepairApplied = repair };
+            var files = SafeGetFiles(_vault).Where(f => !f.Contains("kokonoe-data")).ToList();
+            var noteTargets = BuildWikiTargetIndex(files);
+            var utf8 = new UTF8Encoding(false);
+
+            foreach (var file in files)
+            {
+                var rel = Path.GetRelativePath(_vault, file).Replace('\\', '/');
+                string raw;
+                try { raw = File.ReadAllText(file, Encoding.UTF8); }
+                catch { continue; }
+
+                var bodyOnly = System.Text.RegularExpressions.Regex.Replace(
+                    raw.Trim(), @"^---[\s\S]*?---\s*", "").Trim();
+                if (string.IsNullOrWhiteSpace(bodyOnly))
+                    report.EmptyMarkdownFiles.Add(rel);
+
+                var folderLinks = System.Text.RegularExpressions.Regex.Matches(raw, @"\[\[([^\]|#]+/)\]\]").Count;
+                if (folderLinks > 0)
+                    report.FolderWikiLinks[rel] = folderLinks;
+
+                var actorLinks = System.Text.RegularExpressions.Regex.Matches(
+                    raw, @"\[\[Kokonoe(?:\|[^\]]+)?\]\]", System.Text.RegularExpressions.RegexOptions.IgnoreCase).Count;
+                if (actorLinks > 0)
+                    report.SuppressedActorLinks[rel] = actorLinks;
+
+                if (LooksLikeMojibake(raw))
+                    report.MojibakeSuspects.Add(rel);
+
+                var normalized = NormalizeFrontmatter(raw);
+                if (normalized != raw && HasFrontmatterShape(raw))
+                    report.FrontmatterIssues.Add(rel);
+
+                foreach (System.Text.RegularExpressions.Match match in System.Text.RegularExpressions.Regex.Matches(raw, @"\[\[([^\]|#]+)"))
+                {
+                    var target = match.Groups[1].Value.Trim();
+                    if (string.IsNullOrWhiteSpace(target) || target.EndsWith("/", StringComparison.Ordinal))
+                        continue;
+                    if (!noteTargets.Contains(NormalizeWikiTarget(target)))
+                        report.MissingWikiTargets[target] = report.MissingWikiTargets.TryGetValue(target, out var c) ? c + 1 : 1;
+                }
+
+                if (!repair)
+                    continue;
+
+                var repaired = normalized;
+                repaired = System.Text.RegularExpressions.Regex.Replace(
+                    repaired,
+                    @"\[\[Kokonoe(?:\|([^\]]+))?\]\]",
+                    m => m.Groups[1].Success ? m.Groups[1].Value : "Kokonoe",
+                    System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+                repaired = System.Text.RegularExpressions.Regex.Replace(
+                    repaired,
+                    @"\[\[([^\]|#]+/)\]\]",
+                    m => $"`{m.Groups[1].Value}`");
+
+                if (repaired != raw)
+                {
+                    File.WriteAllText(file, repaired, utf8);
+                    report.RepairedFiles.Add(rel);
+                }
+            }
+
+            if (repair)
+                RepairEmptyMarkdownFiles(report, utf8);
+
+            return report;
+        }
+
         /// <summary>
         /// Видаляє порожні нотатки (без реального контенту), повертає список видалених.
         /// Захищає нотатки автоматично за метаданими — без hardcoded назв:
@@ -452,6 +523,88 @@ tags: [{SanitizeTagsLine(tagsLine)}]
         /// Перевіряє стан vault і повертає статус ініціалізації.
         /// НЕ створює hardcoded нотатки — LLM сама вирішує що і як назвати.
         /// </summary>
+        private HashSet<string> BuildWikiTargetIndex(List<string> files)
+        {
+            var targets = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var file in files)
+            {
+                var rel = Path.GetRelativePath(_vault, file).Replace('\\', '/');
+                var withoutExt = Path.ChangeExtension(rel, null)?.Replace('\\', '/') ?? rel;
+                var title = Path.GetFileNameWithoutExtension(file);
+                targets.Add(NormalizeWikiTarget(withoutExt));
+                targets.Add(NormalizeWikiTarget(title));
+            }
+            return targets;
+        }
+
+        private static string NormalizeWikiTarget(string target)
+        {
+            target = target.Trim().Replace('\\', '/');
+            if (target.EndsWith(".md", StringComparison.OrdinalIgnoreCase))
+                target = target[..^3];
+            return target.TrimEnd('/').ToLowerInvariant();
+        }
+
+        private static bool HasFrontmatterShape(string raw)
+        {
+            if (string.IsNullOrWhiteSpace(raw)) return false;
+            if (raw.StartsWith("---", StringComparison.Ordinal)) return true;
+            var idx = raw.IndexOf("---", StringComparison.Ordinal);
+            return idx > 0 && idx < 8;
+        }
+
+        private static bool LooksLikeMojibake(string raw)
+            => System.Text.RegularExpressions.Regex.IsMatch(raw, @"(Рџ|РЅ|Р°|Рё|СЏ|СЊ|С–|Сѓ|С‚|СЃ|вЂ|Â|Ð|Ñ|�)");
+
+        private static string SanitizeTagValue(string value)
+        {
+            value = (value ?? "").Trim().ToLowerInvariant();
+            value = System.Text.RegularExpressions.Regex.Replace(value, @"[^\p{L}\p{Nd}/_-]+", "-");
+            value = value.Trim('-', '/', '_');
+            return string.IsNullOrWhiteSpace(value) ? "index" : value;
+        }
+
+        private void RepairEmptyMarkdownFiles(VaultDoctorReport report, Encoding encoding)
+        {
+            foreach (var rel in report.EmptyMarkdownFiles.ToList())
+            {
+                var full = Resolve(rel);
+                if (!File.Exists(full)) continue;
+                try
+                {
+                    if (new FileInfo(full).Length > 0)
+                        continue;
+
+                    if (string.Equals(rel, "Kokonoe.md", StringComparison.OrdinalIgnoreCase))
+                    {
+                        File.Delete(full);
+                        report.DeletedEmptyFiles.Add(rel);
+                        continue;
+                    }
+
+                    var title = Path.GetFileNameWithoutExtension(rel);
+                    var tag = SanitizeTagValue(title).ToLowerInvariant();
+                    var content = $"""
+---
+type: index
+tags: [{tag}, index]
+created: {DateTime.Now:yyyy-MM-dd}
+---
+
+# {title}
+
+Індекс-нотатка створена автоматично, бо на цей вузол уже посилався vault. Порожні вузли на графі залишимо для людей, які люблять дивитись у чорну діру.
+""";
+                    File.WriteAllText(full, content, encoding);
+                    report.RepairedFiles.Add(rel);
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"[ObsidianMcp] RepairEmptyMarkdownFiles failed for {rel}: {ex.Message}");
+                }
+            }
+        }
+
         public VaultInitStatus GetVaultInitStatus()
         {
             var allNotes = ListNotes();
@@ -549,6 +702,7 @@ tags: [{SanitizeTagsLine(tagsLine)}]
             }
 
             var notesBefore = ListNotes();
+            var doctor = RunVaultDoctor(repair: true);
             var status = GetVaultStatus();
             var init = GetVaultInitStatus();
             var modifiedToday = GetNotesModifiedToday()
@@ -565,7 +719,7 @@ tags: [{SanitizeTagsLine(tagsLine)}]
             UpsertManagedNote("Kokonoe/Vault Index.md", BuildVaultIndex(status, init, folders, modifiedToday), result);
             UpsertManagedNote("Kokonoe/Architecture/Manifest.md", BuildVaultManifest(notesBefore, folders), result);
             UpsertManagedNote("Kokonoe/Architecture/Map.md", BuildVaultMap(graph), result);
-            UpsertManagedNote("Kokonoe/Architecture/Health.md", BuildVaultHealth(status, init, isolated), result);
+            UpsertManagedNote("Kokonoe/Architecture/Health.md", BuildVaultHealth(status, init, isolated, doctor), result);
             UpsertManagedNote("Kokonoe/Architecture/Backlog.md", BuildVaultBacklog(status, init, isolated), result);
             UpsertManagedNote("Kokonoe/Architecture/Language Policy.md", BuildVaultLanguagePolicy(), result);
             UpsertManagedNote("Kokonoe/Memory/Quality.md", BuildMemoryQualityNote(memoryQuality), result);
@@ -721,7 +875,7 @@ tags: [kokonoe, vault, architecture]
             return sb.ToString();
         }
 
-        private string BuildVaultHealth(VaultStatus status, VaultInitStatus init, List<string> isolated)
+        private string BuildVaultHealth(VaultStatus status, VaultInitStatus init, List<string> isolated, VaultDoctorReport? doctor = null)
         {
             var sb = new StringBuilder();
             sb.Append(BuildManagedFrontmatter("vault-health"));
@@ -734,6 +888,23 @@ tags: [kokonoe, vault, architecture]
             sb.AppendLine($"- Осиротілих нотаток: {status.OrphanNotes.Count}");
             sb.AppendLine($"- Ізольованих нотаток: {isolated.Count}");
             sb.AppendLine($"- Ядро мозку: {(init.HasCoreNote ? init.CoreNotePath : "відсутнє")}");
+            if (doctor != null)
+            {
+                sb.AppendLine($"- Vault doctor: {(doctor.HasProblems ? "issues found" : "clean")} (score {doctor.HealthScore}/100)");
+                sb.AppendLine($"- Doctor repairs: {doctor.RepairedFiles.Count + doctor.DeletedEmptyFiles.Count}");
+                sb.AppendLine();
+                sb.AppendLine("## Vault doctor");
+                sb.AppendLine($"- Empty markdown files: {doctor.EmptyMarkdownFiles.Count}");
+                sb.AppendLine($"- Folder wiki-links: {doctor.FolderWikiLinkCount}");
+                sb.AppendLine($"- Suppressed actor links: {doctor.SuppressedActorLinkCount}");
+                sb.AppendLine($"- Frontmatter issues: {doctor.FrontmatterIssues.Count}");
+                sb.AppendLine($"- Mojibake suspects: {doctor.MojibakeSuspects.Count}");
+                sb.AppendLine($"- Missing wiki targets: {doctor.MissingWikiTargets.Count}");
+                if (doctor.RepairedFiles.Count > 0)
+                    sb.AppendLine($"- Repaired: {string.Join(", ", doctor.RepairedFiles.Take(12))}");
+                if (doctor.DeletedEmptyFiles.Count > 0)
+                    sb.AppendLine($"- Deleted empty: {string.Join(", ", doctor.DeletedEmptyFiles.Take(12))}");
+            }
             sb.AppendLine();
             sb.AppendLine("## Порожні нотатки");
             foreach (var note in status.EmptyNotes.Take(50))
@@ -1722,6 +1893,39 @@ cleanup_empty — видалити порожні нотатки
                 sb.AppendLine($"Осиротілих без [[links]] ({OrphanNotes.Count}): {string.Join(", ", OrphanNotes.Take(10))}");
             return sb.ToString().Trim();
         }
+    }
+
+    public class VaultDoctorReport
+    {
+        public DateTime RanAt { get; set; }
+        public bool RepairApplied { get; set; }
+        public List<string> EmptyMarkdownFiles { get; set; } = new();
+        public Dictionary<string, int> FolderWikiLinks { get; set; } = new();
+        public Dictionary<string, int> SuppressedActorLinks { get; set; } = new();
+        public List<string> FrontmatterIssues { get; set; } = new();
+        public List<string> MojibakeSuspects { get; set; } = new();
+        public Dictionary<string, int> MissingWikiTargets { get; set; } = new();
+        public List<string> RepairedFiles { get; set; } = new();
+        public List<string> DeletedEmptyFiles { get; set; } = new();
+        public int FolderWikiLinkCount => FolderWikiLinks.Values.Sum();
+        public int SuppressedActorLinkCount => SuppressedActorLinks.Values.Sum();
+        public bool HasProblems =>
+            EmptyMarkdownFiles.Count > 0 ||
+            FolderWikiLinkCount > 0 ||
+            SuppressedActorLinkCount > 0 ||
+            FrontmatterIssues.Count > 0 ||
+            MojibakeSuspects.Count > 0 ||
+            MissingWikiTargets.Count > 0;
+        public int HealthScore => Math.Clamp(
+            100
+            - EmptyMarkdownFiles.Count * 8
+            - FolderWikiLinkCount * 3
+            - SuppressedActorLinkCount * 2
+            - FrontmatterIssues.Count * 5
+            - MojibakeSuspects.Count * 4
+            - MissingWikiTargets.Count,
+            0,
+            100);
     }
 
     public class VaultMaintenanceResult

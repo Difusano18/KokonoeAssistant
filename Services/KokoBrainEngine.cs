@@ -146,6 +146,11 @@ namespace KokonoeAssistant.Services
         public string LastScreenAwarenessActivity { get; set; } = "";
         public string LastScreenAwarenessComment { get; set; } = "";
         public string LastScreenAwarenessWindow { get; set; } = "";
+        public string LastScreenAwarenessMode { get; set; } = "";
+        public DateTime LastVisionFailureAt { get; set; } = DateTime.MinValue;
+        public DateTime VisionBackoffUntil { get; set; } = DateTime.MinValue;
+        public int VisionFailureCount { get; set; }
+        public string LastVisionFailureSummary { get; set; } = "";
         public DateTime ScreenAwarenessObserveOnlyUntil { get; set; } = DateTime.MinValue;
     }
 
@@ -2841,6 +2846,11 @@ namespace KokonoeAssistant.Services
             var now = DateTime.Now;
             var interval = Math.Clamp(settings.ScreenAwarenessIntervalMins, 1, 60);
             if ((now - _state.LastScreenAwarenessAt).TotalMinutes < interval) return;
+            if (now < _state.VisionBackoffUntil)
+            {
+                Log($"ScreenAwareness skipped: vision backoff until {_state.VisionBackoffUntil:HH:mm}");
+                return;
+            }
 
             if (ShouldSuppressProactiveForSleep(now))
             {
@@ -2883,6 +2893,12 @@ namespace KokonoeAssistant.Services
 
                 using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(90));
                 var raw = await _llm.SendSystemVisionQueryAsync(prompt, screenshot, "image/jpeg", cts.Token);
+                if (LooksLikeVisionFailure(raw))
+                {
+                    RegisterVisionFailure(raw, now, activity);
+                    SaveState();
+                    return;
+                }
                 var analysis = ScreenAwareness.Parse(raw);
                 var context = ScreenAwareness.BuildCompactContext(analysis, activity);
 
@@ -2892,7 +2908,10 @@ namespace KokonoeAssistant.Services
                     _state.LastScreenAwarenessHash = hash;
                     _state.LastScreenAwarenessSummary = analysis.SummaryUk;
                     _state.LastScreenAwarenessActivity = analysis.ActivityUk;
+                    _state.LastScreenAwarenessMode = analysis.ScreenMode;
                     _state.LastScreenAwarenessWindow = activity.ActiveWindowTitle ?? "";
+                    _state.VisionFailureCount = 0;
+                    _state.VisionBackoffUntil = DateTime.MinValue;
                     _state.LastKnownUserActivity = string.IsNullOrWhiteSpace(analysis.SummaryUk)
                         ? (activity.ActiveWindowTitle ?? "")
                         : analysis.SummaryUk;
@@ -2964,16 +2983,51 @@ namespace KokonoeAssistant.Services
             }
             catch (OperationCanceledException)
             {
+                RegisterVisionFailure("timeout", now, null);
                 Log("ScreenAwareness timed out");
             }
             catch (Exception ex)
             {
+                RegisterVisionFailure(ex.Message, now, null);
                 Log($"ScreenAwareness error: {ex.Message}");
             }
             finally
             {
                 _bgLlmSemaphore.Release();
             }
+        }
+
+        private void RegisterVisionFailure(string? raw, DateTime now, ActivityAnalyzer.ActivityState? activity)
+        {
+            _state.LastScreenAwarenessAt = now;
+            _state.LastVisionFailureAt = now;
+            _state.VisionFailureCount = Math.Min(8, _state.VisionFailureCount + 1);
+            var delay = TimeSpan.FromMinutes(Math.Min(60, 5 * Math.Pow(2, Math.Max(0, _state.VisionFailureCount - 1))));
+            _state.VisionBackoffUntil = now + delay;
+            _state.LastVisionFailureSummary = TrimForLog(raw, 180);
+            _state.LastScreenAwarenessMode = KokoScreenAwarenessService.NormalizeMode("", activity?.ActiveWindowTitle ?? "");
+            _cachedScreenContext = $"[SCREEN AWARENESS]\nMode: {_state.LastScreenAwarenessMode}\nVision unavailable; using window/activity fallback.\nWindow: {activity?.ActiveWindowTitle ?? "-"}";
+            _screenContextCachedAt = now;
+            _llm.ScreenCtx = _cachedScreenContext;
+        }
+
+        private static bool LooksLikeVisionFailure(string? raw)
+        {
+            if (string.IsNullOrWhiteSpace(raw)) return true;
+            var lower = raw.ToLowerInvariant();
+            return lower.Contains("vision-сервер") ||
+                   lower.Contains("vision server") ||
+                   lower.Contains("500") ||
+                   lower.Contains("помилка llm") ||
+                   lower.Contains("【помилка") ||
+                   lower.Contains("error");
+        }
+
+        private static string TrimForLog(string? text, int max)
+        {
+            if (string.IsNullOrWhiteSpace(text)) return "";
+            text = text.Replace("\r", " ").Replace("\n", " ").Trim();
+            return text.Length <= max ? text : text[..max] + "...";
         }
 
         // ── DAILY BRIEFING ────────────────────────────────────────────
@@ -4286,7 +4340,7 @@ namespace KokonoeAssistant.Services
 
             lock (_lock)
             {
-                var result = StateFreshness.Refresh(_state, messages, now);
+                var result = StateFreshness.Refresh(_state, messages, now, BuildReconciliationSignals(reason));
                 var shouldPersistStamp =
                     result.Changed ||
                     _state.LastStateRefreshAt <= DateTime.MinValue ||
@@ -4302,6 +4356,46 @@ namespace KokonoeAssistant.Services
                 return result;
             }
         }
+
+        private KokoStateReconciliationSignals BuildReconciliationSignals(string channel)
+        {
+            return new KokoStateReconciliationSignals
+            {
+                Channel = channel,
+                ScreenMode = _state.LastScreenAwarenessMode,
+                ScreenSummary = _state.LastScreenAwarenessSummary,
+                LastDesktopActivityAt = _state.LastScreenAwarenessAt
+            };
+        }
+
+        public string BuildUnifiedExternalContext(string channel = "external")
+        {
+            var now = DateTime.Now;
+            RefreshTemporalState(now, channel);
+            var autonomyLevel = Math.Clamp(AppSettings.Load().ProactiveAutonomyLevel, 0, 3);
+            var presence = BuildPresenceFrame(now, autonomyLevel);
+            var active = _state.ShortTermIntents
+                .Where(i => !i.ResolvedAt.HasValue)
+                .OrderBy(i => i.FollowUpAt)
+                .Take(3)
+                .Select(i => $"{i.Kind}: {i.Summary} до {i.ExpectedUntil:HH:mm}")
+                .ToArray();
+
+            var sb = new StringBuilder();
+            sb.AppendLine("=== SHARED KOKONOE CONTEXT ===");
+            sb.AppendLine($"channel: {channel}");
+            sb.AppendLine($"state_refresh: {NullDash(_state.LastStateRefreshSummary)}");
+            sb.AppendLine($"presence: {presence.SummaryUk}");
+            sb.AppendLine($"screen_mode: {NullDash(_state.LastScreenAwarenessMode)}");
+            sb.AppendLine($"screen: {NullDash(_state.LastScreenAwarenessSummary)}");
+            sb.AppendLine($"last_activity: {NullDash(_state.LastKnownUserActivity)}");
+            sb.AppendLine($"active_intents: {(active.Length == 0 ? "none" : string.Join("; ", active))}");
+            sb.AppendLine("Use this as private continuity only. Do not quote labels.");
+            return sb.ToString();
+        }
+
+        private static string NullDash(string? value)
+            => string.IsNullOrWhiteSpace(value) ? "-" : value.Trim();
 
         public void EnsureVaultSyncFreshness(string reason = "runtime")
         {

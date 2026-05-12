@@ -9,6 +9,7 @@ namespace KokonoeAssistant.Services
     {
         public string SummaryUk { get; set; } = "";
         public string ActivityUk { get; set; } = "";
+        public string ScreenMode { get; set; } = "unknown";
         public bool ShouldComment { get; set; }
         public string CommentUk { get; set; } = "";
         public double Importance { get; set; }
@@ -63,6 +64,7 @@ JSON schema:
 {
   "summary_uk": "що видно/що він робить, до 140 символів",
   "activity_uk": "active|idle|same|changed + коротко",
+  "screen_mode": "coding|obsidian|telegram|browser|game|idle|private|media|desktop",
   "should_comment": true,
   "comment_uk": "короткий коментар або порожньо",
   "importance": 0.0
@@ -87,6 +89,7 @@ JSON schema:
                 {
                     SummaryUk = RedactSensitive(Trim(obj["summary_uk"]?.ToString(), 180)),
                     ActivityUk = Trim(obj["activity_uk"]?.ToString(), 120),
+                    ScreenMode = NormalizeMode(obj["screen_mode"]?.ToString(), raw),
                     ShouldComment = obj["should_comment"]?.Value<bool>() == true,
                     CommentUk = RedactSensitive(CleanComment(obj["comment_uk"]?.ToString())),
                     Importance = Math.Clamp(obj["importance"]?.Value<double>() ?? 0, 0, 1),
@@ -95,7 +98,7 @@ JSON schema:
             }
             catch
             {
-                return new KokoScreenAwarenessAnalysis { SummaryUk = Trim(raw, 180), Raw = raw };
+                return new KokoScreenAwarenessAnalysis { SummaryUk = Trim(raw, 180), ScreenMode = NormalizeMode("", raw), Raw = raw };
             }
         }
 
@@ -124,8 +127,9 @@ JSON schema:
                 return No("low importance");
 
             var passiveChatWindow = IsPassiveChatWindow(activeWindowTitle, analysis);
-            if (LooksSensitive(activeWindowTitle, analysis))
+            if (analysis.ScreenMode == "private" || LooksSensitive(activeWindowTitle, analysis))
                 return No("sensitive screen", "silence");
+            analysis.ScreenMode = NormalizeMode(analysis.ScreenMode, $"{activeWindowTitle} {analysis.SummaryUk} {analysis.ActivityUk}");
 
             var useful = LooksUseful(activeWindowTitle, analysis, screenChanged, isActive);
             var jabCandidate = LooksJabCandidate(activeWindowTitle, analysis, screenChanged, isActive, passiveChatWindow);
@@ -161,6 +165,7 @@ JSON schema:
             var sb = new StringBuilder();
             sb.AppendLine("[SCREEN AWARENESS]");
             sb.AppendLine($"Window: {NullDash(activity.ActiveWindowTitle)}");
+            sb.AppendLine($"Mode: {NullDash(analysis.ScreenMode)}");
             sb.AppendLine($"Activity: {(activity.IsActive ? "active" : "idle/same")} ({activity.PixelDifferencePercentage:F1}% change)");
             if (!string.IsNullOrWhiteSpace(analysis.SummaryUk))
                 sb.AppendLine($"Summary: {analysis.SummaryUk}");
@@ -171,6 +176,23 @@ JSON schema:
 
         private static KokoScreenAwarenessDecision No(string reason, string kind = "observe")
             => new() { ShouldSend = false, Reason = reason, Kind = kind };
+
+        public static string NormalizeMode(string? declared, string text)
+        {
+            var mode = (declared ?? "").Trim().ToLowerInvariant();
+            if (mode is "coding" or "obsidian" or "telegram" or "browser" or "game" or "idle" or "private" or "media" or "desktop")
+                return mode;
+
+            var lower = (text ?? "").ToLowerInvariant();
+            if (ContainsAny(lower, "password", "token", "api key", "bank", "seed phrase", "authenticator")) return "private";
+            if (ContainsAny(lower, "visual studio", "vscode", "rider", "terminal", "build", "exception", "code", "код")) return "coding";
+            if (ContainsAny(lower, "obsidian", "vault", "graph", "нотат", "заміт")) return "obsidian";
+            if (ContainsAny(lower, "telegram", "чат", "chat", "bot")) return "telegram";
+            if (ContainsAny(lower, "chrome", "browser", "youtube", "браузер", "сайт")) return "browser";
+            if (ContainsAny(lower, "dota", "steam", "game", "гра")) return "game";
+            if (ContainsAny(lower, "idle", "same", "без змін", "завис")) return "idle";
+            return "desktop";
+        }
 
         private static string CleanComment(string? text)
         {
