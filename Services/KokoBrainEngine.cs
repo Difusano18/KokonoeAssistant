@@ -416,8 +416,16 @@ namespace KokonoeAssistant.Services
             try
             {
                 if (File.Exists(_statePath))
-                    return JsonConvert.DeserializeObject<KokoInternalState>(
-                        File.ReadAllText(_statePath)) ?? new();
+                {
+                    var state = JsonConvert.DeserializeObject<KokoInternalState>(
+                        File.ReadAllText(_statePath, Encoding.UTF8)) ?? new();
+                    if (RepairMojibakeObject(state))
+                    {
+                        try { File.WriteAllText(_statePath, JsonConvert.SerializeObject(state, Formatting.Indented), Encoding.UTF8); }
+                        catch { }
+                    }
+                    return state;
+                }
             }
             catch { }
             return new KokoInternalState();
@@ -425,11 +433,134 @@ namespace KokonoeAssistant.Services
 
         private void SaveState()
         {
-            try { File.WriteAllText(_statePath, JsonConvert.SerializeObject(_state, Formatting.Indented)); }
+            try { File.WriteAllText(_statePath, JsonConvert.SerializeObject(_state, Formatting.Indented), Encoding.UTF8); }
             catch { }
         }
 
         // ── CONTEXT BUILDER ────────────────────────────────────────
+
+        private static bool RepairMojibakeObject(object? value, HashSet<object>? seen = null)
+        {
+            if (value == null || value is string) return false;
+            var type = value.GetType();
+            if (type.IsValueType || type.IsEnum) return false;
+
+            seen ??= new HashSet<object>(ReferenceEqualityComparer.Instance);
+            if (!seen.Add(value)) return false;
+
+            var changed = false;
+            if (value is System.Collections.IList list)
+            {
+                for (var i = 0; i < list.Count; i++)
+                {
+                    if (list[i] is string s)
+                    {
+                        var fixedText = RepairMojibakeString(s);
+                        if (!string.Equals(s, fixedText, StringComparison.Ordinal))
+                        {
+                            list[i] = fixedText;
+                            changed = true;
+                        }
+                    }
+                    else
+                    {
+                        changed |= RepairMojibakeObject(list[i], seen);
+                    }
+                }
+                return changed;
+            }
+
+            if (value is System.Collections.IDictionary dict)
+            {
+                foreach (var key in dict.Keys.Cast<object>().ToList())
+                {
+                    if (dict[key] is string s)
+                    {
+                        var fixedText = RepairMojibakeString(s);
+                        if (!string.Equals(s, fixedText, StringComparison.Ordinal))
+                        {
+                            dict[key] = fixedText;
+                            changed = true;
+                        }
+                    }
+                    else
+                    {
+                        changed |= RepairMojibakeObject(dict[key], seen);
+                    }
+                }
+                return changed;
+            }
+
+            foreach (var prop in type.GetProperties(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance))
+            {
+                if (!prop.CanRead) continue;
+                object? current;
+                try { current = prop.GetValue(value); }
+                catch { continue; }
+
+                if (prop.PropertyType == typeof(string) && prop.CanWrite && current is string s)
+                {
+                    var fixedText = RepairMojibakeString(s);
+                    if (!string.Equals(s, fixedText, StringComparison.Ordinal))
+                    {
+                        prop.SetValue(value, fixedText);
+                        changed = true;
+                    }
+                }
+                else if (current != null && !prop.PropertyType.IsValueType && prop.PropertyType != typeof(string))
+                {
+                    changed |= RepairMojibakeObject(current, seen);
+                }
+            }
+
+            return changed;
+        }
+
+        private static string RepairMojibakeString(string text)
+        {
+            if (!LooksMojibake(text)) return text;
+
+            var best = text;
+            var bestScore = MojibakeScore(text);
+            try
+            {
+                Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
+                var cp1251 = Encoding.GetEncoding(1251);
+                for (var i = 0; i < 2; i++)
+                {
+                    var candidate = Encoding.UTF8.GetString(cp1251.GetBytes(best));
+                    var score = MojibakeScore(candidate);
+                    if (score >= bestScore) break;
+                    best = candidate;
+                    bestScore = score;
+                    if (!LooksMojibake(best)) break;
+                }
+            }
+            catch { }
+
+            return best;
+        }
+
+        private static bool LooksMojibake(string text) => MojibakeScore(text) >= 2;
+
+        private static int MojibakeScore(string text)
+        {
+            if (string.IsNullOrEmpty(text)) return 0;
+            var markers = new[] { "РЎ", "Рќ", "Рџ", "Р°", "Рё", "Рµ", "СЊ", "С–", "С—", "Сѓ", "вЂ", "В«", "В»", "в–", "в†" };
+            return markers.Sum(m => CountOccurrences(text, m));
+        }
+
+        private static int CountOccurrences(string text, string needle)
+        {
+            var count = 0;
+            var index = 0;
+            while ((index = text.IndexOf(needle, index, StringComparison.Ordinal)) >= 0)
+            {
+                count++;
+                index += needle.Length;
+            }
+            return count;
+        }
 
         private string BuildContext()
         {
