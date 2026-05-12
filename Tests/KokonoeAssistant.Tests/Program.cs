@@ -41,6 +41,7 @@ internal static class Program
             Run("Post reply guard rejects staged decoration", PostReplyGuardRejectsStagedDecoration);
             Run("Post reply guard blocks duplicate replies", PostReplyGuardBlocksDuplicateReplies);
             Run("Post reply guard protects short affection", PostReplyGuardProtectsShortAffection);
+            Run("Post reply guard protects short greeting", PostReplyGuardProtectsShortGreeting);
             Run("Proactive guard suppresses repeated generic silence", ProactiveGuardSuppressesRepeatedGenericSilence);
             Run("Proactive context anchors silence to last topic", ProactiveContextAnchorsSilenceToLastTopic);
             Run("Proactive context stays silent after goodbye sleep", ProactiveContextStaysSilentAfterGoodbyeSleep);
@@ -53,6 +54,7 @@ internal static class Program
             Run("Screen awareness blocks sensitive screens", ScreenAwarenessBlocksSensitiveScreens);
             Run("Startup greeting avoids dead canned replies", StartupGreetingAvoidsDeadCannedReplies);
             Run("Startup greeting sanitizes dry return line", StartupGreetingSanitizesDryReturnLine);
+            Run("Startup greeting ignores low signal topic", StartupGreetingIgnoresLowSignalTopic);
             Run("Scenario simulation guards temporal continuity", ScenarioSimulationGuardsTemporalContinuity);
             Run("LLM diagnostics snapshot starts idle", LlmDiagnosticsSnapshotStartsIdle);
             Run("Inspector renders state report", InspectorRendersStateReport);
@@ -884,6 +886,24 @@ internal static class Program
         AssertTrue(result.Violations.Any(v => v.Contains("емоційн")), "violation should mention emotional short reply");
     }
 
+    private static void PostReplyGuardProtectsShortGreeting()
+    {
+        var now = new DateTime(2026, 5, 12, 20, 15, 0);
+        var state = new KokoInternalState();
+        var badReply = "Знову відкрив. Значить, тема «привіт» ще не відпустила; добре, добиваємо її без цирку.";
+        var messages = new[]
+        {
+            new ChatRepository.ChatMessage { Role = "user", Content = "привіт", Timestamp = now }
+        };
+        var timeline = new KokoConversationTimelineEngine().Build(messages, state, now, "привіт");
+
+        var result = new KokoPostReplyGuard().Evaluate("привіт", badReply, state, messages, timeline, now);
+
+        AssertTrue(!result.Passed, "guard should reject topic-tail fallback for a greeting");
+        AssertTrue(!string.IsNullOrWhiteSpace(result.HardReplacement), "short greeting should get a direct hard replacement");
+        AssertTrue(result.Violations.Any(v => v.Contains("привітання")), "violation should mention greeting");
+    }
+
     private static void ProactiveGuardSuppressesRepeatedGenericSilence()
     {
         var now = new DateTime(2026, 5, 7, 16, 56, 0);
@@ -1158,6 +1178,24 @@ internal static class Program
 
         AssertTrue(!sanitized.Contains("Знову тут"), "sanitizer should replace canned startup greeting");
         AssertTrue(sanitized.Contains("покращи") || sanitized.Contains("реакції") || sanitized.Contains("вході"), "sanitized greeting should use last topic");
+    }
+
+    private static void StartupGreetingIgnoresLowSignalTopic()
+    {
+        var now = new DateTime(2026, 5, 12, 20, 16, 0);
+        var messages = new[]
+        {
+            new ChatRepository.ChatMessage { Role = "user", Content = "ні я вже награвся хах", Timestamp = now.AddMinutes(-9) },
+            new ChatRepository.ChatMessage { Role = "user", Content = "привіт", Timestamp = now.AddMinutes(-1) }
+        };
+
+        var service = new KokoStartupGreetingService();
+        var frame = service.BuildFrame(messages, now);
+        var fallback = service.BuildFallback(frame);
+
+        AssertTrue(!string.Equals(frame.LastConcreteTopic, "привіт", StringComparison.OrdinalIgnoreCase), "greeting must not become concrete topic");
+        AssertTrue(!fallback.Contains("тема «привіт»"), "fallback must not frame greeting as a topic");
+        AssertTrue(!fallback.Contains("добиваємо"), "fallback should avoid dumb 'finish the topic' wording");
     }
 
     private static void LlmDiagnosticsSnapshotStartsIdle()

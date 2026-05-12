@@ -69,10 +69,13 @@ namespace KokonoeAssistant.Services
 
             var shortAffection = IsShortAffection(userLower);
             var shortConfusion = IsShortConfusion(userLower);
+            var shortGreeting = IsShortGreeting(userLower);
             if (shortAffection && LooksLikeMisreadAffection(replyLower))
                 violations.Add("коротку емоційну репліку прочитано як технічний випад або факт");
             if (shortConfusion && LooksLikeHostileStaleRepair(replyLower))
                 violations.Add("відповідь на коротке уточнення продовжує стару зламану репліку");
+            if (shortGreeting && LooksLikeBadGreetingReply(replyLower))
+                violations.Add("коротке привітання помилково перетворено на тему для добивання");
             if (RepeatsRecentAssistant(reply, messages))
                 violations.Add("відповідь дослівно повторює нещодавню репліку");
 
@@ -87,6 +90,9 @@ namespace KokonoeAssistant.Services
                 : null;
             hardReplacement ??= shortConfusion
                 ? "Так, це була зламана відповідь. Скидаю контекст: постав нормальне питання, і цього разу без театру з повтором."
+                : null;
+            hardReplacement ??= shortGreeting
+                ? "Привіт. Я тут. Кажи, що ламаємо цього разу."
                 : null;
             hardReplacement ??= violations.Any(v => v.Contains("дослівно повторює", StringComparison.OrdinalIgnoreCase))
                 ? "Залипла на попередній репліці. Скидаю повтор: сформулюй ще раз, що саме треба, і я відповім по суті."
@@ -174,11 +180,20 @@ Timeline:
             return normalized is "що" or "шо" or "чого" or "всм" or "всенсі" or "вчомусенс";
         }
 
+        private static bool IsShortGreeting(string userLower)
+        {
+            var normalized = NormalizeCompact(userLower);
+            return normalized is "привіт" or "привет" or "хай" or "йо" or "дарова" or "здоров" or "ку";
+        }
+
         private static bool LooksLikeMisreadAffection(string replyLower)
             => ContainsAny(replyLower, "факт", "зафіксу", "випад", "болюч", "ризиклив", "реальн", "припини");
 
         private static bool LooksLikeHostileStaleRepair(string replyLower)
             => ContainsAny(replyLower, "щойно сказала", "зафіксувала", "твій випад", "короткий замик", "припини це");
+
+        private static bool LooksLikeBadGreetingReply(string replyLower)
+            => ContainsAny(replyLower, "тема «привіт", "тема \"привіт", "тема привіт", "добиваємо", "ще не відпустила", "знову відкрив");
 
         private static bool RepeatsRecentAssistant(string reply, IReadOnlyList<ChatRepository.ChatMessage> messages)
         {

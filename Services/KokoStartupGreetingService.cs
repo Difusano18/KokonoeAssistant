@@ -36,15 +36,15 @@ namespace KokonoeAssistant.Services
         public string BuildFallback(KokoStartupGreetingFrame frame)
         {
             if (string.IsNullOrWhiteSpace(frame.LastConcreteTopic))
-                return "Я на місці. Давай, показуй що сьогодні добиваємо, поки воно знову не вирішило розвалитись.";
+                return "Я на місці. Кажи, що треба, поки я ще роблю вигляд, що терпіння існує.";
 
             if (frame.GapMinutes.HasValue && frame.GapMinutes.Value < 10)
-                return $"Знову відкрив. Значить, тема «{frame.LastConcreteTopic}» ще не відпустила; добре, добиваємо її без цирку.";
+                return $"Я тут. Якщо продовжуємо «{frame.LastConcreteTopic}», то без розгону на три акти.";
 
             if (frame.GapMinutes.HasValue && frame.GapMinutes.Value < 120)
-                return $"Повернувся через {frame.GapTextUk}. Я пам'ятаю хвіст: «{frame.LastConcreteTopic}». Продовжуй, що там ще не померло?";
+                return $"Повернувся через {frame.GapTextUk}. Хвіст пам'ятаю: «{frame.LastConcreteTopic}». Продовжуй.";
 
-            return $"Повернувся. Останній хвіст був «{frame.LastConcreteTopic}»; або продовжуємо його, або ти зараз урочисто поясниш нову пожежу.";
+            return $"Повернувся. Останній хвіст: «{frame.LastConcreteTopic}». Або продовжуємо, або кажи нову проблему.";
         }
 
         public string Sanitize(string? reply, KokoStartupGreetingFrame frame)
@@ -104,6 +104,7 @@ STARTUP GREETING CONTEXT
                 if (string.IsNullOrWhiteSpace(text)) continue;
 
                 var lower = text.ToLowerInvariant();
+                if (IsLowSignalTopic(lower)) continue;
                 if (ContainsAny(lower, "авто-пінг", "автовідпов", "пауза", "тиша", "зник"))
                     return "авто-пінги мають бути живими, а не таймером із хамством";
                 if (ContainsAny(lower, "obsidian", "ваульт", "vault"))
@@ -119,6 +120,13 @@ STARTUP GREETING CONTEXT
                     return text;
             }
             return "";
+        }
+
+        private static bool IsLowSignalTopic(string lower)
+        {
+            var compact = new string(lower.Where(char.IsLetterOrDigit).ToArray());
+            return compact is "привіт" or "привет" or "хай" or "йо" or "дарова" or "ку"
+                or "ага" or "угу" or "ок" or "окей" or "ясно" or "м" or "мм" or "що" or "шо";
         }
 
         private static bool ContainsAny(string text, params string[] values)
