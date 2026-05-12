@@ -425,6 +425,10 @@ namespace KokonoeAssistant
                     LiveCoreVaultText.Text += $" | ctx {_lastObsidianPreflightAt:HH:mm:ss}";
                 if (!string.IsNullOrWhiteSpace(telemetry.ScenarioHealth))
                     LiveCoreVaultText.Text += $" | {telemetry.ScenarioHealth}";
+                LiveCoreCompactText.Text =
+                    $"Kokonoe · {DashboardEmotionLabel(emotion.Current).ToLowerInvariant()} · {DashboardSomaticLabel(somatic.State).ToLowerInvariant()} {somatic.Strain:F2} · " +
+                    $"{(heart.CurrentBpm > 0 ? $"{heart.CurrentBpm:0} bpm" : "-- bpm")} · vault {state.PendingVaultExchangeCount}/5 · " +
+                    $"vision {BuildVisionStatusLabel(state, DateTime.Now).ToLowerInvariant()}";
                 if (RightPanel.Visibility == Visibility.Visible)
                     RefreshRightOpsPanel();
             }
@@ -435,6 +439,7 @@ namespace KokonoeAssistant
                     LiveCoreEmotionText.Text = "емоція: офлайн";
                     LiveCoreBodyText.Text = "соматика: офлайн";
                     LiveCorePulseText.Text = "-- bpm";
+                    LiveCoreCompactText.Text = "Kokonoe · offline · -- bpm · vault -- · vision --";
                     LiveCoreAutonomyText.Text = "автономність недоступна";
                     LiveCorePresenceText.Text = "";
                     LiveCoreRhythmText.Text = "";
@@ -1375,7 +1380,9 @@ tags: [kokonoe, live-core, diagnostics]
             {
                 var report = _obsidian.RunVaultDoctor(repair: true);
                 var linkProblems = report.FolderWikiLinkCount + report.SuppressedActorLinkCount;
-                _rightOpsVaultLine = $"vault doctor {report.HealthScore}/100 · empty {report.EmptyMarkdownFiles.Count} · links {linkProblems}";
+                _rightOpsVaultLine =
+                    $"vault doctor {report.HealthScore}/100 · empty {report.EmptyMarkdownFiles.Count} · links {linkProblems} · " +
+                    $"fm {report.FrontmatterIssues.Count} · moj {report.MojibakeSuspects.Count} · miss {report.MissingWikiTargets.Count}";
                 _rightOpsVaultScanAt = DateTime.Now;
                 RightVaultDoctorText.Text = _rightOpsVaultLine;
                 McpOutput.Text =
@@ -2422,6 +2429,8 @@ LIVE RESPONSE STYLE
         {
             var isUser  = vm.Role == "user";
             var isError = vm.Content.StartsWith("[Error]");
+            var userMaxWidth = GetChatBubbleMaxWidth(620, 132);
+            var assistantMaxWidth = GetChatBubbleMaxWidth(700, 132);
 
             // ── SYSTEM MESSAGE ─────────────────────────────────────
             if (vm.Role == "system")
@@ -2464,7 +2473,7 @@ LIVE RESPONSE STYLE
                 var outerUser = new StackPanel
                 {
                     HorizontalAlignment = System.Windows.HorizontalAlignment.Right,
-                    MaxWidth = 620,
+                    MaxWidth = userMaxWidth,
                     Margin = new Thickness(80, 0, 0, 0)
                 };
 
@@ -2487,7 +2496,9 @@ LIVE RESPONSE STYLE
                 {
                     sp.Children.Add(new System.Windows.Controls.Image
                     {
-                        Source = vm.ImageThumb, MaxHeight = 300, MaxWidth = 400,
+                        Source = vm.ImageThumb,
+                        MaxHeight = 300,
+                        MaxWidth = Math.Max(180, Math.Min(400, userMaxWidth - 48)),
                         Stretch = System.Windows.Media.Stretch.Uniform,
                         Margin = new Thickness(0, 0, 0, 8),
                         HorizontalAlignment = System.Windows.HorizontalAlignment.Right
@@ -2525,7 +2536,7 @@ LIVE RESPONSE STYLE
                 var outer = new StackPanel
                 {
                     HorizontalAlignment = System.Windows.HorizontalAlignment.Left,
-                    MaxWidth = 700,
+                    MaxWidth = assistantMaxWidth,
                     Margin = new Thickness(0, 0, 80, 0)
                 };
 
@@ -2630,6 +2641,19 @@ LIVE RESPONSE STYLE
                 MessagesList.Children.Add(row);
                 return textBlock;
             }
+        }
+
+        private double GetChatBubbleMaxWidth(double preferred, double reserved)
+        {
+            var viewport = MessagesScroll?.ViewportWidth > 0 ? MessagesScroll.ViewportWidth : 0;
+            if (viewport <= 0 && MessagesScroll != null)
+                viewport = MessagesScroll.ActualWidth;
+            if (viewport <= 0 && ChatTab != null)
+                viewport = ChatTab.ActualWidth;
+            if (viewport <= 0)
+                return preferred;
+
+            return Math.Max(220, Math.Min(preferred, viewport - reserved));
         }
 
         private void AddThinkingBubble()
@@ -4514,24 +4538,22 @@ LIVE RESPONSE STYLE
                 var brain = ServiceContainer.BrainEngine;
                 var state = brain.State;
                 var now = DateTime.Now;
+                var emotion = brain.Emotion;
+                var somatic = brain.GetSomaticSnapshot();
+                var heart = ServiceContainer.Heart;
+                var telemetry = brain.BuildTelemetrySnapshot();
+
+                RightEmotionText.Text = $"{DashboardEmotionLabel(emotion.Current).ToUpperInvariant()} · mood {state.MoodScore:F2}";
+                RightBodyText.Text = $"{DashboardSomaticLabel(somatic.State).ToUpperInvariant()} · strain {somatic.Strain:F2}";
+                RightPulseText.Text = heart.CurrentBpm > 0 ? $"{heart.CurrentBpm:0} bpm · {heart.BpmDelta:+0;-0;0}" : "-- bpm";
+                RightVaultSyncText.Text = $"sync {state.PendingVaultExchangeCount}/5 · mem {_liveCoreMemoryItems} · tasks {_liveCoreOpenTasks}";
+                RightAutonomyDetailText.Text = TrimOpsLine(telemetry.AutonomyDebug, 130);
 
                 RightScreenModeText.Text = string.IsNullOrWhiteSpace(state.LastScreenAwarenessMode)
                     ? "UNKNOWN"
                     : state.LastScreenAwarenessMode.Trim().ToUpperInvariant();
 
-                if (state.VisionBackoffUntil > now)
-                {
-                    RightVisionStatusText.Text = $"BACKOFF {state.VisionBackoffUntil:HH:mm}";
-                }
-                else if (state.LastVisionFailureAt > DateTime.MinValue &&
-                         now - state.LastVisionFailureAt < TimeSpan.FromMinutes(30))
-                {
-                    RightVisionStatusText.Text = $"RECOVERED {state.LastVisionFailureAt:HH:mm}";
-                }
-                else
-                {
-                    RightVisionStatusText.Text = "READY";
-                }
+                RightVisionStatusText.Text = BuildVisionStatusLabel(state, now);
 
                 RightStateRefreshText.Text = TrimOpsLine(
                     string.IsNullOrWhiteSpace(state.LastStateRefreshSummary)
@@ -4556,7 +4578,9 @@ LIVE RESPONSE STYLE
                 {
                     var report = _obsidian.RunVaultDoctor(repair: false);
                     var linkProblems = report.FolderWikiLinkCount + report.SuppressedActorLinkCount;
-                    _rightOpsVaultLine = $"vault doctor {report.HealthScore}/100 · empty {report.EmptyMarkdownFiles.Count} · links {linkProblems}";
+                    _rightOpsVaultLine =
+                        $"vault doctor {report.HealthScore}/100 · empty {report.EmptyMarkdownFiles.Count} · links {linkProblems} · " +
+                        $"fm {report.FrontmatterIssues.Count} · moj {report.MojibakeSuspects.Count} · miss {report.MissingWikiTargets.Count}";
                     _rightOpsVaultScanAt = now;
                 }
                 RightVaultDoctorText.Text = _rightOpsVaultLine;
@@ -4580,6 +4604,16 @@ LIVE RESPONSE STYLE
             if (string.IsNullOrWhiteSpace(text)) return "";
             var clean = text.Replace("\r", " ").Replace("\n", " ").Trim();
             return clean.Length <= max ? clean : clean[..Math.Max(0, max - 1)] + "…";
+        }
+
+        private static string BuildVisionStatusLabel(KokoInternalState state, DateTime now)
+        {
+            if (state.VisionBackoffUntil > now)
+                return $"BACKOFF {state.VisionBackoffUntil:HH:mm}";
+            if (state.LastVisionFailureAt > DateTime.MinValue &&
+                now - state.LastVisionFailureAt < TimeSpan.FromMinutes(30))
+                return $"READY · fail {state.LastVisionFailureAt:HH:mm}";
+            return "READY";
         }
 
         private void DashLoadCreatorHealth()

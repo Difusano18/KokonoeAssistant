@@ -399,7 +399,7 @@
                         <!-- Live state strip -->
                         <Border Grid.Row="0" Background="{DynamicResource Brush_050D07}"
                                 BorderBrush="{DynamicResource AccentBgBorder2}" BorderThickness="0,0,0,1"
-                                Padding="16,9">
+                                Padding="16,6">
                             <Grid>
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="1.15*"/>
@@ -410,7 +410,15 @@
                                     <ColumnDefinition Width="Auto"/>
                                 </Grid.ColumnDefinitions>
 
-                                <StackPanel Grid.Column="0" Margin="0,0,12,0">
+                                <TextBlock x:Name="LiveCoreCompactText" Grid.Column="0" Grid.ColumnSpan="5"
+                                           Text="Kokonoe · loading · -- bpm · vault -- · vision --"
+                                           FontSize="11" FontFamily="Consolas" FontWeight="SemiBold"
+                                           Foreground="{DynamicResource AccentTextLight}"
+                                           VerticalAlignment="Center"
+                                           TextTrimming="CharacterEllipsis"
+                                           ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"/>
+
+                                <StackPanel Grid.Column="0" Margin="0,0,12,0" Visibility="Collapsed">
                                     <TextBlock Text="ЖИВЕ ЯДРО" FontSize="9" FontFamily="Consolas" FontWeight="Bold"
                                                Foreground="{DynamicResource AccentBase}"/>
                                     <TextBlock x:Name="LiveCoreEmotionText" Text="емоція: завантаження"
@@ -424,7 +432,7 @@
                                                ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"/>
                                 </StackPanel>
 
-                                <StackPanel Grid.Column="1" Margin="0,0,12,0">
+                                <StackPanel Grid.Column="1" Margin="0,0,12,0" Visibility="Collapsed">
                                     <TextBlock Text="ТІЛО" FontSize="9" FontFamily="Consolas" FontWeight="Bold"
                                                Foreground="{DynamicResource AccentBase}"/>
                                     <TextBlock x:Name="LiveCoreBodyText" Text="соматика: завантаження"
@@ -438,7 +446,7 @@
                                                ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"/>
                                 </StackPanel>
 
-                                <StackPanel Grid.Column="2" Margin="0,0,12,0">
+                                <StackPanel Grid.Column="2" Margin="0,0,12,0" Visibility="Collapsed">
                                     <TextBlock Text="ПУЛЬС" FontSize="9" FontFamily="Consolas" FontWeight="Bold"
                                                Foreground="{DynamicResource AccentBase}"/>
                                     <TextBlock x:Name="LiveCorePulseText" Text="-- bpm"
@@ -451,7 +459,7 @@
                                                  Background="{DynamicResource Brush_071209}" BorderThickness="0"/>
                                 </StackPanel>
 
-                                <StackPanel Grid.Column="3" Margin="0,0,12,0">
+                                <StackPanel Grid.Column="3" Margin="0,0,12,0" Visibility="Collapsed">
                                     <TextBlock Text="АВТОНОМНІСТЬ" FontSize="9" FontFamily="Consolas" FontWeight="Bold"
                                                Foreground="{DynamicResource AccentBase}"/>
                                     <TextBlock x:Name="LiveCoreAutonomyText" Text="рішення --"
@@ -469,7 +477,7 @@
                                                ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"/>
                                 </StackPanel>
 
-                                <StackPanel Grid.Column="4">
+                                <StackPanel Grid.Column="4" Visibility="Collapsed">
                                     <TextBlock Text="ПАМ'ЯТЬ / VAULT" FontSize="9" FontFamily="Consolas" FontWeight="Bold"
                                                Foreground="{DynamicResource AccentBase}"/>
                                     <TextBlock x:Name="LiveCoreMemoryText" Text="синхронізація --"
@@ -496,9 +504,12 @@
                         <ScrollViewer x:Name="MessagesScroll" Grid.Row="1"
                                       VerticalScrollBarVisibility="Auto"
                                       HorizontalScrollBarVisibility="Disabled"
+                                      ClipToBounds="True"
                                       Background="Transparent"
                                       PreviewMouseWheel="MessagesScroll_PreviewMouseWheel">
-                            <StackPanel x:Name="MessagesList" Margin="0,14,0,14"/>
+                            <StackPanel x:Name="MessagesList" Margin="0,14,0,14"
+                                        ClipToBounds="True"
+                                        Width="{Binding ActualWidth, ElementName=MessagesScroll}"/>
                         </ScrollViewer>
 
                         <!-- Input panel -->
@@ -2285,7 +2296,29 @@
 
                             <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto"
                                           HorizontalScrollBarVisibility="Disabled" Padding="14,8">
-                                <ItemsControl x:Name="DashThoughtStream">
+                                <StackPanel>
+                                    <UniformGrid Columns="2" Margin="0,0,0,8">
+                                        <StackPanel Margin="0,0,8,6">
+                                            <TextBlock Text="emotion" FontSize="8" FontFamily="Consolas" Foreground="{DynamicResource AccentDim}"/>
+                                            <TextBlock x:Name="RightEmotionText" Text="-" FontSize="12" FontWeight="Bold" Foreground="{DynamicResource AccentTextLight}" TextWrapping="Wrap"/>
+                                        </StackPanel>
+                                        <StackPanel Margin="0,0,0,6">
+                                            <TextBlock Text="body" FontSize="8" FontFamily="Consolas" Foreground="{DynamicResource AccentDim}"/>
+                                            <TextBlock x:Name="RightBodyText" Text="-" FontSize="12" FontWeight="Bold" Foreground="{DynamicResource AccentBase}" TextWrapping="Wrap"/>
+                                        </StackPanel>
+                                        <StackPanel Margin="0,0,8,0">
+                                            <TextBlock Text="pulse" FontSize="8" FontFamily="Consolas" Foreground="{DynamicResource AccentDim}"/>
+                                            <TextBlock x:Name="RightPulseText" Text="-- bpm" FontSize="12" FontWeight="Bold" Foreground="{DynamicResource AccentPrimary}" TextWrapping="Wrap"/>
+                                        </StackPanel>
+                                        <StackPanel>
+                                            <TextBlock Text="vault" FontSize="8" FontFamily="Consolas" Foreground="{DynamicResource AccentDim}"/>
+                                            <TextBlock x:Name="RightVaultSyncText" Text="sync --" FontSize="9" Foreground="{DynamicResource AccentText}" TextWrapping="Wrap"/>
+                                        </StackPanel>
+                                    </UniformGrid>
+                                    <TextBlock x:Name="RightAutonomyDetailText" Text="autonomy -"
+                                               FontSize="9" Foreground="{DynamicResource Brush_8AC8A0}"
+                                               TextWrapping="Wrap" Margin="0,0,0,6"/>
+                                <ItemsControl x:Name="DashThoughtStream" Visibility="Collapsed">
                                     <ItemsControl.ItemTemplate>
                                         <DataTemplate>
                                             <Grid Margin="0,0,0,8">
@@ -2310,6 +2343,7 @@
                                         </DataTemplate>
                                     </ItemsControl.ItemTemplate>
                                 </ItemsControl>
+                                </StackPanel>
                             </ScrollViewer>
 
                             <Border Grid.Row="2" BorderBrush="{DynamicResource AccentBgBorder2}"
