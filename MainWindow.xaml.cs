@@ -146,6 +146,8 @@ namespace KokonoeAssistant
         private readonly ObservableCollection<string>        _dashCuriosities = new();
         private DateTime _dashLastObsidianSync = DateTime.MinValue;
         private string   _dashLastEmotionSynced = "";
+        private DateTime _rightOpsVaultScanAt = DateTime.MinValue;
+        private string _rightOpsVaultLine = "vault doctor -";
         private DispatcherTimer? _liveCoreTimer;
         private DateTime _liveCoreLastVaultScan = DateTime.MinValue;
         private DateTime _lastObsidianPreflightAt = DateTime.MinValue;
@@ -423,6 +425,8 @@ namespace KokonoeAssistant
                     LiveCoreVaultText.Text += $" | ctx {_lastObsidianPreflightAt:HH:mm:ss}";
                 if (!string.IsNullOrWhiteSpace(telemetry.ScenarioHealth))
                     LiveCoreVaultText.Text += $" | {telemetry.ScenarioHealth}";
+                if (RightPanel.Visibility == Visibility.Visible)
+                    RefreshRightOpsPanel();
             }
             catch (Exception ex)
             {
@@ -1086,7 +1090,9 @@ tags: [kokonoe, live-core, diagnostics]
                     break;
             }
 
-            RightPanel.Visibility = _activeTab == "Tools" ? Visibility.Visible : Visibility.Collapsed;
+            RightPanel.Visibility = (_activeTab == "Chat" || _activeTab == "Tools") ? Visibility.Visible : Visibility.Collapsed;
+            if (RightPanel.Visibility == Visibility.Visible)
+                RefreshRightOpsPanel();
         }
 
         // ══════════════════════════════════════════════════════════
@@ -1361,6 +1367,40 @@ tags: [kokonoe, live-core, diagnostics]
                     : $"Modified today ({recent.Count}):\n" + string.Join("\n", recent);
             }
             catch (Exception ex) { McpOutput.Text = $"Error: {ex.Message}"; }
+        }
+
+        private void RightVaultDoctor_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var report = _obsidian.RunVaultDoctor(repair: true);
+                var linkProblems = report.FolderWikiLinkCount + report.SuppressedActorLinkCount;
+                _rightOpsVaultLine = $"vault doctor {report.HealthScore}/100 · empty {report.EmptyMarkdownFiles.Count} · links {linkProblems}";
+                _rightOpsVaultScanAt = DateTime.Now;
+                RightVaultDoctorText.Text = _rightOpsVaultLine;
+                McpOutput.Text =
+                    $"Vault Doctor ({report.HealthScore}/100)\n" +
+                    $"empty: {report.EmptyMarkdownFiles.Count}\n" +
+                    $"folder links: {report.FolderWikiLinkCount}\n" +
+                    $"Kokonoe links: {report.SuppressedActorLinkCount}\n" +
+                    $"frontmatter: {report.FrontmatterIssues.Count}\n" +
+                    $"mojibake: {report.MojibakeSuspects.Count}\n" +
+                    $"missing targets: {report.MissingWikiTargets.Count}\n" +
+                    $"repaired: {report.RepairedFiles.Count}\n" +
+                    $"deleted: {report.DeletedEmptyFiles.Count}";
+            }
+            catch (Exception ex) { McpOutput.Text = $"Vault doctor error: {ex.Message}"; }
+        }
+
+        private void RightInspector_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var brain = ServiceContainer.BrainEngine;
+                brain.ExportInspectorToVault();
+                McpOutput.Text = brain.BuildInspectorMarkdown();
+            }
+            catch (Exception ex) { McpOutput.Text = $"Inspector error: {ex.Message}"; }
         }
 
         private void McpRecentNotes_Click(object sender, RoutedEventArgs e)
@@ -3569,6 +3609,7 @@ LIVE RESPONSE STYLE
                 DashLoadCuriosities();
                 DashDrawNeuroCharts();
                 DashUpdateFooterComment();
+                RefreshRightOpsPanel();
                 // sync to vault immediately on first open
                 Task.Run(() => DashSyncToObsidian(forceDaily: false));
             }
@@ -3620,6 +3661,7 @@ LIVE RESPONSE STYLE
             DashLoadKpiCards();
             DashLoadCreatorHealth();
             DashUpdateFooterComment();
+            RefreshRightOpsPanel();
             if (_activeDashTabDev)
                 DashDrawDevSection();
             else
@@ -4465,6 +4507,81 @@ LIVE RESPONSE STYLE
         }
 
         // ── Health ───────────────────────────────────────────────
+        private void RefreshRightOpsPanel()
+        {
+            try
+            {
+                var brain = ServiceContainer.BrainEngine;
+                var state = brain.State;
+                var now = DateTime.Now;
+
+                RightScreenModeText.Text = string.IsNullOrWhiteSpace(state.LastScreenAwarenessMode)
+                    ? "UNKNOWN"
+                    : state.LastScreenAwarenessMode.Trim().ToUpperInvariant();
+
+                if (state.VisionBackoffUntil > now)
+                {
+                    RightVisionStatusText.Text = $"BACKOFF {state.VisionBackoffUntil:HH:mm}";
+                }
+                else if (state.LastVisionFailureAt > DateTime.MinValue &&
+                         now - state.LastVisionFailureAt < TimeSpan.FromMinutes(30))
+                {
+                    RightVisionStatusText.Text = $"RECOVERED {state.LastVisionFailureAt:HH:mm}";
+                }
+                else
+                {
+                    RightVisionStatusText.Text = "READY";
+                }
+
+                RightStateRefreshText.Text = TrimOpsLine(
+                    string.IsNullOrWhiteSpace(state.LastStateRefreshSummary)
+                        ? "no refresh yet"
+                        : state.LastStateRefreshSummary,
+                    95);
+
+                var proactive = !string.IsNullOrWhiteSpace(state.LastAutonomyReason)
+                    ? state.LastAutonomyReason
+                    : state.LastAutonomyDecision;
+                RightProactiveText.Text = TrimOpsLine(
+                    string.IsNullOrWhiteSpace(proactive) ? "silent" : proactive,
+                    95);
+
+                var intents = brain.GetActiveShortTermIntents(4)
+                    .Select(i => TrimOpsLine($"{i.Kind}: {i.Summary} до {i.ExpectedUntil:HH:mm}", 96))
+                    .DefaultIfEmpty("немає активних намірів")
+                    .ToList();
+                DashCuriosityList.ItemsSource = intents;
+
+                if (now - _rightOpsVaultScanAt > TimeSpan.FromSeconds(60))
+                {
+                    var report = _obsidian.RunVaultDoctor(repair: false);
+                    var linkProblems = report.FolderWikiLinkCount + report.SuppressedActorLinkCount;
+                    _rightOpsVaultLine = $"vault doctor {report.HealthScore}/100 · empty {report.EmptyMarkdownFiles.Count} · links {linkProblems}";
+                    _rightOpsVaultScanAt = now;
+                }
+                RightVaultDoctorText.Text = _rightOpsVaultLine;
+            }
+            catch
+            {
+                try
+                {
+                    RightScreenModeText.Text = "OFFLINE";
+                    RightVisionStatusText.Text = "UNKNOWN";
+                    RightStateRefreshText.Text = "state unavailable";
+                    RightProactiveText.Text = "no signal";
+                    RightVaultDoctorText.Text = _rightOpsVaultLine;
+                }
+                catch { }
+            }
+        }
+
+        private static string TrimOpsLine(string? text, int max)
+        {
+            if (string.IsNullOrWhiteSpace(text)) return "";
+            var clean = text.Replace("\r", " ").Replace("\n", " ").Trim();
+            return clean.Length <= max ? clean : clean[..Math.Max(0, max - 1)] + "…";
+        }
+
         private void DashLoadCreatorHealth()
         {
             try
