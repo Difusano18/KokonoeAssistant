@@ -2380,7 +2380,7 @@ namespace KokonoeAssistant.Services
                             if (coreContent != null && !coreContent.Contains("[[Chats") && !coreContent.Contains("Chats/"))
                             {
                                 _obsidian.AppendToNote(coreNote,
-                                    $"\n\n## Логи чатів\nВсі розмови зберігаються в [[Chats/]] — {chatLogs.Count} сесій.\n");
+                                    $"\n\n## Логи чатів\nВсі розмови зберігаються в `Chats/` — {chatLogs.Count} сесій.\n");
                             }
                         }
                     }

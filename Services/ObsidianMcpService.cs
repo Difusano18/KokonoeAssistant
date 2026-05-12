@@ -666,7 +666,7 @@ tags: [kokonoe, vault, architecture]
             sb.AppendLine();
             sb.AppendLine("## Основні папки");
             foreach (var folder in folders.Take(40))
-                sb.AppendLine($"- [[{folder}/]]");
+                sb.AppendLine($"- `{folder}/`");
             sb.AppendLine();
             sb.AppendLine("## Змінено сьогодні");
             foreach (var note in modifiedToday)
@@ -1249,7 +1249,7 @@ cleanup_empty — видалити порожні нотатки
 
             // Titles sorted longest first — щоб "Python Tips" не перекрилось "Python"
             var titles = index.Keys
-                .Where(t => t.Length > 3)
+                .Where(t => t.Length > 3 && !IsSuppressedAutoLinkTitle(t))
                 .OrderByDescending(t => t.Length)
                 .ToList();
 
@@ -1332,6 +1332,12 @@ cleanup_empty — видалити порожні нотатки
             }
 
             return (changed, total);
+        }
+
+        private static bool IsSuppressedAutoLinkTitle(string title)
+        {
+            var normalized = title.Trim();
+            return string.Equals(normalized, "Kokonoe", StringComparison.OrdinalIgnoreCase);
         }
 
         /// <summary>

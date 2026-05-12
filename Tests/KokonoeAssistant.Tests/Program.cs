@@ -61,6 +61,7 @@ internal static class Program
             Run("Obsidian memory review suggestions", ObsidianMemoryReviewSuggestions);
             Run("Obsidian normalizes malformed frontmatter", ObsidianNormalizesMalformedFrontmatter);
             Run("Obsidian rebuild links preserves frontmatter", ObsidianRebuildLinksPreservesFrontmatter);
+            Run("Obsidian rebuild links skips suppressed actor names", ObsidianRebuildLinksSkipsSuppressedActorNames);
             Run("Obsidian preflight context loads vault before reply", ObsidianPreflightContextLoadsVaultBeforeReply);
 
             Console.WriteLine($"PASS {_passed} tests");
@@ -1219,7 +1220,9 @@ internal static class Program
             var stable = obsidian.MaintainKokonoeVaultArchitecture("test-idempotent-a");
             stable = obsidian.MaintainKokonoeVaultArchitecture("test-idempotent-b");
             AssertTrue(stable.CreatedNotes.Count == 0, "settled maintenance should not create managed notes again");
-            AssertTrue(File.ReadAllText(Path.Combine(dir, "Kokonoe", "Vault Index.md")).Contains("managed-by: Kokonoe"), "managed notes should keep ownership marker");
+            var vaultIndex = File.ReadAllText(Path.Combine(dir, "Kokonoe", "Vault Index.md"));
+            AssertTrue(vaultIndex.Contains("managed-by: Kokonoe"), "managed notes should keep ownership marker");
+            AssertTrue(!vaultIndex.Contains("/]]"), "vault index should not create empty graph nodes for folders");
         }
         finally
         {
@@ -1390,6 +1393,11 @@ internal static class Program
 
 Reference note.
 """);
+            obsidian.WriteNote("Project.md", """
+# Project
+
+Reference note.
+""");
             obsidian.WriteNote("Chats/sample.md", """
 ---
 type: chat-log
@@ -1399,7 +1407,7 @@ date: 2026-05-12
 
 # Sample
 
-Kokonoe should be linked here, not in YAML tags.
+Kokonoe should stay plain in prose. Project should be linked here, not in YAML tags.
 """);
 
             var result = obsidian.RebuildLinks();
@@ -1407,8 +1415,52 @@ Kokonoe should be linked here, not in YAML tags.
 
             AssertTrue(result.linksAdded >= 1, "rebuild should add a body link");
             AssertTrue(updated.Contains("tags: [kokonoe, chat]"), "rebuild must not link frontmatter tags");
-            AssertTrue(updated.Contains("[[Kokonoe]] should be linked here"), "rebuild should still link note titles in body");
+            AssertTrue(updated.Contains("Kokonoe should stay plain in prose"), "suppressed actor names should not be linked in body");
+            AssertTrue(updated.Contains("[[Project]] should be linked here"), "rebuild should still link ordinary note titles in body");
             AssertTrue(!updated.Contains("tags: [[[Kokonoe]], chat]"), "rebuild must not corrupt tags into wiki links");
+        }
+        finally
+        {
+            try { Directory.Delete(dir, recursive: true); } catch { }
+        }
+    }
+
+    private static void ObsidianRebuildLinksSkipsSuppressedActorNames()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "KokonoeAssistant.Tests", "vault-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            var obsidian = new ObsidianMcpService(dir);
+            obsidian.WriteNote("Kokonoe.md", """
+# Kokonoe
+
+Actor note.
+""");
+            obsidian.WriteNote("Project.md", """
+# Project
+
+Reference note.
+""");
+            obsidian.WriteNote("Chats/sample.md", """
+---
+type: chat-log
+tags: [kokonoe, chat]
+date: 2026-05-12
+---
+
+# Sample
+
+Kokonoe should stay plain. Project should be linked.
+""");
+
+            var result = obsidian.RebuildLinks();
+            var updated = obsidian.ReadNote("Chats/sample.md") ?? "";
+
+            AssertTrue(result.linksAdded >= 1, "rebuild should still add non-suppressed note links");
+            AssertTrue(updated.Contains("Kokonoe should stay plain"), "suppressed actor name should remain plain text");
+            AssertTrue(!updated.Contains("[[Kokonoe]]"), "suppressed actor name must not become a wiki link");
+            AssertTrue(updated.Contains("[[Project]] should be linked"), "ordinary note title should still be linked");
         }
         finally
         {
