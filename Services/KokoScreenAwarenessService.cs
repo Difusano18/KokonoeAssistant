@@ -56,6 +56,9 @@ namespace KokonoeAssistant.Services
 - Якщо це майже той самий екран і немає нової думки, постав should_comment=false.
 - comment_uk має бути 1 коротке речення в її стилі: живо, сухо, без технічних слів типу "скріншот проаналізовано".
 
+- Для живого режиму: якщо видно зависання, довге вдивляння, скрол, чат/профіль, гру або очевидне відволікання — можна дати короткий підкол навіть без "важливої" події.
+- Якщо це майже той самий екран і останній коментар уже сказав ту саму думку, постав should_comment=false. Якщо сама пауза/зависання стала новою думкою — можна should_comment=true.
+
 JSON schema:
 {
   "summary_uk": "що видно/що він робить, до 140 символів",
@@ -134,8 +137,8 @@ JSON schema:
             if (kind == "observe")
                 return No(passiveChatWindow ? "passive chat/profile screen" : "observation only");
 
-            var cooldown = Math.Clamp(passiveChatWindow ? Math.Max(cooldownMinutes, 30) : cooldownMinutes, 1, 180);
-            if ((now - lastCommentAt).TotalMinutes < cooldown)
+            var cooldown = Math.Clamp(cooldownMinutes, 1, 180);
+            if (kind != "jab" && (now - lastCommentAt).TotalMinutes < cooldown)
                 return No("comment cooldown");
 
             if (LooksTechnical(comment))

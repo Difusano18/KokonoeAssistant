@@ -47,6 +47,7 @@ internal static class Program
             Run("Screen awareness suppresses repeated comments", ScreenAwarenessSuppressesRepeatedComments);
             Run("Screen awareness redacts private identifiers", ScreenAwarenessRedactsPrivateIdentifiers);
             Run("Screen awareness allows rare passive jab", ScreenAwarenessAllowsRarePassiveJab);
+            Run("Screen awareness lets jab bypass comment cooldown", ScreenAwarenessLetsJabBypassCommentCooldown);
             Run("Screen awareness blocks sensitive screens", ScreenAwarenessBlocksSensitiveScreens);
             Run("Startup greeting avoids dead canned replies", StartupGreetingAvoidsDeadCannedReplies);
             Run("Startup greeting sanitizes dry return line", StartupGreetingSanitizesDryReturnLine);
@@ -1020,6 +1021,34 @@ internal static class Program
         AssertTrue(decision.ShouldSend, "passive chat should allow a rare jab");
         AssertTrue(decision.CountsAsJab, "passive chat comment should be counted as a jab");
         AssertEqual("jab", decision.Kind, "passive chat should be classified as jab");
+    }
+
+    private static void ScreenAwarenessLetsJabBypassCommentCooldown()
+    {
+        var service = new KokoScreenAwarenessService();
+        var now = new DateTime(2026, 5, 12, 12, 8, 0);
+        var analysis = new KokoScreenAwarenessAnalysis
+        {
+            SummaryUk = "telegram chat/profile, same idle screen",
+            ActivityUk = "same idle",
+            ShouldComment = true,
+            CommentUk = "Вісім хвилин дивитись в одну точку. Справді амбітний план.",
+            Importance = 0.76
+        };
+
+        var decision = service.DecideComment(
+            analysis,
+            now,
+            now.AddMinutes(-8),
+            "Інший короткий коментар.",
+            cooldownMinutes: 30,
+            commentsEnabled: true,
+            screenChanged: false,
+            isActive: false,
+            activeWindowTitle: "Telegram");
+
+        AssertTrue(decision.ShouldSend, "jab should not be blocked by the general assist cooldown");
+        AssertEqual("jab", decision.Kind, "idle passive screen should stay a jab");
     }
 
     private static void ScreenAwarenessBlocksSensitiveScreens()
