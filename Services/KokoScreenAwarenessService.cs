@@ -20,6 +20,8 @@ namespace KokonoeAssistant.Services
         public bool ShouldSend { get; set; }
         public string Reason { get; set; } = "";
         public string Message { get; set; } = "";
+        public string Kind { get; set; } = "observe";
+        public bool CountsAsJab { get; set; }
     }
 
     public sealed class KokoScreenAwarenessService
@@ -103,10 +105,15 @@ JSON schema:
             bool commentsEnabled,
             bool screenChanged = true,
             bool isActive = true,
-            string activeWindowTitle = "")
+            string activeWindowTitle = "",
+            DateTime lastJabAt = default,
+            DateTime jabDate = default,
+            int jabCountToday = 0,
+            int jabCooldownMinutes = 60,
+            int dailyJabLimit = 4)
         {
             if (!commentsEnabled)
-                return No("comments disabled");
+                return No("comments disabled", "silence");
 
             if (!analysis.ShouldComment)
                 return No("vision chose observation-only");
@@ -118,16 +125,36 @@ JSON schema:
             if (analysis.Importance < 0.60)
                 return No("low importance");
 
-            if (!screenChanged && !isActive)
+            var passiveChatWindow = IsPassiveChatWindow(activeWindowTitle, analysis);
+            if (LooksSensitive(activeWindowTitle, analysis))
+                return No("sensitive screen", "silence");
+
+            var useful = LooksUseful(activeWindowTitle, analysis, screenChanged, isActive);
+            var jabCandidate = LooksJabCandidate(activeWindowTitle, analysis, screenChanged, isActive, passiveChatWindow);
+
+            if (!screenChanged && !isActive && !jabCandidate)
                 return No("unchanged idle screen");
 
-            var passiveChatWindow = IsPassiveChatWindow(activeWindowTitle, analysis);
-            if (passiveChatWindow && analysis.Importance < 0.85)
-                return No("passive chat/profile screen");
+            var kind = useful && !passiveChatWindow ? "assist" : jabCandidate ? "jab" : "observe";
+            if (kind == "observe")
+                return No(passiveChatWindow ? "passive chat/profile screen" : "observation only");
 
             var cooldown = Math.Clamp(passiveChatWindow ? Math.Max(cooldownMinutes, 30) : cooldownMinutes, 1, 180);
             if ((now - lastCommentAt).TotalMinutes < cooldown)
                 return No("comment cooldown");
+
+            if (kind == "jab")
+            {
+                dailyJabLimit = Math.Clamp(dailyJabLimit, 0, 12);
+                jabCooldownMinutes = Math.Clamp(jabCooldownMinutes, 15, 360);
+
+                var todayCount = jabDate.Date == now.Date ? jabCountToday : 0;
+                if (dailyJabLimit <= 0 || todayCount >= dailyJabLimit)
+                    return No("daily jab limit", "jab");
+
+                if ((now - lastJabAt).TotalMinutes < jabCooldownMinutes)
+                    return No("jab cooldown", "jab");
+            }
 
             if (LooksTechnical(comment))
                 return No("technical wording");
@@ -138,7 +165,9 @@ JSON schema:
             return new KokoScreenAwarenessDecision
             {
                 ShouldSend = true,
-                Message = comment
+                Message = comment,
+                Kind = kind,
+                CountsAsJab = kind == "jab"
             };
         }
 
@@ -155,8 +184,8 @@ JSON schema:
             return sb.ToString().Trim();
         }
 
-        private static KokoScreenAwarenessDecision No(string reason)
-            => new() { ShouldSend = false, Reason = reason };
+        private static KokoScreenAwarenessDecision No(string reason, string kind = "observe")
+            => new() { ShouldSend = false, Reason = reason, Kind = kind };
 
         private static string CleanComment(string? text)
         {
@@ -221,6 +250,45 @@ JSON schema:
 
             return looksPassive || analysis.Importance < 0.85;
         }
+
+        private static bool LooksSensitive(string activeWindowTitle, KokoScreenAwarenessAnalysis analysis)
+        {
+            var text = $"{activeWindowTitle} {analysis.SummaryUk} {analysis.ActivityUk} {analysis.CommentUk}".ToLowerInvariant();
+            return ContainsAny(text,
+                "password", "passwd", "парол", "api key", "apikey", "token", "токен",
+                "secret", "2fa", "otp", "authenticator", "bank", "банк", "банкінг",
+                "credit card", "card number", "ключ доступ", "private key", "seed phrase");
+        }
+
+        private static bool LooksUseful(string activeWindowTitle, KokoScreenAwarenessAnalysis analysis, bool screenChanged, bool isActive)
+        {
+            var text = $"{activeWindowTitle} {analysis.SummaryUk} {analysis.ActivityUk} {analysis.CommentUk}".ToLowerInvariant();
+            if (analysis.Importance >= 0.88 && (screenChanged || isActive))
+                return true;
+
+            return analysis.Importance >= 0.65 && ContainsAny(text,
+                "error", "exception", "failed", "crash", "bug", "помил", "злам",
+                "code", "код", "visual studio", "vscode", "rider", "terminal", "build",
+                "завдання", "homework", "курс", "навчан", "obsidian", "editor", "редактор");
+        }
+
+        private static bool LooksJabCandidate(string activeWindowTitle, KokoScreenAwarenessAnalysis analysis, bool screenChanged, bool isActive, bool passiveChatWindow)
+        {
+            var text = $"{activeWindowTitle} {analysis.SummaryUk} {analysis.ActivityUk} {analysis.CommentUk}".ToLowerInvariant();
+            if (passiveChatWindow && analysis.Importance >= 0.70)
+                return true;
+
+            if (!screenChanged && !isActive && analysis.Importance >= 0.70)
+                return true;
+
+            return analysis.Importance >= 0.65 && ContainsAny(text,
+                "youtube", "tiktok", "reddit", "steam", "telegram", "chat", "чат",
+                "game", "гра", "dota", "дота", "мем", "картин", "scroll", "горта",
+                "idle", "same", "завис", "дивиш", "профіль", "profile");
+        }
+
+        private static bool ContainsAny(string text, params string[] needles)
+            => needles.Any(n => text.Contains(n, StringComparison.OrdinalIgnoreCase));
 
         private static bool TooSimilar(string a, string b)
         {
