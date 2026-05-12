@@ -100,7 +100,10 @@ JSON schema:
             DateTime lastCommentAt,
             string lastComment,
             int cooldownMinutes,
-            bool commentsEnabled)
+            bool commentsEnabled,
+            bool screenChanged = true,
+            bool isActive = true,
+            string activeWindowTitle = "")
         {
             if (!commentsEnabled)
                 return No("comments disabled");
@@ -112,7 +115,17 @@ JSON schema:
             if (string.IsNullOrWhiteSpace(comment))
                 return No("empty comment");
 
-            var cooldown = Math.Clamp(cooldownMinutes, 1, 180);
+            if (analysis.Importance < 0.60)
+                return No("low importance");
+
+            if (!screenChanged && !isActive)
+                return No("unchanged idle screen");
+
+            var passiveChatWindow = IsPassiveChatWindow(activeWindowTitle, analysis);
+            if (passiveChatWindow && analysis.Importance < 0.85)
+                return No("passive chat/profile screen");
+
+            var cooldown = Math.Clamp(passiveChatWindow ? Math.Max(cooldownMinutes, 30) : cooldownMinutes, 1, 180);
             if ((now - lastCommentAt).TotalMinutes < cooldown)
                 return No("comment cooldown");
 
@@ -183,6 +196,30 @@ JSON schema:
                 || lower.Contains("json")
                 || lower.Contains("should_comment")
                 || lower.Contains("аналіз екрана заверш");
+        }
+
+        private static bool IsPassiveChatWindow(string activeWindowTitle, KokoScreenAwarenessAnalysis analysis)
+        {
+            var text = $"{activeWindowTitle} {analysis.SummaryUk} {analysis.ActivityUk} {analysis.CommentUk}".ToLowerInvariant();
+            var looksChat = text.Contains("telegram")
+                || text.Contains("чат")
+                || text.Contains("chat")
+                || text.Contains("бот")
+                || text.Contains("bot")
+                || text.Contains("profile")
+                || text.Contains("проф");
+
+            if (!looksChat) return false;
+
+            var looksPassive = text.Contains("same")
+                || text.Contains("idle")
+                || text.Contains("profile")
+                || text.Contains("проф")
+                || text.Contains("дивиш")
+                || text.Contains("список")
+                || text.Contains("сторін");
+
+            return looksPassive || analysis.Importance < 0.85;
         }
 
         private static bool TooSimilar(string a, string b)

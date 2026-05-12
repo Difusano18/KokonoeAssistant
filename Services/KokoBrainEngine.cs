@@ -2721,6 +2721,10 @@ namespace KokonoeAssistant.Services
 
                 var activity = _screenActivityAnalyzer.AnalyzeScreenshot(screenshot);
                 var hash = _screenActivityAnalyzer.GenerateScreenshotHash(screenshot);
+                var screenChanged = activity.IsActive ||
+                    (!string.IsNullOrWhiteSpace(_state.LastScreenAwarenessHash) &&
+                     hash != _state.LastScreenAwarenessHash &&
+                     activity.PixelDifferencePercentage >= 1.0);
                 var prompt = ScreenAwareness.BuildVisionPrompt(
                     activity,
                     _state.LastScreenAwarenessSummary,
@@ -2767,7 +2771,10 @@ namespace KokonoeAssistant.Services
                     _state.LastScreenAwarenessCommentAt,
                     _state.LastScreenAwarenessComment,
                     settings.ScreenAwarenessCommentCooldownMins,
-                    settings.ScreenAwarenessSendComments);
+                    settings.ScreenAwarenessSendComments,
+                    screenChanged,
+                    activity.IsActive,
+                    activity.ActiveWindowTitle ?? "");
 
                 if (!decision.ShouldSend)
                 {

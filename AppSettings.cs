@@ -83,7 +83,7 @@ namespace KokonoeAssistant
         public bool ScreenAwarenessEnabled { get; set; } = true;
         public bool ScreenAwarenessSendComments { get; set; } = true;
         public int  ScreenAwarenessIntervalMins { get; set; } = 5;
-        public int  ScreenAwarenessCommentCooldownMins { get; set; } = 5;
+        public int  ScreenAwarenessCommentCooldownMins { get; set; } = 30;
 
         // System
         public bool MinimizeToTray      { get; set; } = true;

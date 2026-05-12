@@ -27,6 +27,7 @@ internal static class Program
             Run("Presence never interrupts active sleep intent", PresenceNeverInterruptsActiveSleepIntent);
             Run("State freshness expires stale sleep intent", StateFreshnessExpiresStaleSleepIntent);
             Run("State freshness closes intent on wake signal", StateFreshnessClosesIntentOnWakeSignal);
+            Run("State freshness closes stale course on later activity", StateFreshnessClosesStaleCourseOnLaterActivity);
             Run("Vault sync policy flushes stale partial batch", VaultSyncPolicyFlushesStalePartialBatch);
             Run("Presence long silence can interrupt on high autonomy", PresenceLongSilenceCanInterruptOnHighAutonomy);
             Run("Internal day shifts phase and writes vault status", InternalDayShiftsPhaseAndWritesVaultStatus);
@@ -462,6 +463,31 @@ internal static class Program
 
         AssertTrue(result.ResolvedIntentCount == 1, "wake signal should resolve active intent");
         AssertTrue(state.ShortTermIntents[0].ResolvedAt == now, "resolved intent should get current timestamp");
+    }
+
+    private static void StateFreshnessClosesStaleCourseOnLaterActivity()
+    {
+        var now = new DateTime(2026, 5, 12, 12, 40, 0);
+        var state = new KokoInternalState();
+        state.ShortTermIntents.Add(new ShortTermIntent
+        {
+            Kind = "course",
+            Summary = "пішов на курси/заняття",
+            SourceText = "я на курси пішов",
+            CreatedAt = now.AddHours(-3),
+            FollowUpAt = now.AddHours(-2),
+            ExpectedUntil = now.AddHours(-1)
+        });
+
+        var messages = new[]
+        {
+            new ChatRepository.ChatMessage { Role = "user", Content = "які картинки хех", Timestamp = now.AddMinutes(-5) }
+        };
+
+        var result = new KokoStateFreshnessService().Refresh(state, messages, now);
+
+        AssertTrue(result.ResolvedIntentCount == 1, "later unrelated user activity should close stale course intent");
+        AssertTrue(state.ShortTermIntents[0].ResolvedAt == now, "stale course should be resolved now");
     }
 
     private static void VaultSyncPolicyFlushesStalePartialBatch()

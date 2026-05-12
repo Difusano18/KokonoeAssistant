@@ -29,7 +29,10 @@ namespace KokonoeAssistant.Services
                 .FirstOrDefault();
 
             if (lastUser != null)
+            {
                 result.ResolvedIntentCount += ResolveFromLatestUserSignal(state, lastUser, now);
+                result.ResolvedIntentCount += ResolveStaleIntentFromLaterUserActivity(state, lastUser, now);
+            }
 
             result.ExpiredIntentCount += ExpireOverdueIntents(state, now);
 
@@ -66,6 +69,34 @@ namespace KokonoeAssistant.Services
             return count;
         }
 
+        private static int ResolveStaleIntentFromLaterUserActivity(KokoInternalState state, ChatRepository.ChatMessage lastUser, DateTime now)
+        {
+            var content = lastUser.Content ?? "";
+            var lower = content.ToLowerInvariant();
+            var count = 0;
+
+            foreach (var intent in state.ShortTermIntents.Where(i => !i.ResolvedAt.HasValue).ToList())
+            {
+                if (intent.Kind == "sleep")
+                    continue;
+
+                if (lastUser.Timestamp <= intent.CreatedAt.AddMinutes(1))
+                    continue;
+
+                if (lastUser.Timestamp < intent.ExpectedUntil.AddMinutes(10))
+                    continue;
+
+                if (LooksLikeSameIntentContinuation(lower, intent.Kind))
+                    continue;
+
+                intent.ResolvedAt = now;
+                intent.ResolutionText = $"auto-state-refresh: later user activity superseded stale {intent.Kind} intent: {Trim(content, 160)}";
+                count++;
+            }
+
+            return count;
+        }
+
         private static int ExpireOverdueIntents(KokoInternalState state, DateTime now)
         {
             var count = 0;
@@ -89,7 +120,7 @@ namespace KokonoeAssistant.Services
         private static TimeSpan GraceFor(string kind) => kind switch
         {
             "return_home" => TimeSpan.FromMinutes(75),
-            "course" => TimeSpan.FromHours(2),
+            "course" => TimeSpan.FromMinutes(45),
             "errand" => TimeSpan.FromMinutes(90),
             "walk" => TimeSpan.FromHours(2),
             "work" => TimeSpan.FromHours(4),
@@ -102,10 +133,27 @@ namespace KokonoeAssistant.Services
         {
             "sleep" => TimeSpan.FromHours(14),
             "work" => TimeSpan.FromHours(12),
-            "course" => TimeSpan.FromHours(8),
+            "course" => TimeSpan.FromHours(4),
             "return_home" => TimeSpan.FromHours(6),
             _ => TimeSpan.FromHours(6)
         };
+
+        private static bool LooksLikeSameIntentContinuation(string lower, string kind)
+        {
+            if (string.IsNullOrWhiteSpace(lower)) return false;
+
+            var stillAway = ContainsAny(lower, "ще", "досі", "поки", "буду", "йду", "іду", "піду", "пішов", "зараз");
+            return kind switch
+            {
+                "course" => stillAway && ContainsAny(lower, "курс", "занят", "урок", "пара", "навчан"),
+                "work" => stillAway && ContainsAny(lower, "робот", "прац", "код", "проєкт", "проект"),
+                "errand" => stillAway && ContainsAny(lower, "магаз", "куп", "продукт", "справ"),
+                "walk" => stillAway && ContainsAny(lower, "гуля", "прогуля", "вулиц"),
+                "return_home" => stillAway && ContainsAny(lower, "додому", "дом", "дороз", "їду", "йду", "іду"),
+                "busy" => stillAway && ContainsAny(lower, "зайнят", "потім", "не можу"),
+                _ => false
+            };
+        }
 
         private static bool LooksLikeReturnOrWakeSignal(string lower)
             => ContainsAny(lower,
