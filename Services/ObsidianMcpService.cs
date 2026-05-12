@@ -1187,9 +1187,22 @@ cleanup_empty — видалити порожні нотатки
                     var thisTitle = Path.GetFileNameWithoutExtension(file);
                     var fileAdded = 0;
 
-                    // Split into [plain, [[link]], plain, [[link]], ...] segments
-                    var segments  = linkSplitter.Split(raw);    // plain text parts
-                    var links     = linkSplitter.Matches(raw);  // [[link]] parts
+                    var frontmatter = "";
+                    var body = raw;
+                    if (raw.StartsWith("---", StringComparison.Ordinal))
+                    {
+                        var end = raw.IndexOf("---", 3, StringComparison.Ordinal);
+                        if (end > 0)
+                        {
+                            frontmatter = raw[..(end + 3)];
+                            body = raw[(end + 3)..];
+                        }
+                    }
+
+                    // Split into [plain, [[link]], plain, [[link]], ...] segments.
+                    // Frontmatter is metadata, not prose; never inject wiki links into tags/date/type.
+                    var segments  = linkSplitter.Split(body);    // plain text parts
+                    var links     = linkSplitter.Matches(body);  // [[link]] parts
 
                     var newSegments = new string[segments.Length];
                     for (int i = 0; i < segments.Length; i++)
@@ -1219,7 +1232,7 @@ cleanup_empty — видалити порожні нотатки
                         if (i < links.Count)
                             sb.Append(links[i].Value);
                     }
-                    var modified = sb.ToString();
+                    var modified = frontmatter + sb;
 
                     if (modified != raw)
                     {

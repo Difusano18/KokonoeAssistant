@@ -59,6 +59,7 @@ internal static class Program
             Run("Obsidian memory quality and task queue", ObsidianMemoryQualityAndTaskQueue);
             Run("Obsidian memory duplicate cleanup", ObsidianMemoryDuplicateCleanup);
             Run("Obsidian memory review suggestions", ObsidianMemoryReviewSuggestions);
+            Run("Obsidian rebuild links preserves frontmatter", ObsidianRebuildLinksPreservesFrontmatter);
             Run("Obsidian preflight context loads vault before reply", ObsidianPreflightContextLoadsVaultBeforeReply);
 
             Console.WriteLine($"PASS {_passed} tests");
@@ -1369,6 +1370,44 @@ internal static class Program
             AssertTrue(review.Actions.Any(a => a.Action == "promote_to_preference"), "review should identify preference-like memory");
             AssertTrue(reviewNote.Contains("## Об'єднати"), "review note should render merge section");
             AssertTrue(maintenance.MemoryReviewActionCount >= 3, "maintenance should report review action count");
+        }
+        finally
+        {
+            try { Directory.Delete(dir, recursive: true); } catch { }
+        }
+    }
+
+    private static void ObsidianRebuildLinksPreservesFrontmatter()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "KokonoeAssistant.Tests", "vault-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            var obsidian = new ObsidianMcpService(dir);
+            obsidian.WriteNote("Kokonoe.md", """
+# Kokonoe
+
+Reference note.
+""");
+            obsidian.WriteNote("Chats/sample.md", """
+---
+type: chat-log
+tags: [kokonoe, chat]
+date: 2026-05-12
+---
+
+# Sample
+
+Kokonoe should be linked here, not in YAML tags.
+""");
+
+            var result = obsidian.RebuildLinks();
+            var updated = obsidian.ReadNote("Chats/sample.md") ?? "";
+
+            AssertTrue(result.linksAdded >= 1, "rebuild should add a body link");
+            AssertTrue(updated.Contains("tags: [kokonoe, chat]"), "rebuild must not link frontmatter tags");
+            AssertTrue(updated.Contains("[[Kokonoe]] should be linked here"), "rebuild should still link note titles in body");
+            AssertTrue(!updated.Contains("tags: [[[Kokonoe]], chat]"), "rebuild must not corrupt tags into wiki links");
         }
         finally
         {
