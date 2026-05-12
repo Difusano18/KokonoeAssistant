@@ -59,6 +59,7 @@ internal static class Program
             Run("Obsidian memory quality and task queue", ObsidianMemoryQualityAndTaskQueue);
             Run("Obsidian memory duplicate cleanup", ObsidianMemoryDuplicateCleanup);
             Run("Obsidian memory review suggestions", ObsidianMemoryReviewSuggestions);
+            Run("Obsidian normalizes malformed frontmatter", ObsidianNormalizesMalformedFrontmatter);
             Run("Obsidian rebuild links preserves frontmatter", ObsidianRebuildLinksPreservesFrontmatter);
             Run("Obsidian preflight context loads vault before reply", ObsidianPreflightContextLoadsVaultBeforeReply);
 
@@ -1413,6 +1414,27 @@ Kokonoe should be linked here, not in YAML tags.
         {
             try { Directory.Delete(dir, recursive: true); } catch { }
         }
+    }
+
+    private static void ObsidianNormalizesMalformedFrontmatter()
+    {
+        var normalized = ObsidianMcpService.NormalizeFrontmatter("""
+ч---
+type: [[finance]]-tracker
+tags: [[[kokonoe]], #[[chat]], #category/[[finance]]/expense]
+date: [[2026-05-12]]
+created: [[2026-05-12]] 13:40
+---
+
+# Sample
+""");
+
+        AssertTrue(normalized.StartsWith("---\n"), "normalizer should repair garbage before opening frontmatter");
+        AssertTrue(normalized.Contains("type: finance-tracker"), "normalizer should remove wiki links from scalar metadata");
+        AssertTrue(normalized.Contains("tags: [kokonoe, chat, category/finance/expense]"), "normalizer should flatten and clean tags");
+        AssertTrue(normalized.Contains("date: 2026-05-12"), "normalizer should turn wiki-link date into scalar date");
+        AssertTrue(normalized.Contains("created: 2026-05-12 13:40"), "normalizer should preserve created time while removing wiki link");
+        AssertTrue(!normalized.Contains("[["), "frontmatter normalizer should remove wiki links from metadata");
     }
 
     private static void ObsidianPreflightContextLoadsVaultBeforeReply()

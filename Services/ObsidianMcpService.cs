@@ -55,6 +55,7 @@ namespace KokonoeAssistant.Services
         {
             var full = Resolve(path);
             Directory.CreateDirectory(Path.GetDirectoryName(full)!);
+            content = NormalizeFrontmatter(content);
             File.WriteAllText(full, content, Encoding.UTF8);
             return full;
         }
@@ -72,7 +73,7 @@ namespace KokonoeAssistant.Services
 ---
 date: {DateTime.Now:yyyy-MM-dd}
 created: {DateTime.Now:yyyy-MM-dd HH:mm}
-tags: [{tagsLine}]
+tags: [{SanitizeTagsLine(tagsLine)}]
 ---
 
 # {title}
@@ -89,6 +90,92 @@ tags: [{tagsLine}]
             File.AppendAllText(full, "\n" + content, Encoding.UTF8);
             return full;
         }
+
+        public static string NormalizeFrontmatter(string content)
+        {
+            if (string.IsNullOrWhiteSpace(content)) return content;
+
+            if (!content.StartsWith("---", StringComparison.Ordinal))
+            {
+                var firstLineEnd = content.IndexOf('\n');
+                var firstLine = firstLineEnd >= 0 ? content[..firstLineEnd].TrimEnd('\r') : content.TrimEnd('\r');
+                if (firstLine.EndsWith("---", StringComparison.Ordinal) && firstLine.Length > 3)
+                {
+                    content = "---" + (firstLineEnd >= 0 ? content[firstLineEnd..] : "");
+                }
+            }
+
+            if (!content.StartsWith("---", StringComparison.Ordinal)) return content;
+
+            var end = content.IndexOf("---", 3, StringComparison.Ordinal);
+            if (end <= 0) return content;
+
+            var front = content[3..end];
+            var body = content[(end + 3)..];
+            var lines = front.Replace("\r\n", "\n").Replace('\r', '\n').Split('\n').ToList();
+            var normalized = new List<string>();
+
+            foreach (var rawLine in lines)
+            {
+                var line = rawLine.TrimEnd();
+                if (string.IsNullOrWhiteSpace(line))
+                    continue;
+
+                if (line.StartsWith("tags:", StringComparison.OrdinalIgnoreCase))
+                {
+                    var value = line[(line.IndexOf(':') + 1)..].Trim();
+                    normalized.Add($"tags: [{SanitizeTagsLine(value)}]");
+                    continue;
+                }
+
+                if (line.StartsWith("date:", StringComparison.OrdinalIgnoreCase) ||
+                    line.StartsWith("created:", StringComparison.OrdinalIgnoreCase))
+                {
+                    var colon = line.IndexOf(':');
+                    var key = line[..colon].Trim();
+                    var value = NormalizeYamlDateLike(line[(colon + 1)..].Trim());
+                    normalized.Add($"{key}: {value}");
+                    continue;
+                }
+
+                normalized.Add(NormalizeYamlInlineWikiLinks(line));
+            }
+
+            return "---\n" + string.Join("\n", normalized) + "\n---" + body;
+        }
+
+        private static string SanitizeTagsLine(string value)
+        {
+            value = (value ?? "")
+                .Replace("[[", "", StringComparison.Ordinal)
+                .Replace("]]", "", StringComparison.Ordinal)
+                .Replace("[", "", StringComparison.Ordinal)
+                .Replace("]", "", StringComparison.Ordinal)
+                .Replace("\"", "", StringComparison.Ordinal);
+
+            var tags = value
+                .Split(new[] { ',', ' ', '\t', '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries)
+                .Select(t => t.Trim().TrimStart('#').Trim())
+                .Select(t => System.Text.RegularExpressions.Regex.Replace(t, @"[^\p{L}\p{N}_/-]", ""))
+                .Where(t => !string.IsNullOrWhiteSpace(t))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+
+            return string.Join(", ", tags);
+        }
+
+        private static string NormalizeYamlDateLike(string value)
+        {
+            value = NormalizeYamlInlineWikiLinks(value);
+            var match = System.Text.RegularExpressions.Regex.Match(
+                value,
+                @"^(?<date>\d{4}-\d{2}-\d{2})(?<time>\s+\d{1,2}:\d{2})?$");
+            if (!match.Success) return value;
+            return match.Groups["date"].Value + (match.Groups["time"].Success ? match.Groups["time"].Value : "");
+        }
+
+        private static string NormalizeYamlInlineWikiLinks(string value)
+            => System.Text.RegularExpressions.Regex.Replace(value ?? "", @"\[\[([^\]]+)\]\]", "$1").Trim();
 
         public int AppendUniqueItemsToNote(string path, string header, IEnumerable<string> items, string label, double duplicateThreshold = 0.82)
         {
@@ -1440,7 +1527,7 @@ cleanup_empty — видалити порожні нотатки
                 if (end > 0)
                 {
                     var front = content[3..end];
-                    var tagsLine = $"tags: [{string.Join(", ", tags)}]";
+                    var tagsLine = $"tags: [{SanitizeTagsLine(string.Join(", ", tags))}]";
                     if (front.Contains("tags:"))
                         front = System.Text.RegularExpressions.Regex.Replace(front, @"tags:.*", tagsLine);
                     else
@@ -1451,11 +1538,11 @@ cleanup_empty — видалити порожні нотатки
             else
             {
                 // Немає frontmatter — додати
-                var front = $"---\ntags: [{string.Join(", ", tags)}]\n---\n\n";
+                var front = $"---\ntags: [{SanitizeTagsLine(string.Join(", ", tags))}]\n---\n\n";
                 content = front + content;
             }
 
-            File.WriteAllText(full, content);
+            File.WriteAllText(full, NormalizeFrontmatter(content), Encoding.UTF8);
             return relPath;
         }
 
