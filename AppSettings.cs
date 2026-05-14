@@ -18,6 +18,10 @@ namespace KokonoeAssistant
 
     public class AppSettings
     {
+        public const string DefaultOllamaCloudModel = "gemma4:31b-cloud";
+        public const string DefaultVisionModel = "gemma4:31b-cloud";
+        public const string FallbackVisionModel = "";
+
         // LLM Provider: "lmstudio" | "claude" | "ollama-cloud"
         public string LlmProvider { get; set; } = "lmstudio";
 
@@ -33,10 +37,10 @@ namespace KokonoeAssistant
         // OllamaApiKey — legacy (single-key); тепер пул у OllamaKeys (нижче)
         public string OllamaApiKey { get; set; } = "";
         public string OllamaUrl    { get; set; } = "https://ollama.com/v1/chat/completions";
-        public string OllamaModel  { get; set; } = "gpt-oss:120b-cloud";
+        public string OllamaModel  { get; set; } = DefaultOllamaCloudModel;
 
         // Vision model — використовується замість основної коли є вкладене зображення
-        public string VisionModel  { get; set; } = "qwen3-vl:235b-instruct";
+        public string VisionModel  { get; set; } = DefaultVisionModel;
         // Vision URL — якщо заповнений, image requests йдуть сюди (локальний Ollama/LM Studio), а не на OllamaUrl
         // Порожньо = той самий OllamaUrl, але з VisionModel
         public string VisionUrl    { get; set; } = "";
@@ -82,7 +86,7 @@ namespace KokonoeAssistant
         // Screen awareness
         public bool ScreenAwarenessEnabled { get; set; } = true;
         public bool ScreenAwarenessSendComments { get; set; } = true;
-        public int  ScreenAwarenessIntervalMins { get; set; } = 5;
+        public int  ScreenAwarenessIntervalMins { get; set; } = 30;
         public int  ScreenAwarenessCommentCooldownMins { get; set; } = 30;
 
         // System
@@ -106,14 +110,46 @@ namespace KokonoeAssistant
             try
             {
                 if (File.Exists(_path))
-                    return JsonConvert.DeserializeObject<AppSettings>(File.ReadAllText(_path))
-                           ?? new AppSettings();
+                {
+                    var loaded = JsonConvert.DeserializeObject<AppSettings>(File.ReadAllText(_path))
+                                 ?? new AppSettings();
+                    if (NormalizeDefaults(loaded))
+                        loaded.Save();
+                    return loaded;
+                }
             }
             catch { }
 
             var def = new AppSettings();
             def.Save();
             return def;
+        }
+
+        private static bool NormalizeDefaults(AppSettings settings)
+        {
+            var changed = false;
+
+            if (string.IsNullOrWhiteSpace(settings.OllamaModel) ||
+                settings.OllamaModel.Equals("gpt-oss:120b-cloud", StringComparison.OrdinalIgnoreCase))
+            {
+                settings.OllamaModel = DefaultOllamaCloudModel;
+                changed = true;
+            }
+
+            if (string.IsNullOrWhiteSpace(settings.VisionModel) ||
+                settings.VisionModel.Equals("qwen3-vl:235b-instruct", StringComparison.OrdinalIgnoreCase))
+            {
+                settings.VisionModel = DefaultVisionModel;
+                changed = true;
+            }
+
+            if (settings.ScreenAwarenessIntervalMins < 30)
+            {
+                settings.ScreenAwarenessIntervalMins = 30;
+                changed = true;
+            }
+
+            return changed;
         }
 
         public void Save()

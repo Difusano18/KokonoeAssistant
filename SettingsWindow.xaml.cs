@@ -119,7 +119,9 @@ namespace KokonoeAssistant
             _settings.ClaudeModel        = ClaudeModelBox.Text?.Trim() ?? "claude-sonnet-4-20250514";
             _settings.OllamaApiKey       = OllamaApiKeyBox.Text.Trim();
             _settings.OllamaUrl          = string.IsNullOrWhiteSpace(OllamaUrlBox.Text) ? "https://ollama.com/v1/chat/completions" : OllamaUrlBox.Text.Trim();
-            _settings.OllamaModel        = OllamaModelBox.Text?.Trim() ?? "gpt-oss:120b-cloud";
+            _settings.OllamaModel        = string.IsNullOrWhiteSpace(OllamaModelBox.Text)
+                                         ? AppSettings.DefaultOllamaCloudModel
+                                         : OllamaModelBox.Text.Trim();
             _settings.OpenAiApiKey       = OpenAiKeyBox.Text.Trim();
             _settings.VaultPath          = VaultPathBox.Text.Trim();
             _settings.TelegramEnabled    = TgEnabledBox.IsChecked == true;
@@ -163,4 +165,3 @@ namespace KokonoeAssistant
         }
     }
 }
-

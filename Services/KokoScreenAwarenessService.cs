@@ -10,10 +10,32 @@ namespace KokonoeAssistant.Services
         public string SummaryUk { get; set; } = "";
         public string ActivityUk { get; set; } = "";
         public string ScreenMode { get; set; } = "unknown";
+        public string CurrentTask { get; set; } = "";
+        public string Progress { get; set; } = "";
+        public string Blocker { get; set; } = "";
+        public string RecommendedBehavior { get; set; } = "";
         public bool ShouldComment { get; set; }
         public string CommentUk { get; set; } = "";
         public double Importance { get; set; }
         public string Raw { get; set; } = "";
+    }
+
+    public sealed class KokoScreenSituation
+    {
+        public string CurrentTask { get; set; } = "";
+        public string Progress { get; set; } = "unknown";
+        public string Blocker { get; set; } = "";
+        public string RecommendedBehavior { get; set; } = "observe";
+        public string Reason { get; set; } = "";
+        public bool ShouldAssist => RecommendedBehavior is "assist" or "interrupt";
+    }
+
+    public sealed class KokoScreenPatternCandidate
+    {
+        public bool ShouldRecord { get; set; }
+        public string Key { get; set; } = "";
+        public string Text { get; set; } = "";
+        public string Mode { get; set; } = "";
     }
 
     public sealed class KokoScreenAwarenessDecision
@@ -65,6 +87,10 @@ JSON schema:
   "summary_uk": "що видно/що він робить, до 140 символів",
   "activity_uk": "active|idle|same|changed + коротко",
   "screen_mode": "coding|obsidian|telegram|browser|game|idle|private|media|desktop",
+  "current_task": "ймовірна задача користувача, до 90 символів",
+  "progress": "moving|stuck|idle|switching|unknown",
+  "blocker": "видима перешкода або порожньо",
+  "recommended_behavior": "observe|assist|interrupt|jab",
   "should_comment": true,
   "comment_uk": "короткий коментар або порожньо",
   "importance": 0.0
@@ -90,6 +116,10 @@ JSON schema:
                     SummaryUk = RedactSensitive(Trim(obj["summary_uk"]?.ToString(), 180)),
                     ActivityUk = Trim(obj["activity_uk"]?.ToString(), 120),
                     ScreenMode = NormalizeMode(obj["screen_mode"]?.ToString(), raw),
+                    CurrentTask = RedactSensitive(Trim(obj["current_task"]?.ToString(), 120)),
+                    Progress = NormalizeProgress(obj["progress"]?.ToString()),
+                    Blocker = RedactSensitive(Trim(obj["blocker"]?.ToString(), 160)),
+                    RecommendedBehavior = NormalizeBehavior(obj["recommended_behavior"]?.ToString()),
                     ShouldComment = obj["should_comment"]?.Value<bool>() == true,
                     CommentUk = RedactSensitive(CleanComment(obj["comment_uk"]?.ToString())),
                     Importance = Math.Clamp(obj["importance"]?.Value<double>() ?? 0, 0, 1),
@@ -102,6 +132,73 @@ JSON schema:
             }
         }
 
+        public KokoScreenSituation BuildSituation(
+            KokoScreenAwarenessAnalysis analysis,
+            ActivityAnalyzer.ActivityState activity,
+            KokoScreenSituation? previous = null)
+        {
+            var text = $"{activity.ActiveWindowTitle} {analysis.SummaryUk} {analysis.ActivityUk} {analysis.CurrentTask} {analysis.Blocker}".ToLowerInvariant();
+            var mode = NormalizeMode(analysis.ScreenMode, text);
+            var task = !string.IsNullOrWhiteSpace(analysis.CurrentTask) ? analysis.CurrentTask : InferTask(mode, text);
+            var progress = !string.IsNullOrWhiteSpace(analysis.Progress) && analysis.Progress != "unknown"
+                ? analysis.Progress
+                : InferProgress(analysis, activity, previous, text);
+            var blocker = !string.IsNullOrWhiteSpace(analysis.Blocker) ? analysis.Blocker : InferBlocker(text);
+            var behavior = !string.IsNullOrWhiteSpace(analysis.RecommendedBehavior) && analysis.RecommendedBehavior != "observe"
+                ? analysis.RecommendedBehavior
+                : InferBehavior(mode, progress, blocker, analysis, text);
+
+            if (mode == "private")
+                behavior = "observe";
+
+            return new KokoScreenSituation
+            {
+                CurrentTask = Trim(task, 120),
+                Progress = progress,
+                Blocker = Trim(blocker, 160),
+                RecommendedBehavior = behavior,
+                Reason = BuildSituationReason(mode, progress, blocker, analysis.Importance)
+            };
+        }
+
+        public KokoScreenPatternCandidate BuildPatternCandidate(
+            KokoScreenAwarenessAnalysis analysis,
+            KokoScreenSituation situation,
+            DateTime now)
+        {
+            var mode = NormalizeMode(analysis.ScreenMode, $"{analysis.SummaryUk} {analysis.ActivityUk} {situation.CurrentTask}");
+            if (mode is "private" or "idle" or "desktop")
+                return new KokoScreenPatternCandidate { ShouldRecord = false, Mode = mode };
+
+            var text = $"{analysis.SummaryUk} {analysis.ActivityUk} {situation.CurrentTask}".ToLowerInvariant();
+            var category = mode switch
+            {
+                "game" => ContainsAny(text, "dota", "дота") ? "Dota 2 / \u0456\u0433\u0440\u0438" : "\u0456\u0433\u0440\u0438",
+                "browser" => ContainsAny(text, "youtube", "ютуб") ? "YouTube/\u0431\u0440\u0430\u0443\u0437\u0435\u0440" : "\u0431\u0440\u0430\u0443\u0437\u0435\u0440/\u043f\u043e\u0448\u0443\u043a",
+                "coding" => "\u043a\u043e\u0434\u0438\u043d\u0433/\u0434\u0435\u0431\u0430\u0433",
+                "obsidian" => "\u0440\u043e\u0431\u043e\u0442\u0430 \u0437 Obsidian/vault",
+                "telegram" => "\u0447\u0430\u0442/\u0442\u0435\u0441\u0442\u0443\u0432\u0430\u043d\u043d\u044f Kokonoe",
+                "media" => "\u043c\u0435\u0434\u0456\u0430",
+                _ => mode
+            };
+
+            var slot = now.Hour switch
+            {
+                >= 5 and < 12 => "\u0440\u0430\u043d\u043e\u043a",
+                >= 12 and < 18 => "\u0434\u0435\u043d\u044c",
+                >= 18 and < 24 => "\u0432\u0435\u0447\u0456\u0440",
+                _ => "\u043d\u0456\u0447"
+            };
+
+            return new KokoScreenPatternCandidate
+            {
+                ShouldRecord = true,
+                Mode = mode,
+                Key = NormalizePatternKey($"{category}|{slot}"),
+                Text = $"{slot}: \u0447\u0430\u0441\u0442\u043e \u043f\u043e\u043c\u0456\u0447\u0435\u043d\u043e {category}; \u0439\u043c\u043e\u0432\u0456\u0440\u043d\u0430 \u043f\u043e\u0442\u043e\u0447\u043d\u0430 \u0437\u0430\u0434\u0430\u0447\u0430: {NullDash(situation.CurrentTask)}"
+            };
+        }
+
         public KokoScreenAwarenessDecision DecideComment(
             KokoScreenAwarenessAnalysis analysis,
             DateTime now,
@@ -111,7 +208,8 @@ JSON schema:
             bool commentsEnabled,
             bool screenChanged = true,
             bool isActive = true,
-            string activeWindowTitle = "")
+            string activeWindowTitle = "",
+            KokoScreenSituation? situation = null)
         {
             if (!commentsEnabled)
                 return No("comments disabled", "silence");
@@ -133,6 +231,10 @@ JSON schema:
 
             var useful = LooksUseful(activeWindowTitle, analysis, screenChanged, isActive);
             var jabCandidate = LooksJabCandidate(activeWindowTitle, analysis, screenChanged, isActive, passiveChatWindow);
+            if (situation?.RecommendedBehavior is "assist" or "interrupt")
+                useful = true;
+            if (situation?.RecommendedBehavior == "jab")
+                jabCandidate = true;
 
             if (!screenChanged && !isActive && !jabCandidate)
                 return No("unchanged idle screen");
@@ -160,7 +262,7 @@ JSON schema:
             };
         }
 
-        public string BuildCompactContext(KokoScreenAwarenessAnalysis analysis, ActivityAnalyzer.ActivityState activity)
+        public string BuildCompactContext(KokoScreenAwarenessAnalysis analysis, ActivityAnalyzer.ActivityState activity, KokoScreenSituation? situation = null)
         {
             var sb = new StringBuilder();
             sb.AppendLine("[SCREEN AWARENESS]");
@@ -171,6 +273,14 @@ JSON schema:
                 sb.AppendLine($"Summary: {analysis.SummaryUk}");
             if (!string.IsNullOrWhiteSpace(analysis.ActivityUk))
                 sb.AppendLine($"State: {analysis.ActivityUk}");
+            situation ??= BuildSituation(analysis, activity);
+            sb.AppendLine("[SCREEN SITUATION]");
+            sb.AppendLine($"Task: {NullDash(situation.CurrentTask)}");
+            sb.AppendLine($"Progress: {NullDash(situation.Progress)}");
+            sb.AppendLine($"Blocker: {NullDash(situation.Blocker)}");
+            sb.AppendLine($"Behavior: {NullDash(situation.RecommendedBehavior)}");
+            if (!string.IsNullOrWhiteSpace(situation.Reason))
+                sb.AppendLine($"Reason: {situation.Reason}");
             return sb.ToString().Trim();
         }
 
@@ -192,6 +302,95 @@ JSON schema:
             if (ContainsAny(lower, "dota", "steam", "game", "гра")) return "game";
             if (ContainsAny(lower, "idle", "same", "без змін", "завис")) return "idle";
             return "desktop";
+        }
+
+        private static string NormalizeProgress(string? value)
+        {
+            var v = (value ?? "").Trim().ToLowerInvariant();
+            return v is "moving" or "stuck" or "idle" or "switching" ? v : "unknown";
+        }
+
+        private static string NormalizeBehavior(string? value)
+        {
+            var v = (value ?? "").Trim().ToLowerInvariant();
+            return v is "observe" or "assist" or "interrupt" or "jab" ? v : "observe";
+        }
+
+        private static string InferTask(string mode, string text)
+        {
+            if (mode == "coding" || ContainsAny(text, "build", "exception", "error", "visual studio", "vscode", "code"))
+                return "debugging or editing code";
+            if (mode == "obsidian" || ContainsAny(text, "obsidian", "vault"))
+                return "working with Obsidian vault";
+            if (mode == "telegram" || ContainsAny(text, "telegram", "chat", "bot"))
+                return "chatting or testing Kokonoe behavior";
+            if (mode == "browser" || ContainsAny(text, "browser", "chrome", "youtube"))
+                return "browsing or researching";
+            if (mode == "game")
+                return "playing a game";
+            return "using the desktop";
+        }
+
+        private static string InferProgress(
+            KokoScreenAwarenessAnalysis analysis,
+            ActivityAnalyzer.ActivityState activity,
+            KokoScreenSituation? previous,
+            string text)
+        {
+            if (ContainsAny(text, "error", "exception", "failed", "crash", "помил", "злам", "stuck"))
+                return "stuck";
+            if (!activity.IsActive || ContainsAny(text, "idle", "same", "без змін", "завис"))
+                return previous != null && TextSimilarity(previous.CurrentTask, analysis.CurrentTask) > 0.55 ? "stuck" : "idle";
+            if (ContainsAny(text, "changed", "active", "typing", "editing", "build", "код", "редактор"))
+                return "moving";
+            return "unknown";
+        }
+
+        private static string InferBlocker(string text)
+        {
+            if (ContainsAny(text, "locked", "file is locked", "cannot access", "used by another process"))
+                return "file locked by running process";
+            if (ContainsAny(text, "error", "exception", "failed", "crash", "помил", "злам"))
+                return "visible error or failed operation";
+            if (ContainsAny(text, "same", "idle", "без змін", "завис"))
+                return "no visible progress";
+            return "";
+        }
+
+        private static string InferBehavior(string mode, string progress, string blocker, KokoScreenAwarenessAnalysis analysis, string text)
+        {
+            if (!string.IsNullOrWhiteSpace(blocker))
+                return progress == "stuck" ? "interrupt" : "assist";
+            if (mode is "coding" or "obsidian" && analysis.Importance >= 0.65)
+                return "assist";
+            if (progress == "stuck" && analysis.Importance >= 0.65)
+                return "interrupt";
+            if (ContainsAny(text, "youtube", "game", "telegram", "profile", "idle") && analysis.Importance >= 0.70)
+                return "jab";
+            return "observe";
+        }
+
+        private static string BuildSituationReason(string mode, string progress, string blocker, double importance)
+        {
+            var parts = new[]
+            {
+                $"mode={mode}",
+                $"progress={progress}",
+                string.IsNullOrWhiteSpace(blocker) ? "" : $"blocker={blocker}",
+                $"importance={importance:0.00}"
+            }.Where(p => !string.IsNullOrWhiteSpace(p));
+            return string.Join("; ", parts);
+        }
+
+        private static string NormalizePatternKey(string text)
+        {
+            var chars = text.ToLowerInvariant()
+                .Select(ch => char.IsLetterOrDigit(ch) ? ch : '-')
+                .ToArray();
+            var normalized = new string(chars);
+            while (normalized.Contains("--", StringComparison.Ordinal))
+                normalized = normalized.Replace("--", "-");
+            return normalized.Trim('-');
         }
 
         private static string CleanComment(string? text)
@@ -309,12 +508,21 @@ JSON schema:
 
         private static string[] TokenSet(string text)
             => text.ToLowerInvariant()
-                .Split(new[] { ' ', '\t', '\r', '\n', '.', ',', ':', ';', '!', '?', '"', '«', '»', '(', ')' },
+                .Split(new[] { ' ', '\t', '\r', '\n', '.', ',', ':', ';', '!', '?', '"', '(', ')' },
                     StringSplitOptions.RemoveEmptyEntries)
                 .Where(t => t.Length >= 4)
                 .Distinct()
                 .Take(24)
                 .ToArray();
+
+        private static double TextSimilarity(string? a, string? b)
+        {
+            var aa = TokenSet(a ?? "");
+            var bb = TokenSet(b ?? "");
+            if (aa.Length == 0 || bb.Length == 0) return 0;
+            var overlap = aa.Count(t => bb.Contains(t));
+            return (double)overlap / Math.Max(aa.Length, bb.Length);
+        }
 
         private static string? ExtractJsonObject(string text)
         {

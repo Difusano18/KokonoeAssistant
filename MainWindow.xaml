@@ -2760,15 +2760,32 @@
 
                             <!-- Model -->
                             <TextBlock Text="Модель" Style="{StaticResource SettingsLabel}"/>
-                            <TextBox x:Name="SP_ModelBox" Style="{StaticResource SettingInput}" Margin="0,0,0,6"/>
+                            <ComboBox x:Name="SP_ModelBox" Style="{StaticResource SettingComboBox}"
+                                      Margin="0,0,0,6" IsEditable="True">
+                                <ComboBoxItem Content="gemma4:31b-cloud"/>
+                                <ComboBoxItem Content="qwen3-coder:480b-cloud"/>
+                                <ComboBoxItem Content="deepseek-v3.1:671b-cloud"/>
+                                <ComboBoxItem Content="gpt-oss:120b-cloud"/>
+                                <ComboBoxItem Content="gpt-oss:20b-cloud"/>
+                                <ComboBoxItem Content="google/gemma-4-26b-a4b"/>
+                                <ComboBoxItem Content="llama3.2"/>
+                                <ComboBoxItem Content="qwen2.5"/>
+                                <ComboBoxItem Content="mistral"/>
+                            </ComboBox>
                             <TextBlock x:Name="SP_ModelHint"
                                        Foreground="#3A3A4E" FontFamily="Segoe UI Variable, Segoe UI" FontSize="10"
                                        Margin="0,0,0,16" TextWrapping="Wrap"/>
 
                             <!-- Vision Model -->
                             <TextBlock Text="Vision Модель" Style="{StaticResource SettingsLabel}"/>
-                            <TextBox x:Name="SP_VisionModelBox" Style="{StaticResource SettingInput}" Margin="0,0,0,4"/>
-                            <TextBlock Text="Vision модель для фото. Для поточного Ollama Cloud працює: qwen3-vl:235b-instruct. Порожньо — буде використано дефолтну vision-модель."
+                            <ComboBox x:Name="SP_VisionModelBox" Style="{StaticResource SettingComboBox}"
+                                      Margin="0,0,0,4" IsEditable="True">
+                                <ComboBoxItem Content="gemma4:31b-cloud"/>
+                                <ComboBoxItem Content="llava:latest"/>
+                                <ComboBoxItem Content="llava-llama3:latest"/>
+                                <ComboBoxItem Content="bakllava:latest"/>
+                            </ComboBox>
+                            <TextBlock Text="Vision модель для фото. Перевірено для Ollama Cloud: gemma4:31b-cloud; перед відправкою фото нормалізується в PNG."
                                        Foreground="#3A3A4E" FontFamily="Segoe UI Variable, Segoe UI" FontSize="10"
                                        Margin="0,0,0,16" TextWrapping="Wrap"/>
 

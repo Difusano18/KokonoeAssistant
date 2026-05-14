@@ -33,6 +33,8 @@ namespace KokonoeAssistant.Services
                 catch { }
 
                 var noteSnippets = new List<string>();
+                AddNote(noteSnippets, "Creator/Profile.md", "Creator profile", 1000);
+                AddNote(noteSnippets, "Kokonoe/Досьє.md", "Kokonoe dossier", 650);
                 AddNote(noteSnippets, "Kokonoe/Memory/Facts.md", "Facts", 700);
                 AddNote(noteSnippets, "Kokonoe/Preferences.md", "Preferences", 500);
                 AddNote(noteSnippets, "Kokonoe/Tasks.md", "Tasks", 500);

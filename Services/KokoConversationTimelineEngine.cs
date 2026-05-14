@@ -84,6 +84,8 @@ namespace KokonoeAssistant.Services
             if (ContainsAny(lower, "прокин", "проснув", "поспав", "встав", "я тут", "вернув", "повернув"))
                 return "користувач повернувся; не повторювати стару інструкцію";
 
+            var currentHasOwnTopic = !string.IsNullOrWhiteSpace(lower) && !LooksLikeTemporalFollowup(lower);
+
             var active = state.ShortTermIntents
                 .Where(i => !i.ResolvedAt.HasValue)
                 .OrderByDescending(i => i.ExpectedUntil)
@@ -99,7 +101,7 @@ namespace KokonoeAssistant.Services
                 .Where(i => i.ResolvedAt.HasValue && now - i.ResolvedAt.Value < TimeSpan.FromHours(6))
                 .OrderByDescending(i => i.ResolvedAt)
                 .FirstOrDefault();
-            if (recentResolved != null)
+            if (recentResolved != null && !currentHasOwnTopic)
                 return $"щойно закритий намір: {recentResolved.Kind}; дія вже в минулому";
 
             var lastUser = events.LastOrDefault(e => e.Role == "user");
@@ -148,6 +150,11 @@ namespace KokonoeAssistant.Services
 
         private static bool ContainsAny(string text, params string[] values)
             => values.Any(v => text.Contains(v, StringComparison.OrdinalIgnoreCase));
+
+        private static bool LooksLikeTemporalFollowup(string lower)
+            => ContainsAny(lower,
+                "спав", "спати", "спать", "сон", "поспав", "прокин", "проснув", "встав",
+                "повернув", "вернув", "я тут", "де був", "скільки", "коли");
 
         private static string Trim(string? text, int max)
         {

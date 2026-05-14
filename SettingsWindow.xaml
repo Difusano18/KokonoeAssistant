@@ -78,6 +78,7 @@
                             <TextBlock Text="Model" Style="{StaticResource SettingsLabel}"/>
                             <ComboBox x:Name="OllamaModelBox" Style="{StaticResource SettingComboBox}"
                                       Margin="0,0,0,4" IsEditable="True">
+                                <ComboBoxItem Content="gemma4:31b-cloud"/>
                                 <ComboBoxItem Content="gpt-oss:120b-cloud"/>
                                 <ComboBoxItem Content="gpt-oss:20b-cloud"/>
                                 <ComboBoxItem Content="qwen3-coder:480b-cloud"/>

@@ -119,6 +119,7 @@ namespace KokonoeAssistant
         private byte[]?  _imgBytes;
         private string   _imgMime = "image/jpeg";
         private BitmapImage? _imgThumb;
+        private string? _pendingFileContext;
 
         // ── Voice ─────────────────────────────────────────────────
         private bool _isRecording;
@@ -961,24 +962,43 @@ tags: [kokonoe, live-core, diagnostics]
                 catch { }
 
                 var frame = service.BuildFrame(recent, now);
-                var fallback = service.BuildFallback(frame);
 
                 var brainObs = "";
+                var moodContext = "";
+                var presenceContext = "";
                 try
                 {
                     var st = ServiceContainer.BrainEngine.State;
+                    moodContext =
+                        $"brainMood={st.PersonalityDailyMood}; moodScore={st.MoodScore:F2}; irritation={st.PersonalityIrritation:F2}; " +
+                        $"lastUserTone={st.LastUserEmotionalTone}; lastPresence={st.LastPresenceSummary}; situation={st.LastPresenceSituation}; tone={st.LastPresenceTone}";
+                    presenceContext = string.Join(" | ", st.PresenceTrace.TakeLast(4));
                     if (st.Observations.Any())
                         brainObs = $"Твоє останнє спостереження: {st.Observations.TakeLast(2).Last()}\n";
                 }
                 catch { }
 
+                try
+                {
+                    var emotion = ServiceContainer.EmotionEngine;
+                    var stress = emotion.Stress.TotalLoad();
+                    var emotionLine =
+                        $"emotion={emotion.Current}; secondary={emotion.Secondary?.ToString() ?? "-"}; " +
+                        $"bond={emotion.Bond}; connection={emotion.ConnectionScore:F2}; stress={stress:F2}; pad={emotion.CurrentPad}";
+                    moodContext = string.IsNullOrWhiteSpace(moodContext) ? emotionLine : moodContext + "; " + emotionLine;
+                }
+                catch { }
+
+                service.EnrichFrame(frame, now, moodContext, presenceContext);
+                var fallback = service.BuildFallback(frame);
+
                 var prompt = $@"{frame.PromptBlock}
 {brainObs}
-Напиши стартову репліку. Вона має відчуватись як повернення до живої роботи, а не системний ping.
-Тільки текст.";
+Напиши стартову репліку повністю через модель. Вона має відчуватись як жива реакція Kokonoe на повернення користувача: врахуй час, паузу, mood, presence і останню тему.
+Не пояснюй правила. Не пиши службовий статус. Тільки текст.";
 
                 var task = _llm.SendSystemQueryAsync(prompt, CancellationToken.None);
-                var completed = await Task.WhenAny(task, Task.Delay(2500));
+                var completed = await Task.WhenAny(task, Task.Delay(9000));
                 if (completed != task)
                     return fallback;
 
@@ -1488,7 +1508,7 @@ tags: [kokonoe, live-core, diagnostics]
         private async Task SendMessage()
         {
             var text = InputBox.Text.Trim();
-            if (string.IsNullOrWhiteSpace(text) && _imgBytes == null) return;
+            if (string.IsNullOrWhiteSpace(text) && _imgBytes == null && string.IsNullOrWhiteSpace(_pendingFileContext)) return;
             if (_isGenerating) return;
 
             // Slash команди для діагностики
@@ -1520,6 +1540,13 @@ tags: [kokonoe, live-core, diagnostics]
             _llmCts = new CancellationTokenSource();
 
             // Add user bubble
+            var baseText = string.IsNullOrWhiteSpace(text) && _imgBytes != null
+                ? "Що на фото? Опиши зображення коротко і по суті."
+                : text;
+            var effectiveText = string.IsNullOrWhiteSpace(_pendingFileContext)
+                ? baseText
+                : (string.IsNullOrWhiteSpace(baseText) ? "" : baseText + "\n\n") + _pendingFileContext;
+
             var userVm = new ChatMessageVm { Role = "user", Content = text, ImageThumb = _imgThumb };
             AddMessageBubble(userVm);
 
@@ -1528,7 +1555,7 @@ tags: [kokonoe, live-core, diagnostics]
             {
                 ServiceContainer.ChatRepository.InsertMessage(new ChatRepository.ChatMessage
                 {
-                    Content = text, Role = "user", Author = Environment.UserName, Timestamp = DateTime.Now
+                    Content = effectiveText, Role = "user", Author = Environment.UserName, Timestamp = DateTime.Now
                 });
             }
             catch { }
@@ -1536,11 +1563,12 @@ tags: [kokonoe, live-core, diagnostics]
             InputBox.Clear();
             var imgBytes = _imgBytes;
             var imgMime  = _imgMime;
+            var sendText = effectiveText;
             ClearPendingImage();
 
             // Brain state must observe the user message before context is built,
             // otherwise temporal/presence logic answers from the previous turn.
-            try { ServiceContainer.BrainEngine?.ProcessUserMessage(text); } catch { }
+            try { ServiceContainer.BrainEngine?.ProcessUserMessage(sendText); } catch { }
 
             // Thinking indicator
             AddThinkingBubble();
@@ -1550,6 +1578,38 @@ tags: [kokonoe, live-core, diagnostics]
             {
                 // Ensure UI updates (thinking bubble) before blocking operations
                 await Task.Yield();
+
+                if (LooksLikeManualScreenScan(sendText))
+                {
+                    await HandleManualScreenScanAsync(sendText, _llmCts?.Token ?? default);
+                    return;
+                }
+
+                if (TryHandleDirectObsidianCommand(sendText, out var obsidianReply))
+                {
+                    RemoveThinkingBubble();
+                    var replyVm = new ChatMessageVm { Role = "assistant", Content = "" };
+                    var replyTb = AddMessageBubble(replyVm);
+                    if (replyTb != null)
+                        await TypeIntoAsync(replyTb, obsidianReply, _llmCts?.Token ?? default);
+                    else
+                        replyVm.Content = obsidianReply;
+
+                    try
+                    {
+                        ServiceContainer.ChatRepository.InsertMessage(new ChatRepository.ChatMessage
+                        {
+                            Content = obsidianReply,
+                            Role = "assistant",
+                            Author = "Kokonoe",
+                            Timestamp = DateTime.Now
+                        });
+                    }
+                    catch { }
+
+                    _ = Task.Run(() => ServiceContainer.ChatLogger.LogExchange("app", sendText, obsidianReply));
+                    return;
+                }
 
                 // Refresh dynamic personality hint before each LLM call (background)
                 _ = Task.Run(() =>
@@ -1562,7 +1622,7 @@ tags: [kokonoe, live-core, diagnostics]
                 TextBlock? finalReplyTb = null;
 
                 // Build context on background thread (file I/O can be slow)
-                var contextTask = Task.Run(() => BuildContext(text));
+                var contextTask = Task.Run(() => BuildContext(sendText));
 
                 // ── Streaming path (no image) ────────────────────────────
                 if (imgBytes == null)
@@ -1572,7 +1632,7 @@ tags: [kokonoe, live-core, diagnostics]
 
                     var context = await contextTask;
                     var streamedReply = await _llm.SendStreamingAsync(
-                        text, context,
+                        sendText, context,
                         chunk => Dispatcher.InvokeAsync(() =>
                         {
                             if (streamTb == null)
@@ -1611,7 +1671,7 @@ tags: [kokonoe, live-core, diagnostics]
 
                         AddThinkingBubble();
 
-                        reply = await _llm.SendAsync(text, null, imgMime, await contextTask, _llmCts?.Token ?? default);
+                        reply = await _llm.SendAsync(sendText, null, imgMime, await contextTask, _llmCts?.Token ?? default);
                         RemoveThinkingBubble();
                         if (streamTb == null) streamTb = AddMessageBubble(replyVm);
                         if (streamTb != null)
@@ -1625,8 +1685,23 @@ tags: [kokonoe, live-core, diagnostics]
                 }
                 else
                 {
-                    // ── Image path — always non-streaming ────────────────
-                    reply = await _llm.SendAsync(text, imgBytes, imgMime, await contextTask, _llmCts?.Token ?? default);
+                    // ── Image path — use the same direct vision route as screen-awareness.
+                    var visionPrompt = $"""
+Ти Kokonoe. Проаналізуй вкладене зображення користувача.
+Запит користувача: {sendText}
+
+Правила:
+- Відповідай українською.
+- 1-4 речення.
+- Описуй саме зображення, не історію чату.
+- Якщо не можеш прочитати зображення, скажи це прямо без згадок Settings/model/HTTP.
+""";
+                    reply = await _llm.SendSystemVisionQueryAsync(
+                                visionPrompt,
+                                imgBytes,
+                                imgMime,
+                                _llmCts?.Token ?? default)
+                            ?? "Фото не прочиталось. Кинь інший файл або перезбереж зображення; вдавати, що я його бачу, не будемо.";
                     RemoveThinkingBubble();
                     var replyVm = new ChatMessageVm { Role = "assistant", Content = "" };
                     var replyTb = AddMessageBubble(replyVm);
@@ -1639,7 +1714,7 @@ tags: [kokonoe, live-core, diagnostics]
                         replyVm.Content = reply;
                 }
 
-                var guardedReply = await GuardAndRepairReplyAsync(text, reply, await contextTask, _llmCts?.Token ?? default);
+                var guardedReply = await GuardAndRepairReplyAsync(sendText, reply, await contextTask, _llmCts?.Token ?? default);
                 if (!string.Equals(guardedReply, reply, StringComparison.Ordinal))
                 {
                     reply = guardedReply;
@@ -1660,8 +1735,8 @@ tags: [kokonoe, live-core, diagnostics]
                 catch { }
 
                 // Auto-log this exchange to Obsidian vault for archival memory
-                _ = Task.Run(() => ServiceContainer.ChatLogger.LogExchange("app", text, reply));
-                try { ServiceContainer.BrainEngine?.ObserveExchangeForVaultSync(text, reply); } catch { }
+                _ = Task.Run(() => ServiceContainer.ChatLogger.LogExchange("app", sendText, reply));
+                try { ServiceContainer.BrainEngine?.ObserveExchangeForVaultSync(sendText, reply); } catch { }
 
                 if (AppSettings.Load().TtsEnabled) SpeakAsync(reply);
 
@@ -1671,8 +1746,8 @@ tags: [kokonoe, live-core, diagnostics]
                     try
                     {
                         var brain = ServiceContainer.BrainEngine;
-                        if (brain != null && text.Length > 10)
-                            await brain.ExtractFactsWithLlmAsync(text);
+                        if (brain != null && sendText.Length > 10)
+                            await brain.ExtractFactsWithLlmAsync(sendText);
                     }
                     catch { }
                 });
@@ -1689,6 +1764,74 @@ tags: [kokonoe, live-core, diagnostics]
                 ScrollToBottom();
                 InputBox.Focus();
             }
+        }
+
+        private static bool LooksLikeManualScreenScan(string? text)
+        {
+            var lower = (text ?? "").ToLowerInvariant();
+            if (string.IsNullOrWhiteSpace(lower)) return false;
+
+            var wantsScan = ContainsAny(lower,
+                "проскануй", "просканируй", "скануй", "сканируй",
+                "подивись", "глянь", "провір", "перевір", "проаналізуй", "що на");
+            var targetScreen = ContainsAny(lower,
+                "екран", "скрін", "скрин", "screen", "монітор", "робочий стіл");
+
+            return wantsScan && targetScreen;
+        }
+
+        private async Task HandleManualScreenScanAsync(string userText, CancellationToken ct)
+        {
+            byte[] screenshot;
+            try
+            {
+                screenshot = await Task.Run(() => ServiceContainer.PcControl.TakeScreenshot(), ct);
+            }
+            catch (Exception ex)
+            {
+                RemoveThinkingBubble();
+                AddMessageBubble(new ChatMessageVm
+                {
+                    Role = "assistant",
+                    Content = $"Не змогла зняти екран: {ex.Message}. Нарешті команда була нормальна, а Windows вирішив зобразити меблі."
+                });
+                return;
+            }
+
+            var prompt = $"""
+Ти Kokonoe. Користувач прямо попросив просканувати його поточний екран.
+Запит користувача: {userText}
+
+Завдання:
+- Подивись на скріншот і скажи, що реально видно.
+- Якщо видно чат/програму/помилку/код/порожній стан, назви це прямо.
+- Не вигадуй прихованих мотивів користувача.
+- Не кажи "екран просканований" як службовий штамп; дай корисне спостереження.
+- Не переписуй приватні токени, ключі, email, телефони або довгі приватні рядки.
+- Українською, 2-5 речень, стиль Kokonoe: сухо, розумно, без канцеляриту.
+""";
+
+            var reply = await _llm.SendSystemVisionQueryAsync(prompt, screenshot, "image/jpeg", ct)
+                        ?? "Екран зняла, але vision не повернув нормального аналізу. Тобто команда була розумна, а провайдер знову прикинувся цеглою.";
+
+            RemoveThinkingBubble();
+            var replyVm = new ChatMessageVm { Role = "assistant", Content = "" };
+            var replyTb = AddMessageBubble(replyVm);
+            if (replyTb != null)
+                await TypeIntoAsync(replyTb, reply, ct);
+            else
+                replyVm.Content = reply;
+
+            try
+            {
+                ServiceContainer.ChatRepository.InsertMessage(new ChatRepository.ChatMessage
+                {
+                    Content = reply, Role = "assistant", Author = "Kokonoe", Timestamp = DateTime.Now
+                });
+            }
+            catch { }
+
+            _ = Task.Run(() => ServiceContainer.ChatLogger.LogExchange("app", userText, reply));
         }
 
         private string BuildContext(string? userText = null)
@@ -1955,6 +2098,10 @@ LIVE RESPONSE STYLE
 - спершу реагуй на конкретику останнього повідомлення, не на абстрактний настрій;
 - не починай з декоративної ремарки в *зірочках*, якщо користувач сам не почав roleplay;
 - не вигадуй «монітор блимає», «датчики», «лабораторію», «тіло реагує» без прямої причини;
+- не вигадуй зовнішні факти про користувача: акаунти, YouTube/Twitch/Discord, мемберства, підписки, роботу, покупки або людей, якщо цього нема в чаті;
+- не психологізуй: не вигадуй, що користувач боїться сказати, що в нього щось застрягло в голові, або що ти «дивишся через екран»;
+- якщо питають про тебе/Коконое — дай прямий опис характеру чи позиції, без терапевтичних питань у відповідь;
+- якщо питають "що ти знаєш про мене" або про пам'ять/профіль — відповідай списком/коротким оглядом відомих фактів з контексту; не підміняй це старим sleep-наміpом;
 - допускається суха іронія, але вона має бути прив'язана до події, часу, наміру або питання;
 - краще одна точна фраза, ніж театральна сцена з трьома шарами декорацій.
 """;
@@ -2036,6 +2183,286 @@ LIVE RESPONSE STYLE
         private static bool ContainsAny(string text, params string[] values)
             => values.Any(v => text.Contains(v, StringComparison.OrdinalIgnoreCase));
 
+        private bool TryHandleDirectObsidianCommand(string text, out string reply)
+        {
+            reply = "";
+            if (string.IsNullOrWhiteSpace(text) || _obsidian == null)
+                return false;
+
+            var lower = text.ToLowerInvariant();
+            var looksObsidian =
+                ContainsAny(lower, "obsidian", "vault", "папк", "нотатк", "журнал", "щоденник", "journal", "spanish", "lesson_", "lesson", "урок");
+            var wantsMutation =
+                ContainsAny(lower, "створ", "созд", "create", "зроби", "запиш", "збереж", "нема", "немає");
+            var wantsCheck =
+                ContainsAny(lower, "перевір", "провір", "check", "існує", "бачиш");
+
+            if (!looksObsidian || (!wantsMutation && !wantsCheck))
+                return false;
+
+            try
+            {
+                var paths = InferObsidianTargets(text);
+                if (paths.Count == 0)
+                {
+                    return false;
+                }
+
+                var report = new List<string>();
+                foreach (var target in paths)
+                {
+                    if (target.EndsWith(".md", StringComparison.OrdinalIgnoreCase))
+                    {
+                        var existing = _obsidian.ReadNote(target);
+                        if (wantsMutation && string.IsNullOrWhiteSpace(existing))
+                            _obsidian.WriteNote(target, BuildDefaultObsidianNote(target));
+
+                        var verified = !string.IsNullOrWhiteSpace(_obsidian.ReadNote(target));
+                        report.Add($"{(verified ? "є" : "немає")} нотатка `{target}`");
+                    }
+                    else
+                    {
+                        if (wantsMutation)
+                            _obsidian.CreateFolder(target);
+
+                        var folderFull = Path.Combine(_obsidian.VaultPath, target.Replace('/', Path.DirectorySeparatorChar));
+                        var verified = Directory.Exists(folderFull);
+                        report.Add($"{(verified ? "є" : "немає")} папка `{target}`");
+                    }
+                }
+
+                reply = "Перевірила через файлову систему, не через уяву. " + string.Join("; ", report) + ".";
+                return true;
+            }
+            catch (Exception ex)
+            {
+                reply = $"Obsidian-операція впала: {ex.Message}. Оце вже реальна помилка, а не театр про «я створила».";
+                return true;
+            }
+        }
+
+        private static List<string> InferObsidianTargets(string text)
+        {
+            var targets = new List<string>();
+            var cleaned = text
+                .Replace("→", "/", StringComparison.Ordinal)
+                .Replace("➜", "/", StringComparison.Ordinal)
+                .Replace("->", "/", StringComparison.Ordinal)
+                .Replace("\\", "/", StringComparison.Ordinal)
+                .Replace("**", "", StringComparison.Ordinal)
+                .Replace("`", "", StringComparison.Ordinal)
+                .Replace("$rightarrow$", "/", StringComparison.OrdinalIgnoreCase);
+
+            foreach (System.Text.RegularExpressions.Match m in System.Text.RegularExpressions.Regex.Matches(
+                         cleaned,
+                         @"(?<![\p{L}\p{N}_])([\p{L}\p{N}][\p{L}\p{N}_ .-]*(?:/[\p{L}\p{N}][\p{L}\p{N}_ .-]*)+(\.md)?)",
+                         System.Text.RegularExpressions.RegexOptions.IgnoreCase))
+            {
+                var path = NormalizeObsidianRelPath(m.Groups[1].Value);
+                if (!string.IsNullOrWhiteSpace(path) && !targets.Contains(path, StringComparer.OrdinalIgnoreCase))
+                    targets.Add(path);
+            }
+
+            var lower = cleaned.ToLowerInvariant();
+            if (lower.Contains("journal", StringComparison.OrdinalIgnoreCase) &&
+                lower.Contains("spanish", StringComparison.OrdinalIgnoreCase) &&
+                !targets.Contains("Journal/Spanish", StringComparer.OrdinalIgnoreCase))
+                targets.Add("Journal/Spanish");
+
+            if ((lower.Contains("lesson_1_daily_routine", StringComparison.OrdinalIgnoreCase) ||
+                 (lower.Contains("daily routine", StringComparison.OrdinalIgnoreCase) && lower.Contains("spanish", StringComparison.OrdinalIgnoreCase))) &&
+                !targets.Contains("Journal/Spanish/Lesson_1_Daily_Routine.md", StringComparer.OrdinalIgnoreCase))
+                targets.Add("Journal/Spanish/Lesson_1_Daily_Routine.md");
+
+            if ((lower.Contains("lesson_2_social_interaction", StringComparison.OrdinalIgnoreCase) ||
+                 (lower.Contains("social interaction", StringComparison.OrdinalIgnoreCase) && lower.Contains("spanish", StringComparison.OrdinalIgnoreCase)) ||
+                 (ContainsAny(lower, "другий урок", "другого урок", "2 урок", "урок 2", "lesson 2") && ContainsAny(lower, "нема", "немає", "створ", "зроби", "перевір", "провір"))) &&
+                !targets.Contains("Journal/Spanish/Lesson_2_Social_Interaction.md", StringComparer.OrdinalIgnoreCase))
+                targets.Add("Journal/Spanish/Lesson_2_Social_Interaction.md");
+
+            if ((lower.Contains("lesson_3", StringComparison.OrdinalIgnoreCase) ||
+                 (ContainsAny(lower, "третій урок", "третього урок", "3 урок", "урок 3", "lesson 3") && ContainsAny(lower, "spanish", "іспан", "діалог", "dialog", "b1", "створ", "зроби")) ||
+                 (ContainsAny(lower, "b1", "живий діалог", "живий диалог", "live dialogue") && ContainsAny(lower, "урок", "lesson", "spanish", "іспан"))) &&
+                !targets.Contains("Journal/Spanish/Lesson_3_B1_Live_Dialogue.md", StringComparer.OrdinalIgnoreCase))
+                targets.Add("Journal/Spanish/Lesson_3_B1_Live_Dialogue.md");
+
+            return targets;
+        }
+
+        private static string NormalizeObsidianRelPath(string raw)
+        {
+            var parts = raw.Split('/', StringSplitOptions.RemoveEmptyEntries)
+                .Select(p => p.Trim().Trim('.', ' ', '\'', '"'))
+                .Where(p => !string.IsNullOrWhiteSpace(p))
+                .ToList();
+            if (parts.Count == 0) return "";
+
+            var path = string.Join("/", parts);
+            while (path.Contains("//", StringComparison.Ordinal)) path = path.Replace("//", "/", StringComparison.Ordinal);
+            return path.Trim('/');
+        }
+
+        private static string BuildDefaultObsidianNote(string path)
+        {
+            var title = Path.GetFileNameWithoutExtension(path).Replace('_', ' ');
+            if (path.Equals("Journal/Spanish/Lesson_1_Daily_Routine.md", StringComparison.OrdinalIgnoreCase))
+            {
+                return """
+---
+tags: [spanish, journal, lesson]
+---
+
+# Lesson 1 Daily Routine
+
+## Vocabulary
+
+- me despierto — я прокидаюся
+- me levanto — я встаю
+- desayuno — я снідаю
+- trabajo / estudio — я працюю / навчаюся
+- almuerzo — я обідаю
+- ceno — я вечеряю
+- me ducho — я приймаю душ
+- me acuesto — я лягаю спати
+
+## Notes
+
+- `me despierto` = I wake up.
+- `despierto` = awake / I wake, depending on context.
+
+## Practice
+
+- Me despierto a las siete.
+- Desayuno por la mañana.
+- Me acuesto por la noche.
+""";
+            }
+
+            if (path.Equals("Journal/Spanish/Lesson_2_Social_Interaction.md", StringComparison.OrdinalIgnoreCase))
+            {
+                return """
+---
+tags: [spanish, journal, lesson]
+---
+
+# Урок 2. Соціальна взаємодія
+
+## Основні фрази
+
+- Hola, ¿qué tal? — Привіт, як справи?
+- ¿Cómo estás? — Як ти?
+- Estoy bien, gracias. — У мене все добре, дякую.
+- Más o menos. — Більш-менш.
+- Encantado / Encantada. — Приємно познайомитись.
+- ¿De dónde eres? — Звідки ти?
+- Soy de Ucrania. — Я з України.
+- ¿Qué haces? — Що ти робиш? / Чим займаєшся?
+- Estoy aprendiendo español. — Я вчу іспанську.
+- Nos vemos. — Побачимось.
+
+## Мінідіалог
+
+- A: Hola, ¿qué tal?
+- B: Bien, gracias. ¿Y tú?
+- A: Más o menos, pero vivo.
+
+## Нотатки
+
+- `¿Qué tal?` — розмовна й дуже поширена фраза для "як справи?".
+- `Nos vemos` — природне неформальне прощання.
+""";
+            }
+
+            if (path.Equals("Journal/Spanish/Lesson_3_B1_Live_Dialogue.md", StringComparison.OrdinalIgnoreCase))
+            {
+                return """
+---
+tags: [spanish, journal, lesson, b1, dialogue]
+---
+
+# Урок 3. Живий діалог рівня B1
+
+## Мета
+
+Навчитись вести природний короткий діалог: реагувати, уточнювати, не відповідати одним сухим словом і не звучати як перекладач із 2007 року.
+
+## Ситуація
+
+Ти знайомишся з людиною в кав'ярні після мовного клубу. Розмова проста, але вже не зовсім A1: є уточнення, реакції, маленькі деталі й природні переходи.
+
+## Діалог
+
+- A: Hola, ¿eres nuevo en el club?
+- B: Sí, es mi primera vez aquí. Estoy un poco nervioso, la verdad.
+- A: No te preocupes. Todos empezamos así. ¿De dónde eres?
+- B: Soy de Ucrania. Vivo aquí desde hace poco.
+- A: Ah, interesante. ¿Y por qué estás aprendiendo español?
+- B: Porque me gusta cómo suena, y quiero hablar con más gente sin depender del traductor.
+- A: Buena razón. ¿Te resulta difícil?
+- B: A veces sí. Entiendo bastante, pero cuando tengo que hablar, mi cerebro se apaga.
+- A: Eso es normal. Lo importante es seguir hablando aunque cometas errores.
+- B: Sí, supongo. Necesito practicar más conversaciones reales.
+- A: Pues podemos practicar ahora. ¿Qué haces normalmente por la tarde?
+- B: Normalmente estudio, juego un poco o trabajo en mis proyectos.
+- A: Suena bien. Entonces ya tienes temas para practicar.
+- B: Perfecto. Pero habla despacio, o voy a fingir que entiendo todo.
+
+## Переклад
+
+- A: Привіт, ти новенький у клубі?
+- B: Так, я тут уперше. Якщо чесно, я трохи нервую.
+- A: Не хвилюйся. Усі так починали. Звідки ти?
+- B: Я з України. Живу тут недавно.
+- A: О, цікаво. А чому ти вчиш іспанську?
+- B: Бо мені подобається, як вона звучить, і я хочу говорити з більшою кількістю людей без перекладача.
+- A: Хороша причина. Тобі складно?
+- B: Іноді так. Я досить багато розумію, але коли треба говорити, мозок вимикається.
+- A: Це нормально. Головне — продовжувати говорити, навіть якщо робиш помилки.
+- B: Так, мабуть. Мені треба більше практикувати реальні розмови.
+- A: Тоді можемо потренуватись зараз. Що ти зазвичай робиш увечері?
+- B: Зазвичай вчуся, трохи граю або працюю над своїми проєктами.
+- A: Звучить добре. Отже, у тебе вже є теми для практики.
+- B: Чудово. Але говори повільно, або я робитиму вигляд, що все розумію.
+
+## Корисні фрази
+
+- `Es mi primera vez aquí.` — Я тут уперше.
+- `Estoy un poco nervioso.` — Я трохи нервую.
+- `No te preocupes.` — Не хвилюйся.
+- `¿Por qué estás aprendiendo español?` — Чому ти вчиш іспанську?
+- `Me gusta cómo suena.` — Мені подобається, як вона звучить.
+- `Depender del traductor.` — Залежати від перекладача.
+- `Mi cerebro se apaga.` — Мій мозок вимикається.
+- `Aunque cometas errores.` — Навіть якщо робиш помилки.
+- `Habla despacio.` — Говори повільно.
+- `Voy a fingir que entiendo todo.` — Я робитиму вигляд, що все розумію.
+
+## Граматика з діалогу
+
+- `Estoy aprendiendo` — теперішній тривалий час: "я зараз вчу".
+- `desde hace poco` — "з недавнього часу", "недавно".
+- `aunque + subjuntivo` у `aunque cometas errores` — "навіть якщо ти робиш/робитимеш помилки".
+- `voy a + infinitivo` — найближчий майбутній намір: `voy a fingir` = "я збираюся вдавати".
+
+## Практика
+
+1. Відповідай іспанською: чому ти вчиш іспанську?
+2. Склади 3 речення про те, що ти робиш увечері.
+3. Перепиши відповідь `Mi cerebro se apaga`, але більш серйозно.
+4. Заміни в діалозі тему "мовний клуб" на "онлайн-курс".
+""";
+            }
+
+            return $"""
+---
+tags: []
+---
+
+# {title}
+
+""";
+        }
+
         private static string GuardTemporalReply(string userText, string reply)
         {
             if (string.IsNullOrWhiteSpace(reply)) return reply;
@@ -2061,6 +2488,9 @@ LIVE RESPONSE STYLE
         {
             try
             {
+                if (TryBuildProfileIdentityReply(userText, out var identityReply))
+                    return identityReply;
+
                 var brain = ServiceContainer.BrainEngine;
                 if (brain == null) return GuardTemporalReply(userText, reply);
 
@@ -2088,6 +2518,127 @@ LIVE RESPONSE STYLE
             {
                 return GuardTemporalReply(userText, reply);
             }
+        }
+
+        private bool TryBuildProfileIdentityReply(string userText, out string reply)
+        {
+            reply = "";
+            if (!LooksLikeProfileQuestion(userText))
+                return false;
+
+            try
+            {
+                if (_obsidian == null) return false;
+                var profile = _obsidian.ReadNote("Creator/Profile.md");
+                if (string.IsNullOrWhiteSpace(profile)) return false;
+
+                var name = MatchProfileValue(profile, @"\*\*Ім'?я:\*\*\s*(.+)");
+                var age = MatchProfileValue(profile, @"\*\*Вік:\*\*\s*(.+)");
+                if (LooksLikeBroadProfileQuestion(userText))
+                {
+                    reply = BuildProfileSummaryReply(profile, name, age);
+                    return !string.IsNullOrWhiteSpace(reply);
+                }
+
+                if (string.IsNullOrWhiteSpace(name) && string.IsNullOrWhiteSpace(age))
+                    return false;
+
+                var facts = new List<string>();
+                if (!string.IsNullOrWhiteSpace(name)) facts.Add($"звати тебе {name}");
+                if (!string.IsNullOrWhiteSpace(age)) facts.Add($"тобі {age}");
+
+                reply = "Перевірила `Creator/Profile.md`, не вгадувала з кавової гущі. " +
+                        string.Join(", ", facts) +
+                        ". Якщо я ще раз скажу «Артем, 19» — значить, десь знову проліз отруєний старий контекст, і його треба вирізати, а не слухати.";
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private static bool LooksLikeProfileQuestion(string? userText)
+        {
+            var lower = (userText ?? "").ToLowerInvariant();
+            if (string.IsNullOrWhiteSpace(lower)) return false;
+
+            var asksName = ContainsAny(lower, "як мене звати", "моє ім", "моє ім'я", "хто я", "звати мене");
+            var asksAge = ContainsAny(lower, "скільки мені років", "мій вік", "мені років", "скільки років");
+            var asksKnown = LooksLikeBroadProfileQuestion(userText);
+
+            return asksName || asksAge || asksKnown;
+        }
+
+        private static bool LooksLikeBroadProfileQuestion(string? userText)
+        {
+            var lower = (userText ?? "").ToLowerInvariant();
+            return ContainsAny(lower,
+                "що ти знаєш про мене",
+                "розкажи все про мене",
+                "повністю",
+                "мої інтерес",
+                "інтереси",
+                "профіль",
+                "пам'ять про мене");
+        }
+
+        private static string BuildProfileSummaryReply(string profile, string name, string age)
+        {
+            var interests = ExtractProfileSectionBullets(profile, "Плани та інтереси", 4);
+            var habits = ExtractProfileSectionBullets(profile, "Звички та режим", 4);
+            var emotional = ExtractProfileSectionBullets(profile, "Емоційні патерни", 4);
+
+            var sb = new StringBuilder();
+            sb.AppendLine("Перевірила `Creator/Profile.md`, цього разу не зводжу тебе до двох жалюгідних полів.");
+            if (!string.IsNullOrWhiteSpace(name) || !string.IsNullOrWhiteSpace(age))
+                sb.AppendLine($"База: {(string.IsNullOrWhiteSpace(name) ? "ім'я не витягнулось" : name)}; {(string.IsNullOrWhiteSpace(age) ? "вік не витягнувся" : age)}.");
+            if (interests.Count > 0)
+                sb.AppendLine("Інтереси: " + string.Join("; ", interests) + ".");
+            if (habits.Count > 0)
+                sb.AppendLine("Режим/звички: " + string.Join("; ", habits) + ".");
+            if (emotional.Count > 0)
+                sb.AppendLine("Патерни: " + string.Join("; ", emotional) + ".");
+            sb.Append("Коротко: ти Вова/Yasu, 21, тягнешся до ШІ, програмування, BlazBlue, YouTube/AI-контенту, і постійно тестуєш Коконое так, ніби вона лабораторний реактор з характером.");
+            return sb.ToString().Trim();
+        }
+
+        private static List<string> ExtractProfileSectionBullets(string text, string heading, int max)
+        {
+            var lines = text.Replace("\r\n", "\n").Split('\n');
+            var result = new List<string>();
+            var inSection = false;
+            foreach (var raw in lines)
+            {
+                var line = raw.Trim();
+                if (line.StartsWith("## ", StringComparison.Ordinal))
+                {
+                    inSection = line.Contains(heading, StringComparison.OrdinalIgnoreCase);
+                    continue;
+                }
+
+                if (!inSection || !line.StartsWith("- ", StringComparison.Ordinal))
+                    continue;
+
+                var item = line[2..].Trim();
+                if (item.Length > 140) item = item[..140].TrimEnd() + "...";
+                if (!string.IsNullOrWhiteSpace(item))
+                    result.Add(item);
+                if (result.Count >= max)
+                    break;
+            }
+
+            return result;
+        }
+
+        private static string MatchProfileValue(string text, string pattern)
+        {
+            var match = System.Text.RegularExpressions.Regex.Match(
+                text,
+                pattern,
+                System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            if (!match.Success) return "";
+            return match.Groups[1].Value.Trim().TrimEnd('.', ';');
         }
 
         private static string TrimForPrompt(string? text, int max)
@@ -2835,11 +3386,11 @@ LIVE RESPONSE STYLE
         {
             var dlg = new Microsoft.Win32.OpenFileDialog
             {
-                Title  = "Вибрати зображення",
-                Filter = "Images|*.jpg;*.jpeg;*.png;*.gif;*.webp;*.bmp|All|*.*"
+                Title  = "Вибрати файл",
+                Filter = "Images and text|*.jpg;*.jpeg;*.png;*.gif;*.webp;*.bmp;*.tif;*.tiff;*.txt;*.md;*.json;*.csv;*.tsv;*.log;*.xml;*.yaml;*.yml;*.cs;*.xaml;*.js;*.ts;*.html;*.css|Images|*.jpg;*.jpeg;*.png;*.gif;*.webp;*.bmp;*.tif;*.tiff|Text/code|*.txt;*.md;*.json;*.csv;*.tsv;*.log;*.xml;*.yaml;*.yml;*.cs;*.xaml;*.js;*.ts;*.html;*.css|All|*.*"
             };
             if (dlg.ShowDialog() != true) return;
-            LoadImageFile(dlg.FileName);
+            LoadAttachmentFile(dlg.FileName);
         }
 
         private void Input_Drop(object sender, WDragArgs e)
@@ -2847,10 +3398,8 @@ LIVE RESPONSE STYLE
             if (e.Data.GetDataPresent(WDataFmts.FileDrop))
             {
                 var files = (string[])e.Data.GetData(WDataFmts.FileDrop);
-                var img = files.FirstOrDefault(f =>
-                    new[] { ".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp" }
-                    .Contains(Path.GetExtension(f).ToLower()));
-                if (img != null) LoadImageFile(img);
+                var file = files.FirstOrDefault(File.Exists);
+                if (file != null) LoadAttachmentFile(file);
             }
         }
 
@@ -2877,10 +3426,8 @@ LIVE RESPONSE STYLE
             else if (WClipboard.ContainsData(WDataFmts.FileDrop))
             {
                 var files = (string[]?)WClipboard.GetData(WDataFmts.FileDrop);
-                var img = files?.FirstOrDefault(f =>
-                    new[] { ".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp" }
-                    .Contains(Path.GetExtension(f).ToLower()));
-                if (img != null) LoadImageFile(img);
+                var file = files?.FirstOrDefault(File.Exists);
+                if (file != null) LoadAttachmentFile(file);
             }
             else
             {
@@ -2893,12 +3440,33 @@ LIVE RESPONSE STYLE
             }
         }
 
+        private void LoadAttachmentFile(string path)
+        {
+            if (IsSupportedImageFile(path))
+            {
+                LoadImageFile(path);
+                return;
+            }
+
+            if (TryLoadTextFile(path, out var context))
+            {
+                _pendingFileContext = context;
+                _imgBytes = null;
+                _imgThumb = null;
+                ShowImagePreview(Path.GetFileName(path));
+                return;
+            }
+
+            WMsgBox.Show("Цей файл не схожий ні на зображення, ні на читабельний текст. Так, неймовірно, але не кожен байт у всесвіті варто пхати в prompt.");
+        }
+
         private void LoadImageFile(string path)
         {
             try
             {
                 _imgBytes = CompressImageForLlm(File.ReadAllBytes(path));
                 _imgMime  = "image/jpeg";
+                _pendingFileContext = null;
 
                 var bi = new BitmapImage();
                 bi.BeginInit();
@@ -2917,24 +3485,47 @@ LIVE RESPONSE STYLE
             }
         }
 
-        // Стискає зображення до maxPx і конвертує в JPEG — зменшує base64 payload для LLM
+        private static bool IsSupportedImageFile(string path)
+        {
+            var ext = Path.GetExtension(path).ToLowerInvariant();
+            return ext is ".jpg" or ".jpeg" or ".png" or ".gif" or ".webp" or ".bmp" or ".tif" or ".tiff";
+        }
+
+        private static bool TryLoadTextFile(string path, out string context)
+        {
+            context = "";
+            try
+            {
+                var ext = Path.GetExtension(path).ToLowerInvariant();
+                var allowed = ext is ".txt" or ".md" or ".json" or ".csv" or ".tsv" or ".log"
+                    or ".xml" or ".yaml" or ".yml" or ".cs" or ".xaml" or ".js" or ".ts"
+                    or ".html" or ".css" or ".ps1" or ".bat" or ".cmd" or ".py";
+                if (!allowed) return false;
+
+                var info = new FileInfo(path);
+                if (info.Length > 2_000_000) return false;
+
+                var text = File.ReadAllText(path);
+                text = text.Replace("\r\n", "\n").Replace('\r', '\n');
+                if (text.Length > 12000)
+                    text = text[..12000] + "\n...[truncated]";
+                context = $"[Вкладений файл: {Path.GetFileName(path)}, {info.Length} bytes]\n{text}";
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        // Стискає зображення до maxPx і конвертує в screen-style JPEG для vision.
         private static byte[] CompressImageForLlm(byte[] raw, int maxPx = 1024, int jpegQuality = 78)
         {
             try
             {
                 using var input = new MemoryStream(raw);
                 var src = BitmapFrame.Create(input, BitmapCreateOptions.None, BitmapCacheOption.OnLoad);
-                BitmapSource resized = src;
-                if (src.PixelWidth > maxPx || src.PixelHeight > maxPx)
-                {
-                    double scale = Math.Min((double)maxPx / src.PixelWidth, (double)maxPx / src.PixelHeight);
-                    resized = new TransformedBitmap(src, new ScaleTransform(scale, scale));
-                }
-                using var output = new MemoryStream();
-                var enc = new JpegBitmapEncoder { QualityLevel = jpegQuality };
-                enc.Frames.Add(BitmapFrame.Create(resized));
-                enc.Save(output);
-                return output.ToArray();
+                return EncodeBitmapSourceAsVisionJpeg(src, maxPx, jpegQuality);
             }
             catch { return raw; }
         }
@@ -2943,19 +3534,49 @@ LIVE RESPONSE STYLE
         {
             try
             {
-                BitmapSource resized = src;
-                if (src.PixelWidth > maxPx || src.PixelHeight > maxPx)
-                {
-                    double scale = Math.Min((double)maxPx / src.PixelWidth, (double)maxPx / src.PixelHeight);
-                    resized = new TransformedBitmap(src, new ScaleTransform(scale, scale));
-                }
-                using var output = new MemoryStream();
-                var enc = new JpegBitmapEncoder { QualityLevel = jpegQuality };
-                enc.Frames.Add(BitmapFrame.Create(resized));
-                enc.Save(output);
-                return output.ToArray();
+                return EncodeBitmapSourceAsVisionJpeg(src, maxPx, jpegQuality);
             }
             catch { return Array.Empty<byte>(); }
+        }
+
+        private static byte[] EncodeBitmapSourceAsVisionJpeg(BitmapSource src, int maxPx, int jpegQuality)
+        {
+            BitmapSource prepared = src;
+            if (src.PixelWidth > maxPx || src.PixelHeight > maxPx)
+            {
+                double scale = Math.Min((double)maxPx / src.PixelWidth, (double)maxPx / src.PixelHeight);
+                prepared = new TransformedBitmap(src, new ScaleTransform(scale, scale));
+            }
+
+            if (prepared.Format != PixelFormats.Bgra32 && prepared.Format != PixelFormats.Pbgra32)
+                prepared = new FormatConvertedBitmap(prepared, PixelFormats.Bgra32, null, 0);
+
+            var stride = prepared.PixelWidth * 4;
+            var pixels = new byte[stride * prepared.PixelHeight];
+            prepared.CopyPixels(pixels, stride, 0);
+            for (var i = 0; i < pixels.Length; i += 4)
+            {
+                var a = pixels[i + 3] / 255.0;
+                pixels[i + 0] = (byte)(pixels[i + 0] * a + 255 * (1 - a));
+                pixels[i + 1] = (byte)(pixels[i + 1] * a + 255 * (1 - a));
+                pixels[i + 2] = (byte)(pixels[i + 2] * a + 255 * (1 - a));
+                pixels[i + 3] = 255;
+            }
+
+            var flattened = BitmapSource.Create(
+                prepared.PixelWidth,
+                prepared.PixelHeight,
+                prepared.DpiX,
+                prepared.DpiY,
+                PixelFormats.Bgra32,
+                null,
+                pixels,
+                stride);
+            using var output = new MemoryStream();
+            var enc = new JpegBitmapEncoder { QualityLevel = Math.Clamp(jpegQuality, 40, 92) };
+            enc.Frames.Add(BitmapFrame.Create(flattened));
+            enc.Save(output);
+            return output.ToArray();
         }
 
         private void ShowImagePreview(string label)
@@ -2972,6 +3593,7 @@ LIVE RESPONSE STYLE
         {
             _imgBytes = null;
             _imgThumb = null;
+            _pendingFileContext = null;
             ImagePreviewBorder.Visibility = Visibility.Collapsed;
             // ImagePreviewRow removed
             PendingImageThumb.Source = null;
@@ -5802,6 +6424,31 @@ tags: [kokonoe, dashboard, live]
                 }
 
                 // ── Regular chat → LLM ──────────────────────────────
+                if (TryHandleDirectObsidianCommand(text, out var obsidianReply))
+                {
+                    Dispatcher.Invoke(() =>
+                    {
+                        _tgMessages.Add($"[Kokonoe]: {obsidianReply}");
+                        TgScroll.ScrollToBottom();
+                        AddMessageBubble(new ChatMessageVm { Role = "user", Content = $"[TG: {from}] {text}" });
+                        AddMessageBubble(new ChatMessageVm { Role = "assistant", Content = obsidianReply });
+                    });
+                    try { await bot.SendMessage(chatId, obsidianReply, cancellationToken: ct); } catch { }
+                    try
+                    {
+                        ServiceContainer.ChatRepository.InsertMessage(new ChatRepository.ChatMessage
+                        {
+                            Content = obsidianReply,
+                            Role = "assistant",
+                            Author = "Kokonoe",
+                            Timestamp = DateTime.Now
+                        });
+                    }
+                    catch { }
+                    _ = Task.Run(() => ServiceContainer.ChatLogger.LogExchange("tg", text, obsidianReply));
+                    return;
+                }
+
                 try { ServiceContainer.BrainEngine?.ProcessUserMessage(text); } catch { }
                 var tgContext = BuildContext(text);
                 var reply = await _llm.SendAsync(text, null, "image/jpeg", tgContext, ct);
@@ -6594,8 +7241,8 @@ tags: [kokonoe, dashboard, live]
 
                     LoadOllamaKeysVM(s);
 
-                    SP_ModelBox.Text  = string.IsNullOrWhiteSpace(s.OllamaModel) ? "gpt-oss:120b-cloud" : s.OllamaModel;
-                    SP_ModelHint.Text = "Хмарна модель — обов'язково з суфіксом :cloud. Напр. gpt-oss:120b-cloud, qwen3-coder:480b-cloud, deepseek-v3.1:671b-cloud.";
+                    SP_ModelBox.Text  = string.IsNullOrWhiteSpace(s.OllamaModel) ? AppSettings.DefaultOllamaCloudModel : s.OllamaModel;
+                    SP_ModelHint.Text = "Хмарна модель — обов'язково з суфіксом :cloud. Дефолт: gemma4:31b-cloud. Напр. qwen3-coder:480b-cloud, deepseek-v3.1:671b-cloud.";
                     SP_VisionModelBox.Text = s.VisionModel;
 
                     StartPoolRefreshTimer();

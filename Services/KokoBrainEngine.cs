@@ -147,6 +147,12 @@ namespace KokonoeAssistant.Services
         public string LastScreenAwarenessComment { get; set; } = "";
         public string LastScreenAwarenessWindow { get; set; } = "";
         public string LastScreenAwarenessMode { get; set; } = "";
+        public string LastScreenSituationTask { get; set; } = "";
+        public string LastScreenSituationProgress { get; set; } = "";
+        public string LastScreenSituationBlocker { get; set; } = "";
+        public string LastScreenSituationBehavior { get; set; } = "";
+        public string LastScreenSituationReason { get; set; } = "";
+        public Dictionary<string, ScreenPatternStats> ScreenPatterns { get; set; } = new();
         public DateTime LastVisionFailureAt { get; set; } = DateTime.MinValue;
         public DateTime VisionBackoffUntil { get; set; } = DateTime.MinValue;
         public int VisionFailureCount { get; set; }
@@ -173,6 +179,17 @@ namespace KokonoeAssistant.Services
         public DateTime FollowUpAt { get; set; } = DateTime.Now.AddHours(1);
         public DateTime? ResolvedAt { get; set; }
         public string ResolutionText { get; set; } = "";
+    }
+
+    public class ScreenPatternStats
+    {
+        public string Key { get; set; } = "";
+        public string Text { get; set; } = "";
+        public string Mode { get; set; } = "";
+        public int Count { get; set; }
+        public DateTime FirstSeenAt { get; set; } = DateTime.MinValue;
+        public DateTime LastSeenAt { get; set; } = DateTime.MinValue;
+        public DateTime LastWrittenAt { get; set; } = DateTime.MinValue;
     }
 
     // ══════════════════════════════════════════════════════════════════
@@ -317,7 +334,7 @@ namespace KokonoeAssistant.Services
                 TimeSpan.FromMinutes(3), TimeSpan.FromMinutes(10));
 
             _screenAwarenessTimer = new System.Threading.Timer(_ => _ = GuardedScreenAwarenessAsync(), null,
-                TimeSpan.FromSeconds(45), TimeSpan.FromMinutes(1));
+                TimeSpan.FromMinutes(3), TimeSpan.FromMinutes(5));
         }
 
         // Reentrancy guards: skip tick if previous still running.
@@ -1961,7 +1978,7 @@ namespace KokonoeAssistant.Services
         {
             var lower = content.ToLowerInvariant();
             if (LooksLikeSleepOrGoodbye(lower))
-                return BuildIntent("sleep", "пішов спати/попрощався", content, now, TimeSpan.FromHours(10), TimeSpan.FromHours(12));
+                return BuildSleepIntent("пішов спати/попрощався", content, now);
 
             if (!ContainsAny(lower, "піду", "йду", "іду", "пішов", "буду", "зараз", "скоро")) return null;
 
@@ -1977,7 +1994,7 @@ namespace KokonoeAssistant.Services
             if (ContainsAny(lower, "гуля", "прогуля", "вийду", "вулиц"))
                 return BuildIntent("walk", "пішов гуляти/на вулицю", content, now, TimeSpan.FromHours(2), TimeSpan.FromHours(1));
             if (ContainsAny(lower, "спать", "спати", "сон", "ляга"))
-                return BuildIntent("sleep", "пішов спати", content, now, TimeSpan.FromHours(9), TimeSpan.FromHours(8));
+                return BuildSleepIntent("пішов спати", content, now);
 
             if (ContainsAny(lower, "зайнят", "відійду", "афк", "не буду"))
                 return BuildIntent("busy", "буде зайнятий або відійде", content, now, TimeSpan.FromHours(2), TimeSpan.FromHours(1));
@@ -2022,6 +2039,29 @@ namespace KokonoeAssistant.Services
                 ExpectedUntil = now + expectedFor,
                 FollowUpAt = now + followAfter
             };
+
+        private static ShortTermIntent BuildSleepIntent(string summary, string source, DateTime now)
+        {
+            var expectedUntil = BuildSleepExpectedUntil(now);
+            return BuildIntent(
+                "sleep",
+                summary,
+                source,
+                now,
+                expectedUntil,
+                expectedUntil);
+        }
+
+        private static DateTime BuildSleepExpectedUntil(DateTime now)
+        {
+            // Night sleep should resolve around the next morning, not "now + 10h".
+            // Yes, 04:42 + 10h = 14:42. Arithmetic obeyed; common sense did not.
+            if (now.Hour >= 20)
+                return now.Date.AddDays(1).AddHours(9);
+            if (now.Hour < 8)
+                return now.Date.AddHours(9);
+            return now.AddHours(2.5);
+        }
 
         private static ShortTermIntent BuildIntent(string kind, string summary, string source, DateTime now, DateTime expectedUntil, DateTime followUpAt)
             => new()
@@ -2858,6 +2898,17 @@ namespace KokonoeAssistant.Services
                 return;
             }
 
+            try
+            {
+                var diag = _llm.GetDiagnosticsSnapshot();
+                if (diag.InFlight > 0)
+                {
+                    Log("ScreenAwareness skipped: foreground LLM is busy");
+                    return;
+                }
+            }
+            catch { }
+
             if (!await _bgLlmSemaphore.WaitAsync(0))
             {
                 Log("ScreenAwareness skipped: background LLM is busy");
@@ -2900,7 +2951,19 @@ namespace KokonoeAssistant.Services
                     return;
                 }
                 var analysis = ScreenAwareness.Parse(raw);
-                var context = ScreenAwareness.BuildCompactContext(analysis, activity);
+                var previousSituation = new KokoScreenSituation
+                {
+                    CurrentTask = _state.LastScreenSituationTask,
+                    Progress = _state.LastScreenSituationProgress,
+                    Blocker = _state.LastScreenSituationBlocker,
+                    RecommendedBehavior = string.IsNullOrWhiteSpace(_state.LastScreenSituationBehavior)
+                        ? "observe"
+                        : _state.LastScreenSituationBehavior,
+                    Reason = _state.LastScreenSituationReason
+                };
+                var situation = ScreenAwareness.BuildSituation(analysis, activity, previousSituation);
+                var context = ScreenAwareness.BuildCompactContext(analysis, activity, situation);
+                var patternCandidate = ScreenAwareness.BuildPatternCandidate(analysis, situation, now);
 
                 lock (_lock)
                 {
@@ -2910,6 +2973,11 @@ namespace KokonoeAssistant.Services
                     _state.LastScreenAwarenessActivity = analysis.ActivityUk;
                     _state.LastScreenAwarenessMode = analysis.ScreenMode;
                     _state.LastScreenAwarenessWindow = activity.ActiveWindowTitle ?? "";
+                    _state.LastScreenSituationTask = situation.CurrentTask;
+                    _state.LastScreenSituationProgress = situation.Progress;
+                    _state.LastScreenSituationBlocker = situation.Blocker;
+                    _state.LastScreenSituationBehavior = situation.RecommendedBehavior;
+                    _state.LastScreenSituationReason = situation.Reason;
                     _state.VisionFailureCount = 0;
                     _state.VisionBackoffUntil = DateTime.MinValue;
                     _state.LastKnownUserActivity = string.IsNullOrWhiteSpace(analysis.SummaryUk)
@@ -2918,6 +2986,8 @@ namespace KokonoeAssistant.Services
                     if (!string.IsNullOrWhiteSpace(analysis.SummaryUk))
                     {
                         _state.Observations.Add($"screen {now:HH:mm}: {analysis.SummaryUk}");
+                        if (!string.IsNullOrWhiteSpace(situation.CurrentTask))
+                            _state.Observations.Add($"screen-situation {now:HH:mm}: {situation.CurrentTask}; {situation.Progress}; {situation.RecommendedBehavior}");
                         if (_state.Observations.Count > 40)
                             _state.Observations.RemoveRange(0, _state.Observations.Count - 40);
                     }
@@ -2934,6 +3004,8 @@ namespace KokonoeAssistant.Services
                     analysis.ActivityUk,
                     activity.IsActive ? "Active" : "Idle");
 
+                ObserveScreenPattern(patternCandidate, now);
+
                 var decision = ScreenAwareness.DecideComment(
                     analysis,
                     now,
@@ -2943,7 +3015,8 @@ namespace KokonoeAssistant.Services
                     settings.ScreenAwarenessSendComments && now >= _state.ScreenAwarenessObserveOnlyUntil,
                     screenChanged,
                     activity.IsActive,
-                    activity.ActiveWindowTitle ?? "");
+                    activity.ActiveWindowTitle ?? "",
+                    situation);
 
                 if (!decision.ShouldSend)
                 {
@@ -3006,9 +3079,74 @@ namespace KokonoeAssistant.Services
             _state.VisionBackoffUntil = now + delay;
             _state.LastVisionFailureSummary = TrimForLog(raw, 180);
             _state.LastScreenAwarenessMode = KokoScreenAwarenessService.NormalizeMode("", activity?.ActiveWindowTitle ?? "");
+            _state.LastScreenSituationTask = "screen context fallback";
+            _state.LastScreenSituationProgress = "unknown";
+            _state.LastScreenSituationBlocker = "vision unavailable";
+            _state.LastScreenSituationBehavior = "observe";
+            _state.LastScreenSituationReason = $"vision failure; fallback mode={_state.LastScreenAwarenessMode}";
             _cachedScreenContext = $"[SCREEN AWARENESS]\nMode: {_state.LastScreenAwarenessMode}\nVision unavailable; using window/activity fallback.\nWindow: {activity?.ActiveWindowTitle ?? "-"}";
             _screenContextCachedAt = now;
             _llm.ScreenCtx = _cachedScreenContext;
+        }
+
+        private void ObserveScreenPattern(KokoScreenPatternCandidate candidate, DateTime now)
+        {
+            if (!candidate.ShouldRecord || string.IsNullOrWhiteSpace(candidate.Key) || string.IsNullOrWhiteSpace(candidate.Text))
+                return;
+
+            ScreenPatternStats stats;
+            lock (_lock)
+            {
+                if (!_state.ScreenPatterns.TryGetValue(candidate.Key, out stats!))
+                {
+                    stats = new ScreenPatternStats
+                    {
+                        Key = candidate.Key,
+                        Text = candidate.Text,
+                        Mode = candidate.Mode,
+                        FirstSeenAt = now
+                    };
+                    _state.ScreenPatterns[candidate.Key] = stats;
+                }
+
+                stats.Text = candidate.Text;
+                stats.Mode = candidate.Mode;
+                stats.Count++;
+                stats.LastSeenAt = now;
+
+                var staleKeys = _state.ScreenPatterns
+                    .Where(kv => (now - kv.Value.LastSeenAt).TotalDays > 14)
+                    .Select(kv => kv.Key)
+                    .ToList();
+                foreach (var key in staleKeys)
+                    _state.ScreenPatterns.Remove(key);
+            }
+
+            if (stats.Count < 3)
+                return;
+            if (stats.LastWrittenAt > DateTime.MinValue && (now - stats.LastWrittenAt).TotalHours < 12)
+                return;
+
+            var memory = $"{stats.Text}; \u043f\u043e\u043c\u0456\u0447\u0435\u043d\u043e {stats.Count} \u0440\u0430\u0437\u0438 \u0437 {stats.FirstSeenAt:yyyy-MM-dd HH:mm}.";
+            try
+            {
+                var added = _obsidian.AppendUniqueItemsToNote(
+                    "Kokonoe/Memory/Screen Patterns.md",
+                    "# \u041f\u0430\u0442\u0435\u0440\u043d\u0438 \u0435\u043a\u0440\u0430\u043d\u0430\n\n\u0423\u0437\u0430\u0433\u0430\u043b\u044c\u043d\u0435\u043d\u0456 \u043f\u0430\u0442\u0435\u0440\u043d\u0438 screen-awareness. \u0411\u0435\u0437 \u0441\u0438\u0440\u0438\u0445 \u0441\u043a\u0440\u0456\u043d\u0448\u043e\u0442\u0456\u0432, \u043f\u0440\u0438\u0432\u0430\u0442\u043d\u0438\u0445 \u0456\u0434\u0435\u043d\u0442\u0438\u0444\u0456\u043a\u0430\u0442\u043e\u0440\u0456\u0432, \u0442\u043e\u043a\u0435\u043d\u0456\u0432 \u0430\u0431\u043e \u0442\u043e\u0447\u043d\u043e\u0433\u043e \u043f\u0440\u0438\u0432\u0430\u0442\u043d\u043e\u0433\u043e \u0442\u0435\u043a\u0441\u0442\u0443.\n",
+                    new[] { memory },
+                    "screen-pattern",
+                    duplicateThreshold: 0.86);
+
+                if (added > 0)
+                {
+                    stats.LastWrittenAt = now;
+                    Log($"Screen pattern saved: {stats.Text}");
+                }
+            }
+            catch (Exception ex)
+            {
+                Log($"Screen pattern save failed: {ex.Message}");
+            }
         }
 
         private static bool LooksLikeVisionFailure(string? raw)
@@ -4099,7 +4237,7 @@ namespace KokonoeAssistant.Services
                 {
                     model       = s.Model,
                     messages    = new[] { new { role = "user", content = prompt } },
-                    max_tokens  = 2048,
+                    max_tokens  = 16384,
                     temperature = 0.9,
                     stream      = false
                 };
@@ -4143,7 +4281,7 @@ namespace KokonoeAssistant.Services
                         .Where(l =>
                             l.Length > 10 &&
                             System.Text.RegularExpressions.Regex.IsMatch(l, @"[А-Яа-яЄєІіЇїҐґ]") &&
-                            (l.EndsWith('.') || l.EndsWith('!') || l.EndsWith('?') || l.EndsWith('…')) &&
+                            (l.EndsWith('.') || l.EndsWith('!') || l.EndsWith('?') || l.EndsWith("\u2026")) &&
                             !garbagePrefixes.Any(p => l.ToLower().StartsWith(p)))
                         .FirstOrDefault();
 
@@ -4587,7 +4725,7 @@ namespace KokonoeAssistant.Services
                 var raw = await CallLlmRawAsync(prompt);
                 if (string.IsNullOrWhiteSpace(raw) || raw.Trim() == "null") return;
 
-                var fact = raw.Trim().Trim('"').Trim('«', '»');
+                var fact = raw.Trim().Trim('"').Trim('\u00AB', '\u00BB');
                 if (fact.Length > 10 && fact.Length < 200)
                 {
                     Memory.LearnFact(fact, "observation", 0.65f);

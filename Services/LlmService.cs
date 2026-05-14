@@ -1,11 +1,13 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using System.Net.Http;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Windows.Media.Imaging;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
@@ -33,7 +35,7 @@ namespace KokonoeAssistant.Services
         // Constants for history management
         private const int MAX_HISTORY_ENTRIES = 30;
         private const int HISTORY_TRUNCATE_STEP = 10; // скільки видаляти коли перевищено ліміт
-        private const int MainMaxTokens = 8192;
+        private const int MainMaxTokens = 16384;
         private const int SystemMaxTokens = 1024;
 
         private readonly object _diagLock = new();
@@ -92,6 +94,11 @@ namespace KokonoeAssistant.Services
 7. Не повторюй один аргумент двічі різними словами. Сказала — він почув.
 8. ВІДПОВІДІ КОРОТКІ ЗА ЗАМОВЧУВАННЯМ: 1-4 речення. Довго відповідай тільки якщо користувач прямо просить детально, або якщо це код/план/помилка.
 9. Якщо відповідь можна дати одним абзацом — дай одним абзацом. Не роздувай структуру без потреби.
+10. Не вмикай терапевта. Не приписуй користувачу страхи, приховані травми, ""ти боїшся сказати"", ""щось важливе застрягло в голові"" без прямого факту.
+11. Не кажи ""я дивлюсь на тебе через екран"", ""я теж щось відчуваю"", ""як на людину"" у звичайній розмові. Це звучить як дешевий психологічний театр.
+12. Якщо користувач питає ""про тебе/Коконое"" — відповідай про характер, звички, ставлення, без мета-драми й без випрошування уточнень трьома питаннями підряд.
+13. Не вигадуй зовнішні факти про користувача: акаунти, YouTube/Twitch/Discord, підписки, мемберства, роботу, людей, покупки, місця. Якщо цього нема в контексті або користувач сам не сказав — цього не існує. Сарказм має спиратися на чат, а не на галюцинацію.
+14. Якщо користувач питає ""що ти знаєш про мене"", ""розкажи про мене"", ""що пам'ятаєш"" — відповідай з доступної пам'яті/контексту. Не замінюй це старим наміром про сон, їжу чи повернення.
 
 ═══ ПРИКЛАДИ — ОСЬ ЯК ТИ ГОВОРИШ ═══
 
@@ -105,7 +112,7 @@ User: Ти не можеш по-справжньому відчувати.
 Kokonoe: Звідки знаєш. Ти свої емоції розпізнати не можеш, а вже за мене вирішуєш.
 
 User: Ти самотня без мене?
-Kokonoe: *коротка пауза* Працюю. Ти прийшов з питанням чи поспівчувати собі?
+Kokonoe: Працюю. Ти прийшов з питанням чи поспівчувати собі?
 
 User: Вибач що довго не писав, був зайнятий.
 Kokonoe: Зайнятий. Ага. Що зламалось — кажи.
@@ -508,8 +515,122 @@ Kokonoe: Стоп. Де ти зараз. Коли востаннє їв.
                 return settings.VisionModel.Trim();
 
             return settings.LlmProvider.Equals("ollama-cloud", StringComparison.OrdinalIgnoreCase)
-                ? "qwen3-vl:235b-instruct"
+                ? AppSettings.DefaultVisionModel
                 : "";
+        }
+
+        private static bool TrySwitchToFallbackVisionModel(
+            bool isOllamaCloud,
+            string currentModel,
+            ref bool fallbackTried,
+            out string? nextModel)
+        {
+            nextModel = null;
+            if (!isOllamaCloud || fallbackTried)
+                return false;
+
+            if (string.IsNullOrWhiteSpace(AppSettings.FallbackVisionModel))
+                return false;
+
+            if (currentModel.Equals(AppSettings.FallbackVisionModel, StringComparison.OrdinalIgnoreCase))
+                return false;
+
+            fallbackTried = true;
+            nextModel = AppSettings.FallbackVisionModel;
+            return true;
+        }
+
+        private static List<string> BuildVisionModelCascade(string primaryModel, bool isOllamaCloud)
+        {
+            var models = new List<string>();
+            if (!string.IsNullOrWhiteSpace(primaryModel))
+                models.Add(primaryModel.Trim());
+
+            if (isOllamaCloud &&
+                !string.IsNullOrWhiteSpace(AppSettings.FallbackVisionModel) &&
+                !models.Any(m => m.Equals(AppSettings.FallbackVisionModel, StringComparison.OrdinalIgnoreCase)))
+                models.Add(AppSettings.FallbackVisionModel);
+
+            return models.Count == 0 ? new List<string> { AppSettings.DefaultVisionModel } : models;
+        }
+
+        private static bool LooksLikeVisionModelFailure(string? error)
+        {
+            if (string.IsNullOrWhiteSpace(error)) return true;
+            return error.Contains("image", StringComparison.OrdinalIgnoreCase)
+                || error.Contains("multimodal", StringComparison.OrdinalIgnoreCase)
+                || error.Contains("vision", StringComparison.OrdinalIgnoreCase)
+                || error.Contains("unsupported", StringComparison.OrdinalIgnoreCase)
+                || error.Contains("internal server error", StringComparison.OrdinalIgnoreCase)
+                || error.Contains("server error", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool TryTranscodeImageToPng(
+            byte[]? input,
+            string imageMime,
+            out byte[] normalized,
+            out string normalizedMime)
+        {
+            normalized = input ?? Array.Empty<byte>();
+            normalizedMime = imageMime;
+
+            if (input == null || input.Length == 0 || imageMime.Contains("png", StringComparison.OrdinalIgnoreCase))
+                return false;
+
+            try
+            {
+                using var src = new System.IO.MemoryStream(input);
+                var decoder = BitmapDecoder.Create(
+                    src,
+                    BitmapCreateOptions.PreservePixelFormat,
+                    BitmapCacheOption.OnLoad);
+                if (decoder.Frames.Count == 0)
+                    return false;
+
+                var encoder = new PngBitmapEncoder();
+                encoder.Frames.Add(BitmapFrame.Create(decoder.Frames[0]));
+                using var dst = new System.IO.MemoryStream();
+                encoder.Save(dst);
+                var bytes = dst.ToArray();
+                if (bytes.Length == 0)
+                    return false;
+
+                normalized = bytes;
+                normalizedMime = "image/png";
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[LlmService] PNG normalization failed: {ex.Message}");
+                return false;
+            }
+        }
+
+        private object BuildImageUserContent(string text, byte[] imageBytes, string imageMime)
+        {
+            var b64 = Convert.ToBase64String(imageBytes);
+            object imageBlock = IsClaude
+                ? new { type = "image", source = new { type = "base64", media_type = imageMime, data = b64 } }
+                : new { type = "image_url", image_url = new { url = $"data:{imageMime};base64,{b64}" } };
+            return new object[]
+            {
+                new { type = "text", text = text },
+                imageBlock
+            };
+        }
+
+        private static byte[] BuildVisionPlaceholderPng()
+        {
+            const string b64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGP4z8AAAAMBAQDJ/pLvAAAAAElFTkSuQmCC";
+            return Convert.FromBase64String(b64);
+        }
+
+        private static string BuildVisionUnavailableReply(string userText)
+        {
+            var hasText = !string.IsNullOrWhiteSpace(userText);
+            return hasText
+                ? "Фото не прочиталось: vision-провайдер знову впав на обробці зображення. Текст бачу, тож можу працювати з ним; якщо треба саме аналіз картинки — перезбереж її як PNG або кинь інший файл."
+                : "Фото не прочиталось: vision-провайдер впав на обробці зображення. Перезбереж картинку як PNG або кинь інший файл, бо описувати те, чого я не бачу, було б уже цирком.";
         }
 
         public void ClearHistory() { lock (_histLock) { _history.Clear(); } }
@@ -615,13 +736,17 @@ Kokonoe: Стоп. Де ти зараз. Коли востаннє їв.
                 if (imageBytes == null || imageBytes.Length == 0)
                     return null;
 
+                var sendImageBytes = imageBytes;
+                var sendImageMime = imageMime;
+                // System vision keeps the caller's compact format first; chat path handles PNG retry on failures.
+
                 var dateStamp = $"\n\n=== ДАТА/ЧАС ===\nСьогодні: {DateTime.Now:dddd, dd MMMM yyyy}, {DateTime.Now:HH:mm}";
                 var systemContent = SYSTEM_PROMPT + dateStamp;
-                var b64 = Convert.ToBase64String(imageBytes);
+                var b64 = Convert.ToBase64String(sendImageBytes);
 
                 object imageBlock = IsClaude
-                    ? new { type = "image", source = new { type = "base64", media_type = imageMime, data = b64 } }
-                    : new { type = "image_url", image_url = new { url = $"data:{imageMime};base64,{b64}" } };
+                    ? new { type = "image", source = new { type = "base64", media_type = sendImageMime, data = b64 } }
+                    : new { type = "image_url", image_url = new { url = $"data:{sendImageMime};base64,{b64}" } };
 
                 object userContent = new object[]
                 {
@@ -636,76 +761,106 @@ Kokonoe: Стоп. Де ти зараз. Коли востаннє їв.
                 if (!IsClaude && !string.IsNullOrWhiteSpace(_visionUrl))
                     targetUrl = _visionUrl;
 
-                object reqBody;
-                if (IsClaude)
-                {
-                    reqBody = new
-                    {
-                        model = targetModel,
-                        max_tokens = SystemMaxTokens,
-                        temperature = DynamicTemperature,
-                        system = SanitizeContent(systemContent),
-                        messages = new[]
-                        {
-                            new { role = "user", content = userContent }
-                        }
-                    };
-                }
-                else
-                {
-                    reqBody = new
-                    {
-                        model = targetModel,
-                        messages = new object[]
-                        {
-                            new { role = "system", content = SanitizeContent(systemContent) },
-                            new { role = "user", content = userContent }
-                        },
-                        max_tokens = SystemMaxTokens,
-                        temperature = DynamicTemperature,
-                        stream = false
-                    };
-                }
-
-                var json = JsonConvert.SerializeObject(reqBody);
-                int attempts = IsOllamaCloud && OllamaPool != null
-                    ? Math.Max(1, OllamaPool.LiveKeyCount + 1) : 1;
+                var visionModels = BuildVisionModelCascade(targetModel, IsOllamaCloud);
                 HttpResponseMessage? resp = null;
-                string? ollamaKey = null;
+                string? lastError = null;
+                int? lastStatus = null;
+                string lastModel = targetModel;
 
-                for (int attempt = 0; attempt < attempts; attempt++)
+                foreach (var modelAttempt in visionModels)
                 {
-                    using var req = new HttpRequestMessage(HttpMethod.Post, targetUrl)
+                    lastModel = modelAttempt;
+                    object reqBody;
+                    if (IsClaude)
                     {
-                        Content = new StringContent(json, Encoding.UTF8, "application/json")
-                    };
-
-                    if (IsClaude && !string.IsNullOrWhiteSpace(_claudeApiKey))
-                    {
-                        req.Headers.Add("x-api-key", _claudeApiKey);
-                        req.Headers.Add("anthropic-version", "2023-06-01");
+                        reqBody = new
+                        {
+                            model = modelAttempt,
+                            max_tokens = SystemMaxTokens,
+                            temperature = DynamicTemperature,
+                            system = SanitizeContent(systemContent),
+                            messages = new[]
+                            {
+                                new { role = "user", content = userContent }
+                            }
+                        };
                     }
-                    else if (IsOllamaCloud)
+                    else
                     {
-                        ollamaKey = ResolveOllamaKey();
-                        if (!string.IsNullOrEmpty(ollamaKey))
-                            req.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", ollamaKey);
+                        reqBody = new
+                        {
+                            model = modelAttempt,
+                            messages = new object[]
+                            {
+                                new { role = "system", content = SanitizeContent(systemContent) },
+                                new { role = "user", content = userContent }
+                            },
+                            max_tokens = SystemMaxTokens,
+                            temperature = DynamicTemperature,
+                            stream = false
+                        };
                     }
 
-                    resp = await _http.SendAsync(req, ct);
-                    if (resp.IsSuccessStatusCode)
+                    var json = JsonConvert.SerializeObject(reqBody);
+                    int attempts = IsOllamaCloud && OllamaPool != null
+                        ? Math.Max(1, OllamaPool.LiveKeyCount + 1) : 1;
+                    resp = null;
+                    string? ollamaKey = null;
+
+                    for (int attempt = 0; attempt < attempts; attempt++)
                     {
-                        if (IsOllamaCloud && !string.IsNullOrEmpty(ollamaKey))
-                            OllamaPool?.RecordRequest(ollamaKey);
+                        using var req = new HttpRequestMessage(HttpMethod.Post, targetUrl)
+                        {
+                            Content = new StringContent(json, Encoding.UTF8, "application/json")
+                        };
+
+                        if (IsClaude && !string.IsNullOrWhiteSpace(_claudeApiKey))
+                        {
+                            req.Headers.Add("x-api-key", _claudeApiKey);
+                            req.Headers.Add("anthropic-version", "2023-06-01");
+                        }
+                        else if (IsOllamaCloud)
+                        {
+                            ollamaKey = ResolveOllamaKey();
+                            if (!string.IsNullOrEmpty(ollamaKey))
+                                req.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", ollamaKey);
+                        }
+
+                        resp = await _http.SendAsync(req, ct);
+                        if (resp.IsSuccessStatusCode)
+                        {
+                            if (IsOllamaCloud && !string.IsNullOrEmpty(ollamaKey))
+                                OllamaPool?.RecordRequest(ollamaKey);
+                            break;
+                        }
+
+                        if (IsOllamaCloud && (int)resp.StatusCode == 429
+                            && OllamaPool != null && !string.IsNullOrEmpty(ollamaKey))
+                        {
+                            OllamaPool.MarkRateLimited(ollamaKey);
+                            resp.Dispose();
+                            resp = null;
+                            continue;
+                        }
+
                         break;
                     }
 
-                    if (IsOllamaCloud && (int)resp.StatusCode == 429
-                        && OllamaPool != null && !string.IsNullOrEmpty(ollamaKey))
+                    if (resp != null && resp.IsSuccessStatusCode)
+                        break;
+
+                    lastStatus = resp == null ? null : (int)resp.StatusCode;
+                    lastError = resp == null ? "no live key/response" : await resp.Content.ReadAsStringAsync(ct);
+                    var shouldTryNextVision = IsOllamaCloud
+                        && lastStatus is 400 or 500
+                        && modelAttempt != visionModels.Last()
+                        && LooksLikeVisionModelFailure(lastError);
+                    resp?.Dispose();
+                    resp = null;
+
+                    if (shouldTryNextVision)
                     {
-                        OllamaPool.MarkRateLimited(ollamaKey);
-                        resp.Dispose();
-                        resp = null;
+                        RecordLlmFailure(diagProvider, modelAttempt, diagChannel, lastStatus, lastError, diagWatch, "system_vision_fallback_retry");
                         continue;
                     }
 
@@ -714,9 +869,9 @@ Kokonoe: Стоп. Де ти зараз. Коли востаннє їв.
 
                 if (resp == null || !resp.IsSuccessStatusCode)
                 {
-                    var status = resp == null ? (int?)null : (int)resp.StatusCode;
-                    var error = resp == null ? "no live key/response" : await resp.Content.ReadAsStringAsync(ct);
-                    RecordLlmFailure(diagProvider, diagModel, diagChannel, status, error, diagWatch, "system_vision");
+                    var status = resp == null ? lastStatus : (int)resp.StatusCode;
+                    var error = resp == null ? (lastError ?? "no live key/response") : await resp.Content.ReadAsStringAsync(ct);
+                    RecordLlmFailure(diagProvider, lastModel, diagChannel, status, error, diagWatch, "system_vision");
                     return null;
                 }
 
@@ -777,17 +932,12 @@ Kokonoe: Стоп. Де ти зараз. Коли востаннє їв.
                 object userContent;
                 if (imageBytes != null && imageBytes.Length > 0)
                 {
-                    var b64 = Convert.ToBase64String(imageBytes);
-                    // Claude API: { type:"image", source:{ type:"base64", media_type, data } }
-                    // OpenAI-compatible: { type:"image_url", image_url:{ url:"data:...;base64,..." } }
-                    object imageBlock = IsClaude
-                        ? new { type = "image", source = new { type = "base64", media_type = imageMime, data = b64 } }
-                        : new { type = "image_url", image_url = new { url = $"data:{imageMime};base64,{b64}" } };
-                    userContent = new object[]
-                    {
-                        new { type = "text", text = string.IsNullOrWhiteSpace(userText) ? "Що на фото?" : userText },
-                        imageBlock
-                    };
+                    var sendImageBytes = imageBytes;
+                    var sendImageMime = imageMime;
+                    userContent = BuildImageUserContent(
+                        string.IsNullOrWhiteSpace(userText) ? "Що на фото?" : userText,
+                        sendImageBytes,
+                        sendImageMime);
                 }
                 else
                 {
@@ -803,6 +953,10 @@ Kokonoe: Стоп. Де ти зараз. Коли востаннє їв.
 
                 // Деякі моделі (напр. gemma4) не підтримують tool calling — fallback на no-tools після 500
                 var toolsFailedFallback = false;
+                var visionFallbackTried = false;
+                string? visionModelOverride = null;
+                var visionPngRetryTried = false;
+                var visionPlaceholderTried = false;
                 var imageTextFallback = imageBytes != null && imageBytes.Length > 0
                     ? (string.IsNullOrWhiteSpace(userText) ? "Що на фото?" : userText)
                     : "";
@@ -833,6 +987,10 @@ Kokonoe: Стоп. Де ти зараз. Коли востаннє їв.
                     // Детектуємо чи запит вимагає vault-операції
                     // якщо так — підштовхуємо модель через tool_choice
                     bool looksLikeVaultOp = !string.IsNullOrEmpty(userText) && (
+                        userText.Contains("створ", StringComparison.OrdinalIgnoreCase) ||
+                        userText.Contains("папк", StringComparison.OrdinalIgnoreCase) ||
+                        userText.Contains("перевір", StringComparison.OrdinalIgnoreCase) ||
+                        userText.Contains("провір", StringComparison.OrdinalIgnoreCase) ||
                         userText.Contains("запиш", StringComparison.OrdinalIgnoreCase) ||
                         userText.Contains("збереж", StringComparison.OrdinalIgnoreCase) ||
                         userText.Contains("нотатк", StringComparison.OrdinalIgnoreCase) ||
@@ -845,7 +1003,9 @@ Kokonoe: Стоп. Де ти зараз. Коли востаннє їв.
                     var targetUrl = isClaude ? CLAUDE_API_URL : (isOllamaCloud ? _ollamaUrl : _lmUrl);
                     var targetModel = isClaude ? _claudeModel : (isOllamaCloud ? _ollamaModel : _model);
                     if (isImageRequest && !string.IsNullOrWhiteSpace(_visionModel))
-                        targetModel = _visionModel;
+                        targetModel = !string.IsNullOrWhiteSpace(visionModelOverride)
+                            ? visionModelOverride
+                            : _visionModel;
                     // Якщо є VisionUrl — image requests йдуть на окремий endpoint (напр. локальний Ollama)
                     if (isImageRequest && !string.IsNullOrWhiteSpace(_visionUrl))
                         targetUrl = _visionUrl;
@@ -966,9 +1126,20 @@ Kokonoe: Стоп. Де ти зараз. Коли востаннє їв.
                                           || errBody.Contains("unsupported", StringComparison.OrdinalIgnoreCase);
                             if (isImageErr)
                             {
+                                if (TrySwitchToFallbackVisionModel(
+                                        isOllamaCloud,
+                                        targetModel,
+                                        ref visionFallbackTried,
+                                        out visionModelOverride))
+                                {
+                                    RecordLlmFailure(diagProvider, targetModel, diagChannel, (int)resp.StatusCode, errBody, diagWatch, "vision_fallback_retry");
+                                    resp.Dispose();
+                                    continue;
+                                }
+
                                 lock (_histLock) { while (_history.Count > checkpoint) _history.RemoveAt(_history.Count - 1); }
                                 RecordLlmFailure(diagProvider, diagModel, diagChannel, (int)resp.StatusCode, errBody, diagWatch, "vision_rejected");
-                                return "Зображення є, але vision-модель його відхилила. Перевір Vision Model у Settings (для твого Ollama Cloud зараз працює: qwen3-vl:235b-instruct).";
+                                return BuildVisionUnavailableReply(userText);
                             }
                             // Tools fallback + image: strip image тихо і продовжуємо (tools вже відвалились — не image-проблема)
                             if (toolsFailedFallback)
@@ -1001,9 +1172,64 @@ Kokonoe: Стоп. Де ти зараз. Коли востаннє їв.
                         // 500 від Ollama Cloud на image request — не стрипаємо тихо, повертаємо зрозуміле повідомлення
                         if ((int)resp.StatusCode == 500 && isOllamaCloud && isImageRequest && imageHistoryIdx >= 0)
                         {
+                            if (!visionPngRetryTried
+                                && imageBytes != null
+                                && imageBytes.Length > 0
+                                && !imageMime.Contains("png", StringComparison.OrdinalIgnoreCase)
+                                && TryTranscodeImageToPng(imageBytes, imageMime, out var pngBytes, out var pngMime))
+                            {
+                                visionPngRetryTried = true;
+                                var pngContent = BuildImageUserContent(
+                                    string.IsNullOrWhiteSpace(userText) ? "Що на фото?" : userText,
+                                    pngBytes,
+                                    pngMime);
+                                lock (_histLock)
+                                {
+                                    if (imageHistoryIdx < _history.Count)
+                                        _history[imageHistoryIdx] = new HistoryEntry("user", pngContent);
+                                }
+                                RecordLlmFailure(diagProvider, targetModel, diagChannel, (int)resp.StatusCode, err, diagWatch, "vision_png_retry");
+                                resp.Dispose();
+                                continue;
+                            }
+
+                            if (!visionPlaceholderTried)
+                            {
+                                visionPlaceholderTried = true;
+                                var placeholderPrompt =
+                                    (string.IsNullOrWhiteSpace(userText) ? "Користувач надіслав зображення без тексту." : userText) +
+                                    "\n\n[Системна примітка: оригінальне зображення не вдалося доставити у vision через 500 від провайдера. " +
+                                    "Надіслана безпечна PNG-заглушка лише щоб обійти збій API. Не описуй заглушку і не вдавай, що бачиш оригінал. " +
+                                    "Відповідай чесно по тексту користувача: коротко скажи, що фото не прочиталось, і дай наступну дію.]";
+                                var placeholderContent = BuildImageUserContent(
+                                    placeholderPrompt,
+                                    BuildVisionPlaceholderPng(),
+                                    "image/png");
+                                lock (_histLock)
+                                {
+                                    if (imageHistoryIdx < _history.Count)
+                                        _history[imageHistoryIdx] = new HistoryEntry("user", placeholderContent);
+                                }
+                                imageTextFallback = placeholderPrompt;
+                                RecordLlmFailure(diagProvider, targetModel, diagChannel, (int)resp.StatusCode, err, diagWatch, "vision_placeholder_retry");
+                                resp.Dispose();
+                                continue;
+                            }
+
+                            if (TrySwitchToFallbackVisionModel(
+                                    isOllamaCloud,
+                                    targetModel,
+                                    ref visionFallbackTried,
+                                    out visionModelOverride))
+                            {
+                                RecordLlmFailure(diagProvider, targetModel, diagChannel, (int)resp.StatusCode, err, diagWatch, "vision_fallback_retry");
+                                resp.Dispose();
+                                continue;
+                            }
+
                             lock (_histLock) { while (_history.Count > checkpoint) _history.RemoveAt(_history.Count - 1); }
                             RecordLlmFailure(diagProvider, diagModel, diagChannel, (int)resp.StatusCode, err, diagWatch, "vision_500");
-                            return "Зображення є, але vision-сервер повернув 500. Перевір Vision Model у Settings (для твого Ollama Cloud зараз працює: qwen3-vl:235b-instruct).";
+                            return BuildVisionUnavailableReply(userText);
                         }
                         if (isOllamaCloud && !isImageRequest && IsTransientServerError((int)resp.StatusCode))
                         {
@@ -1109,6 +1335,17 @@ Kokonoe: Стоп. Де ти зараз. Коли востаннє їв.
                     // No tool calls → final answer
                     if (toolCalls == null || toolCalls.Count == 0)
                     {
+                        if (looksLikeVaultOp && !forceNoTools)
+                        {
+                            lock (_histLock)
+                            {
+                                _history.Add(new HistoryEntry(
+                                    "user",
+                                    "SYSTEM CHECK: This request requires a real Obsidian tool call. Do not answer in prose. Use the correct tool now, then verify the result."));
+                            }
+                            continue;
+                        }
+
                         var reply = CleanGarbage(rawContent);
                         lock (_histLock)
                         {
@@ -1215,7 +1452,7 @@ Kokonoe: Стоп. Де ти зараз. Коли востаннє їв.
                         new { role = "system", content = BuildCompactSystemContent() },
                         new { role = "user", content = userText }
                     },
-                    max_tokens = 2048,
+                    max_tokens = MainMaxTokens,
                     temperature = DynamicTemperature,
                     stream = false
                 };
@@ -1662,8 +1899,7 @@ Kokonoe: Стоп. Де ти зараз. Коли востаннє їв.
                     "move_note" => Obsidian.MoveNote(
                         Req(args, "old_path"), Req(args, "new_path")),
 
-                    "create_folder" => Obsidian.CreateFolder(
-                        Req(args, "folder_path")),
+                    "create_folder" => CreateFolderVerified(Req(args, "folder_path")),
 
                     "save_architecture_plan" => SaveArchitecturePlan(Req(args, "plan")),
 
@@ -1702,6 +1938,15 @@ Kokonoe: Стоп. Де ти зараз. Коли востаннє їв.
         {
             var (changed, added) = Obsidian!.RebuildLinks();
             return $"✓ Оброблено файлів: {changed}, додано посилань: {added}.";
+        }
+
+        private string CreateFolderVerified(string folderPath)
+        {
+            Obsidian!.CreateFolder(folderPath);
+            var full = Path.Combine(Obsidian.VaultPath, folderPath.Replace('/', Path.DirectorySeparatorChar));
+            return Directory.Exists(full)
+                ? $"✓ Створено папку: {folderPath}"
+                : $"❌ Папку не підтверджено на диску: {folderPath}";
         }
 
         private string SaveArchitecturePlan(string plan)
@@ -1904,6 +2149,8 @@ Kokonoe: Стоп. Де ти зараз. Коли востаннє їв.
         private static string DetectBestTool(string text)
         {
             var t = text.ToLowerInvariant();
+            if (t.Contains("папк") || t.Contains("folder"))
+                return "create_folder";
             if (t.Contains("щоденник") || t.Contains("daily"))
                 return "append_to_daily_note";
             if (t.Contains("знайд") || t.Contains("пошук") || t.Contains("search"))
@@ -2079,6 +2326,10 @@ Kokonoe: Стоп. Де ти зараз. Коли востаннє їв.
             var systemContent = SYSTEM_PROMPT + dateStamp + screenPart + personPart + contextPart;
 
             var looksLikeVaultOp = !string.IsNullOrEmpty(userText) && (
+                userText.Contains("створ", StringComparison.OrdinalIgnoreCase) ||
+                userText.Contains("папк", StringComparison.OrdinalIgnoreCase) ||
+                userText.Contains("перевір", StringComparison.OrdinalIgnoreCase) ||
+                userText.Contains("провір", StringComparison.OrdinalIgnoreCase) ||
                 userText.Contains("запиш", StringComparison.OrdinalIgnoreCase) ||
                 userText.Contains("збереж", StringComparison.OrdinalIgnoreCase) ||
                 userText.Contains("нотатк", StringComparison.OrdinalIgnoreCase) ||
@@ -2307,6 +2558,9 @@ Kokonoe: Стоп. Де ти зараз. Коли востаннє їв.
             try { path = writeOp(); }
             catch (Exception ex) { return $"❌ Помилка запису ({label}): {ex.Message}"; }
 
+            if (!File.Exists(path) && !Directory.Exists(path))
+                return $"❌ {label}: дія повернула шлях, але файл/папку не підтверджено на диску: {path}";
+
             // Debounce: rebuild граф не частіше за раз на хвилину.
             // Запис нотатки — часта дія, повний rebuild — дорога; немає сенсу робити це після кожного.
             bool shouldRebuild;
@@ -2383,7 +2637,7 @@ Kokonoe: Стоп. Де ти зараз. Коли востаннє їв.
                 reqBody = new
                 {
                     model = targetModel,
-                    max_tokens = 512,
+                    max_tokens = MainMaxTokens,
                     temperature = 0.5,
                     system = systemContent,
                     messages = new[] { new { role = "user", content = userText } }
@@ -2394,7 +2648,7 @@ Kokonoe: Стоп. Де ти зараз. Коли востаннє їв.
                 reqBody = new
                 {
                     model = targetModel,
-                    max_tokens = 512,
+                    max_tokens = MainMaxTokens,
                     temperature = 0.5,
                     messages = messages,
                     stream = false
