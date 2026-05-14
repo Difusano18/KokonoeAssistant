@@ -126,6 +126,18 @@ namespace KokonoeAssistant.Services
         public string LastTimelineState { get; set; } = "";
         public string LastPostReplyGuard { get; set; } = "";
         public DateTime LastPostReplyGuardAt { get; set; } = DateTime.MinValue;
+        public string LastPersonaDecision { get; set; } = "";
+        public DateTime LastPersonaDecisionAt { get; set; } = DateTime.MinValue;
+        public List<string> PersonaDecisionLog { get; set; } = new();
+        public string LastResponsePlan { get; set; } = "";
+        public string LastResponsePlanTrace { get; set; } = "";
+        public DateTime LastResponsePlanAt { get; set; } = DateTime.MinValue;
+        public List<string> ResponsePlanLog { get; set; } = new();
+        public string LastMemoryPolicyDecision { get; set; } = "";
+        public DateTime LastMemoryPolicyAt { get; set; } = DateTime.MinValue;
+        public List<string> MemoryPolicyLog { get; set; } = new();
+        public string LastContinuitySummary { get; set; } = "";
+        public DateTime LastContinuityAt { get; set; } = DateTime.MinValue;
         public DateTime LastStateRefreshAt { get; set; } = DateTime.MinValue;
         public string LastStateRefreshSummary { get; set; } = "";
         public bool LastStateRefreshChanged { get; set; }
@@ -225,6 +237,10 @@ namespace KokonoeAssistant.Services
         public readonly KokoScenarioSimulationService Scenarios;
         public readonly KokoConversationTimelineEngine Timeline;
         public readonly KokoPostReplyGuard PostReplyGuard;
+        public readonly KokoPersonaEngine Persona;
+        public readonly KokoResponsePlannerEngine ResponsePlanner;
+        public readonly KokoMemoryWritePolicyEngine MemoryWritePolicy;
+        public readonly KokoContinuityEngine Continuity;
         public readonly KokoStateFreshnessService StateFreshness;
         public readonly KokoProactiveContextService ProactiveContext;
         public readonly KokoScreenAwarenessService ScreenAwareness;
@@ -313,6 +329,10 @@ namespace KokonoeAssistant.Services
             Scenarios = new KokoScenarioSimulationService();
             Timeline = new KokoConversationTimelineEngine();
             PostReplyGuard = new KokoPostReplyGuard();
+            Persona = new KokoPersonaEngine();
+            ResponsePlanner = new KokoResponsePlannerEngine();
+            MemoryWritePolicy = new KokoMemoryWritePolicyEngine();
+            Continuity = new KokoContinuityEngine(dataDir);
             StateFreshness = new KokoStateFreshnessService();
             ProactiveContext = new KokoProactiveContextService();
             ScreenAwareness = new KokoScreenAwarenessService();
@@ -887,8 +907,30 @@ namespace KokonoeAssistant.Services
                 sb.AppendLine(Presence.BuildDebugBlock(_state));
                 sb.AppendLine(InternalDay.BuildDebugBlock(_state));
                 sb.AppendLine(Autonomy.BuildDebugBlock(_state));
+                sb.AppendLine(ResponsePlanner.BuildDebugBlock(_state));
+                sb.AppendLine(MemoryWritePolicy.BuildDebugBlock(_state));
             }
             catch { }
+
+            try
+            {
+                var continuity = Continuity.BuildPromptBlock();
+                if (!string.IsNullOrWhiteSpace(continuity))
+                    sb.AppendLine(continuity);
+            }
+            catch { }
+
+            if (!string.IsNullOrWhiteSpace(_state.LastResponsePlan) &&
+                (DateTime.Now - _state.LastResponsePlanAt).TotalMinutes < 30)
+            {
+                sb.AppendLine(_state.LastResponsePlan);
+            }
+
+            if (!string.IsNullOrWhiteSpace(_state.LastPersonaDecision) &&
+                (DateTime.Now - _state.LastPersonaDecisionAt).TotalMinutes < 30)
+            {
+                sb.AppendLine(_state.LastPersonaDecision);
+            }
 
             // Криза
             if (_state.PersonalityInCrisis)
@@ -1850,6 +1892,9 @@ namespace KokonoeAssistant.Services
                 _state.TotalMessagesExchanged++;
                 _state.LastKnownUserActivity = "chatting";
                 ObserveShortTermIntent(content);
+                RecordPersonaDecision(content, DateTime.Now);
+                RecordResponsePlan(content, DateTime.Now);
+                RecordMemoryPolicyAndContinuity(content, DateTime.Now);
                 ApplyScreenAwarenessUserPreference(content, DateTime.Now);
                 Presence.ObserveUserMessage(_state, content, DateTime.Now);
 
@@ -2120,6 +2165,10 @@ namespace KokonoeAssistant.Services
 
         private void ExtractAndRememberFacts(string userMsg)
         {
+            var policy = MemoryWritePolicy.Evaluate(userMsg, DateTime.Now);
+            if (policy.Action is "ignore" or "daily_log" or "review")
+                return;
+
             // Прості евристики для вилучення фактів без LLM
             var lower = userMsg.ToLower();
 
@@ -2150,6 +2199,64 @@ namespace KokonoeAssistant.Services
                     }
                 }
             }
+        }
+
+        private KokoPersonaFrame RecordPersonaDecision(string userText, DateTime now)
+        {
+            var frame = Persona.Build(userText, _state, now);
+            _state.LastPersonaDecision = frame.PromptBlock;
+            _state.LastPersonaDecisionAt = now;
+            _state.PersonaDecisionLog.Add(frame.TraceLine);
+            if (_state.PersonaDecisionLog.Count > 40)
+                _state.PersonaDecisionLog.RemoveRange(0, _state.PersonaDecisionLog.Count - 40);
+
+            _state.InnerMonologues.Add($"[persona/{frame.Mode}] {frame.Stance}. {frame.ReasonUk}");
+            if (_state.InnerMonologues.Count > 80)
+                _state.InnerMonologues.RemoveRange(0, _state.InnerMonologues.Count - 80);
+
+            return frame;
+        }
+
+        private KokoResponsePlanFrame RecordResponsePlan(string userText, DateTime now)
+        {
+            var frame = ResponsePlanner.Build(userText, _state, Cognition, now);
+            _state.LastResponsePlan = frame.PromptBlock;
+            _state.LastResponsePlanTrace = frame.TraceLine;
+            _state.LastResponsePlanAt = now;
+            _state.ResponsePlanLog.Add(frame.TraceLine);
+            if (_state.ResponsePlanLog.Count > 60)
+                _state.ResponsePlanLog.RemoveRange(0, _state.ResponsePlanLog.Count - 60);
+
+            _state.InnerMonologues.Add($"[plan/{frame.Intent}] {frame.Stance}. {frame.ReasonUk}");
+            if (_state.InnerMonologues.Count > 80)
+                _state.InnerMonologues.RemoveRange(0, _state.InnerMonologues.Count - 80);
+
+            return frame;
+        }
+
+        private KokoMemoryWriteDecision RecordMemoryPolicyAndContinuity(string userText, DateTime now)
+        {
+            var decision = MemoryWritePolicy.Evaluate(userText, now);
+            _state.LastMemoryPolicyDecision = decision.TraceLine;
+            _state.LastMemoryPolicyAt = now;
+            _state.MemoryPolicyLog.Add(decision.TraceLine);
+            if (_state.MemoryPolicyLog.Count > 60)
+                _state.MemoryPolicyLog.RemoveRange(0, _state.MemoryPolicyLog.Count - 60);
+
+            var belief = Continuity.ApplyMemoryDecision(decision, now);
+            _state.LastContinuitySummary = belief == null
+                ? Continuity.BuildDebugLine()
+                : $"{belief.Status}/{belief.Kind}: {belief.Claim}";
+            _state.LastContinuityAt = now;
+
+            if (decision.Action != "ignore")
+            {
+                _state.InnerMonologues.Add($"[memory/{decision.Action}] {decision.ReasonUk}");
+                if (_state.InnerMonologues.Count > 80)
+                    _state.InnerMonologues.RemoveRange(0, _state.InnerMonologues.Count - 80);
+            }
+
+            return decision;
         }
 
         // ══════════════════════════════════════════════════════════════
@@ -4446,6 +4553,22 @@ namespace KokonoeAssistant.Services
         public KokoPostReplyGuardResult EvaluatePostReplyGuard(string userText, string reply)
         {
             var now = DateTime.Now;
+            if (string.IsNullOrWhiteSpace(_state.LastPersonaDecision) ||
+                (now - _state.LastPersonaDecisionAt).TotalMinutes > 30)
+            {
+                lock (_lock)
+                {
+                    RecordPersonaDecision(userText, now);
+                }
+            }
+            if (string.IsNullOrWhiteSpace(_state.LastResponsePlan) ||
+                (now - _state.LastResponsePlanAt).TotalMinutes > 30)
+            {
+                lock (_lock)
+                {
+                    RecordResponsePlan(userText, now);
+                }
+            }
             var timeline = BuildTimelineFrame(userText);
             var result = PostReplyGuard.Evaluate(userText, reply, _state, _chatRepo.GetMessages(60), timeline, now);
             lock (_lock)
@@ -4466,6 +4589,24 @@ namespace KokonoeAssistant.Services
             {
                 Log($"SelfReview failed: {ex.Message}");
                 return "SELF-REVIEW BEFORE REPLY\nSelf-review failed; still verify current time, active intent, and immediate context before answering.\n";
+            }
+        }
+
+        public string BuildResponsePlanContext(string? userText = null)
+        {
+            var now = DateTime.Now;
+            lock (_lock)
+            {
+                if (!string.IsNullOrWhiteSpace(userText) &&
+                    (string.IsNullOrWhiteSpace(_state.LastResponsePlan) ||
+                     now - _state.LastResponsePlanAt > TimeSpan.FromMinutes(5)))
+                {
+                    RecordResponsePlan(userText, now);
+                }
+
+                return string.IsNullOrWhiteSpace(_state.LastResponsePlan)
+                    ? ResponsePlanner.BuildDebugBlock(_state)
+                    : _state.LastResponsePlan;
             }
         }
 
@@ -4599,6 +4740,10 @@ namespace KokonoeAssistant.Services
                 Attachment = $"trust {attachment.Trust:F2}, intimacy {attachment.Intimacy:F2}, reliability {attachment.Reliability:F2}, reciprocity {attachment.Reciprocity:F2}, vitality {attachment.Vitality:F2}",
                 SelfReview = $"{review.RiskLevel}: {review.Summary}",
                 PostReplyGuard = string.IsNullOrWhiteSpace(_state.LastPostReplyGuard) ? "none" : _state.LastPostReplyGuard,
+                PersonaDecision = string.IsNullOrWhiteSpace(_state.LastPersonaDecision) ? "none" : _state.PersonaDecisionLog.LastOrDefault() ?? "none",
+                ResponsePlan = string.IsNullOrWhiteSpace(_state.LastResponsePlanTrace) ? "none" : _state.LastResponsePlanTrace,
+                MemoryPolicy = string.IsNullOrWhiteSpace(_state.LastMemoryPolicyDecision) ? "none" : _state.LastMemoryPolicyDecision,
+                Continuity = string.IsNullOrWhiteSpace(_state.LastContinuitySummary) ? Continuity.BuildDebugLine() : _state.LastContinuitySummary,
                 LlmStatus = $"{llmDiag.Status} / {llmDiag.Channel} / {llmDiag.LastLatencyMs}ms",
                 LlmProvider = llmDiag.Provider,
                 LlmModel = llmDiag.Model,
@@ -4620,6 +4765,9 @@ namespace KokonoeAssistant.Services
                     .Select(i => $"{i.Kind}: {i.Summary} до {i.ExpectedUntil:dd.MM HH:mm}")
                     .ToArray(),
                 AutonomyLog = _state.AutonomyDecisionLog.TakeLast(8).ToArray(),
+                PersonaLog = _state.PersonaDecisionLog.TakeLast(8).ToArray(),
+                ResponsePlanLog = _state.ResponsePlanLog.TakeLast(8).ToArray(),
+                MemoryPolicyLog = _state.MemoryPolicyLog.TakeLast(8).ToArray(),
                 PresenceTrace = _state.PresenceTrace.TakeLast(6).ToArray(),
                 InternalDayTrace = _state.InternalDayTrace.TakeLast(6).ToArray(),
                 RelationshipEvents = relationship.RecentEvents
@@ -4807,6 +4955,30 @@ namespace KokonoeAssistant.Services
             lock (_lock)
             {
                 return _state.InitiativeReasonLog.TakeLast(count).Reverse().ToList();
+            }
+        }
+
+        public List<string> GetPersonaDecisionLog(int count = 8)
+        {
+            lock (_lock)
+            {
+                return _state.PersonaDecisionLog.TakeLast(count).Reverse().ToList();
+            }
+        }
+
+        public List<string> GetResponsePlanLog(int count = 8)
+        {
+            lock (_lock)
+            {
+                return _state.ResponsePlanLog.TakeLast(count).Reverse().ToList();
+            }
+        }
+
+        public List<string> GetMemoryPolicyLog(int count = 8)
+        {
+            lock (_lock)
+            {
+                return _state.MemoryPolicyLog.TakeLast(count).Reverse().ToList();
             }
         }
 

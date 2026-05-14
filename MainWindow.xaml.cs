@@ -1854,6 +1854,14 @@ tags: [kokonoe, live-core, diagnostics]
 
             try
             {
+                var responsePlan = ServiceContainer.BrainEngine?.BuildResponsePlanContext(userText);
+                if (!string.IsNullOrWhiteSpace(responsePlan))
+                    parts.Add((responsePlan, 0));
+            }
+            catch { }
+
+            try
+            {
                 var selfReview = ServiceContainer.BrainEngine?.BuildSelfReviewContext(userText);
                 if (!string.IsNullOrWhiteSpace(selfReview))
                     parts.Add((selfReview, 0));

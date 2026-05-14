@@ -17,7 +17,7 @@ namespace KokonoeAssistant.Services
 
         public ObsidianMcpService(string vaultPath)
         {
-            _vault = vaultPath;
+            _vault = Path.GetFullPath(vaultPath);
         }
 
         // ── LIST ─────────────────────────────────────────────────
@@ -775,6 +775,10 @@ created: {DateTime.Now:yyyy-MM-dd}
         {
             return path.StartsWith("Kokonoe/Architecture/", StringComparison.OrdinalIgnoreCase) ||
                    path.Equals("Kokonoe/Vault Index.md", StringComparison.OrdinalIgnoreCase) ||
+                   path.Equals("Kokonoe/Tasks Queue.md", StringComparison.OrdinalIgnoreCase) ||
+                   path.StartsWith("Kokonoe/Memory/Quality", StringComparison.OrdinalIgnoreCase) ||
+                   path.StartsWith("Kokonoe/Memory/Cleanup", StringComparison.OrdinalIgnoreCase) ||
+                   path.StartsWith("Kokonoe/Memory/Review", StringComparison.OrdinalIgnoreCase) ||
                    path.StartsWith("Kokonoe/Automation/", StringComparison.OrdinalIgnoreCase);
         }
 
@@ -1792,9 +1796,23 @@ cleanup_empty — видалити порожні нотатки
 
         private string Resolve(string rel)
         {
+            if (string.IsNullOrWhiteSpace(rel))
+                throw new ArgumentException("Vault path is empty.", nameof(rel));
+
             if (!rel.EndsWith(".md", StringComparison.OrdinalIgnoreCase))
                 rel += ".md";
-            return Path.Combine(_vault, rel.Replace('/', Path.DirectorySeparatorChar));
+
+            var normalizedRel = rel
+                .Replace('\\', Path.DirectorySeparatorChar)
+                .Replace('/', Path.DirectorySeparatorChar)
+                .TrimStart(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            var full = Path.GetFullPath(Path.Combine(_vault, normalizedRel));
+            var vaultRoot = Path.TrimEndingDirectorySeparator(Path.GetFullPath(_vault)) + Path.DirectorySeparatorChar;
+
+            if (!full.StartsWith(vaultRoot, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException($"Vault path escapes vault root: {rel}");
+
+            return full;
         }
 
         /// <summary>

@@ -80,6 +80,12 @@ namespace KokonoeAssistant.Services
             if (LooksGeneric(userText, reply))
                 violations.Add("відповідь занадто шаблонна для наявного контексту");
 
+            if (KokoPersonaEngine.LooksBotLike(reply))
+                violations.Add("відповідь звучить як сервісний бот, а не Kokonoe з характером");
+
+            if (KokoPersonaEngine.LooksBlindlyAgreeing(userText, reply))
+                violations.Add("відповідь автоматично погоджується замість критичного судження");
+
             var shortAffection = IsShortAffection(userLower);
             var shortConfusion = IsShortConfusion(userLower);
             var shortGreeting = IsShortGreeting(userLower);
@@ -134,7 +140,7 @@ namespace KokonoeAssistant.Services
                 Summary = $"post-reply guard знайшов {violations.Count} проблем.",
                 Violations = violations.ToArray(),
                 HardReplacement = hardReplacement,
-                RepairInstruction = BuildRepairInstruction(userText, reply, violations, timeline)
+                RepairInstruction = BuildRepairInstruction(userText, reply, violations, timeline, state)
             };
         }
 
@@ -150,7 +156,8 @@ namespace KokonoeAssistant.Services
             string userText,
             string badReply,
             IReadOnlyList<string> violations,
-            KokoConversationTimelineFrame timeline)
+            KokoConversationTimelineFrame timeline,
+            KokoInternalState state)
         {
             return $"""
 POST-REPLY REPAIR
@@ -162,6 +169,9 @@ POST-REPLY REPAIR
 
 Timeline:
 {timeline.PromptBlock}
+
+{KokoPersonaEngine.BuildRepairRules(userText)}
+{KokoResponsePlannerEngine.BuildRepairRules(state.LastResponsePlan)}
 
 Перепиши відповідь.
 Правила:

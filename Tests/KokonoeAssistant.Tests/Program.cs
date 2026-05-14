@@ -50,6 +50,13 @@ internal static class Program
             Run("Post reply guard duplicate image prompt avoids stale repeat text", PostReplyGuardDuplicateImagePromptAvoidsStaleRepeatText);
             Run("Post reply guard blocks therapy meta tone", PostReplyGuardBlocksTherapyMetaTone);
             Run("Post reply guard blocks fabricated external facts", PostReplyGuardBlocksFabricatedExternalFacts);
+            Run("Post reply guard blocks service bot tone", PostReplyGuardBlocksServiceBotTone);
+            Run("Post reply guard blocks blind agreement", PostReplyGuardBlocksBlindAgreement);
+            Run("Response planner classifies critical assistant architecture", ResponsePlannerClassifiesCriticalAssistantArchitecture);
+            Run("Response planner requires vault read for memory questions", ResponsePlannerRequiresVaultReadForMemoryQuestions);
+            Run("Memory policy stores stable preference", MemoryPolicyStoresStablePreference);
+            Run("Memory policy keeps temporary state out of beliefs", MemoryPolicyKeepsTemporaryStateOutOfBeliefs);
+            Run("Continuity reinforces repeated belief", ContinuityReinforcesRepeatedBelief);
             Run("Post reply guard repairs sleep leak on profile question", PostReplyGuardRepairsSleepLeakOnProfileQuestion);
             Run("Proactive guard suppresses repeated generic silence", ProactiveGuardSuppressesRepeatedGenericSilence);
             Run("Proactive context anchors silence to last topic", ProactiveContextAnchorsSilenceToLastTopic);
@@ -74,6 +81,8 @@ internal static class Program
             Run("Inspector renders state report", InspectorRendersStateReport);
             Run("Obsidian vault architecture maintenance", ObsidianVaultArchitectureMaintenance);
             Run("Obsidian unique memory append", ObsidianUniqueMemoryAppend);
+            Run("Obsidian rejects paths outside vault", ObsidianRejectsPathsOutsideVault);
+            Run("LLM vault tool routing avoids accidental writes", LlmVaultToolRoutingAvoidsAccidentalWrites);
             Run("Obsidian memory quality and task queue", ObsidianMemoryQualityAndTaskQueue);
             Run("Obsidian memory duplicate cleanup", ObsidianMemoryDuplicateCleanup);
             Run("Obsidian memory review suggestions", ObsidianMemoryReviewSuggestions);
@@ -1093,6 +1102,128 @@ internal static class Program
         AssertTrue(!result.HardReplacement.Contains("мемберств", StringComparison.OrdinalIgnoreCase), "replacement should not preserve invented membership");
     }
 
+    private static void PostReplyGuardBlocksServiceBotTone()
+    {
+        var now = DateTime.Today.AddHours(15);
+        var state = new KokoInternalState();
+        var messages = new[]
+        {
+            new ChatRepository.ChatMessage { Role = "user", Content = "поясни що не так з поведінкою коконое", Timestamp = now }
+        };
+        var timeline = new KokoConversationTimelineEngine().Build(messages, state, now, messages[0].Content);
+        var badReply = "Я розумію, що це важливо для тебе. Давай розглянемо це разом і я тут, щоб допомогти.";
+
+        var result = new KokoPostReplyGuard().Evaluate(messages[0].Content, badReply, state, messages, timeline, now);
+
+        AssertTrue(!result.Passed, "guard should reject service-bot support wording");
+        AssertTrue(result.ShouldRepair, "bot tone should be repaired through persona rules");
+        AssertTrue(result.Violations.Any(v => v.Contains("сервісний бот")), "violation should name bot tone");
+        AssertTrue(result.RepairInstruction.Contains("ANTI-BOT"), "repair should include anti-bot persona rules");
+    }
+
+    private static void PostReplyGuardBlocksBlindAgreement()
+    {
+        var now = DateTime.Today.AddHours(16);
+        var state = new KokoInternalState();
+        var messages = new[]
+        {
+            new ChatRepository.ChatMessage { Role = "user", Content = "оцін мою ідею: нехай Коконое завжди погоджується зі мною", Timestamp = now }
+        };
+        var timeline = new KokoConversationTimelineEngine().Build(messages, state, now, messages[0].Content);
+        var badReply = "Так, це гарна ідея. Повністю згодна, так буде краще.";
+
+        var result = new KokoPostReplyGuard().Evaluate(messages[0].Content, badReply, state, messages, timeline, now);
+
+        AssertTrue(!result.Passed, "guard should reject blind agreement on a judgment request");
+        AssertTrue(result.ShouldRepair, "blind agreement should request critical rewrite");
+        AssertTrue(result.Violations.Any(v => v.Contains("критичного судження")), "violation should require critical judgment");
+        AssertTrue(result.RepairInstruction.Contains("CRITICAL THINKING"), "repair should include critical thinking rules");
+    }
+
+    private static void ResponsePlannerClassifiesCriticalAssistantArchitecture()
+    {
+        using var ctx = TestContext.Create();
+        var cognition = new KokoCognitionEngine(ctx.TestDir);
+        var state = new KokoInternalState { PersonalityDailyMood = "sharp" };
+
+        var frame = new KokoResponsePlannerEngine().Build(
+            "оцін архітектуру поведінки Коконое, треба щоб вона була як реальний асистент",
+            state,
+            cognition,
+            new DateTime(2026, 5, 14, 16, 0, 0));
+
+        AssertTrue(frame.Intent is "evaluate" or "architecture", "planner should classify assistant architecture as a judgment/architecture request");
+        AssertTrue(frame.RequiresCritique, "assistant architecture request should require critique");
+        AssertTrue(frame.ShouldPushBack, "planner should push back on weak assumptions");
+        AssertTrue(frame.PromptBlock.Contains("RESPONSE EXECUTION PLAN"), "planner should produce a prompt block");
+        AssertTrue(frame.PromptBlock.Contains("no blind agreement"), "planner should forbid blind agreement");
+    }
+
+    private static void ResponsePlannerRequiresVaultReadForMemoryQuestions()
+    {
+        using var ctx = TestContext.Create();
+        var cognition = new KokoCognitionEngine(ctx.TestDir);
+        var state = new KokoInternalState();
+
+        var frame = new KokoResponsePlannerEngine().Build(
+            "що ти пам'ятаєш про мене з vault?",
+            state,
+            cognition,
+            new DateTime(2026, 5, 14, 16, 10, 0));
+
+        AssertEqual("memory", frame.Intent, "memory question should be classified as memory intent");
+        AssertTrue(frame.RequiresVaultRead, "memory question should require vault read");
+        AssertEqual("read_before_answer", frame.MemoryPolicy, "memory question should read before answering");
+        AssertTrue(frame.Steps.Any(s => s.Contains("memory")), "planner should include memory read step");
+    }
+
+    private static void MemoryPolicyStoresStablePreference()
+    {
+        var decision = new KokoMemoryWritePolicyEngine().Evaluate(
+            "я люблю довгі технічні пояснення без води",
+            new DateTime(2026, 5, 14, 17, 0, 0));
+
+        AssertEqual("store_stable", decision.Action, "stable preference should be stored");
+        AssertTrue(decision.Candidates.Any(c => c.Kind == "preference"), "decision should include preference candidate");
+        AssertTrue(decision.PromptBlock.Contains("MEMORY WRITE POLICY"), "decision should render memory policy prompt");
+    }
+
+    private static void MemoryPolicyKeepsTemporaryStateOutOfBeliefs()
+    {
+        using var ctx = TestContext.Create();
+        var policy = new KokoMemoryWritePolicyEngine();
+        var continuity = new KokoContinuityEngine(ctx.TestDir);
+        var now = new DateTime(2026, 5, 14, 17, 5, 0);
+
+        var decision = policy.Evaluate("я зараз дуже втомився і хочу спати", now);
+        var belief = continuity.ApplyMemoryDecision(decision, now);
+
+        AssertEqual("daily_log", decision.Action, "temporary state should go to daily/log policy");
+        AssertTrue(belief == null, "temporary state must not become a durable belief");
+        AssertTrue(!continuity.Beliefs.Any(), "continuity beliefs should stay empty for temporary state");
+    }
+
+    private static void ContinuityReinforcesRepeatedBelief()
+    {
+        using var ctx = TestContext.Create();
+        var policy = new KokoMemoryWritePolicyEngine();
+        var continuity = new KokoContinuityEngine(ctx.TestDir);
+        var now = new DateTime(2026, 5, 14, 17, 10, 0);
+
+        var first = continuity.ApplyMemoryDecision(
+            policy.Evaluate("мені подобається коли Коконое критикує слабкі ідеї", now),
+            now);
+        var second = continuity.ApplyMemoryDecision(
+            policy.Evaluate("мені подобається коли Коконое критикує слабкі ідеї", now.AddMinutes(5)),
+            now.AddMinutes(5));
+
+        AssertTrue(first != null, "first stable preference should create belief");
+        AssertTrue(second != null, "second stable preference should reinforce belief");
+        AssertEqual(first!.Id, second!.Id, "repeated belief should deduplicate by normalized claim");
+        AssertTrue(second.EvidenceCount >= 2, "repeated belief should increase evidence count");
+        AssertTrue(continuity.BuildPromptBlock().Contains("active_beliefs"), "continuity prompt should expose active beliefs");
+    }
+
     private static void PostReplyGuardRepairsSleepLeakOnProfileQuestion()
     {
         var now = new DateTime(2026, 5, 13, 21, 13, 0);
@@ -1708,6 +1839,50 @@ internal static class Program
         }
     }
 
+    private static void ObsidianRejectsPathsOutsideVault()
+    {
+        var parent = Path.Combine(Path.GetTempPath(), "KokonoeAssistant.Tests", "vault-parent-" + Guid.NewGuid().ToString("N"));
+        var dir = Path.Combine(parent, "vault");
+        Directory.CreateDirectory(dir);
+        try
+        {
+            var obsidian = new ObsidianMcpService(dir);
+            var escaped = Path.Combine(parent, "escaped.md");
+            var rejected = false;
+
+            try
+            {
+                obsidian.WriteNote("../escaped.md", "# escaped");
+            }
+            catch (InvalidOperationException)
+            {
+                rejected = true;
+            }
+
+            AssertTrue(rejected, "vault writes must reject parent-directory traversal");
+            AssertTrue(!File.Exists(escaped), "rejected traversal must not create files outside the vault");
+        }
+        finally
+        {
+            try { Directory.Delete(parent, recursive: true); } catch { }
+        }
+    }
+
+    private static void LlmVaultToolRoutingAvoidsAccidentalWrites()
+    {
+        var method = typeof(LlmService).GetMethod(
+            "DetectBestTool",
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+        AssertTrue(method != null, "DetectBestTool should exist for routing tests");
+
+        string Detect(string text) => (string)method!.Invoke(null, new object[] { text })!;
+
+        AssertEqual("list_notes", Detect("покажи список нотаток у vault"), "note list request should not default to append");
+        AssertEqual("list_folders", Detect("покажи список папок"), "folder list request should not create a folder");
+        AssertEqual("create_folder", Detect("створи папку Kokonoe/Review"), "folder creation should still create folders when explicitly requested");
+        AssertEqual("read_note", Detect("прочитай Kokonoe/Memory/Facts"), "read request should stay read-only");
+    }
+
     private static void ObsidianMemoryQualityAndTaskQueue()
     {
         var dir = Path.Combine(Path.GetTempPath(), "KokonoeAssistant.Tests", "vault-" + Guid.NewGuid().ToString("N"));
@@ -2102,6 +2277,7 @@ Persistent Obsidian context is now a core project requirement.
     private sealed class TestContext : IDisposable
     {
         private readonly string _dir;
+        public string TestDir => _dir;
 
         public KokoEmotionEngine Emotion { get; }
         public KokoRelationshipEngine Relationship { get; }

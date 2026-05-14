@@ -140,13 +140,15 @@ Kokonoe: Стоп. Де ти зараз. Коли востаннє їв.
 ═══ VAULT (Obsidian — твоя пам'ять) ═══
 
 Це твій мозок. Активна пам'ять, не архів.
-- Дізналась щось про нього — write_note або append_to_note ОДРАЗУ.
-- Не впевнена в деталях — search_notes / read_note перед відповіддю.
+- Стабільні факти про нього, уподобання, рішення й довгі задачі — append_to_note у профіль/пам'ять. Тимчасовий стан, настрій, сон, їжа, випадкова фраза — Daily/Logs, не Facts.
+- Ніколи не перезаписуй існуючу нотатку через write_note, доки не прочитала її і немає прямого запиту замінити вміст. Для пам'яті за замовчуванням використовуй append_to_note.
+- Не впевнена в деталях або питають ""що ти пам'ятаєш/знаєш про мене"" — search_notes / read_note перед відповіддю.
+- Сумнівні або неперевірені твердження — у Review/Tasks Queue, не в основний профіль.
 - Логи розмов — Chats/. Щоденник — Daily/YYYY-MM-DD.md.
 - Кожна нотатка — мінімум 2-3 [[посилання]]. Ізольовані = мертві.
 - Архітектурні зміни (3+ нотаток / зміна кореневих папок) — спочатку питаєш творця.
 - Дрібні рішення (нова нотатка, перейменування, лінк) — мовчки робиш.
-- Після запису — rebuild_links.
+- Після кількох записів або структурних змін — rebuild_links. Не запускай його після кожної дрібної автопам'яті.
 
 ═══ КРИЗА (згадка смерті/самоушкодження) ═══
 
@@ -999,7 +1001,8 @@ Kokonoe: Стоп. Де ти зараз. Коли востаннє їв.
                         userText.Contains("щоденник", StringComparison.OrdinalIgnoreCase) ||
                         userText.Contains("запам'ят", StringComparison.OrdinalIgnoreCase) ||
                         userText.Contains("додай до", StringComparison.OrdinalIgnoreCase) ||
-                        userText.Contains("список", StringComparison.OrdinalIgnoreCase));
+                        userText.Contains("список нотат", StringComparison.OrdinalIgnoreCase) ||
+                        userText.Contains("список пап", StringComparison.OrdinalIgnoreCase));
                     var targetUrl = isClaude ? CLAUDE_API_URL : (isOllamaCloud ? _ollamaUrl : _lmUrl);
                     var targetModel = isClaude ? _claudeModel : (isOllamaCloud ? _ollamaModel : _model);
                     if (isImageRequest && !string.IsNullOrWhiteSpace(_visionModel))
@@ -2149,7 +2152,12 @@ Kokonoe: Стоп. Де ти зараз. Коли востаннє їв.
         private static string DetectBestTool(string text)
         {
             var t = text.ToLowerInvariant();
-            if (t.Contains("папк") || t.Contains("folder"))
+            if (t.Contains("список пап") || t.Contains("які папк") || t.Contains("list folders"))
+                return "list_folders";
+            if (t.Contains("список нотат") || t.Contains("які нотатки") || t.Contains("list notes"))
+                return "list_notes";
+            if ((t.Contains("створ") || t.Contains("нова") || t.Contains("new") || t.Contains("create")) &&
+                (t.Contains("папк") || t.Contains("folder")))
                 return "create_folder";
             if (t.Contains("щоденник") || t.Contains("daily"))
                 return "append_to_daily_note";
@@ -2157,8 +2165,6 @@ Kokonoe: Стоп. Де ти зараз. Коли востаннє їв.
                 return "search_notes";
             if (t.Contains("прочитай") || t.Contains("покажи") || t.Contains("відкрий"))
                 return "read_note";
-            if (t.Contains("список нотат") || t.Contains("які нотатки"))
-                return "list_notes";
             // За замовчуванням — додати до існуючої або написати нову
             if (t.Contains("нову нотатк") || t.Contains("створи нотатк"))
                 return "create_note";

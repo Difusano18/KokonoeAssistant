@@ -23,6 +23,10 @@ namespace KokonoeAssistant.Services
         public string Attachment { get; set; } = "";
         public string SelfReview { get; set; } = "";
         public string PostReplyGuard { get; set; } = "";
+        public string PersonaDecision { get; set; } = "";
+        public string ResponsePlan { get; set; } = "";
+        public string MemoryPolicy { get; set; } = "";
+        public string Continuity { get; set; } = "";
         public string LlmStatus { get; set; } = "";
         public string LlmProvider { get; set; } = "";
         public string LlmModel { get; set; } = "";
@@ -39,6 +43,9 @@ namespace KokonoeAssistant.Services
         public int ActiveIntentCount { get; set; }
         public string[] ActiveIntents { get; set; } = Array.Empty<string>();
         public string[] AutonomyLog { get; set; } = Array.Empty<string>();
+        public string[] PersonaLog { get; set; } = Array.Empty<string>();
+        public string[] ResponsePlanLog { get; set; } = Array.Empty<string>();
+        public string[] MemoryPolicyLog { get; set; } = Array.Empty<string>();
         public string[] PresenceTrace { get; set; } = Array.Empty<string>();
         public string[] InternalDayTrace { get; set; } = Array.Empty<string>();
         public string[] RelationshipEvents { get; set; } = Array.Empty<string>();
