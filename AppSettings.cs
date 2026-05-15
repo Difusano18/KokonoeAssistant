@@ -88,6 +88,8 @@ namespace KokonoeAssistant
         public bool ScreenAwarenessSendComments { get; set; } = true;
         public int  ScreenAwarenessIntervalMins { get; set; } = 30;
         public int  ScreenAwarenessCommentCooldownMins { get; set; } = 30;
+        public int  GameScreenAwarenessIntervalMins { get; set; } = 5;
+        public int  GameScreenAwarenessCommentCooldownMins { get; set; } = 10;
 
         // System
         public bool MinimizeToTray      { get; set; } = true;
@@ -146,6 +148,18 @@ namespace KokonoeAssistant
             if (settings.ScreenAwarenessIntervalMins < 30)
             {
                 settings.ScreenAwarenessIntervalMins = 30;
+                changed = true;
+            }
+
+            if (settings.GameScreenAwarenessIntervalMins < 3)
+            {
+                settings.GameScreenAwarenessIntervalMins = 3;
+                changed = true;
+            }
+
+            if (settings.GameScreenAwarenessCommentCooldownMins < 5)
+            {
+                settings.GameScreenAwarenessCommentCooldownMins = 5;
                 changed = true;
             }
 

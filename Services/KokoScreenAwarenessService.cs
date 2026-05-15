@@ -80,6 +80,7 @@ namespace KokonoeAssistant.Services
 - comment_uk має бути 1 коротке речення в її стилі: живо, сухо, без технічних слів типу "скріншот проаналізовано".
 
 - Для живого режиму: якщо видно зависання, довге вдивляння, скрол, чат/профіль, гру або очевидне відволікання — можна дати короткий підкол навіть без "важливої" події.
+- Якщо видно активну гру: будь уважнішою, але не коментуй кожен кадр. Коментар доречний при матчі/раунді, смерті, перемозі/поразці, AFK, довгій паузі, явному фейлі або якщо він застряг у меню.
 - Якщо це майже той самий екран і останній коментар уже сказав ту саму думку, постав should_comment=false. Якщо сама пауза/зависання стала новою думкою — можна should_comment=true.
 
 JSON schema:
@@ -221,19 +222,23 @@ JSON schema:
             if (string.IsNullOrWhiteSpace(comment))
                 return No("empty comment");
 
-            if (analysis.Importance < 0.60)
-                return No("low importance");
-
             var passiveChatWindow = IsPassiveChatWindow(activeWindowTitle, analysis);
             if (analysis.ScreenMode == "private" || LooksSensitive(activeWindowTitle, analysis))
                 return No("sensitive screen", "silence");
             analysis.ScreenMode = NormalizeMode(analysis.ScreenMode, $"{activeWindowTitle} {analysis.SummaryUk} {analysis.ActivityUk}");
+
+            var gameMode = analysis.ScreenMode == "game";
+            var importanceFloor = gameMode ? 0.55 : 0.60;
+            if (analysis.Importance < importanceFloor)
+                return No("low importance");
 
             var useful = LooksUseful(activeWindowTitle, analysis, screenChanged, isActive);
             var jabCandidate = LooksJabCandidate(activeWindowTitle, analysis, screenChanged, isActive, passiveChatWindow);
             if (situation?.RecommendedBehavior is "assist" or "interrupt")
                 useful = true;
             if (situation?.RecommendedBehavior == "jab")
+                jabCandidate = true;
+            if (gameMode && analysis.Importance >= 0.55 && (screenChanged || isActive))
                 jabCandidate = true;
 
             if (!screenChanged && !isActive && !jabCandidate)
@@ -246,6 +251,8 @@ JSON schema:
             var cooldown = Math.Clamp(cooldownMinutes, 1, 180);
             if (kind != "jab" && (now - lastCommentAt).TotalMinutes < cooldown)
                 return No("comment cooldown");
+            if (gameMode && kind == "jab" && (now - lastCommentAt).TotalMinutes < cooldown)
+                return No("game comment cooldown", "jab");
 
             if (LooksTechnical(comment))
                 return No("technical wording");

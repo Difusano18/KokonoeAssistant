@@ -69,6 +69,7 @@ internal static class Program
             Run("Screen awareness redacts private identifiers", ScreenAwarenessRedactsPrivateIdentifiers);
             Run("Screen awareness allows rare passive jab", ScreenAwarenessAllowsRarePassiveJab);
             Run("Screen awareness lets jab bypass comment cooldown", ScreenAwarenessLetsJabBypassCommentCooldown);
+            Run("Screen awareness game mode uses active jab cooldown", ScreenAwarenessGameModeUsesActiveJabCooldown);
             Run("Screen awareness blocks sensitive screens", ScreenAwarenessBlocksSensitiveScreens);
             Run("Screen awareness builds situation context", ScreenAwarenessBuildsSituationContext);
             Run("Screen awareness builds aggregate pattern candidate", ScreenAwarenessBuildsAggregatePatternCandidate);
@@ -1535,6 +1536,48 @@ internal static class Program
 
         AssertTrue(decision.ShouldSend, "jab should not be blocked by the general assist cooldown");
         AssertEqual("jab", decision.Kind, "idle passive screen should stay a jab");
+    }
+
+    private static void ScreenAwarenessGameModeUsesActiveJabCooldown()
+    {
+        var service = new KokoScreenAwarenessService();
+        var now = new DateTime(2026, 5, 15, 20, 0, 0);
+        var analysis = new KokoScreenAwarenessAnalysis
+        {
+            SummaryUk = "активна гра, користувач у матчі",
+            ActivityUk = "active gameplay",
+            ScreenMode = "game",
+            ShouldComment = true,
+            CommentUk = "О, матч живий. Спробуй цього разу не воювати з інтерфейсом.",
+            Importance = 0.58
+        };
+
+        var blocked = service.DecideComment(
+            analysis,
+            now,
+            now.AddMinutes(-8),
+            "Інший ігровий коментар.",
+            cooldownMinutes: 10,
+            commentsEnabled: true,
+            screenChanged: true,
+            isActive: true,
+            activeWindowTitle: "Dota 2");
+
+        var allowed = service.DecideComment(
+            analysis,
+            now,
+            now.AddMinutes(-11),
+            "Інший ігровий коментар.",
+            cooldownMinutes: 10,
+            commentsEnabled: true,
+            screenChanged: true,
+            isActive: true,
+            activeWindowTitle: "Dota 2");
+
+        AssertTrue(!blocked.ShouldSend, "game jab should respect its own cooldown");
+        AssertEqual("game comment cooldown", blocked.Reason, "game cooldown should explain suppression");
+        AssertTrue(allowed.ShouldSend, "game jab should send after game cooldown");
+        AssertEqual("jab", allowed.Kind, "game comment should be a jab, not assist");
     }
 
     private static void ScreenAwarenessBlocksSensitiveScreens()

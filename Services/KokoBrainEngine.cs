@@ -3112,7 +3112,7 @@ namespace KokonoeAssistant.Services
             if (!settings.ScreenAwarenessEnabled) return;
 
             var now = DateTime.Now;
-            var interval = Math.Clamp(settings.ScreenAwarenessIntervalMins, 1, 60);
+            var interval = GetEffectiveScreenAwarenessInterval(settings, now);
             if ((now - _state.LastScreenAwarenessAt).TotalMinutes < interval) return;
             if (now < _state.VisionBackoffUntil)
             {
@@ -3234,12 +3234,13 @@ namespace KokonoeAssistant.Services
 
                 ObserveScreenPattern(patternCandidate, now);
 
+                var commentCooldown = GetEffectiveScreenAwarenessCommentCooldown(settings, analysis, activity);
                 var decision = ScreenAwareness.DecideComment(
                     analysis,
                     now,
                     _state.LastScreenAwarenessCommentAt,
                     _state.LastScreenAwarenessComment,
-                    settings.ScreenAwarenessCommentCooldownMins,
+                    commentCooldown,
                     settings.ScreenAwarenessSendComments && now >= _state.ScreenAwarenessObserveOnlyUntil,
                     screenChanged,
                     activity.IsActive,
@@ -3296,6 +3297,36 @@ namespace KokonoeAssistant.Services
             {
                 _bgLlmSemaphore.Release();
             }
+        }
+
+        private int GetEffectiveScreenAwarenessInterval(AppSettings settings, DateTime now)
+        {
+            var normal = Math.Clamp(settings.ScreenAwarenessIntervalMins, 1, 60);
+            if (!IsGameScreenLikelyActive(now))
+                return normal;
+
+            return Math.Clamp(Math.Min(normal, settings.GameScreenAwarenessIntervalMins), 3, 60);
+        }
+
+        private int GetEffectiveScreenAwarenessCommentCooldown(AppSettings settings, KokoScreenAwarenessAnalysis analysis, ActivityAnalyzer.ActivityState activity)
+        {
+            var normal = Math.Clamp(settings.ScreenAwarenessCommentCooldownMins, 1, 180);
+            var mode = KokoScreenAwarenessService.NormalizeMode(analysis.ScreenMode, $"{activity.ActiveWindowTitle} {analysis.SummaryUk} {analysis.ActivityUk}");
+            if (mode != "game")
+                return normal;
+
+            return Math.Clamp(Math.Min(normal, settings.GameScreenAwarenessCommentCooldownMins), 5, 180);
+        }
+
+        private bool IsGameScreenLikelyActive(DateTime now)
+        {
+            var recentScreen = _state.LastScreenAwarenessAt > DateTime.MinValue &&
+                now - _state.LastScreenAwarenessAt < TimeSpan.FromMinutes(45);
+            if (recentScreen && string.Equals(_state.LastScreenAwarenessMode, "game", StringComparison.OrdinalIgnoreCase))
+                return true;
+
+            var lastWindowMode = KokoScreenAwarenessService.NormalizeMode("", _state.LastScreenAwarenessWindow);
+            return recentScreen && lastWindowMode == "game";
         }
 
         private void RegisterVisionFailure(string? raw, DateTime now, ActivityAnalyzer.ActivityState? activity)
