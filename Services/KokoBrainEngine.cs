@@ -141,6 +141,12 @@ namespace KokonoeAssistant.Services
         public DateTime LastStateRefreshAt { get; set; } = DateTime.MinValue;
         public string LastStateRefreshSummary { get; set; } = "";
         public bool LastStateRefreshChanged { get; set; }
+        public string LastFoodStatus { get; set; } = "";
+        public DateTime LastFoodMentionAt { get; set; } = DateTime.MinValue;
+        public string LastFoodMentionText { get; set; } = "";
+        public string LastSleepStatus { get; set; } = "";
+        public DateTime LastSleepMentionAt { get; set; } = DateTime.MinValue;
+        public string LastSleepMentionText { get; set; } = "";
 
         public int PendingVaultExchangeCount { get; set; }
         public List<string> PendingVaultExchangeBuffer { get; set; } = new();
@@ -666,6 +672,9 @@ namespace KokonoeAssistant.Services
             sb.AppendLine($"Поганих снів підряд: {_state.ConsecutiveBadSleeps}");
             if (_state.Observations.Any())
                 sb.AppendLine("Спостереження: " + string.Join("; ", _state.Observations.TakeLast(3)));
+            var foodSleep = BuildFoodSleepContinuityBlock(now);
+            if (!string.IsNullOrWhiteSpace(foodSleep))
+                sb.AppendLine(foodSleep);
             try
             {
                 var presence = BuildPresenceFrame(now, AppSettings.Load().ProactiveAutonomyLevel);
@@ -909,6 +918,9 @@ namespace KokonoeAssistant.Services
                 sb.AppendLine(Autonomy.BuildDebugBlock(_state));
                 sb.AppendLine(ResponsePlanner.BuildDebugBlock(_state));
                 sb.AppendLine(MemoryWritePolicy.BuildDebugBlock(_state));
+                var foodSleep = BuildFoodSleepContinuityBlock(DateTime.Now);
+                if (!string.IsNullOrWhiteSpace(foodSleep))
+                    sb.AppendLine(foodSleep);
             }
             catch { }
 
@@ -1141,6 +1153,48 @@ namespace KokonoeAssistant.Services
             }
             catch { }
 
+            return sb.ToString();
+        }
+
+        private string BuildFoodSleepContinuityBlock(DateTime now)
+        {
+            var lines = new List<string>();
+
+            if (_state.LastFoodMentionAt > DateTime.MinValue &&
+                now - _state.LastFoodMentionAt < TimeSpan.FromHours(24))
+            {
+                var status = _state.LastFoodStatus switch
+                {
+                    "ate" => "останній сигнал: він їв",
+                    "not_eaten" => "останній сигнал: він ще не їв",
+                    "hungry" => "останній сигнал: він голодний/хоче їсти",
+                    _ => ""
+                };
+                if (!string.IsNullOrWhiteSpace(status))
+                    lines.Add($"Їжа: {status} о {_state.LastFoodMentionAt:HH:mm}. Репліка: \"{_state.LastFoodMentionText}\".");
+            }
+
+            if (_state.LastSleepMentionAt > DateTime.MinValue &&
+                now - _state.LastSleepMentionAt < TimeSpan.FromHours(36))
+            {
+                var status = _state.LastSleepStatus switch
+                {
+                    "slept" => "останній сигнал: він спав/заснув",
+                    "going_to_sleep" => "останній сигнал: він збирався спати",
+                    "woke_or_returned" => "останній сигнал: він прокинувся/повернувся",
+                    _ => ""
+                };
+                if (!string.IsNullOrWhiteSpace(status))
+                    lines.Add($"Сон: {status} о {_state.LastSleepMentionAt:HH:mm}. Репліка: \"{_state.LastSleepMentionText}\".");
+            }
+
+            if (lines.Count == 0) return "";
+
+            var sb = new StringBuilder();
+            sb.AppendLine("\n--- СВІЖИЙ СТАН ЇЖІ/СНУ ---");
+            foreach (var line in lines)
+                sb.AppendLine(line);
+            sb.AppendLine("Правило: не супереч останньому сигналу. Якщо він сказав, що їв — не кажи, що він нічого не їв. Якщо сказав, що заснув/спав — не заперечуй сон і не називай це гібернацією чи комою.");
             return sb.ToString();
         }
 
@@ -1891,6 +1945,7 @@ namespace KokonoeAssistant.Services
             {
                 _state.TotalMessagesExchanged++;
                 _state.LastKnownUserActivity = "chatting";
+                ObserveFoodSleepState(content, DateTime.Now);
                 ObserveShortTermIntent(content);
                 RecordPersonaDecision(content, DateTime.Now);
                 RecordResponsePlan(content, DateTime.Now);
@@ -1962,6 +2017,72 @@ namespace KokonoeAssistant.Services
                 SaveState();
             }
             catch (Exception ex) { Log($"ProcessUserMessage: {ex.Message}"); }
+        }
+
+        private void ObserveFoodSleepState(string content, DateTime now)
+        {
+            if (string.IsNullOrWhiteSpace(content)) return;
+
+            var lower = content.ToLowerInvariant();
+            var compact = TrimStateMention(content);
+
+            if (SaysNotEaten(lower))
+            {
+                _state.LastFoodStatus = "not_eaten";
+                _state.LastFoodMentionAt = now;
+                _state.LastFoodMentionText = compact;
+            }
+            else if (SaysAte(lower))
+            {
+                _state.LastFoodStatus = "ate";
+                _state.LastFoodMentionAt = now;
+                _state.LastFoodMentionText = compact;
+            }
+            else if (ContainsAny(lower, "голод", "хочу їсти", "хочу есть", "їсти хочу", "есть хочу"))
+            {
+                _state.LastFoodStatus = "hungry";
+                _state.LastFoodMentionAt = now;
+                _state.LastFoodMentionText = compact;
+            }
+
+            if (ContainsAny(lower, "прокин", "проснув", "встав", "поспав"))
+            {
+                _state.LastSleepStatus = "woke_or_returned";
+                _state.LastSleepMentionAt = now;
+                _state.LastSleepMentionText = compact;
+            }
+            else if (ContainsAny(lower, "заснув", "спав", "ліг спати", "ліг спать", "ляг спати", "ляг спать"))
+            {
+                _state.LastSleepStatus = "slept";
+                _state.LastSleepMentionAt = now;
+                _state.LastSleepMentionText = compact;
+            }
+            else if (ContainsAny(lower, "я спать", "я спати", "піду спати", "пішов спати", "лягаю"))
+            {
+                _state.LastSleepStatus = "going_to_sleep";
+                _state.LastSleepMentionAt = now;
+                _state.LastSleepMentionText = compact;
+            }
+        }
+
+        private static bool SaysNotEaten(string lower)
+            => ContainsAny(lower,
+                "не їв", "не ів", "не ел", "не їла", "не їли",
+                "нічого не їв", "ничего не ел", "ще нічого не їв", "ще не їв", "ще не їла",
+                "не їв зранку", "без їжі", "без еды");
+
+        private static bool SaysAte(string lower)
+            => ContainsAny(lower,
+                "я їв", "я ів", "я ел", "поїв", "поів", "поел",
+                "з'їв", "з’їв", "зїв", "з'ів", "з’ів", "з'ела", "з’ела",
+                "піц", "снідав", "обідав", "вечеряв", "їв ", " їв", "їла", "ел ");
+
+        private static string TrimStateMention(string text)
+        {
+            text = text.Replace("\r", " ").Replace("\n", " ").Trim();
+            while (text.Contains("  ", StringComparison.Ordinal))
+                text = text.Replace("  ", " ");
+            return text.Length <= 120 ? text : text[..120].TrimEnd() + "...";
         }
 
         private void ObserveShortTermIntent(string content)

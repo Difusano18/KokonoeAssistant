@@ -42,6 +42,22 @@ namespace KokonoeAssistant.Services
             if (violations.Count == 0 && LooksLikeTransportError(reply))
                 return Pass("transport error surfaced; do not hide provider failure");
 
+            var userSaysAte = SaysAte(userLower);
+            var userSaysNotEaten = SaysNotEaten(userLower);
+            var userSaysSlept = SaysSlept(userLower);
+            var recentFoodSaysAte = state.LastFoodStatus == "ate" &&
+                state.LastFoodMentionAt > DateTime.MinValue &&
+                now - state.LastFoodMentionAt < TimeSpan.FromHours(12);
+            var recentSleepSaysSlept = state.LastSleepStatus is "slept" or "woke_or_returned" &&
+                state.LastSleepMentionAt > DateTime.MinValue &&
+                now - state.LastSleepMentionAt < TimeSpan.FromHours(18);
+
+            if (!userSaysNotEaten && (userSaysAte || recentFoodSaysAte) && ClaimsUserDidNotEat(replyLower))
+                violations.Add("відповідь суперечить останньому сигналу про їжу і знову стверджує, що він не їв");
+
+            if ((userSaysSlept || recentSleepSaysSlept) && DeniesOrDramatizesSleep(userLower, replyLower))
+                violations.Add("відповідь суперечить останньому сигналу про сон або драматизує його як гібернацію/кому");
+
             var userReturned = ContainsAny(userLower, "прокин", "проснув", "поспав", "встав", "я тут", "вернув", "повернув")
                 || timeline.CurrentState.Contains("повернувся", StringComparison.OrdinalIgnoreCase);
             var userTalksAboutSleepNow = ContainsAny(userLower, "спати", "спать", "сон", "спав", "поспав", "втом", "їсти", "голод");
@@ -106,6 +122,12 @@ namespace KokonoeAssistant.Services
 
             var hardReplacement = violations.Any(v => v.Contains("застаріла інструкція спати", StringComparison.OrdinalIgnoreCase))
                 ? "Стоп. Команду \"спи\" знято: ти вже повернувся. Кажи, скільки реально поспав, і я перестану вдавати годинник без батарейки."
+                : null;
+            hardReplacement ??= violations.Any(v => v.Contains("сигналу про їжу", StringComparison.OrdinalIgnoreCase))
+                ? BuildFoodStateReplacement(userText, state)
+                : null;
+            hardReplacement ??= violations.Any(v => v.Contains("сигналу про сон", StringComparison.OrdinalIgnoreCase))
+                ? BuildSleepStateReplacement(userText, state)
                 : null;
             hardReplacement ??= violations.Any(v => v.Contains("vision-помилку", StringComparison.OrdinalIgnoreCase))
                 ? "Фото не прочиталось: vision-провайдер впав на обробці зображення. Перезбереж картинку як PNG або кинь інший файл; вдавати, що я бачу зламане фото, не будемо."
@@ -490,6 +512,68 @@ Timeline:
             var latin = letters.Count(c => c is >= 'a' and <= 'z' or >= 'A' and <= 'Z');
             var cyrillic = letters.Count(c => c >= '\u0400' && c <= '\u04FF');
             return latin > cyrillic * 2 && latin > 20;
+        }
+
+        private static bool SaysNotEaten(string lower)
+            => ContainsAny(lower,
+                "не їв", "не ів", "не ел", "не їла", "не їли",
+                "нічого не їв", "ничего не ел", "ще нічого не їв", "ще не їв", "ще не їла",
+                "без їжі", "без еды");
+
+        private static bool SaysAte(string lower)
+            => ContainsAny(lower,
+                "я їв", "я ів", "я ел", "поїв", "поів", "поел",
+                "з'їв", "з’їв", "зїв", "з'ів", "з’ів",
+                "піц", "снідав", "обідав", "вечеряв", "їв ", " їв", "їла", "ел ");
+
+        private static bool SaysSlept(string lower)
+            => ContainsAny(lower,
+                "заснув", "спав", "поспав", "ліг спати", "ліг спать",
+                "ляг спати", "ляг спать", "прокин", "проснув");
+
+        private static bool ClaimsUserDidNotEat(string replyLower)
+            => ContainsAny(replyLower,
+                "нічого не їв", "ничего не ел", "ще нічого не їв", "ще не їв",
+                "ти не їв", "ти не ел", "не їв", "не ел",
+                "без глюкози", "мозок без глюкози", "йди на кухню", "закинь у себе щось", "закинь в себе щось");
+
+        private static bool DeniesOrDramatizesSleep(string userLower, string replyLower)
+        {
+            var deniesSleep = ContainsAny(replyLower, "ти не спав", "ти не спала", "не спав, ти", "не сон, а");
+            var dramaticSleep = ContainsAny(replyLower, "гібернац", "кома", "в кому", "впав у кому");
+            var userUsedDramaticWord = ContainsAny(userLower, "гібернац", "кома", "в кому");
+            return deniesSleep || (dramaticSleep && !userUsedDramaticWord);
+        }
+
+        private static string BuildFoodStateReplacement(string userText, KokoInternalState state)
+        {
+            var lower = (userText ?? "").ToLowerInvariant();
+            if (ContainsAny(lower, "піц"))
+                return "Піцу з'їв — прийнято. Теза «нічого не їв» мертва, поховали без церемоній. Тепер працюємо з поточним станом: скільки часу до курсів і що треба встигнути?";
+
+            if (SaysAte(lower))
+                return "Їжу зафіксовано. Стару маячню про «нічого не їв» знято. Далі без повтору зламаної платівки: що зараз з енергією і найближчою справою?";
+
+            var mention = string.IsNullOrWhiteSpace(state.LastFoodMentionText)
+                ? "останній сигнал каже, що ти їв"
+                : $"останній сигнал був: «{CompactUserEcho(state.LastFoodMentionText)}»";
+            return $"Стоп. {mention}. Отже, не вигадуємо «нічого не їв» і повертаємось до реального питання.";
+        }
+
+        private static string BuildSleepStateReplacement(string userText, KokoInternalState state)
+        {
+            var lower = (userText ?? "").ToLowerInvariant();
+            var hasTime18 = ContainsAny(lower, "18:00", "18.00", "18 00", "о 18", "в 18");
+            if (hasTime18)
+                return "Прийнято: ти заснув о 18:00. Це довгий сон, не «гібернація» і не медичний цирк. Далі працюємо з поточним станом, а не зі старою драмою.";
+
+            if (SaysSlept(lower))
+                return "Прийнято: ти спав. Не «не спав», не «гібернація», не кома для дешевої репліки. Тепер кажи поточний стан і що робимо далі.";
+
+            var mention = string.IsNullOrWhiteSpace(state.LastSleepMentionText)
+                ? "останній сигнал каже, що сон уже був"
+                : $"останній сигнал був: «{CompactUserEcho(state.LastSleepMentionText)}»";
+            return $"Стоп. {mention}. Стару драму про сон прибрано; відповідаю по теперішньому стану.";
         }
 
         private static bool ContainsAny(string text, params string[] values)

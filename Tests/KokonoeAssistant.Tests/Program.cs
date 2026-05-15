@@ -39,6 +39,8 @@ internal static class Program
             Run("Self review blocks stale sleep replies", SelfReviewBlocksStaleSleepReplies);
             Run("Timeline summarizes returned state", TimelineSummarizesReturnedState);
             Run("Post reply guard blocks stale sleep", PostReplyGuardBlocksStaleSleep);
+            Run("Post reply guard blocks stale food claim after ate", PostReplyGuardBlocksStaleFoodClaimAfterAte);
+            Run("Post reply guard blocks hibernation framing after slept", PostReplyGuardBlocksHibernationFramingAfterSlept);
             Run("Post reply guard rejects staged decoration", PostReplyGuardRejectsStagedDecoration);
             Run("Post reply guard blocks duplicate replies", PostReplyGuardBlocksDuplicateReplies);
             Run("Post reply guard allows repeated screen scan command", PostReplyGuardAllowsRepeatedScreenScanCommand);
@@ -854,6 +856,64 @@ internal static class Program
         AssertTrue(!result.Passed, "guard should reject stale sleep instruction");
         AssertTrue(!string.IsNullOrWhiteSpace(result.HardReplacement), "guard should provide hard replacement for stale sleep");
         AssertTrue(result.Violations.Any(v => v.Contains("спати")), "violation should explain stale sleep problem");
+    }
+
+    private static void PostReplyGuardBlocksStaleFoodClaimAfterAte()
+    {
+        var now = new DateTime(2026, 5, 15, 13, 53, 0);
+        var state = new KokoInternalState
+        {
+            LastFoodStatus = "ate",
+            LastFoodMentionAt = now,
+            LastFoodMentionText = "я їв"
+        };
+        var messages = new[]
+        {
+            new ChatRepository.ChatMessage { Role = "user", Content = "я їв", Timestamp = now }
+        };
+        var timeline = new KokoConversationTimelineEngine().Build(messages, state, now, "я їв");
+
+        var result = new KokoPostReplyGuard().Evaluate(
+            "я їв",
+            "А те, що ти ще нічого не їв, пояснює, чому мозок без глюкози фризить.",
+            state,
+            messages,
+            timeline,
+            now);
+
+        AssertTrue(!result.Passed, "guard should reject stale not-eaten claim after explicit ate signal");
+        AssertTrue(!string.IsNullOrWhiteSpace(result.HardReplacement), "food contradiction should get a hard replacement");
+        AssertTrue(!result.HardReplacement!.Contains("глюкоз", StringComparison.OrdinalIgnoreCase), "replacement should not preserve stale glucose scolding");
+        AssertTrue(result.Violations.Any(v => v.Contains("їжу")), "violation should explain food-state contradiction");
+    }
+
+    private static void PostReplyGuardBlocksHibernationFramingAfterSlept()
+    {
+        var now = new DateTime(2026, 5, 15, 9, 46, 0);
+        var state = new KokoInternalState
+        {
+            LastSleepStatus = "slept",
+            LastSleepMentionAt = now,
+            LastSleepMentionText = "о 18.00 вчора заснув"
+        };
+        var messages = new[]
+        {
+            new ChatRepository.ChatMessage { Role = "user", Content = "о 18.00 вчора заснув", Timestamp = now }
+        };
+        var timeline = new KokoConversationTimelineEngine().Build(messages, state, now, "о 18.00 вчора заснув");
+
+        var result = new KokoPostReplyGuard().Evaluate(
+            "о 18.00 вчора заснув",
+            "З 18:00? Ти не спав, ти впав у гібернацію.",
+            state,
+            messages,
+            timeline,
+            now);
+
+        AssertTrue(!result.Passed, "guard should reject sleep denial and hibernation framing");
+        AssertTrue(!string.IsNullOrWhiteSpace(result.HardReplacement), "sleep contradiction should get a hard replacement");
+        AssertTrue(!result.HardReplacement!.Contains("ти не спав", StringComparison.OrdinalIgnoreCase), "replacement should not deny sleep");
+        AssertTrue(result.HardReplacement.Contains("18:00", StringComparison.OrdinalIgnoreCase), "replacement should preserve the concrete sleep time");
     }
 
     private static void PostReplyGuardRejectsStagedDecoration()
