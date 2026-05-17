@@ -2,6 +2,7 @@
 <Window x:Class="KokonoeAssistant.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:controls="clr-namespace:KokonoeAssistant.Controls"
         xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
         xmlns:skia="clr-namespace:SkiaSharp.Views.WPF;assembly=SkiaSharp.Views.WPF"
         Title="Kokonoe" Height="900" Width="1380"
@@ -86,6 +87,20 @@
             </Setter>
         </Style>
 
+        <Style x:Key="KokoGlassPanel" TargetType="Border">
+            <Setter Property="Background" Value="#B0081109"/>
+            <Setter Property="BorderBrush" Value="#244A6F4D"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="12"/>
+            <Setter Property="Padding" Value="14"/>
+            <Setter Property="SnapsToDevicePixels" Value="True"/>
+            <Setter Property="Effect">
+                <Setter.Value>
+                    <DropShadowEffect Color="#000000" BlurRadius="28" ShadowDepth="0" Opacity="0.42"/>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
         <!-- ─── HEALTH SLIDER ─────────────────────────────────── -->
         <Style x:Key="HealthSlider" TargetType="Slider">
             <Setter Property="Template">
@@ -131,7 +146,7 @@
     </Window.Resources>
 
     <!-- ════════════ ROOT ════════════════ -->
-    <Border Background="{DynamicResource AccentBgMain}"
+    <Border Background="Transparent"
             BorderBrush="{DynamicResource AccentBgBorder1}" BorderThickness="0,1,0,0"
             ClipToBounds="True">
 
@@ -141,6 +156,8 @@
                 <RowDefinition Height="*"/>
                 <RowDefinition Height="22"/>
             </Grid.RowDefinitions>
+
+            <controls:NeuralParticleBackground Grid.RowSpan="3"/>
 
             <!-- ══════════════ TITLE BAR ══════════════ -->
             <Border Grid.Row="0" Background="{DynamicResource AccentBgDarker}"
