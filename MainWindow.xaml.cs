@@ -20,6 +20,7 @@ using System.Windows.Interop;
 using KokonoeAssistant.Services;
 using Microsoft.Win32;
 using Newtonsoft.Json;
+using SkiaSharp;
 using Telegram.Bot;
 using Telegram.Bot.Polling;
 using Telegram.Bot.Types.Enums;
@@ -46,59 +47,6 @@ namespace KokonoeAssistant
     // VIEW MODELS
     // ══════════════════════════════════════════════════════════════
 
-    public class ChatMessageVm : INotifyPropertyChanged
-    {
-        private string _content = "";
-
-        public string Id        { get; set; } = Guid.NewGuid().ToString();
-        public string Role      { get; set; } = "user";
-        public DateTime Time    { get; set; } = DateTime.Now;
-        public string TimeStr   => Time.ToString("HH:mm");
-        public BitmapImage? ImageThumb { get; set; }
-        public bool HasImage    => ImageThumb != null;
-
-        public string Content
-        {
-            get => _content;
-            set { _content = value; OnPropertyChanged(); }
-        }
-
-        public event PropertyChangedEventHandler? PropertyChanged;
-        protected void OnPropertyChanged([CallerMemberName] string? n = null)
-            => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(n));
-    }
-
-    public class NoteVm
-    {
-        public string Path  { get; set; } = "";
-        public string Title { get; set; } = "";
-    }
-
-    public class HealthHistoryVm
-    {
-        public string DateStr { get; set; } = "";
-        public string Summary { get; set; } = "";
-    }
-
-    public class HabitVm : INotifyPropertyChanged
-    {
-        private bool _done;
-        public string Name { get; set; } = "";
-        public bool Done
-        {
-            get => _done;
-            set { _done = value; OnPropertyChanged(); }
-        }
-        public event PropertyChangedEventHandler? PropertyChanged;
-        protected void OnPropertyChanged([CallerMemberName] string? n = null)
-            => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(n));
-    }
-
-    public class GoalVm
-    {
-        public string Title { get; set; } = "";
-    }
-
     // ══════════════════════════════════════════════════════════════
     // MAIN WINDOW
     // ══════════════════════════════════════════════════════════════
@@ -121,13 +69,15 @@ namespace KokonoeAssistant
         private BitmapImage? _imgThumb;
         private string? _pendingFileContext;
 
+        private readonly List<MemoryCortexNodeVm> _memoryCortexNodes = new();
+        private double _memoryCortexZoom = 1.0;
+
         // ── Voice ─────────────────────────────────────────────────
         private bool _isRecording;
 
         // ── Telegram Bot ─────────────────────────────────────────
         private TelegramBotClient? _tgBot;
-        private KokonoeAssistant.Services.MiniAppServer? _miniApp;
-        private KokonoeAssistant.Services.TunnelManager? _tunnel;
+
         private CancellationTokenSource _tgCts = new();
         private readonly ObservableCollection<string> _tgMessages = new();
 
@@ -169,6 +119,30 @@ namespace KokonoeAssistant
         public MainWindow()
         {
             InitializeComponent();
+            _llm = ServiceContainer.LlmService;
+            _llm.OnProgress += (type, content) => Dispatcher.InvokeAsync(() =>
+            {
+                if (type == "thought")
+                {
+                    _dashThoughts.Insert(0, new DashThoughtVm
+                    {
+                        Time = DateTime.Now.ToString("HH:mm:ss"),
+                        Thought = content,
+                        MoodTag = "THINK"
+                    });
+                    if (_dashThoughts.Count > 50) _dashThoughts.RemoveAt(_dashThoughts.Count - 1);
+                }
+                else if (type == "tool")
+                {
+                    _dashThoughts.Insert(0, new DashThoughtVm
+                    {
+                        Time = DateTime.Now.ToString("HH:mm:ss"),
+                        Thought = content,
+                        MoodTag = "TOOL"
+                    });
+                    if (_dashThoughts.Count > 50) _dashThoughts.RemoveAt(_dashThoughts.Count - 1);
+                }
+            });
         }
 
         // ── Fill work area (above taskbar, not WindowState=Maximized) ──
@@ -784,7 +758,7 @@ tags: [kokonoe, live-core, diagnostics]
                 LoadToolsTab();
 
                 SetLoadingProgress(65, "telegram...");
-                InitTelegram();
+                // InitTelegram(); // Removed web/miniapp dependency
                 _ = InitTelegramUserAsync();
 
                 SetLoadingProgress(75, "мозок...");
@@ -997,7 +971,7 @@ tags: [kokonoe, live-core, diagnostics]
 Напиши стартову репліку повністю через модель. Вона має відчуватись як жива реакція Kokonoe на повернення користувача: врахуй час, паузу, mood, presence і останню тему.
 Не пояснюй правила. Не пиши службовий статус. Тільки текст.";
 
-                var task = _llm.SendSystemQueryAsync(prompt, CancellationToken.None);
+                var task = _llm.SendSystemQueryAsync(prompt, ct: CancellationToken.None);
                 var completed = await Task.WhenAny(task, Task.Delay(9000));
                 if (completed != task)
                     return fallback;
@@ -1112,6 +1086,7 @@ tags: [kokonoe, live-core, diagnostics]
                     SandboxTab.Visibility = Visibility.Visible;
                     TabBtnSandbox.Style = active;
                     _activeTab = "Sandbox";
+                    RefreshAgentTaskBoard();
                     break;
             }
 
@@ -1133,23 +1108,259 @@ tags: [kokonoe, live-core, diagnostics]
                 var mem = ServiceContainer.KokoMemory;
                 if (mem == null) return;
                 var all = mem.Facts;
-                var facts = all.OrderByDescending(f => f.Importance).Take(60).ToList();
+                var query = MemoryCortexSearchBox?.Text?.Trim() ?? "";
+                var filtered = string.IsNullOrWhiteSpace(query)
+                    ? all
+                    : all.Where(f =>
+                        (f.Content ?? "").Contains(query, StringComparison.OrdinalIgnoreCase) ||
+                        (f.Category ?? "").Contains(query, StringComparison.OrdinalIgnoreCase))
+                        .ToList();
+                var facts = filtered.OrderByDescending(f => f.Importance).Take(60).ToList();
+
                 MemTabTotalText.Text     = all.Count.ToString();
                 MemTabConfirmedText.Text = all.Count(f => f.ConfirmCount > 1).ToString();
                 MemTabHighImpText.Text   = all.Count(f => f.Importance >= 0.7f).ToString();
                 MemTabCatCountText.Text  = all.Select(f => f.Category).Distinct().Count().ToString();
-                MemTabFactsList.ItemsSource = facts.Select(f => new
-                {
-                    Text           = f.Content,
-                    Category       = f.Category ?? "general",
-                    ImportanceLabel = $"imp {f.Importance:F2}",
-                    ConfirmLabel   = $"×{f.ConfirmCount}",
-                }).ToList();
+
+                MemoryActiveQueryText.Text = string.IsNullOrWhiteSpace(query) ? "\"memory cortex\"" : $"\"{query}\"";
+                MemoryCortexSourcesText.Text = $"Vault online\nIndex cache synced\nGraph engine active\nSemantic links {Math.Max(0, facts.Count * 3)}";
+                MemoryCortexDensityText.Text = $"density {(all.Count == 0 ? 0 : Math.Min(99, (facts.Count * 100) / Math.Max(1, all.Count)))}%";
+
+                BuildMemoryCortexNodes(facts.Take(26).ToList());
+                DrawMemoryCortexGraph();
+                SelectMemoryCortexNode(_memoryCortexNodes.OrderByDescending(n => n.Importance).FirstOrDefault());
             }
             catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[MemTab] {ex.Message}"); }
         }
 
-        // ══════════════════════════════════════════════════════════
+        private sealed class MemoryCortexNodeVm
+        {
+            public string Id { get; init; } = "";
+            public string Text { get; init; } = "";
+            public string Category { get; init; } = "general";
+            public float Importance { get; init; }
+            public int ConfirmCount { get; init; }
+            public double X { get; set; }
+            public double Y { get; set; }
+            public double Radius { get; set; }
+            public SKColor Color { get; init; } = SKColors.White;
+        }
+
+        private void BuildMemoryCortexNodes(IReadOnlyList<KokoMemoryEngine.MemoryFact> facts)
+        {
+            _memoryCortexNodes.Clear();
+            if (facts.Count == 0) return;
+
+            double width = Math.Max(760, MemoryCortexSkia?.ActualWidth ?? 0);
+            double height = Math.Max(460, MemoryCortexSkia?.ActualHeight ?? 0);
+            double centerX = width / 2;
+            double centerY = height / 2;
+            double spreadX = width * 0.38 * _memoryCortexZoom;
+            double spreadY = height * 0.34 * _memoryCortexZoom;
+
+            var clusters = facts
+                .GroupBy(f => string.IsNullOrWhiteSpace(f.Category) ? "general" : f.Category.Trim())
+                .OrderByDescending(g => g.Max(f => f.Importance))
+                .ToList();
+
+            int index = 0;
+            for (int clusterIndex = 0; clusterIndex < clusters.Count; clusterIndex++)
+            {
+                var cluster = clusters[clusterIndex].OrderByDescending(f => f.Importance).ToList();
+                double clusterAngle = (Math.PI * 2 * clusterIndex / Math.Max(1, clusters.Count)) - Math.PI / 2;
+                double clusterX = centerX + Math.Cos(clusterAngle) * spreadX * 0.55;
+                double clusterY = centerY + Math.Sin(clusterAngle) * spreadY * 0.55;
+
+                for (int itemIndex = 0; itemIndex < cluster.Count; itemIndex++)
+                {
+                    var fact = cluster[itemIndex];
+                    double angle = clusterAngle + (itemIndex - (cluster.Count - 1) / 2.0) * 0.42;
+                    double orbit = 32 + itemIndex * 18;
+                    _memoryCortexNodes.Add(new MemoryCortexNodeVm
+                    {
+                        Id = $"mem-{index++}",
+                        Text = fact.Content ?? "",
+                        Category = string.IsNullOrWhiteSpace(fact.Category) ? "general" : fact.Category,
+                        Importance = fact.Importance,
+                        ConfirmCount = fact.ConfirmCount,
+                        Radius = 6 + Math.Clamp(fact.Importance, 0.1f, 1f) * 15 + Math.Min(8, fact.ConfirmCount),
+                        X = Math.Clamp(clusterX + Math.Cos(angle) * orbit, 34, width - 34),
+                        Y = Math.Clamp(clusterY + Math.Sin(angle) * orbit, 34, height - 34),
+                        Color = MemoryCortexColorForCategory(fact.Category)
+                    });
+                }
+            }
+        }
+
+        private SKColor MemoryCortexColorForCategory(string? category)
+        {
+            var key = (category ?? "").ToLowerInvariant();
+            if (key.Contains("person")) return new SKColor(255, 45, 117);
+            if (key.Contains("project")) return new SKColor(41, 182, 246);
+            if (key.Contains("emotion")) return new SKColor(186, 104, 255);
+            if (key.Contains("goal")) return new SKColor(0, 230, 118);
+            if (key.Contains("world")) return new SKColor(0, 191, 165);
+            return new SKColor(126, 87, 194);
+        }
+
+        private void DrawMemoryCortexGraph()
+        {
+            MemoryCortexSkia?.InvalidateVisual();
+        }
+
+        private void MemoryCortexSkia_PaintSurface(object? sender, SkiaSharp.Views.Desktop.SKPaintSurfaceEventArgs e)
+        {
+            var canvas = e.Surface.Canvas;
+            var info = e.Info;
+            canvas.Clear(SKColors.Transparent);
+
+            using var gridPaint = new SKPaint
+            {
+                Color = new SKColor(255, 45, 117, 18),
+                StrokeWidth = 1,
+                IsAntialias = true
+            };
+            for (int x = 0; x < info.Width; x += 56)
+                canvas.DrawLine(x, 0, x, info.Height, gridPaint);
+            for (int y = 0; y < info.Height; y += 56)
+                canvas.DrawLine(0, y, info.Width, y, gridPaint);
+
+            if (_memoryCortexNodes.Count == 0)
+            {
+                using var emptyPaint = new SKPaint
+                {
+                    Color = new SKColor(160, 160, 180),
+                    IsAntialias = true
+                };
+                using var emptyFont = new SKFont(SKTypeface.FromFamilyName("Consolas"), 18);
+                canvas.DrawText("no memory nodes. tragic, but fixable.", 24, 42, SKTextAlign.Left, emptyFont, emptyPaint);
+                return;
+            }
+
+            using var edgePaint = new SKPaint { IsAntialias = true, Style = SKPaintStyle.Stroke };
+            using var glowPaint = new SKPaint { IsAntialias = true, Style = SKPaintStyle.Fill, MaskFilter = SKMaskFilter.CreateBlur(SKBlurStyle.Normal, 10) };
+            using var nodePaint = new SKPaint { IsAntialias = true, Style = SKPaintStyle.Fill };
+            using var ringPaint = new SKPaint { IsAntialias = true, Style = SKPaintStyle.Stroke, StrokeWidth = 1.4f };
+            using var labelPaint = new SKPaint
+            {
+                Color = new SKColor(230, 230, 245),
+                IsAntialias = true
+            };
+            using var subLabelPaint = new SKPaint
+            {
+                Color = new SKColor(186, 104, 255),
+                IsAntialias = true
+            };
+            using var labelFont = new SKFont(SKTypeface.FromFamilyName("Consolas"), 13);
+            using var subLabelFont = new SKFont(SKTypeface.FromFamilyName("Consolas"), 10);
+
+            for (int i = 0; i < _memoryCortexNodes.Count; i++)
+            {
+                for (int j = i + 1; j < _memoryCortexNodes.Count; j++)
+                {
+                    var a = _memoryCortexNodes[i];
+                    var b = _memoryCortexNodes[j];
+                    bool linked = a.Category == b.Category || (i < 5 && j % 3 == 0);
+                    if (!linked) continue;
+
+                    edgePaint.Color = linked && a.Category == b.Category
+                        ? a.Color.WithAlpha(72)
+                        : new SKColor(120, 90, 170, 32);
+                    edgePaint.StrokeWidth = a.Category == b.Category ? 1.25f : 0.75f;
+                    canvas.DrawLine((float)a.X, (float)a.Y, (float)b.X, (float)b.Y, edgePaint);
+                }
+            }
+
+            var active = _memoryCortexNodes.OrderByDescending(n => n.Importance).Take(6).ToList();
+            edgePaint.Color = new SKColor(255, 45, 170, 190);
+            edgePaint.StrokeWidth = 2.4f;
+            for (int i = 0; i < active.Count - 1; i++)
+                canvas.DrawLine((float)active[i].X, (float)active[i].Y, (float)active[i + 1].X, (float)active[i + 1].Y, edgePaint);
+
+            foreach (var node in _memoryCortexNodes.OrderBy(n => n.Radius))
+            {
+                glowPaint.Color = node.Color.WithAlpha((byte)(node.Importance >= 0.8f ? 150 : 80));
+                canvas.DrawCircle((float)node.X, (float)node.Y, (float)(node.Radius * 2.15), glowPaint);
+
+                nodePaint.Color = node.Color.WithAlpha(230);
+                canvas.DrawCircle((float)node.X, (float)node.Y, (float)node.Radius, nodePaint);
+
+                ringPaint.Color = SKColors.White.WithAlpha((byte)(node.Importance >= 0.8f ? 190 : 90));
+                ringPaint.StrokeWidth = node.Importance >= 0.8f ? 1.7f : 0.9f;
+                canvas.DrawCircle((float)node.X, (float)node.Y, (float)(node.Radius + 2), ringPaint);
+
+                if (node.Importance >= 0.55f || node.Radius > 18)
+                {
+                    canvas.DrawText(ShortMemoryLabel(node.Text), (float)(node.X + node.Radius + 8), (float)(node.Y - 2), SKTextAlign.Left, labelFont, labelPaint);
+                    canvas.DrawText($"importance {node.Importance:0.00}", (float)(node.X + node.Radius + 8), (float)(node.Y + 12), SKTextAlign.Left, subLabelFont, subLabelPaint);
+                }
+            }
+        }
+
+        private static string ShortMemoryLabel(string text)
+        {
+            if (string.IsNullOrWhiteSpace(text)) return "memory.md";
+            var trimmed = text.Trim().Replace('\n', ' ');
+            return trimmed.Length <= 24 ? trimmed : trimmed[..24] + "...";
+        }
+
+        private void SelectMemoryCortexNode(MemoryCortexNodeVm? node)
+        {
+            if (node == null)
+            {
+                MemoryInspectorTitle.Text = "select node";
+                MemoryInspectorMeta.Text = "type -- / importance -- / confirmations --";
+                MemoryInspectorImportanceBar.Value = 0;
+                MemoryLinksList.ItemsSource = Array.Empty<string>();
+                MemoryActivityFeed.ItemsSource = Array.Empty<string>();
+                MemoryThoughtFlow.ItemsSource = Array.Empty<string>();
+                return;
+            }
+
+            var related = _memoryCortexNodes
+                .Where(n => n != node)
+                .OrderByDescending(n => n.Category == node.Category)
+                .ThenByDescending(n => n.Importance)
+                .Take(6)
+                .ToList();
+
+            MemoryInspectorTitle.Text = ShortMemoryLabel(node.Text);
+            MemoryInspectorMeta.Text = $"type {node.Category} / importance {node.Importance:0.00} / confirmations {node.ConfirmCount}";
+            MemoryInspectorImportanceBar.Value = Math.Clamp(node.Importance * 100, 0, 100);
+            MemoryLinksList.ItemsSource = related.Select(n => $"- {ShortMemoryLabel(n.Text)}   {n.Importance:0.00}").ToList();
+            MemoryActivityFeed.ItemsSource = new[]
+            {
+                $"{DateTime.Now:HH:mm} {ShortMemoryLabel(node.Text)} accessed",
+                $"{DateTime.Now.AddMinutes(-1):HH:mm} linked to {related.FirstOrDefault()?.Category ?? "none"}",
+                $"{DateTime.Now.AddMinutes(-2):HH:mm} relation strength recalculated",
+                $"{DateTime.Now.AddMinutes(-3):HH:mm} vault sync completed"
+            };
+            MemoryThoughtFlow.ItemsSource = related.Take(4).Select(n => $"- {ShortMemoryLabel(n.Text)}").Prepend($"- {ShortMemoryLabel(node.Text)}").Append("- response generated").ToList();
+        }
+
+        private void MemoryTab_SizeChanged(object sender, SizeChangedEventArgs e) => DrawMemoryCortexGraph();
+
+        private void MemoryCortexSkia_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+        {
+            var point = e.GetPosition(MemoryCortexSkia);
+            var nearest = _memoryCortexNodes
+                .OrderBy(n => Math.Pow(n.X - point.X, 2) + Math.Pow(n.Y - point.Y, 2))
+                .FirstOrDefault();
+            if (nearest != null) SelectMemoryCortexNode(nearest);
+        }
+
+        private void MemoryCortexSearchBox_TextChanged(object sender, TextChangedEventArgs e)
+        {
+            if (MemoryTab?.Visibility == Visibility.Visible)
+                MemTabRefreshData();
+        }
+
+        private void MemoryCortexZoomSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+        {
+            _memoryCortexZoom = e.NewValue <= 0 ? 1.0 : e.NewValue;
+            DrawMemoryCortexGraph();
+        }
+
         // PULSE TAB
         // ══════════════════════════════════════════════════════════
 
@@ -1161,6 +1372,7 @@ tags: [kokonoe, live-core, diagnostics]
             int newSize = Math.Max(2, (int)(canvas.ActualWidth));
             if (newSize != _ecgBuffer.Length)
                 _ecgBuffer = new double[newSize];
+            DrawPulseHrGraph();
         }
 
         private void UpdatePulseTab()
@@ -1179,11 +1391,13 @@ tags: [kokonoe, live-core, diagnostics]
                 PulseTabBpmBig.Text   = cur > 0 ? $"{cur:0}" : "—";
                 PulseTabCurText.Text  = cur > 0 ? $"{cur:0.0}" : "—";
                 PulseTabBaseText.Text = $"{heart.BaselineBpm:0.0}";
+                PulseSideBpmText.Text = cur > 0 ? $"{cur:0}" : "--";
                 try
                 {
                     var somatic = ServiceContainer.BrainEngine.GetSomaticSnapshot();
                     var selfReg = ServiceContainer.BrainEngine.GetSelfRegulationFrame(somatic);
                     PulseTabStateLabel.Text = $"{somatic.State.ToUpper()} · {selfReg.Regulation} · strain {somatic.Strain:P0}";
+                    PulseSideStateText.Text = $"{somatic.State.ToLowerInvariant()} · baseline {heart.BaselineBpm:0} · strain {somatic.Strain:P0}";
                 }
                 catch { }
 
@@ -1197,16 +1411,122 @@ tags: [kokonoe, live-core, diagnostics]
 
                 if (_heartHistory.Count > 0)
                 {
-                    double mn = double.MaxValue, mx = double.MinValue;
-                    foreach (var (_, b) in _heartHistory) { if (b < mn) mn = b; if (b > mx) mx = b; }
+                    double mn = double.MaxValue, mx = double.MinValue, sum = 0;
+                    foreach (var (_, b) in _heartHistory) { if (b < mn) mn = b; if (b > mx) mx = b; sum += b; }
+                    var avg = sum / Math.Max(1, _heartHistory.Count);
                     PulseTabMinMaxText.Text = $"{mn:0} / {mx:0}";
+                    PulseAvgText.Text = $"{avg:0.0} bpm";
+                    PulsePeakText.Text = $"{mx:0} bpm";
+                    PulseLowText.Text = $"{mn:0} bpm";
+                    var spread = Math.Max(1, mx - mn);
+                    PulseConsistencyText.Text = $"{Math.Clamp(100 - spread * 3, 0, 100):0}%";
                 }
 
                 PulseVitalLog.ItemsSource = _heartHistory.ToArray().Reverse().Take(30)
                     .Select(h => new { TimeStr = h.t.ToString("HH:mm:ss"), BpmStr = $"{h.bpm:0} bpm" })
                     .ToList();
+
+                UpdatePulseSidePanels(cur);
+                DrawPulseHrGraph();
             }
             catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[PulseTab] {ex.Message}"); }
+        }
+
+        private void UpdatePulseSidePanels(double currentBpm)
+        {
+            try
+            {
+                var brain = ServiceContainer.BrainEngine;
+                var emotion = brain.Emotion;
+                var state = brain.State;
+                var annoyed = emotion.Current == KokoEmotionEngine.EmotionState.Irritated
+                    ? Math.Clamp(emotion.Data.Intensity * 100, 20, 100)
+                    : Math.Clamp((1.0 - state.MoodScore) * 65, 0, 100);
+                var curiosity = emotion.Current == KokoEmotionEngine.EmotionState.Curious
+                    ? Math.Clamp(emotion.Data.Intensity * 100, 20, 100)
+                    : 23.0;
+                var trust = Math.Clamp(emotion.ConnectionScore * 100, 0, 100);
+
+                PulseMoodMainText.Text = DashboardEmotionLabel(emotion.Current).ToUpperInvariant();
+                PulseMoodDetailText.Text = $"annoyed {annoyed:0}% · curiosity {curiosity:0}% · trust {trust:0}% · sleep depr. {Math.Clamp((1.0 - state.MoodScore) * 100, 0, 100):0}%";
+                PulseMoodBar.Value = Math.Clamp(state.MoodScore * 100, 0, 100);
+
+                var status = currentBpm <= 0
+                    ? "telemetry standby"
+                    : currentBpm > 95
+                        ? "core online · memory synced · telemetry elevated"
+                        : "core online · memory synced · telemetry recording";
+                PulseSystemStatusText.Text = status;
+
+                var now = DateTime.Now;
+                var eventBrushHot = new SolidColorBrush(MediaColor.FromRgb(0xFF, 0x4D, 0x6D));
+                var eventBrushOk = new SolidColorBrush(MediaColor.FromRgb(0x00, 0xE6, 0x76));
+                var eventBrushWarn = new SolidColorBrush(MediaColor.FromRgb(0xFF, 0xB0, 0x20));
+                PulseRecentEvents.ItemsSource = new[]
+                {
+                    new { Time = now.ToString("HH:mm:ss"), Text = currentBpm > 95 ? "Elevated pulse detected" : "Telemetry recording", Brush = currentBpm > 95 ? eventBrushHot : eventBrushOk },
+                    new { Time = now.AddSeconds(-18).ToString("HH:mm:ss"), Text = $"{emotion.Current} mood channel active", Brush = eventBrushWarn },
+                    new { Time = now.AddSeconds(-42).ToString("HH:mm:ss"), Text = "Memory sync complete", Brush = eventBrushOk },
+                    new { Time = now.AddMinutes(-1).ToString("HH:mm:ss"), Text = "Vision module active", Brush = eventBrushOk },
+                    new { Time = now.AddMinutes(-2).ToString("HH:mm:ss"), Text = "Idle state baseline captured", Brush = eventBrushWarn },
+                };
+            }
+            catch { }
+        }
+
+        private void DrawPulseHrGraph()
+        {
+            var canvas = PulseHr24Canvas;
+            if (canvas == null) return;
+            canvas.Children.Clear();
+            double w = canvas.ActualWidth, h = canvas.ActualHeight;
+            if (w < 20 || h < 20 || _heartHistory.Count < 2) return;
+
+            var pts = _heartHistory.ToArray();
+            double minBpm = Math.Max(35, pts.Min(p => p.bpm) - 8);
+            double maxBpm = Math.Min(160, pts.Max(p => p.bpm) + 8);
+            double rng = Math.Max(10, maxBpm - minBpm);
+            double tMin = pts[0].t.Ticks, tMax = pts[^1].t.Ticks;
+            double tRng = Math.Max(1, tMax - tMin);
+
+            foreach (var marker in new[] { 60.0, 90.0, 120.0 })
+            {
+                if (marker < minBpm || marker > maxBpm) continue;
+                var y = h - (marker - minBpm) / rng * h;
+                canvas.Children.Add(new System.Windows.Shapes.Line
+                {
+                    X1 = 0, X2 = w, Y1 = y, Y2 = y,
+                    Stroke = new SolidColorBrush(MediaColor.FromArgb(28, 255, 255, 255)),
+                    StrokeThickness = 0.5,
+                    StrokeDashArray = new DoubleCollection { 3, 5 }
+                });
+            }
+
+            var poly = new System.Windows.Shapes.Polyline
+            {
+                Stroke = new SolidColorBrush(MediaColor.FromRgb(0xFF, 0x4D, 0x6D)),
+                StrokeThickness = 1.5,
+                Effect = new System.Windows.Media.Effects.DropShadowEffect
+                {
+                    Color = MediaColor.FromRgb(0xFF, 0x4D, 0x6D),
+                    ShadowDepth = 0, BlurRadius = 7, Opacity = 0.55
+                }
+            };
+            foreach (var (t, bpm) in pts)
+            {
+                double x = (t.Ticks - tMin) / tRng * w;
+                double y = h - (bpm - minBpm) / rng * h;
+                poly.Points.Add(new System.Windows.Point(x, y));
+            }
+            canvas.Children.Add(poly);
+
+            var last = pts[^1];
+            var lx = w;
+            var ly = h - (last.bpm - minBpm) / rng * h;
+            var dot = new System.Windows.Shapes.Ellipse { Width = 7, Height = 7, Fill = new SolidColorBrush(MediaColor.FromRgb(0xFF, 0x4D, 0x6D)) };
+            Canvas.SetLeft(dot, lx - 4);
+            Canvas.SetTop(dot, ly - 4);
+            canvas.Children.Add(dot);
         }
 
         // ── ECG REAL-TIME ANIMATION ─────────────────────────────────
@@ -1372,10 +1692,77 @@ tags: [kokonoe, live-core, diagnostics]
             catch (Exception ex) { SandboxOutput.Text = $"// error: {ex.Message}"; }
         }
 
+
         private void SandboxClear_Click(object sender, RoutedEventArgs e)
         {
             SandboxInput.Clear();
-            SandboxOutput.Text = "—";
+            SandboxOutput.Text = "?";
+        }
+
+        private void AgentCreateTask_Click(object sender, RoutedEventArgs e)
+        {
+            var objective = SandboxInput.Text.Trim();
+            if (string.IsNullOrWhiteSpace(objective))
+            {
+                AgentTaskStatusText.Text = "Put an objective in the prompt box first. Incredible concept, I know.";
+                return;
+            }
+
+            try
+            {
+                var task = ServiceContainer.AgentTasks.AddTask(objective);
+                AgentTaskStatusText.Text = $"created {task.Id} with {task.Steps.Count} steps";
+                RefreshAgentTaskBoard();
+            }
+            catch (Exception ex)
+            {
+                AgentTaskStatusText.Text = $"create failed: {ex.Message}";
+            }
+        }
+
+        private void AgentStart_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                ServiceContainer.AgentTasks.Start();
+                AgentTaskStatusText.Text = "runner started";
+                RefreshAgentTaskBoard();
+            }
+            catch (Exception ex)
+            {
+                AgentTaskStatusText.Text = $"start failed: {ex.Message}";
+            }
+        }
+
+        private void AgentStop_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                ServiceContainer.AgentTasks.Stop();
+                AgentTaskStatusText.Text = "runner stopped";
+                RefreshAgentTaskBoard();
+            }
+            catch (Exception ex)
+            {
+                AgentTaskStatusText.Text = $"stop failed: {ex.Message}";
+            }
+        }
+
+        private void AgentRefresh_Click(object sender, RoutedEventArgs e) => RefreshAgentTaskBoard();
+
+        private void RefreshAgentTaskBoard()
+        {
+            try
+            {
+                var board = ServiceContainer.AgentTasks.RenderBoard();
+                AgentTaskBoardText.Text = board;
+                var snap = ServiceContainer.AgentTasks.GetSnapshot();
+                AgentTaskStatusText.Text = $"tasks {snap.Tasks.Count} | running {snap.RunningSteps}/{snap.MaxParallel}";
+            }
+            catch (Exception ex)
+            {
+                AgentTaskStatusText.Text = $"refresh failed: {ex.Message}";
+            }
         }
 
         // ══════════════════════════════════════════════════════════
@@ -1686,14 +2073,19 @@ tags: [kokonoe, live-core, diagnostics]
                 else
                 {
                     // ── Image path — use the same direct vision route as screen-awareness.
+                    var imageContext = await contextTask;
                     var visionPrompt = $"""
 Ти Kokonoe. Проаналізуй вкладене зображення користувача.
 Запит користувача: {sendText}
 
+Контекст діалогу і пам'яті, який треба врахувати:
+{TrimForPrompt(imageContext, 3200)}
+
 Правила:
 - Відповідай українською.
 - 1-4 речення.
-- Описуй саме зображення, не історію чату.
+- Не описуй фото ізольовано: прив'яжи його до останнього діалогу, гри, наміру або питання користувача.
+- Якщо на фото гра/скрін, назви що видно і коротко відреагуй як Kokonoe, а не як сухий OCR.
 - Якщо не можеш прочитати зображення, скажи це прямо без згадок Settings/model/HTTP.
 """;
                     reply = await _llm.SendSystemVisionQueryAsync(
@@ -1911,6 +2303,10 @@ tags: [kokonoe, live-core, diagnostics]
                 var emotHint = ServiceContainer.BrainEngine?.Emotion?.GetPromptHint();
                 if (!string.IsNullOrEmpty(emotHint))
                     parts.Add((emotHint, 2));
+
+                var condition = BuildKokoConditionContext();
+                if (!string.IsNullOrWhiteSpace(condition))
+                    parts.Add((condition, 2));
             }
             catch { }
 
@@ -2512,7 +2908,7 @@ tags: []
                 var repairPrompt = guard.RepairInstruction +
                                    "\n\nДодатковий контекст:\n" +
                                    TrimForPrompt(context, 2600);
-                var repaired = await _llm.SendSystemQueryAsync(repairPrompt, ct);
+                var repaired = await _llm.SendSystemQueryAsync(repairPrompt, ct: ct);
                 if (string.IsNullOrWhiteSpace(repaired))
                     return GuardTemporalReply(userText, reply);
 
@@ -2656,6 +3052,62 @@ tags: []
             return text.Length <= max ? text : text[..max] + "...";
         }
 
+        private string BuildKokoConditionContext()
+        {
+            try
+            {
+                var brain = ServiceContainer.BrainEngine;
+                var emotion = brain?.Emotion ?? ServiceContainer.EmotionEngine;
+                var state = brain?.State;
+                var somatic = brain?.GetSomaticSnapshot();
+
+                var emotionState = emotion.Current;
+                var intensity = emotion.Data.Intensity;
+                var moodScore = state?.MoodScore ?? 0.5f;
+                var dailyMood = state?.PersonalityDailyMood ?? "neutral";
+                var strain = somatic?.Strain ?? 0f;
+                var somaticState = somatic?.State ?? "steady";
+                var condition = ResolveKokoCondition(emotionState, intensity, moodScore, dailyMood, strain, somaticState);
+
+                var behavior = condition.Kind switch
+                {
+                    "offended" => "вона ображена: відповідає холодніше, коротше, з сухою колючістю; не пробачає миттєво, але не влаштовує мелодраму",
+                    "sick" => "вона нездужає: менше енергії, коротші фрази, більше дратівливого бурчання; не просить жалості",
+                    "bad_mood" => "у неї поганий настрій: сарказм гостріший, терпіння нижче, але корисність не зникає",
+                    "tired" => "вона втомлена: економить слова, менше грайливості, більше прямоти",
+                    _ => "стан стабільний: звичайна різка, компетентна Коконое"
+                };
+
+                return "=== СТАН KOKONOE ===\n" +
+                       $"status={condition.Label}; kind={condition.Kind}; severity={condition.Severity:F2}; emotion={emotionState}; mood={dailyMood}/{moodScore:F2}; body={somaticState}/{strain:F2}\n" +
+                       $"Поводься відповідно: {behavior}. Це не тема відповіді, а фон її тону.";
+            }
+            catch { return ""; }
+        }
+
+        private static (string Kind, string Label, double Severity) ResolveKokoCondition(
+            KokoEmotionEngine.EmotionState emotion,
+            float intensity,
+            float moodScore,
+            string dailyMood,
+            double strain,
+            string somaticState)
+        {
+            var lowerMood = (dailyMood ?? "").ToLowerInvariant();
+            var lowerBody = (somaticState ?? "").ToLowerInvariant();
+            var severity = Math.Clamp((1.0 - moodScore) * 0.45 + intensity * 0.30 + strain * 0.25, 0.0, 1.0);
+
+            if ((emotion is KokoEmotionEngine.EmotionState.Irritated or KokoEmotionEngine.EmotionState.Distant) && intensity > 0.45f)
+                return ("offended", severity > 0.7 ? "ОБРАЖЕНА" : "ЗАЧЕПЛЕНА", severity);
+            if (lowerBody.Contains("tired") || lowerBody.Contains("low") || lowerBody.Contains("drained") || lowerMood.Contains("tired"))
+                return ("sick", "НЕЗДУЖАЄ", Math.Max(severity, 0.55));
+            if (moodScore < 0.32f || emotion is KokoEmotionEngine.EmotionState.Melancholy or KokoEmotionEngine.EmotionState.Anxious)
+                return ("bad_mood", "ПОГАНИЙ НАСТРІЙ", Math.Max(severity, 0.50));
+            if (moodScore < 0.45f || lowerMood.Contains("distant"))
+                return ("tired", "ВТОМЛЕНА", Math.Max(severity, 0.40));
+            return ("stable", "СТАБІЛЬНА", Math.Clamp(1.0 - severity, 0.20, 0.95));
+        }
+
         /// <summary>
         /// Обрізає текст на межі слова, не посеред символу.
         /// Шукає останній пробіл або перенос рядка перед limit.
@@ -2720,7 +3172,7 @@ tags: []
                 // Restore LLM memory so it remembers previous sessions
                 _llm.RestoreHistory(
                     msgs.Select(m => (m.Role, m.Content)),
-                    maxMessages: 40,
+                    maxMessages: 400,
                     memoryPrefix: memoryBootstrap);
 
                 ScrollToBottom();
@@ -2742,10 +3194,10 @@ tags: []
             {
                 if (_obsidian == null) return null;
 
-                const int MAX_BOOTSTRAP_LENGTH = 2500;
-                const int PROFILE_MAX = 1200;
-                const int DAILY_MAX = 800;
-                const int CHAT_MAX = 500;
+                const int MAX_BOOTSTRAP_LENGTH = 25000;
+                const int PROFILE_MAX = 12000;
+                const int DAILY_MAX = 8000;
+                const int CHAT_MAX = 5000;
 
                 var allNotes = _obsidian.ListNotes();
                 var parts = new List<(string content, int priority)>();
@@ -4446,13 +4898,13 @@ tags: []
         {
             try
             {
-                DashSysMiniAppStatus.Text = _miniApp?.IsRunning == true
-                    ? $"online :{_miniApp.Port}" : "offline";
+                // // // DashSysMiniAppStatus.Text = _miniApp?.IsRunning == true
+                    //                     // // // ? $"online :{_miniApp.Port}" : "offline";
 
-                var url = AppSettings.Load().MiniAppPublicUrl;
-                DashSysMiniAppUrl.Text = string.IsNullOrEmpty(url) ? "(no public URL)" : url;
+                // // var url = AppSettings.Load().MiniAppPublicUrl;
+                // // DashSysMiniAppUrl.Text = string.IsNullOrEmpty(url) ? "(no public URL)" : url;
 
-                DashSysTunnelStatus.Text = _tunnel?.IsRunning == true ? "running" : "stopped";
+                // // // DashSysTunnelStatus.Text = _tunnel?.IsRunning == true ? "running" : "stopped";
 
                 var proc = System.Diagnostics.Process.GetCurrentProcess();
                 var up = DateTime.Now - proc.StartTime;
@@ -5177,6 +5629,10 @@ tags: []
                 RightBodyText.Text = $"{DashboardSomaticLabel(somatic.State).ToUpperInvariant()} · strain {somatic.Strain:F2}";
                 RightPulseText.Text = heart.CurrentBpm > 0 ? $"{heart.CurrentBpm:0} bpm · {heart.BpmDelta:+0;-0;0}" : "-- bpm";
                 RightVaultSyncText.Text = $"sync {state.PendingVaultExchangeCount}/5 · mem {_liveCoreMemoryItems} · tasks {_liveCoreOpenTasks}";
+                var condition = ResolveKokoCondition(emotion.Current, emotion.Data.Intensity, state.MoodScore, state.PersonalityDailyMood, somatic.Strain, somatic.State);
+                RightKokoConditionText.Text = condition.Label;
+                RightKokoConditionDetailText.Text =
+                    $"{condition.Kind} · severity {condition.Severity:F2} · {DashboardEmotionLabel(emotion.Current).ToLowerInvariant()} · {state.PersonalityDailyMood}";
                 RightAutonomyDetailText.Text = TrimOpsLine(telemetry.AutonomyDebug, 130);
 
                 RightScreenModeText.Text = string.IsNullOrWhiteSpace(state.LastScreenAwarenessMode)
@@ -5221,6 +5677,8 @@ tags: []
                 {
                     RightScreenModeText.Text = "OFFLINE";
                     RightVisionStatusText.Text = "UNKNOWN";
+                    RightKokoConditionText.Text = "UNKNOWN";
+                    RightKokoConditionDetailText.Text = "state unavailable";
                     RightStateRefreshText.Text = "state unavailable";
                     RightProactiveText.Text = "no signal";
                     RightVaultDoctorText.Text = _rightOpsVaultLine;
@@ -6235,13 +6693,19 @@ tags: [kokonoe, dashboard, live]
             {
                 var s = AppSettings.Load();
 
-                // Ensure defaults are written if file was empty
-                if (string.IsNullOrEmpty(s.TelegramToken))
+                if (!s.TelegramEnabled)
                 {
-                    s.TelegramToken   = "8744373148:AAH1pGM9N48PC99AieaAs6hW9_dMJRcj8Co";
-                    s.TelegramChatId  = 1095326977;
-                    s.TelegramEnabled = true;
-                    s.Save();
+                    TgStatusLabel.Text = " · вимкнено";
+                    TgStatusDot.Tag = "offline";
+                    return;
+                }
+
+                if (string.IsNullOrWhiteSpace(s.TelegramToken) || s.TelegramChatId <= 0)
+                {
+                    TgStatusLabel.Text = " · не налаштовано";
+                    TgStatusDot.Tag = "offline";
+                    System.Diagnostics.Debug.WriteLine("[Telegram] skipped: token or allowed chat id is missing");
+                    return;
                 }
 
                 _tgBot = new TelegramBotClient(s.TelegramToken);
@@ -6252,24 +6716,25 @@ tags: [kokonoe, dashboard, live]
                     _tgCts.Token);
 
                 // Mini App HTTP server (для TG Web App)
-                if (s.MiniAppEnabled)
+                // if (s.MiniAppEnabled)
                 {
                     try
                     {
-                        _miniApp ??= new KokonoeAssistant.Services.MiniAppServer(
-                            s.MiniAppPort, s.TelegramToken, s.TelegramChatId);
-                        _miniApp.Start();
+                        // _miniApp ??= new KokonoeAssistant.Services.MiniAppServer(
+                            // s.MiniAppPort, s.TelegramToken, s.TelegramChatId);
+                        // // // _miniApp.Start();
                         System.Diagnostics.Debug.WriteLine($"[MiniApp] started on port {s.MiniAppPort}");
 
                         // Авто-тунель cloudflared (видає публічний HTTPS URL)
-                        _tunnel ??= new KokonoeAssistant.Services.TunnelManager(s.MiniAppPort);
-                        _tunnel.Log += msg => System.Diagnostics.Debug.WriteLine(msg);
-                        _tunnel.UrlChanged += url =>
+                        // _tunnel ??= new KokonoeAssistant.Services.TunnelManager(s.MiniAppPort);
+                        // _tunnel.Log += msg => System.Diagnostics.Debug.WriteLine(msg);
+                        // _tunnel.UrlChanged += url =>
                         {
                             // Зберегти URL у settings, щоб TG-меню одразу його підхопило
                             try
                             {
                                 var cur = AppSettings.Load();
+                                var url = cur.MiniAppPublicUrl;
                                 cur.MiniAppPublicUrl = url;
                                 cur.Save();
                                 System.Diagnostics.Debug.WriteLine($"[MiniApp] public URL saved: {url}");
@@ -6279,7 +6744,7 @@ tags: [kokonoe, dashboard, live]
                                 System.Diagnostics.Debug.WriteLine($"[MiniApp] save URL failed: {sex}");
                             }
                         };
-                        _ = _tunnel.StartAsync();
+                        // _ = _tunnel.StartAsync();
                     }
                     catch (Exception mex)
                     {
@@ -6302,6 +6767,19 @@ tags: [kokonoe, dashboard, live]
         // TELEGRAM — HANDLER
         // ══════════════════════════════════════════════════════════
 
+        private bool IsAuthorizedTelegramChat(long chatId)
+        {
+            try
+            {
+                var s = AppSettings.Load();
+                return s.TelegramEnabled && s.TelegramChatId > 0 && chatId == s.TelegramChatId;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
         private async void HandleTgUpdate(ITelegramBotClient bot, TgUpdate update, CancellationToken ct)
         {
             try
@@ -6316,6 +6794,12 @@ tags: [kokonoe, dashboard, live]
                 if (msg == null) return;
                 var chatId = msg.Chat.Id;
                 var from   = msg.From?.FirstName ?? "User";
+
+                if (!IsAuthorizedTelegramChat(chatId))
+                {
+                    System.Diagnostics.Debug.WriteLine($"[TG] rejected unauthorized chat {chatId}");
+                    return;
+                }
 
                 // ── Photo message ────────────────────────────────────
                 if (msg.Photo != null && msg.Photo.Length > 0)
@@ -6387,14 +6871,14 @@ tags: [kokonoe, dashboard, live]
                 if (text == "/note")
                 {
                     await bot.SendMessage(chatId, "Пиши нотатку — збережу.", cancellationToken: ct);
-                    _tgAwaitingNote = true;
+                    SetTgAwaiting(chatId, TgAwaitingMode.Note);
                     return;
                 }
 
                 // ── Awaiting states ─────────────────────────────────
-                if (_tgAwaitingNote)
+                var awaiting = ConsumeTgAwaiting(chatId);
+                if (awaiting == TgAwaitingMode.Note)
                 {
-                    _tgAwaitingNote = false;
                     try { ServiceContainer.BrainEngine?.ProcessUserMessage(text); } catch { }
                     try { ServiceContainer.BrainEngine?.Memory?.RecordEpisode(text, "neutral", 0.6f); }
                     catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[ERROR] TG note memory: {ex.Message}"); }
@@ -6404,9 +6888,8 @@ tags: [kokonoe, dashboard, live]
                     return;
                 }
 
-                if (_tgAwaitingCmd)
+                if (awaiting == TgAwaitingMode.Command)
                 {
-                    _tgAwaitingCmd = false;
                     await bot.SendMessage(chatId, "⏳ Виконую...", cancellationToken: ct);
                     var cmdOutput = await ServiceContainer.PcControl.RunCommandAsync(text);
                     await bot.SendMessage(chatId, $"```\n{cmdOutput}\n```",
@@ -6415,17 +6898,15 @@ tags: [kokonoe, dashboard, live]
                     return;
                 }
 
-                if (_tgAwaitingOpen)
+                if (awaiting == TgAwaitingMode.Open)
                 {
-                    _tgAwaitingOpen = false;
                     var (openOk, openMsg) = ServiceContainer.PcControl.OpenApp(text);
                     await bot.SendMessage(chatId, openOk ? $"✅ {openMsg}" : $"❌ {openMsg}", cancellationToken: ct);
                     return;
                 }
 
-                if (_tgAwaitingKill)
+                if (awaiting == TgAwaitingMode.Kill)
                 {
-                    _tgAwaitingKill = false;
                     var (killOk, killMsg) = ServiceContainer.PcControl.KillProcess(text);
                     await bot.SendMessage(chatId, killOk ? $"✅ {killMsg}" : $"❌ {killMsg}", cancellationToken: ct);
                     return;
@@ -6487,15 +6968,42 @@ tags: [kokonoe, dashboard, live]
             catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[TG] HandleUpdate: {ex.Message}"); }
         }
 
-        private bool _tgAwaitingNote = false;
-        private bool _tgAwaitingCmd  = false;
-        private bool _tgAwaitingOpen = false;
-        private bool _tgAwaitingKill = false;
+        private enum TgAwaitingMode { None, Note, Command, Open, Kill }
+        private readonly object _tgAwaitingLock = new();
+        private readonly Dictionary<long, TgAwaitingMode> _tgAwaitingByChat = new();
+
+        private void SetTgAwaiting(long chatId, TgAwaitingMode mode)
+        {
+            lock (_tgAwaitingLock)
+            {
+                if (mode == TgAwaitingMode.None)
+                    _tgAwaitingByChat.Remove(chatId);
+                else
+                    _tgAwaitingByChat[chatId] = mode;
+            }
+        }
+
+        private TgAwaitingMode ConsumeTgAwaiting(long chatId)
+        {
+            lock (_tgAwaitingLock)
+            {
+                if (!_tgAwaitingByChat.TryGetValue(chatId, out var mode))
+                    return TgAwaitingMode.None;
+                _tgAwaitingByChat.Remove(chatId);
+                return mode;
+            }
+        }
 
         private async Task HandleTgCallback(ITelegramBotClient bot, Telegram.Bot.Types.CallbackQuery cb, CancellationToken ct)
         {
-            var chatId = cb.Message!.Chat.Id;
+            if (cb.Message == null) return;
+            var chatId = cb.Message.Chat.Id;
             var data   = cb.Data ?? "";
+            if (!IsAuthorizedTelegramChat(chatId))
+            {
+                System.Diagnostics.Debug.WriteLine($"[TG] rejected unauthorized callback chat {chatId}");
+                return;
+            }
             try { await bot.AnswerCallbackQuery(cb.Id, cancellationToken: ct); } catch { }
 
             switch (data)
@@ -6507,7 +7015,7 @@ tags: [kokonoe, dashboard, live]
                 case "habits":        await TgSendHabits(bot, chatId, ct);      break;
                 case "mood":          await TgSendMoodPicker(bot, chatId, ct);  break;
                 case "note":
-                    _tgAwaitingNote = true;
+                    SetTgAwaiting(chatId, TgAwaitingMode.Note);
                     await bot.SendMessage(chatId, "Пиши — збережу.", cancellationToken: ct);
                     break;
                 case var m when m.StartsWith("mood_"):
@@ -6545,15 +7053,14 @@ tags: [kokonoe, dashboard, live]
                 case "pc_restart_ok":   await bot.SendMessage(chatId, "🔄 Рестарт через 10 секунд.", cancellationToken: ct);
                                         ServiceContainer.PcControl.Restart(10);        break;
                 case "pc_cmd":
-                    _tgAwaitingCmd = true;
-                    await bot.SendMessage(chatId, "Введи команду PowerShell:", cancellationToken: ct);
+                    await bot.SendMessage(chatId, "PowerShell з Telegram вимкнено. Я не залишаю віддалену консоль просто тому, що хтось назвав це фічею.", cancellationToken: ct);
                     break;
                 case "pc_open":
-                    _tgAwaitingOpen = true;
+                    SetTgAwaiting(chatId, TgAwaitingMode.Open);
                     await bot.SendMessage(chatId, "Що відкрити? (chrome, code, explorer, spotify, notepad, або повний шлях):", cancellationToken: ct);
                     break;
                 case "pc_kill":
-                    _tgAwaitingKill = true;
+                    SetTgAwaiting(chatId, TgAwaitingMode.Kill);
                     await bot.SendMessage(chatId, "Назва процесу або PID для завершення:", cancellationToken: ct);
                     break;
             }
@@ -7601,8 +8108,6 @@ tags: [kokonoe, dashboard, live]
         protected override void OnClosed(EventArgs e)
         {
             try { ServiceContainer.BrainEngine?.RecordClose(); } catch { }
-            try { _tunnel?.Stop(); }   catch { }
-            try { _miniApp?.Stop(); }  catch { }
             try { _notifyIcon?.Dispose(); } catch { }
             try { ServiceContainer.Heart?.Dispose(); } catch { }
             base.OnClosed(e);
@@ -7627,10 +8132,4 @@ tags: [kokonoe, dashboard, live]
         }
     }
 
-    public class DashThoughtVm
-    {
-        public string Time    { get; set; } = "";
-        public string Thought { get; set; } = "";
-        public string MoodTag { get; set; } = "";
-    }
 }

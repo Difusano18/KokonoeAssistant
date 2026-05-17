@@ -21,6 +21,7 @@ kokonoe-data/
 # VS user files
 *.user
 *.suo
+*.lscache
 .vs/
 
 # Secrets / local config overrides

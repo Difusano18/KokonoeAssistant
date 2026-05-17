@@ -7,21 +7,18 @@
     <CodePage>65001</CodePage>
     <UseWPF>true</UseWPF>
     <UseWindowsForms>true</UseWindowsForms>
+    <NoWarn>$(NoWarn);NU1701</NoWarn>
     <AssemblyName>KokonoeAssistant</AssemblyName>
     <RootNamespace>KokonoeAssistant</RootNamespace>
     <ApplicationIcon>Logo\Logo_icon.ico</ApplicationIcon>
   </PropertyGroup>
   <ItemGroup>
-    <Resource Include="Logo\Logo.png"/>
-    <Resource Include="Logo\Logo.ico"/>
-    <Resource Include="Logo\Logo_icon.ico"/>
-    <Resource Include="Logo\иконка.ico"/>
+    <Resource Include="Logo\Logo.png" />
+    <Resource Include="Logo\Logo.ico" />
+    <Resource Include="Logo\Logo_icon.ico" />
+    <Resource Include="Logo\иконка.ico" />
   </ItemGroup>
-  <ItemGroup>
-    <None Include="webapp\**\*.*">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-  </ItemGroup>
+
   <ItemGroup>
     <Compile Remove="Tests\**\*.cs" />
     <EmbeddedResource Remove="Tests\**\*" />
@@ -29,23 +26,24 @@
     <Page Remove="Tests\**\*.xaml" />
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="Newtonsoft.Json"               Version="13.0.3" />
-    <PackageReference Include="Telegram.Bot"                  Version="22.0.0" />
-    <PackageReference Include="WTelegramClient"               Version="3.7.1"  />
-    <PackageReference Include="System.Data.SQLite"            Version="1.0.118" />
-    <PackageReference Include="NAudio"                        Version="2.2.1" />
-    <PackageReference Include="NAudio.Wasapi"                 Version="2.2.1" />
-    <PackageReference Include="System.Speech"                 Version="8.0.0" />
-    <PackageReference Include="Microsoft.VisualBasic"         Version="10.3.0" />
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+    <PackageReference Include="SkiaSharp.Views.WPF" Version="3.119.2" />
+    <PackageReference Include="Telegram.Bot" Version="22.0.0" />
+    <PackageReference Include="WTelegramClient" Version="3.7.1" />
+    <PackageReference Include="System.Data.SQLite" Version="1.0.118" />
+    <PackageReference Include="NAudio" Version="2.2.1" />
+    <PackageReference Include="NAudio.Wasapi" Version="2.2.1" />
+    <PackageReference Include="System.Speech" Version="8.0.0" />
+    <PackageReference Include="Microsoft.VisualBasic" Version="10.3.0" />
     <!-- Fuzzy search -->
-    <PackageReference Include="FuzzySharp"                    Version="2.0.2" />
+    <PackageReference Include="FuzzySharp" Version="2.0.2" />
     <!-- Local Whisper STT -->
-    <PackageReference Include="Whisper.net"                   Version="1.7.4" />
-    <PackageReference Include="Whisper.net.Runtime"           Version="1.7.4" />
+    <PackageReference Include="Whisper.net" Version="1.7.4" />
+    <PackageReference Include="Whisper.net.Runtime" Version="1.7.4" />
     <!-- ML.NET time-series + anomaly -->
-    <PackageReference Include="Microsoft.ML"                  Version="3.0.1" />
-    <PackageReference Include="Microsoft.ML.TimeSeries"       Version="3.0.1" />
+    <PackageReference Include="Microsoft.ML" Version="3.0.1" />
+    <PackageReference Include="Microsoft.ML.TimeSeries" Version="3.0.1" />
     <!-- Markdown rendering -->
-    <PackageReference Include="Markdig"                       Version="0.38.0" />
+    <PackageReference Include="Markdig" Version="0.38.0" />
   </ItemGroup>
 </Project>

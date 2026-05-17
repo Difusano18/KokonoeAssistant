@@ -29,6 +29,7 @@ namespace KokonoeAssistant.Services
             public DateTime FirstSeen  { get; set; } = DateTime.Now;
             public DateTime LastSeen   { get; set; } = DateTime.Now;
             public List<string> Tags   { get; set; } = new();
+            public float[]?     Vector { get; set; }
         }
 
         public class MemoryEpisode
@@ -39,6 +40,7 @@ namespace KokonoeAssistant.Services
             public string  EmotionalTone { get; set; } = "neutral";
             public float   Intensity   { get; set; } = 0.5f;       // 0..1 — наскільки значима подія
             public List<string> Keywords { get; set; } = new();
+            public float[]?     Vector   { get; set; }
         }
 
         public class WorkingMemory
@@ -54,6 +56,7 @@ namespace KokonoeAssistant.Services
         private readonly string              _factsPath;
         private readonly string              _episodesPath;
         private readonly EnhancedMemory?     _enhanced;  // може бути null якщо не ініц
+        private readonly KokoEmbeddingService? _embeddings;
         private readonly object              _lock = new();
 
         private List<MemoryFact>    _facts    = new();
@@ -65,20 +68,25 @@ namespace KokonoeAssistant.Services
 
         // ── Ініціалізація ─────────────────────────────────────────────
 
-        public KokoMemoryEngine(string dataDir, EnhancedMemory? enhanced = null)
+        public KokoMemoryEngine(string dataDir, EnhancedMemory? enhanced = null, KokoEmbeddingService? embeddings = null)
         {
             _factsPath    = Path.Combine(dataDir, "koko-facts.json");
             _episodesPath = Path.Combine(dataDir, "koko-episodes.json");
             _chainsPath   = Path.Combine(dataDir, "koko-chains.json");
             _enhanced     = enhanced;
+            _embeddings   = embeddings;
             Load();
         }
 
         // ── ФАКТИ ─────────────────────────────────────────────────────
 
         /// <summary>Додати або оновити факт про творця</summary>
-        public MemoryFact LearnFact(string content, string category = "general", float importance = 0.5f, string[]? tags = null)
+        public async Task<MemoryFact> LearnFactAsync(string content, string category = "general", float importance = 0.5f, string[]? tags = null)
         {
+            float[]? vec = null;
+            if (_embeddings != null && _embeddings.IsAvailable)
+                vec = await _embeddings.GetEmbeddingAsync(content);
+
             lock (_lock)
             {
                 // Шукаємо схожий факт (щоб не дублювати)
@@ -92,6 +100,7 @@ namespace KokonoeAssistant.Services
                     existing.LastSeen  = DateTime.Now;
                     existing.Importance = Math.Min(1f, existing.Importance + 0.05f); // підтверджений факт стає важливішим
                     if (tags != null) existing.Tags = existing.Tags.Union(tags).Distinct().ToList();
+                    if (vec != null) existing.Vector = vec;
                     Save();
                     return existing;
                 }
@@ -101,7 +110,8 @@ namespace KokonoeAssistant.Services
                     Content    = content,
                     Category   = category,
                     Importance = importance,
-                    Tags       = tags?.ToList() ?? new()
+                    Tags       = tags?.ToList() ?? new(),
+                    Vector     = vec
                 };
 
                 _facts.Add(fact);
@@ -120,11 +130,32 @@ namespace KokonoeAssistant.Services
             }
         }
 
-        /// <summary>Пошук фактів за запитом</summary>
-        public List<MemoryFact> Recall(string query, int max = 10)
+        [Obsolete("Use LearnFactAsync")]
+        public MemoryFact LearnFact(string content, string category = "general", float importance = 0.5f, string[]? tags = null)
         {
+            return Task.Run(() => LearnFactAsync(content, category, importance, tags)).Result;
+        }
+
+        /// <summary>Пошук фактів за запитом</summary>
+        public async Task<List<MemoryFact>> RecallAsync(string query, int max = 10)
+        {
+            float[]? queryVec = null;
+            if (_embeddings != null && _embeddings.IsAvailable)
+                queryVec = await _embeddings.GetEmbeddingAsync(query);
+
             lock (_lock)
             {
+                if (queryVec != null)
+                {
+                    return _facts
+                        .Select(f => (f, score: f.Vector != null ? KokoEmbeddingService.CosineSimilarity(queryVec, f.Vector) : 0f))
+                        .Where(x => x.score > 0.5f)
+                        .OrderByDescending(x => x.score)
+                        .Take(max)
+                        .Select(x => x.f)
+                        .ToList();
+                }
+
                 var q = query.ToLower();
                 return _facts
                     .Where(f => f.Content.ToLower().Contains(q) ||
@@ -178,8 +209,12 @@ namespace KokonoeAssistant.Services
         // ── ЕПІЗОДИ ───────────────────────────────────────────────────
 
         /// <summary>Зафіксувати значущу подію</summary>
-        public MemoryEpisode RecordEpisode(string summary, string emotionalTone = "neutral", float intensity = 0.5f, string[]? keywords = null)
+        public async Task<MemoryEpisode> RecordEpisodeAsync(string summary, string emotionalTone = "neutral", float intensity = 0.5f, string[]? keywords = null)
         {
+            float[]? vec = null;
+            if (_embeddings != null && _embeddings.IsAvailable)
+                vec = await _embeddings.GetEmbeddingAsync(summary);
+
             lock (_lock)
             {
                 var ep = new MemoryEpisode
@@ -187,7 +222,8 @@ namespace KokonoeAssistant.Services
                     Summary       = summary,
                     EmotionalTone = emotionalTone,
                     Intensity     = intensity,
-                    Keywords      = keywords?.ToList() ?? ExtractKeywords(summary)
+                    Keywords      = keywords?.ToList() ?? ExtractKeywords(summary),
+                    Vector        = vec
                 };
 
                 _episodes.Add(ep);
@@ -205,6 +241,12 @@ namespace KokonoeAssistant.Services
                 Save();
                 return ep;
             }
+        }
+
+        [Obsolete("Use RecordEpisodeAsync")]
+        public MemoryEpisode RecordEpisode(string summary, string emotionalTone = "neutral", float intensity = 0.5f, string[]? keywords = null)
+        {
+            return Task.Run(() => RecordEpisodeAsync(summary, emotionalTone, intensity, keywords)).Result;
         }
 
         /// <summary>Останні N епізодів</summary>
@@ -280,55 +322,94 @@ namespace KokonoeAssistant.Services
         // ── КОНТЕКСТ ДЛЯ LLM ─────────────────────────────────────────
 
         /// <summary>Сформувати блок пам'яті для системного промпту</summary>
-        public string BuildMemoryContext(int maxFacts = 12, int maxEpisodes = 5)
+        public async Task<string> BuildMemoryContextAsync(int maxFacts = 12, int maxEpisodes = 5, string? query = null)
         {
+            List<MemoryFact> facts;
+            List<MemoryEpisode> episodes;
+
+            if (!string.IsNullOrEmpty(query))
+            {
+                var relevant = await FindRelevantAsync(query, maxFacts, maxEpisodes);
+                facts = relevant.Facts;
+                episodes = relevant.Episodes;
+            }
+            else
+            {
+                lock (_lock)
+                {
+                    facts = _facts.OrderByDescending(f => f.Importance * f.ConfirmCount).Take(maxFacts).ToList();
+                    episodes = _episodes.OrderByDescending(e => e.When).Take(maxEpisodes).ToList();
+                }
+            }
+
+            var sb = new StringBuilder();
+            
+            if (facts.Count > 0)
+            {
+                sb.AppendLine("=== ПАМ'ЯТЬ — ФАКТИ ПРО НЬОГО ===");
+                foreach (var f in facts)
+                    sb.AppendLine($"• [{f.Category}] {f.Content} (підтверджено {f.ConfirmCount}×)");
+            }
+
+            if (episodes.Count > 0)
+            {
+                sb.AppendLine("\n=== ПАМ'ЯТЬ — ПОДІЇ ===");
+                foreach (var e in episodes)
+                    sb.AppendLine($"• [{e.When:dd.MM HH:mm}] ({e.EmotionalTone}, {e.Intensity:P0}) {e.Summary}");
+            }
+
             lock (_lock)
             {
-                var sb = new StringBuilder();
-
-                var topFacts = _facts
-                    .OrderByDescending(f => f.Importance * f.ConfirmCount)
-                    .Take(maxFacts)
-                    .ToList();
-
-                if (topFacts.Count > 0)
-                {
-                    sb.AppendLine("=== ПАМ'ЯТЬ — ФАКТИ ПРО НЬОГО ===");
-                    foreach (var f in topFacts)
-                        sb.AppendLine($"• [{f.Category}] {f.Content} (підтверджено {f.ConfirmCount}×)");
-                }
-
-                var recentEps = _episodes
-                    .OrderByDescending(e => e.When)
-                    .Take(maxEpisodes)
-                    .ToList();
-
-                if (recentEps.Count > 0)
-                {
-                    sb.AppendLine("\n=== ПАМ'ЯТЬ — ОСТАННІ ПОДІЇ ===");
-                    foreach (var e in recentEps)
-                        sb.AppendLine($"• [{e.When:dd.MM HH:mm}] ({e.EmotionalTone}, {e.Intensity:P0}) {e.Summary}");
-                }
-
                 if (Working.CurrentSessionFacts.Count > 0)
                 {
                     sb.AppendLine("\n=== ЦЯ СЕСІЯ — НОВЕ ===");
                     foreach (var f in Working.CurrentSessionFacts.TakeLast(5))
                         sb.AppendLine($"• {f}");
                 }
-
-                return sb.ToString();
             }
+
+            return sb.ToString();
+        }
+
+        [Obsolete("Use BuildMemoryContextAsync")]
+        public string BuildMemoryContext(int maxFacts = 12, int maxEpisodes = 5)
+        {
+            return Task.Run(() => BuildMemoryContextAsync(maxFacts, maxEpisodes)).Result;
         }
 
         /// <summary>Знайти факти і епізоди релевантні до поточного тексту</summary>
-        public (List<MemoryFact> Facts, List<MemoryEpisode> Episodes) FindRelevant(
+        public async Task<(List<MemoryFact> Facts, List<MemoryEpisode> Episodes)> FindRelevantAsync(
             string query, int maxFacts = 3, int maxEpisodes = 2)
         {
+            float[]? queryVec = null;
+            if (_embeddings != null && _embeddings.IsAvailable)
+                queryVec = await _embeddings.GetEmbeddingAsync(query);
+
             lock (_lock)
             {
                 if (string.IsNullOrWhiteSpace(query))
                     return (new(), new());
+
+                if (queryVec != null)
+                {
+                    var scoredFactsVec = _facts
+                        .Select(f => (f, score: f.Vector != null ? KokoEmbeddingService.CosineSimilarity(queryVec, f.Vector) : 0f))
+                        .Where(x => x.score > 0.6f)
+                        .OrderByDescending(x => x.score)
+                        .Take(maxFacts)
+                        .Select(x => x.f)
+                        .ToList();
+
+                    var scoredEpsVec = _episodes
+                        .Select(e => (e, score: e.Vector != null ? KokoEmbeddingService.CosineSimilarity(queryVec, e.Vector) : 0f))
+                        .Where(x => x.score > 0.6f)
+                        .OrderByDescending(x => x.score)
+                        .Take(maxEpisodes)
+                        .Select(x => x.e)
+                        .ToList();
+
+                    return (scoredFactsVec, scoredEpsVec);
+                }
 
                 var words = query.ToLower()
                     .Split(' ', '.', ',', '?', '!', '\n')
@@ -361,6 +442,13 @@ namespace KokonoeAssistant.Services
 
                 return (scoredFacts, scoredEps);
             }
+        }
+
+        [Obsolete("Use FindRelevantAsync")]
+        public (List<MemoryFact> Facts, List<MemoryEpisode> Episodes) FindRelevant(
+            string query, int maxFacts = 3, int maxEpisodes = 2)
+        {
+            return Task.Run(() => FindRelevantAsync(query, maxFacts, maxEpisodes)).Result;
         }
 
         // ── КАУЗАЛЬНІ ЛАНЦЮГИ ────────────────────────────────────────

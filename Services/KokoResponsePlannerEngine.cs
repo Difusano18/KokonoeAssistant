@@ -189,7 +189,7 @@ RESPONSE PLAN REPAIR:
 
         private static List<string> BuildConstraints(KokoResponsePlanFrame frame, KokoInternalState state)
         {
-            var constraints = new List<string>
+            var constraints = new List<string>()
             {
                 "no generic assistant phrases",
                 "no blind agreement",
@@ -219,11 +219,11 @@ RESPONSE PLAN REPAIR:
             foreach (var step in frame.Steps) sb.AppendLine($"- {step}");
             sb.AppendLine("constraints:");
             foreach (var constraint in frame.Constraints) sb.AppendLine($"- {constraint}");
-            var cog = cognition.BuildCognitionContext();
-            if (!string.IsNullOrWhiteSpace(cog))
+            // var cog = cognition.BuildCognitionContext();
+            // if (!string.IsNullOrWhiteSpace(cog))
             {
-                sb.AppendLine("cognitive_context:");
-                sb.AppendLine(cog);
+                // sb.AppendLine("cognitive_context:");
+                // sb.AppendLine(cog);
             }
             sb.AppendLine("rule: this is private planning, not text to quote.");
             return sb.ToString();

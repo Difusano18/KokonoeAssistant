@@ -610,7 +610,7 @@ namespace KokonoeAssistant.Services
             return count;
         }
 
-        private string BuildContext()
+        private async Task<string> BuildContextAsync(string? query = null)
         {
             var sb = new StringBuilder();
             var now = DateTime.Now;
@@ -677,11 +677,20 @@ namespace KokonoeAssistant.Services
                 sb.AppendLine(foodSleep);
             try
             {
-                var presence = BuildPresenceFrame(now, AppSettings.Load().ProactiveAutonomyLevel);
-                var internalDay = BuildInternalDayFrame(now, AppSettings.Load().ProactiveAutonomyLevel, presence, writeVault: false, record: false);
+                var autonomyLevel = AppSettings.Load().ProactiveAutonomyLevel;
+                var msgs = _chatRepo.GetMessages(20).OrderBy(m => m.Timestamp).ToList();
+                
+                // Refresh state freshness before evaluating presence
+                StateFreshness.Refresh(_state, msgs, now);
+                
+                var presence = Presence.Evaluate(_state, msgs, now, autonomyLevel);
+                var somatic = Somatic.Evaluate(ServiceContainer.Heart, Emotion, _health, now);
+                var dayFrame = InternalDay.Evaluate(_state, presence, somatic, now, autonomyLevel);
+                
                 sb.AppendLine("\n--- ПРИСУТНІСТЬ І ВНУТРІШНІЙ ДЕНЬ ---");
                 sb.AppendLine(presence.ExtraContext);
-                sb.AppendLine(internalDay.PromptBlock);
+                sb.AppendLine(dayFrame.PromptBlock);
+                sb.AppendLine(Somatic.BuildPromptBlock(somatic));
             }
             catch { }
 
@@ -708,7 +717,7 @@ namespace KokonoeAssistant.Services
             // ── Когнітивний двигун (GWT + Working Memory + User Model) ──
             try
             {
-                var cogCtx = Cognition.BuildCognitionContext();
+                var cogCtx = await Cognition.BuildCognitionContextAsync();
                 if (!string.IsNullOrEmpty(cogCtx)) sb.AppendLine("\n" + cogCtx);
             }
             catch { }
@@ -716,7 +725,7 @@ namespace KokonoeAssistant.Services
             // ── Пам'ять ───────────────────────────────────────────────
             try
             {
-                var memCtx = Memory.BuildMemoryContext(10, 3);
+                var memCtx = await Memory.BuildMemoryContextAsync(10, 3, query);
                 if (!string.IsNullOrEmpty(memCtx)) sb.AppendLine("\n" + memCtx);
             }
             catch { }
@@ -1240,7 +1249,7 @@ namespace KokonoeAssistant.Services
         private async Task ThinkAsync()
         {
             var previousLastThoughtAt = _state.LastThoughtAt;
-            var context = BuildContext();
+            var context = await BuildContextAsync();
 
             // Останні 3 монологи — для самоусвідомлення
             var recentThoughts = _state.InnerMonologues.Count > 0
@@ -1282,7 +1291,7 @@ namespace KokonoeAssistant.Services
   ""isCrisis"": false
 }}";
 
-            var result = await CallLlmRawAsync(prompt);
+            var result = await _llm.SendSystemQueryAsync(prompt, useTools: true);
             if (result == null) return;
 
             try
@@ -1477,42 +1486,17 @@ namespace KokonoeAssistant.Services
 
             try
             {
-                // Збираємо контекст
-                var msgs = _chatRepo.GetMessages(60).OrderBy(m => m.Timestamp).ToList();
-                var chatCtx = string.Join("\n", msgs.Select(m =>
-                    $"[{m.Timestamp:dd.MM HH:mm}] {(m.Role == "user" ? "Він" : "Kokonoe")}: {m.Content[..Math.Min(200, m.Content.Length)]}"));
+                var context = await BuildContextAsync("його плани та наміри");
+                var prompt = $@"{context}
+Ти — Kokonoe Mercury.
 
-                // Пошук в vault по ключових словах намірів
-                var vaultHints = new StringBuilder();
-                foreach (var kw in new[] { "треба", "хочу", "план", "зробити", "не забути" })
-                {
-                    try
-                    {
-                        var found = _obsidian.SearchNotes(kw, 3);
-                        foreach (var r in found)
-                            vaultHints.AppendLine($"[vault] {r.Path}: {r.Preview[..Math.Min(100, r.Preview.Length)]}");
-                    }
-                    catch { }
-                }
-
-                var moodCtx = $"Твій настрій зараз: {_state.CurrentMood} ({_state.MoodScore:F1})";
-                if (_state.Observations.Any())
-                    moodCtx += $"\nТвоє останнє спостереження: {_state.Observations.Last()}";
-
-                var prompt = $@"Ти — Kokonoe Mercury. {moodCtx}
-
-Ось що він говорив останнім часом:
-{chatCtx}
-
-{(vaultHints.Length > 0 ? $"З vault (його нотатки):\n{vaultHints}" : "")}
-
-Перечитай це. Є щось що він згадував — план, намір, обіцянку собі, незакінчену справу — що так і залишилось висіти в повітрі?
+Перечитай контекст. Є щось що він згадував — план, намір, обіцянку собі, незакінчену справу — що так і залишилось висіти в повітрі?
 
 Якщо є щось конкретне — напиши йому ОДНЕ коротке повідомлення в Telegram своїми словами. Не як нагадування-скрипт. Як ти б сказала це сама — можливо іронічно, можливо просто, але щиро. Тільки українська.
 
 Якщо нічого конкретного немає — відповідь рівно одне слово: null";
 
-                var result = await CallLlmRawAsync(prompt);
+                var result = await _llm.SendSystemQueryAsync(prompt, useTools: true);
                 if (string.IsNullOrWhiteSpace(result)) return;
 
                 result = result.Trim().Trim('"');
@@ -1559,63 +1543,16 @@ namespace KokonoeAssistant.Services
 
             try
             {
-                var today    = DateTime.Today;
-                var todayMsgs = _chatRepo.GetMessagesFromDate(today);
+                var today = DateTime.Today;
+                var context = await BuildContextAsync("підсумок дня та важливі події");
+                
+                var prompt = $@"{context}
+Ти — Kokonoe Mercury.
 
-                // Коротке зведення розмов
-                var msgCount = todayMsgs.Count;
-                var userMsgs = todayMsgs.Where(m => m.Role == "user").ToList();
-                var snippets = userMsgs.Take(3)
-                    .Select(m => $"  • {m.Content[..Math.Min(80, m.Content.Length)]}")
-                    .ToList();
-                var chatSummary = msgCount == 0
-                    ? "Сьогодні він зі мною не говорив."
-                    : $"Повідомлень сьогодні: {msgCount} (від нього: {userMsgs.Count}).\nУривки:\n{string.Join("\n", snippets)}";
-
-                // Health
-                var healthCtx = "";
-                try
-                {
-                    var h = _health.GetToday();
-                    if (h != null)
-                        healthCtx = $"Здоров'я: сон {h.SleepHours}г.";
-                }
-                catch { }
-
-                // Vault зміни сьогодні
-                var vaultChanges = new List<string>();
-                try
-                {
-                    foreach (var note in _obsidian.ListNotes())
-                    {
-                        try
-                        {
-                            var fullPath = System.IO.Path.Combine(AppSettings.Load().VaultPath, note);
-                            if (System.IO.File.GetLastWriteTime(fullPath).Date == today)
-                                vaultChanges.Add(note);
-                        }
-                        catch { }
-                    }
-                }
-                catch { }
-
-                var vaultCtx = vaultChanges.Count > 0
-                    ? $"В vault сьогодні змінено/створено: {string.Join(", ", vaultChanges.Take(5))}."
-                    : "В vault сьогодні нічого не змінювалось.";
-
-                var moodCtx = $"Твій настрій зараз: {_state.CurrentMood}.";
-
-                var prompt = $@"Ти — Kokonoe Mercury. {moodCtx}
-
-Сьогодні {today:dd MMMM yyyy} закінчується. Ось що відбулось:
-
-{chatSummary}
-{(healthCtx.Length > 0 ? "\n" + healthCtx : "")}
-{vaultCtx}
-
+Сьогодні {today:dd MMMM yyyy} закінчується. Переглянь контекст вище.
 Напиши йому в Telegram коротко — 3-4 речення — як ти бачиш його сьогоднішній день. Не звіт і не список. Твоє враження — іронія, турбота, спостереження, що завгодно що відповідає твоєму характеру і тому що реально відбулось. Тільки українська. Тільки текст, нічого зайвого.";
 
-                var msg = await CallLlmRawAsync(prompt);
+                var msg = await _llm.SendSystemQueryAsync(prompt, useTools: true);
                 if (string.IsNullOrWhiteSpace(msg)) return;
                 msg = msg.Trim().Trim('"');
 
@@ -1745,7 +1682,7 @@ namespace KokonoeAssistant.Services
 Відповідь СТРОГО одним словом з набору: anxious / stressed / sad / tired / neutral / calm / happy / excited
 Тільки одне слово, нічого більше.";
 
-                var tone = await CallLlmRawAsync(prompt);
+                var tone = await _llm.SendSystemQueryAsync(prompt, useTools: true);
                 if (string.IsNullOrWhiteSpace(tone)) return;
 
                 tone = tone.Trim().ToLower().Split(' ', '\n')[0];
@@ -1860,7 +1797,7 @@ namespace KokonoeAssistant.Services
 
             if (prompt == null) return false;
 
-            var msg = await CallLlmRawAsync(prompt);
+            var msg = await _llm.SendSystemQueryAsync(prompt, useTools: true);
             if (string.IsNullOrWhiteSpace(msg)) return false;
             msg = msg.Trim().Trim('"');
 
@@ -1908,7 +1845,7 @@ namespace KokonoeAssistant.Services
 Знайди нетривіальний зв'язок між своєю думкою і цими нотатками.
 Відповідь — ONE рядок: асоціація або спостереження. Тільки українська. Без пояснень.";
 
-                var assoc = await CallLlmRawAsync(prompt);
+                var assoc = await _llm.SendSystemQueryAsync(prompt, useTools: true);
                 if (string.IsNullOrWhiteSpace(assoc) || assoc.Length < 5) return;
 
                 assoc = assoc.Trim().Trim('"');
@@ -1945,13 +1882,29 @@ namespace KokonoeAssistant.Services
             {
                 _state.TotalMessagesExchanged++;
                 _state.LastKnownUserActivity = "chatting";
-                ObserveFoodSleepState(content, DateTime.Now);
-                ObserveShortTermIntent(content);
-                RecordPersonaDecision(content, DateTime.Now);
-                RecordResponsePlan(content, DateTime.Now);
-                RecordMemoryPolicyAndContinuity(content, DateTime.Now);
-                ApplyScreenAwarenessUserPreference(content, DateTime.Now);
-                Presence.ObserveUserMessage(_state, content, DateTime.Now);
+                var now = DateTime.Now;
+                var autonomyLevel = AppSettings.Load().ProactiveAutonomyLevel;
+                var msgs = _chatRepo.GetMessages(20).OrderBy(m => m.Timestamp).ToList();
+
+                // 1. Freshness pass: resolve stale intents and detect return/wake signals
+                try { StateFreshness.Refresh(_state, msgs, now); } catch { }
+
+                // 2. Presence & Day state updates
+                try { Presence.ObserveUserMessage(_state, content, now); } catch { }
+                try 
+                { 
+                    var presence = Presence.Evaluate(_state, msgs, now, autonomyLevel);
+                    var somatic = Somatic.Evaluate(ServiceContainer.Heart, Emotion, _health, now);
+                    var dayFrame = InternalDay.Evaluate(_state, presence, somatic, now, autonomyLevel);
+                    InternalDay.Record(_state, dayFrame, now); 
+                } catch { }
+
+                ObserveFoodSleepState(content, now);
+                ApplyScreenAwarenessUserPreference(content, now);
+                
+                RecordPersonaDecision(content, now);
+                RecordResponsePlan(content, now);
+                RecordMemoryPolicyAndContinuity(content, now);
 
                 // Паттерни — записати активність
                 Patterns.RecordActivity(wasActive: true, messageCount: 1);
@@ -2400,7 +2353,7 @@ namespace KokonoeAssistant.Services
 
 Напиши природньо, своїми словами. Тільки українська. Тільки текст, без пояснень.";
 
-                var msg = await CallLlmRawAsync(prompt);
+                var msg = await _llm.SendSystemQueryAsync(prompt, useTools: true);
                 if (string.IsNullOrWhiteSpace(msg)) return;
                 msg = msg.Trim().Trim('"');
 
@@ -2482,7 +2435,7 @@ namespace KokonoeAssistant.Services
 
 Тільки Markdown, без пояснень. Мова: українська.";
 
-                var result = await CallLlmRawAsync(prompt);
+                var result = await _llm.SendSystemQueryAsync(prompt, useTools: true);
                 if (string.IsNullOrWhiteSpace(result) || result == "...") return;
 
                 result = result.Trim();
@@ -2544,7 +2497,7 @@ namespace KokonoeAssistant.Services
 
 Напиши 1-2 речення — що сьогодні відбулось, про що він думав або переживав. Від першої особи (Kokonoe). Тільки текст, без заголовків.
 Мова: українська.";
-                    var daySummary = await CallLlmRawAsync(summaryPrompt);
+                    var daySummary = await _llm.SendSystemQueryAsync(summaryPrompt, useTools: true);
                     if (!string.IsNullOrWhiteSpace(daySummary) && daySummary.Length > 10)
                         _obsidian.AppendToDailyNote($"\n\n> 🧠 **Kokonoe:** {daySummary.Trim()}");
                 }
@@ -2617,7 +2570,7 @@ namespace KokonoeAssistant.Services
 
 Тільки текст для append. Без пояснень. Українська.";
 
-                var result = await CallLlmRawAsync(prompt);
+                var result = await _llm.SendSystemQueryAsync(prompt, useTools: true);
                 if (string.IsNullOrWhiteSpace(result) || result.Trim() == "null") return;
 
                 // Append нову інформацію до профілю
@@ -2704,7 +2657,7 @@ namespace KokonoeAssistant.Services
 
 Якщо все ок — needsChanges: false і plan: null. Не вигадуй проблем де їх нема.";
 
-                var result = await CallLlmRawAsync(prompt);
+                var result = await _llm.SendSystemQueryAsync(prompt, useTools: true);
                 if (string.IsNullOrWhiteSpace(result)) return;
 
                 var jsonStr = ExtractJson(result);
@@ -2758,7 +2711,7 @@ namespace KokonoeAssistant.Services
 {plan}
 
 Використовуй get_vault_tree щоб перевірити що є, потім move_note / create_folder / write_note щоб виконати зміни. На завершення rebuild_links. Виконуй послідовно, без зайвих пояснень.";
-                    await _llm.SendSystemQueryAsync(execPrompt, CancellationToken.None);
+                    await _llm.SendSystemQueryAsync(execPrompt, ct: CancellationToken.None);
                 }
 
                 Log($"ArchitectureReview done. severity={severity}, askUser={askUser}");
@@ -2805,7 +2758,7 @@ namespace KokonoeAssistant.Services
   ""remember"": ""що хочеш запам'ятати або null""
 }}";
 
-                var result = await CallLlmRawAsync(prompt);
+                var result = await _llm.SendSystemQueryAsync(prompt, useTools: true);
                 if (string.IsNullOrWhiteSpace(result)) return;
 
                 var jsonStr = ExtractJson(result);
@@ -2882,7 +2835,7 @@ namespace KokonoeAssistant.Services
 }
 """;
 
-                var result = await CallLlmRawAsync(prompt);
+                var result = await _llm.SendSystemQueryAsync(prompt, useTools: true);
                 if (string.IsNullOrWhiteSpace(result)) return false;
 
                 var jsonStr = ExtractJson(result);
@@ -3477,7 +3430,7 @@ namespace KokonoeAssistant.Services
 
 Тільки текст. Українська.";
 
-                var msg = await CallLlmRawAsync(prompt);
+                var msg = await _llm.SendSystemQueryAsync(prompt, useTools: true);
                 if (!string.IsNullOrWhiteSpace(msg))
                 {
                     msg = msg.Trim().Trim('"');
@@ -3546,7 +3499,7 @@ namespace KokonoeAssistant.Services
                 ctx.AppendLine("Напиши одне коротке повідомлення в стилі Kokonoe — запитай що робив, як справи. Без зайвих слів, без списків. Просто живо і по-людськи.");
 
                 // Використовуємо SendSystemQueryAsync щоб не засмічувати основну історію
-                var reply = await _llm.SendSystemQueryAsync(ctx.ToString(), CancellationToken.None);
+                var reply = await _llm.SendSystemQueryAsync(ctx.ToString(), ct: CancellationToken.None);
                 if (string.IsNullOrWhiteSpace(reply) || reply.StartsWith("[")) return;
 
                 OnNewMessage?.Invoke("assistant", reply);
@@ -3597,7 +3550,7 @@ namespace KokonoeAssistant.Services
 Напиши короткий summary — 3-5 речень. Що було активним, що цікавого. Своїм стилем.
 Тільки текст. Українська.";
 
-                var digest = await CallLlmRawAsync(prompt);
+                var digest = await _llm.SendSystemQueryAsync(prompt, useTools: true);
                 if (string.IsNullOrWhiteSpace(digest)) return;
 
                 digest = digest.Trim();
@@ -3679,7 +3632,7 @@ namespace KokonoeAssistant.Services
 Не питай «чи все добре». Не будь надокучливою. Просто — поруч.
 Тільки українська. Тільки текст без лапок.";
 
-            var msg = await CallLlmRawAsync(prompt);
+            var msg = await _llm.SendSystemQueryAsync(prompt, useTools: true);
             if (string.IsNullOrWhiteSpace(msg)) return;
 
             msg = msg.Trim().Trim('"');
@@ -4002,7 +3955,7 @@ namespace KokonoeAssistant.Services
 Можна підколоти, спитати, чи він зайнятий, але без трагедії.
 Тільки текст, без лапок.";
 
-            var msg = (await CallLlmRawAsync(prompt))?.Trim().Trim('"') ?? "";
+            var msg = (await _llm.SendSystemQueryAsync(prompt, useTools: true))?.Trim().Trim('"') ?? "";
             var proactiveCheck = ProactiveContext.Check(msg, proactive, level);
             if (!proactiveCheck.Passed)
             {
@@ -4361,7 +4314,7 @@ namespace KokonoeAssistant.Services
 {personalityBlock}
 Напиши одне речення — ти поруч. Без снарку. Без порад. Просто є.
 Тільки українська. Тільки текст.";
-                var crisisMsg = await CallLlmRawAsync(crisisPrompt);
+                var crisisMsg = await _llm.SendSystemQueryAsync(crisisPrompt);
                 if (!string.IsNullOrWhiteSpace(crisisMsg))
                 {
                     var msg2 = crisisMsg.Trim().Trim('"');
@@ -4405,7 +4358,7 @@ namespace KokonoeAssistant.Services
 - Якщо після останньої репліки користувача вже був твій авто-пінг, не повторюй ""пауза/тиша/зник"": або мовчи, або питай конкретно по останній темі.
 - Непередбачувано. Не шаблонно. Як людина що щось відчула і написала.";
 
-            var msg = (await CallLlmRawAsync(prompt))?.Trim().Trim('"') ?? "";
+            var msg = (await _llm.SendSystemQueryAsync(prompt, useTools: true))?.Trim().Trim('"') ?? "";
             if (string.IsNullOrWhiteSpace(msg)) return;
             if (msg == "[мовчання]" || msg.Contains("[мовчання]"))
             {
@@ -5022,7 +4975,7 @@ namespace KokonoeAssistant.Services
 
 Тільки факт або null. Нічого більше.";
 
-                var raw = await CallLlmRawAsync(prompt);
+                var raw = await _llm.SendSystemQueryAsync(prompt, useTools: true);
                 if (string.IsNullOrWhiteSpace(raw) || raw.Trim() == "null") return;
 
                 var fact = raw.Trim().Trim('"').Trim('\u00AB', '\u00BB');
@@ -5379,7 +5332,7 @@ CHAT:
 {{string.Join("\n\n---\n\n", batch)}}
 """;
 
-                var raw = await _llm.SendSystemQueryAsync(prompt);
+                var raw = await _llm.SendSystemQueryAsync(prompt, useTools: true);
                 if (string.IsNullOrWhiteSpace(raw))
                 {
                     WriteVaultFallback(batch, "LLM returned nothing");

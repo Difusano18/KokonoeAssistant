@@ -226,6 +226,12 @@ namespace KokonoeAssistant.Services
         }
 
         // ══════════════════════════════════════════════════════════════════════
+        public string BuildCognitionContext()
+        {
+            // Placeholder for now
+            return "";
+        }
+
         // PROSPECTIVE MEMORY — майбутні наміри
         // ══════════════════════════════════════════════════════════════════════
 
@@ -883,67 +889,93 @@ namespace KokonoeAssistant.Services
         // ══════════════════════════════════════════════════════════════════════
 
         /// <summary>Збудувати когнітивний контекст для LLM промпту</summary>
-        public string BuildCognitionContext()
+        public async Task<string> BuildCognitionContextAsync()
         {
+            // We use a local copy or careful locking because we might need to await within the "logical" lock
+            // But for simplicity and to avoid deadlocks with async, we'll extract data then process.
+            
+            StringBuilder sb = new StringBuilder();
+            
+            // Extract data under lock
+            WorkingMemoryChunk? focus;
+            string needs;
+            string traits;
+            string? inferredMood;
+            float moodConfidence;
+            List<ProspectiveIntent> due;
+            string? nextQ;
+            float cognitiveLoad;
+            float internalConflict;
+            bool inReflectiveState;
+            DateTime reflectiveStateUntil;
+            List<NarrativeEpisode> recentEpisodes;
+            List<BehaviorPattern> strongPatterns;
+
             lock (_lock)
             {
-                var sb = new StringBuilder();
-
-                // Working Memory focus
-                var focus = GetFocus();
-                if (focus != null)
-                    sb.AppendLine($"[Фокус уваги: {focus.Content} (sal={focus.Salience:F2})]");
-
-                // User needs
-                var needs = GetUserNeedsSummary();
-                if (!string.IsNullOrEmpty(needs)) sb.AppendLine(needs);
-
-                // User traits
-                var traits = GetUserTraitsSummary();
-                if (!string.IsNullOrEmpty(traits)) sb.AppendLine(traits);
-
-                // Inferred mood
-                if (_data.UserModel.MoodConfidence > 0.5f)
-                    sb.AppendLine($"[Його ймовірний стан: {_data.UserModel.InferredMood} (впевненість {_data.UserModel.MoodConfidence:P0})]");
-
-                // Prospective intents (що планує зробити/сказати)
-                var due = GetDueIntents();
-                if (due.Any())
-                    sb.AppendLine($"[Намір: {string.Join("; ", due.Take(2).Select(i => i.Intent))}]");
-
-                var nextQ = GetNextOpenQuestion();
-                if (nextQ != null) sb.AppendLine($"[Питання що хочу задати: {nextQ}]");
-
-                // Metacognition
-                var meta = _data.Metacognition;
-                if (meta.CognitiveLoad > 0.65f)
-                    sb.AppendLine($"[Когнітивне навантаження: {meta.CognitiveLoad:P0} — відповідай коротше]");
-                if (meta.InternalConflict > 0.4f)
-                    sb.AppendLine($"[Внутрішній конфлікт: раціо vs емоції ({meta.InternalConflict:F2})]");
-                if (meta.InReflectiveState && DateTime.Now < meta.ReflectiveStateUntil)
-                    sb.AppendLine("[У рефлексивному стані — більш introspective відповіді допустимі]");
-
-                // Recent narrative episodes
-                var recentEpisodes = _data.Narrative.KeyMoments
+                focus = GetFocus();
+                needs = GetUserNeedsSummary();
+                traits = GetUserTraitsSummary();
+                inferredMood = _data.UserModel.InferredMood;
+                moodConfidence = _data.UserModel.MoodConfidence;
+                due = GetDueIntents();
+                nextQ = GetNextOpenQuestion();
+                cognitiveLoad = _data.Metacognition.CognitiveLoad;
+                internalConflict = _data.Metacognition.InternalConflict;
+                inReflectiveState = _data.Metacognition.InReflectiveState;
+                reflectiveStateUntil = _data.Metacognition.ReflectiveStateUntil;
+                
+                recentEpisodes = _data.Narrative.KeyMoments
                     .Where(e => e.When > DateTime.Now.AddDays(-30))
                     .OrderByDescending(e => e.Memorability)
                     .Take(2)
                     .ToList();
-                if (recentEpisodes.Any())
-                {
-                    sb.AppendLine($"[Значущі моменти: {string.Join("; ", recentEpisodes.Select(e => e.Title))}]");
-                }
-
-                // Behavior patterns
-                var strongPatterns = _data.UserModel.Patterns
+                    
+                strongPatterns = _data.UserModel.Patterns
                     .Where(p => p.IsActive && p.Confidence > 0.6f && p.Occurrences >= 3)
                     .Take(2)
                     .ToList();
-                if (strongPatterns.Any())
-                    sb.AppendLine($"[Поведінкові паттерни: {string.Join("; ", strongPatterns.Select(p => p.Description))}]");
-
-                return sb.ToString().Trim();
             }
+
+            // Working Memory focus
+            if (focus != null)
+                sb.AppendLine($"[Фокус уваги: {focus.Content} (sal={focus.Salience:F2})]");
+
+            // User needs
+            if (!string.IsNullOrEmpty(needs)) sb.AppendLine(needs);
+
+            // User traits
+            if (!string.IsNullOrEmpty(traits)) sb.AppendLine(traits);
+
+            // Inferred mood
+            if (moodConfidence > 0.5f)
+                sb.AppendLine($"[Його ймовірний стан: {inferredMood} (впевненість {moodConfidence:P0})]");
+
+            // Prospective intents (що планує зробити/сказати)
+            if (due.Any())
+                sb.AppendLine($"[Намір: {string.Join("; ", due.Take(2).Select(i => i.Intent))}]");
+
+            if (nextQ != null) sb.AppendLine($"[Питання що хочу задати: {nextQ}]");
+
+            // Metacognition
+            if (cognitiveLoad > 0.65f)
+                sb.AppendLine($"[Когнітивне навантаження: {cognitiveLoad:P0} — відповідай коротше]");
+            if (internalConflict > 0.4f)
+                sb.AppendLine($"[Внутрішній конфлікт: раціо vs емоції ({internalConflict:F2})]");
+            if (inReflectiveState && DateTime.Now < reflectiveStateUntil)
+                sb.AppendLine("[У рефлексивному стані — більш introspective відповіді допустимі]");
+
+            // Recent narrative episodes
+            if (recentEpisodes.Any())
+            {
+                sb.AppendLine($"[Значущі моменти: {string.Join("; ", recentEpisodes.Select(e => e.Title))}]");
+            }
+
+            // Behavior patterns
+            if (strongPatterns.Any())
+                sb.AppendLine($"[Поведінкові паттерни: {string.Join("; ", strongPatterns.Select(p => p.Description))}]");
+
+            return sb.ToString().Trim();
         }
 
         /// <summary>Короткий рядок стану для логів</summary>

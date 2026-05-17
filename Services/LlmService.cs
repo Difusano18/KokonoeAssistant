@@ -15,6 +15,8 @@ namespace KokonoeAssistant.Services
 {
     public class LlmService
     {
+        public event Action<string, string>? OnProgress; // type, content
+
         private static readonly HttpClient _http = new() { Timeout = Timeout.InfiniteTimeSpan };
 
         private readonly List<HistoryEntry> _history = new();
@@ -638,85 +640,110 @@ Kokonoe: Стоп. Де ти зараз. Коли востаннє їв.
         public void ClearHistory() { lock (_histLock) { _history.Clear(); } }
 
         /// <summary>
-        /// Виконує системний запит до LLM без зміни основної історії.
-        /// Використовується для внутрішніх монологів, спонтанних повідомлень тощо.
+        /// Виконує системний запит до LLM з підтримкою інструментів (Agent Loop).
+        /// Використовується для автономних завдань, де Kokonoe може сама планувати дії.
         /// </summary>
-        public async Task<string?> SendSystemQueryAsync(string prompt, CancellationToken ct = default)
+        public async Task<string?> SendSystemQueryAsync(string prompt, bool useTools = false, CancellationToken ct = default)
         {
             var diagWatch = Stopwatch.StartNew();
             var diagProvider = ActiveProviderLabel();
             var diagModel = ActiveModelLabel();
-            const string diagChannel = "system";
+            const string diagChannel = "system_agent";
             RecordLlmRequest(diagProvider, diagModel, diagChannel);
+
+            var history = new List<HistoryEntry>();
+            var dateStamp = $"\n\n=== ДАТА/ЧАС ===\nСьогодні: {DateTime.Now:dddd, dd MMMM yyyy}, {DateTime.Now:HH:mm}";
+            var systemContent = SYSTEM_PROMPT + dateStamp;
+
+            history.Add(new HistoryEntry("user", prompt));
 
             try
             {
-                var dateStamp = $"\n\n=== ДАТА/ЧАС ===\nСьогодні: {DateTime.Now:dddd, dd MMMM yyyy}, {DateTime.Now:HH:mm}";
-                var systemContent = SYSTEM_PROMPT + dateStamp;
-
-                var messages = new List<object>
+                for (int round = 0; round < (useTools ? 5 : 1); round++)
                 {
-                    new { role = "system", content = SanitizeContent(systemContent) },
-                    new { role = "user", content = prompt }
-                };
-
-                var sysModel = IsOllamaCloud ? _ollamaModel : _model;
-                var sysUrl   = IsOllamaCloud ? _ollamaUrl   : _lmUrl;
-                var reqBody = new { model = sysModel, messages, max_tokens = SystemMaxTokens, temperature = DynamicTemperature, stream = false };
-                var json = JsonConvert.SerializeObject(reqBody);
-
-                int sysAttempts = IsOllamaCloud && OllamaPool != null
-                    ? Math.Max(1, OllamaPool.LiveKeyCount + 1) : 1;
-                HttpResponseMessage? resp = null;
-                string? sysOllamaKey = null;
-
-                for (int attempt = 0; attempt < sysAttempts; attempt++)
-                {
-                    var httpContent = new StringContent(json, Encoding.UTF8, "application/json");
-                    using var sysReq = new HttpRequestMessage(HttpMethod.Post, sysUrl) { Content = httpContent };
-                    if (IsOllamaCloud)
+                    var messages = new List<object> { new { role = "system", content = SanitizeContent(systemContent) } };
+                    foreach (var h in history)
                     {
-                        sysOllamaKey = ResolveOllamaKey();
-                        if (!string.IsNullOrEmpty(sysOllamaKey))
-                            sysReq.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", sysOllamaKey);
+                        if (h.Role == "assistant_tool_calls")
+                        {
+                            var obj = JObject.Parse(h.Content.ToString()!);
+                            messages.Add(new { role = "assistant", content = obj["content"]?.ToString(), tool_calls = obj["tool_calls"] });
+                        }
+                        else if (h.Role == "tool")
+                            messages.Add(new { role = "tool", tool_call_id = h.ToolCallId, name = h.Name, content = h.Content });
+                        else
+                            messages.Add(new { role = h.Role, content = h.Content });
                     }
 
-                    resp = await _http.SendAsync(sysReq, ct);
-                    if (resp.IsSuccessStatusCode)
+                    var sysModel = IsOllamaCloud ? _ollamaModel : _model;
+                    var sysUrl = IsOllamaCloud ? _ollamaUrl : _lmUrl;
+                    
+                    object reqBody;
+                    if (useTools && Obsidian != null && round < 4)
+                        reqBody = new { model = sysModel, messages, tools = TOOLS, tool_choice = "auto", max_tokens = SystemMaxTokens, temperature = DynamicTemperature, stream = false };
+                    else
+                        reqBody = new { model = sysModel, messages, max_tokens = SystemMaxTokens, temperature = DynamicTemperature, stream = false };
+
+                    var json = JsonConvert.SerializeObject(reqBody);
+                    HttpResponseMessage? resp = null;
+                    int attempts = IsOllamaCloud && OllamaPool != null ? Math.Max(1, OllamaPool.LiveKeyCount + 1) : 1;
+
+                    for (int attempt = 0; attempt < attempts; attempt++)
                     {
-                        if (IsOllamaCloud && !string.IsNullOrEmpty(sysOllamaKey))
-                            OllamaPool?.RecordRequest(sysOllamaKey);
-                        break;
+                        var httpContent = new StringContent(json, Encoding.UTF8, "application/json");
+                        using var req = new HttpRequestMessage(HttpMethod.Post, sysUrl) { Content = httpContent };
+                        if (IsOllamaCloud)
+                        {
+                            var key = ResolveOllamaKey();
+                            if (!string.IsNullOrEmpty(key)) req.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", key);
+                        }
+
+                        resp = await _http.SendAsync(req, ct);
+                        if (resp.IsSuccessStatusCode) break;
+                        if (IsOllamaCloud && (int)resp.StatusCode == 429 && OllamaPool != null) { /* retry with next key */ }
+                        else break;
                     }
-                    if (IsOllamaCloud && (int)resp.StatusCode == 429
-                        && OllamaPool != null && !string.IsNullOrEmpty(sysOllamaKey))
+
+                    if (resp == null || !resp.IsSuccessStatusCode)
                     {
-                        OllamaPool.MarkRateLimited(sysOllamaKey);
-                        resp.Dispose();
-                        resp = null;
-                        continue;
+                        RecordLlmFailure(diagProvider, diagModel, diagChannel, (int?)resp?.StatusCode, "API Error", diagWatch, "system_agent_fail");
+                        return null;
                     }
-                    break;
+
+                    var respText = await resp.Content.ReadAsStringAsync(ct);
+                    var respObj = JObject.Parse(respText);
+                    var message = respObj["choices"]?[0]?["message"] as JObject;
+                    if (message == null) return null;
+
+                    var toolCalls = message["tool_calls"] as JArray;
+                    var rawContent = message["content"]?.ToString() ?? "";
+                    var reasoning = message["reasoning_content"]?.ToString() ?? "";
+
+                    if (!string.IsNullOrWhiteSpace(reasoning))
+                        OnProgress?.Invoke("thought", reasoning);
+
+                    if (toolCalls == null || toolCalls.Count == 0)
+                    {
+                        RecordLlmSuccess(diagProvider, diagModel, diagChannel, diagWatch);
+                        return CleanGarbage(rawContent);
+                    }
+
+                    history.Add(new HistoryEntry("assistant_tool_calls", message.ToString()));
+                    foreach (var call in toolCalls)
+                    {
+                        var callId = call["id"]?.ToString() ?? Guid.NewGuid().ToString();
+                        var funcName = call["function"]?["name"]?.ToString() ?? "";
+                        var argsRaw = call["function"]?["arguments"]?.ToString() ?? "{}";
+                        OnProgress?.Invoke("tool", $"Автономна дія: {funcName}");
+                        var result = ExecuteTool(funcName, JObject.Parse(argsRaw));
+                        history.Add(new HistoryEntry("tool", result, ToolCallId: callId, Name: funcName));
+                    }
                 }
-
-                if (resp == null || !resp.IsSuccessStatusCode)
-                {
-                    var status = resp == null ? (int?)null : (int)resp.StatusCode;
-                    var error = resp == null ? "no live key/response" : await resp.Content.ReadAsStringAsync(ct);
-                    RecordLlmFailure(diagProvider, diagModel, diagChannel, status, error, diagWatch, "system_query");
-                    return null;
-                }
-
-                var respText = await resp.Content.ReadAsStringAsync(ct);
-                var respObj = JObject.Parse(respText);
-                var reply = respObj["choices"]?[0]?["message"]?["content"]?.ToString();
-
-                RecordLlmSuccess(diagProvider, diagModel, diagChannel, diagWatch);
-                return CleanGarbage(reply ?? "");
+                return null;
             }
             catch (Exception ex)
             {
-                RecordLlmFailure(diagProvider, diagModel, diagChannel, null, ex.Message, diagWatch, "system_exception");
+                RecordLlmFailure(diagProvider, diagModel, diagChannel, null, ex.Message, diagWatch, "system_agent_exception");
                 return null;
             }
         }
@@ -1335,6 +1362,11 @@ Kokonoe: Стоп. Де ти зараз. Коли востаннє їв.
                     if ((toolCalls == null || toolCalls.Count == 0) && Obsidian != null)
                         toolCalls = TryParseTextToolCalls(rawContent);
 
+                    if (!string.IsNullOrWhiteSpace(reasoningContent))
+                    {
+                        OnProgress?.Invoke("thought", reasoningContent);
+                    }
+
                     // No tool calls → final answer
                     if (toolCalls == null || toolCalls.Count == 0)
                     {
@@ -1380,6 +1412,7 @@ Kokonoe: Стоп. Де ти зараз. Коли востаннє їв.
                         catch { args = new JObject(); }
 
                         System.Diagnostics.Debug.WriteLine($"[LlmService] Round {round}: tool={funcName} args={argsRaw[..Math.Min(200, argsRaw.Length)]}");
+                        OnProgress?.Invoke("tool", $"Виконую {funcName}...");
 
                         var result = ExecuteTool(funcName, args);
 

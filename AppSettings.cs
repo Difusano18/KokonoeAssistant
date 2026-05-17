@@ -62,13 +62,10 @@ namespace KokonoeAssistant
         public string TelegramToken   { get; set; } = "";
         public long   TelegramChatId  { get; set; } = 0;
         public bool   TelegramEnabled { get; set; } = true;
+        public int    MiniAppPort     { get; set; } = 8787;
+        public string MiniAppPublicUrl { get; set; } = "";
 
-        // Mini App (TG Web App)
-        public bool   MiniAppEnabled    { get; set; } = true;
-        public int    MiniAppPort       { get; set; } = 8765;
-        // Публічний HTTPS URL з тунелю (ngrok / cloudflared). Без слешу в кінці.
-        // Приклад: https://koko.example.trycloudflare.com
-        public string MiniAppPublicUrl  { get; set; } = "";
+
 
         // Telegram UserClient (MTProto — повний акаунт)
         public int    TgApiId         { get; set; } = 0;

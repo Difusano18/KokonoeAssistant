@@ -97,6 +97,7 @@ internal static class Program
             Run("Screen awareness classifies modes", ScreenAwarenessClassifiesModes);
             Run("Proactive context requires natural trigger for silence ping", ProactiveContextRequiresNaturalTriggerForSilencePing);
             Run("Obsidian preflight context loads vault before reply", ObsidianPreflightContextLoadsVaultBeforeReply);
+            Run("Agent task service plans and persists", AgentTaskServicePlansAndPersists);
 
             Console.WriteLine($"PASS {_passed} tests");
             return 0;
@@ -2352,6 +2353,33 @@ Persistent Obsidian context is now a core project requirement.
             AssertTrue(context.Contains("Kokonoe should check the vault"), "daily note should be included");
             AssertTrue(context.Contains("pulse_spike"), "somatic events tail should be included");
             AssertTrue(context.Contains("Query-relevant vault recall"), "query semantic recall should be included");
+        }
+        finally
+        {
+            try { Directory.Delete(dir, recursive: true); } catch { }
+        }
+    }
+
+    private static void AgentTaskServicePlansAndPersists()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "KokonoeAssistant.Tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            var service = new KokoAgentTaskService(dir);
+            var task = service.AddTask("реалізуй UI і перевір Obsidian пам'ять", priority: 8);
+
+            AssertEqual(8, task.Priority, "priority should be stored");
+            AssertTrue(task.Steps.Any(s => s.Kind == KokoAgentStepKind.Vault), "vault step should be planned");
+            AssertTrue(task.Steps.Any(s => s.Kind == KokoAgentStepKind.Implement), "implementation step should be planned");
+            AssertTrue(task.Steps.Last().Kind == KokoAgentStepKind.Report, "last step should be report");
+
+            var board = service.RenderBoard();
+            AssertTrue(board.Contains(task.Id), "board should include task id");
+            AssertTrue(board.Contains("Agent Board"), "board should include header");
+
+            var reloaded = new KokoAgentTaskService(dir);
+            AssertTrue(reloaded.GetSnapshot().Tasks.Any(t => t.Id == task.Id), "task should persist to disk");
         }
         finally
         {

@@ -3,6 +3,7 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
+        xmlns:skia="clr-namespace:SkiaSharp.Views.WPF;assembly=SkiaSharp.Views.WPF"
         Title="Kokonoe" Height="900" Width="1380"
         MinHeight="620" MinWidth="900"
         Background="{DynamicResource AccentBgMain}"
@@ -1839,119 +1840,118 @@
                     </Grid>
 
                     <!-- ╔══════════ MEMORY TAB ══════════╗ -->
-                    <Grid x:Name="MemoryTab" Visibility="Collapsed" Background="Transparent">
+                    <Grid x:Name="MemoryTab" Visibility="Collapsed" Background="Transparent"
+                          SizeChanged="MemoryTab_SizeChanged">
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="Auto"/>
                             <RowDefinition Height="*"/>
+                            <RowDefinition Height="Auto"/>
                         </Grid.RowDefinitions>
 
-                        <!-- Header -->
                         <Border Grid.Row="0" Background="{DynamicResource AccentBgDarker}"
-                                BorderBrush="{DynamicResource AccentBgBorder2}" BorderThickness="0,0,0,1" Padding="20,12">
+                                BorderBrush="{DynamicResource AccentBgBorder2}" BorderThickness="0,0,0,1" Padding="16,10">
                             <Grid>
                                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                    <TextBlock Text="// MEMORY" FontSize="12" FontFamily="Consolas" FontWeight="Bold"
-                                               Foreground="{DynamicResource AccentBase}" VerticalAlignment="Center"/>
-                                    <TextBlock Text=" · Enhanced Fact Storage" FontSize="10" FontFamily="Consolas"
-                                               Foreground="{DynamicResource AccentDim}" VerticalAlignment="Center" Margin="6,0,0,0"/>
+                                    <TextBlock Text="// MEMORY CORTEX" FontSize="12" FontFamily="Consolas" FontWeight="Bold"
+                                               Foreground="#FF2D75" VerticalAlignment="Center"/>
+                                    <Border Background="{DynamicResource AccentNavBg}" CornerRadius="6" Padding="10,4" Margin="14,0,0,0">
+                                        <TextBlock Text="BRAIN MAP" FontSize="10" FontFamily="Consolas" FontWeight="Bold"
+                                                   Foreground="{DynamicResource AccentTextLight}"/>
+                                    </Border>
+                                    <TextBlock Text="HEAT MAP" FontSize="10" FontFamily="Consolas" Foreground="{DynamicResource AccentDim}" Margin="22,0,0,0"/>
+                                    <TextBlock Text="THOUGHT REPLAY" FontSize="10" FontFamily="Consolas" Foreground="{DynamicResource AccentDim}" Margin="22,0,0,0"/>
+                                    <TextBlock Text="INSPECTOR" FontSize="10" FontFamily="Consolas" Foreground="{DynamicResource AccentDim}" Margin="22,0,0,0"/>
                                 </StackPanel>
-                                <Button Content="↻ Refresh" Style="{StaticResource BtnGhost}"
-                                        Padding="8,3" HorizontalAlignment="Right"
-                                        Click="MemTabRefresh_Click"/>
+                                <Button Content="Refresh" Style="{StaticResource BtnGhost}" Padding="8,3"
+                                        HorizontalAlignment="Right" Click="MemTabRefresh_Click"/>
                             </Grid>
                         </Border>
 
-                        <!-- Stats row -->
-                        <Grid Grid.Row="1" Margin="20,12,20,0">
+                        <Grid Grid.Row="1" Margin="14,12,14,10">
                             <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="230"/>
+                                <ColumnDefinition Width="12"/>
                                 <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="12"/>
+                                <ColumnDefinition Width="300"/>
                             </Grid.ColumnDefinitions>
+
                             <Border Grid.Column="0" Background="{DynamicResource AccentBgCard}"
-                                    BorderBrush="{DynamicResource AccentBgBorder2}" BorderThickness="1" CornerRadius="8"
-                                    Padding="12,10" Margin="0,0,6,0">
-                                <StackPanel>
-                                    <TextBlock Text="TOTAL" FontSize="8" FontFamily="Consolas" Foreground="{DynamicResource AccentDim}"/>
-                                    <TextBlock x:Name="MemTabTotalText" Text="—" FontSize="22" FontWeight="Bold"
-                                               Foreground="{DynamicResource AccentBase}"/>
-                                    <TextBlock Text="facts" FontSize="8" Foreground="{DynamicResource AccentDim}"/>
-                                </StackPanel>
+                                    BorderBrush="{DynamicResource AccentBgBorder2}" BorderThickness="1" CornerRadius="10" Padding="14">
+                                <Grid>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="*"/>
+                                        <RowDefinition Height="Auto"/>
+                                    </Grid.RowDefinitions>
+                                    <TextBlock Text="MEMORY STATUS" FontSize="9" FontFamily="Consolas" Foreground="{DynamicResource AccentDim}" Margin="0,0,0,12"/>
+                                    <UniformGrid Grid.Row="1" Columns="2" Margin="0,0,0,12">
+                                        <StackPanel Margin="0,0,10,8"><TextBlock Text="neurons" FontSize="9" Foreground="{DynamicResource AccentDim}"/><TextBlock x:Name="MemTabTotalText" Text="?" FontSize="18" FontFamily="Consolas" FontWeight="Bold" Foreground="{DynamicResource AccentTextLight}"/></StackPanel>
+                                        <StackPanel Margin="0,0,0,8"><TextBlock Text="active" FontSize="9" Foreground="{DynamicResource AccentDim}"/><TextBlock x:Name="MemTabConfirmedText" Text="?" FontSize="18" FontFamily="Consolas" FontWeight="Bold" Foreground="{DynamicResource Brush_Ok}"/></StackPanel>
+                                        <StackPanel Margin="0,0,10,8"><TextBlock Text="priority" FontSize="9" Foreground="{DynamicResource AccentDim}"/><TextBlock x:Name="MemTabHighImpText" Text="?" FontSize="18" FontFamily="Consolas" FontWeight="Bold" Foreground="#FF2D75"/></StackPanel>
+                                        <StackPanel Margin="0,0,0,8"><TextBlock Text="clusters" FontSize="9" Foreground="{DynamicResource AccentDim}"/><TextBlock x:Name="MemTabCatCountText" Text="?" FontSize="18" FontFamily="Consolas" FontWeight="Bold" Foreground="{DynamicResource AccentBase}"/></StackPanel>
+                                    </UniformGrid>
+                                    <StackPanel Grid.Row="2">
+                                        <TextBlock Text="DATA SOURCES" FontSize="9" FontFamily="Consolas" Foreground="{DynamicResource AccentDim}" Margin="0,0,0,8"/>
+                                        <TextBlock x:Name="MemoryCortexSourcesText" Text="Vault online&#x0a;Index cache synced&#x0a;Graph engine active" FontSize="10" FontFamily="Consolas" Foreground="{DynamicResource AccentText}" TextWrapping="Wrap"/>
+                                    </StackPanel>
+                                    <TextBlock Grid.Row="3" x:Name="MemoryCortexDensityText" Text="density --" FontSize="10" FontFamily="Consolas" Foreground="{DynamicResource AccentDim}"/>
+                                </Grid>
                             </Border>
-                            <Border Grid.Column="1" Background="{DynamicResource AccentBgCard}"
-                                    BorderBrush="{DynamicResource AccentBgBorder2}" BorderThickness="1" CornerRadius="8"
-                                    Padding="12,10" Margin="0,0,6,0">
-                                <StackPanel>
-                                    <TextBlock Text="CONFIRMED" FontSize="8" FontFamily="Consolas" Foreground="{DynamicResource AccentDim}"/>
-                                    <TextBlock x:Name="MemTabConfirmedText" Text="—" FontSize="22" FontWeight="Bold"
-                                               Foreground="{DynamicResource Brush_Ok}"/>
-                                    <TextBlock Text="verified" FontSize="8" Foreground="{DynamicResource AccentDim}"/>
-                                </StackPanel>
+
+                            <Border Grid.Column="2" Background="{DynamicResource AccentBgPanel}"
+                                    BorderBrush="{DynamicResource AccentBgBorder2}" BorderThickness="1" CornerRadius="10">
+                                <Grid>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="58"/>
+                                        <RowDefinition Height="*"/>
+                                        <RowDefinition Height="38"/>
+                                    </Grid.RowDefinitions>
+                                    <Border Grid.Row="0" BorderBrush="{DynamicResource AccentBgBorder2}" BorderThickness="0,0,0,1" Padding="14,8">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                            <StackPanel Orientation="Horizontal">
+                                                <StackPanel Margin="0,0,34,0"><TextBlock Text="ACTIVE QUERY" FontSize="8" FontFamily="Consolas" Foreground="{DynamicResource AccentDim}"/><TextBlock x:Name="MemoryActiveQueryText" Text="&quot;memory cortex&quot;" FontSize="11" FontFamily="Consolas" Foreground="{DynamicResource AccentBase}"/></StackPanel>
+                                                <StackPanel><TextBlock Text="MODE" FontSize="8" FontFamily="Consolas" Foreground="{DynamicResource AccentDim}"/><TextBlock Text="associative thinking" FontSize="11" FontFamily="Consolas" Foreground="{DynamicResource AccentText}"/></StackPanel>
+                                            </StackPanel>
+                                            <TextBlock Grid.Column="1" Text="LIVE" FontSize="9" FontFamily="Consolas" Foreground="#FF2D75" VerticalAlignment="Center"/>
+                                        </Grid>
+                                    </Border>
+                                    <skia:SKElement x:Name="MemoryCortexSkia" Grid.Row="1" ClipToBounds="True"
+                                                    PaintSurface="MemoryCortexSkia_PaintSurface"
+                                                    MouseLeftButtonDown="MemoryCortexSkia_MouseLeftButtonDown"/>
+                                    <Border Grid.Row="2" BorderBrush="{DynamicResource AccentBgBorder2}" BorderThickness="0,1,0,0" Padding="12,6">
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Text="person" Foreground="#FF2D75" FontSize="9" FontFamily="Consolas" Margin="0,0,18,0"/>
+                                            <TextBlock Text="project" Foreground="#29B6F6" FontSize="9" FontFamily="Consolas" Margin="0,0,18,0"/>
+                                            <TextBlock Text="world / lore" Foreground="#00BFA5" FontSize="9" FontFamily="Consolas" Margin="0,0,18,0"/>
+                                            <TextBlock Text="ideas" Foreground="#00E676" FontSize="9" FontFamily="Consolas" Margin="0,0,18,0"/>
+                                            <TextBlock Text="system" Foreground="#B0B0C0" FontSize="9" FontFamily="Consolas"/>
+                                        </StackPanel>
+                                    </Border>
+                                </Grid>
                             </Border>
-                            <Border Grid.Column="2" Background="{DynamicResource AccentBgCard}"
-                                    BorderBrush="{DynamicResource AccentBgBorder2}" BorderThickness="1" CornerRadius="8"
-                                    Padding="12,10" Margin="0,0,6,0">
-                                <StackPanel>
-                                    <TextBlock Text="HIGH IMP" FontSize="8" FontFamily="Consolas" Foreground="{DynamicResource AccentDim}"/>
-                                    <TextBlock x:Name="MemTabHighImpText" Text="—" FontSize="22" FontWeight="Bold"
-                                               Foreground="{DynamicResource Brush_Info}"/>
-                                    <TextBlock Text="priority" FontSize="8" Foreground="{DynamicResource AccentDim}"/>
-                                </StackPanel>
-                            </Border>
-                            <Border Grid.Column="3" Background="{DynamicResource AccentBgCard}"
-                                    BorderBrush="{DynamicResource AccentBgBorder2}" BorderThickness="1" CornerRadius="8"
-                                    Padding="12,10">
-                                <StackPanel>
-                                    <TextBlock Text="CATEGORIES" FontSize="8" FontFamily="Consolas" Foreground="{DynamicResource AccentDim}"/>
-                                    <TextBlock x:Name="MemTabCatCountText" Text="—" FontSize="22" FontWeight="Bold"
-                                               Foreground="{DynamicResource AccentPrimary}"/>
-                                    <TextBlock Text="types" FontSize="8" Foreground="{DynamicResource AccentDim}"/>
-                                </StackPanel>
-                            </Border>
+
+                            <StackPanel Grid.Column="4">
+                                <Border Background="{DynamicResource AccentBgCard}" BorderBrush="{DynamicResource AccentBgBorder2}" BorderThickness="1" CornerRadius="10" Padding="14" Margin="0,0,0,10">
+                                    <StackPanel><TextBlock Text="MEMORY INSPECTOR" FontSize="9" FontFamily="Consolas" Foreground="{DynamicResource AccentDim}" Margin="0,0,0,10"/><TextBlock x:Name="MemoryInspectorTitle" Text="select node" FontSize="16" FontWeight="SemiBold" Foreground="{DynamicResource AccentTextLight}" TextWrapping="Wrap"/><TextBlock x:Name="MemoryInspectorMeta" Text="type -- / importance -- / confirmations --" FontSize="10" FontFamily="Consolas" Foreground="{DynamicResource AccentDim}" TextWrapping="Wrap" Margin="0,8,0,0"/><ProgressBar x:Name="MemoryInspectorImportanceBar" Height="4" Minimum="0" Maximum="100" Value="0" Foreground="#FF2D75" Background="{DynamicResource AccentBgDarker}" Margin="0,10,0,0"/></StackPanel>
+                                </Border>
+                                <Border Background="{DynamicResource AccentBgCard}" BorderBrush="{DynamicResource AccentBgBorder2}" BorderThickness="1" CornerRadius="10" Padding="14" Margin="0,0,0,10"><StackPanel><TextBlock Text="LINKS" FontSize="9" FontFamily="Consolas" FontWeight="Bold" Foreground="#FF2D75" Margin="0,0,0,8"/><ItemsControl x:Name="MemoryLinksList"/></StackPanel></Border>
+                                <Border Background="{DynamicResource AccentBgCard}" BorderBrush="{DynamicResource AccentBgBorder2}" BorderThickness="1" CornerRadius="10" Padding="14" Margin="0,0,0,10"><StackPanel><TextBlock Text="ACTIVITY FEED" FontSize="9" FontFamily="Consolas" FontWeight="Bold" Foreground="#FF2D75" Margin="0,0,0,8"/><ItemsControl x:Name="MemoryActivityFeed"/></StackPanel></Border>
+                                <Border Background="{DynamicResource AccentBgCard}" BorderBrush="{DynamicResource AccentBgBorder2}" BorderThickness="1" CornerRadius="10" Padding="14"><StackPanel><TextBlock Text="THOUGHT FLOW" FontSize="9" FontFamily="Consolas" FontWeight="Bold" Foreground="#FF2D75" Margin="0,0,0,8"/><ItemsControl x:Name="MemoryThoughtFlow"/></StackPanel></Border>
+                            </StackPanel>
                         </Grid>
 
-                        <!-- Fact list -->
-                        <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto" Margin="20,12,20,12">
-                            <ItemsControl x:Name="MemTabFactsList">
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate>
-                                        <Border Background="{DynamicResource AccentBgCard}"
-                                                BorderBrush="{DynamicResource AccentBgBorder2}"
-                                                BorderThickness="1" CornerRadius="6"
-                                                Padding="12,9" Margin="0,0,0,6">
-                                            <Grid>
-                                                <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="*"/>
-                                                    <ColumnDefinition Width="Auto"/>
-                                                </Grid.ColumnDefinitions>
-                                                <StackPanel>
-                                                    <TextBlock Text="{Binding Text}"
-                                                               Foreground="{DynamicResource AccentText}"
-                                                               FontSize="11" TextWrapping="Wrap"/>
-                                                    <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
-                                                        <TextBlock Text="{Binding Category}"
-                                                                   FontSize="9" FontFamily="Consolas"
-                                                                   Foreground="{DynamicResource AccentDim}" Margin="0,0,10,0"/>
-                                                        <TextBlock Text="{Binding ImportanceLabel}"
-                                                                   FontSize="9" FontFamily="Consolas"
-                                                                   Foreground="{DynamicResource AccentBase}"/>
-                                                    </StackPanel>
-                                                </StackPanel>
-                                                <Border Grid.Column="1" Background="{DynamicResource AccentNavBg}"
-                                                        CornerRadius="4" Padding="6,2" Margin="8,0,0,0"
-                                                        VerticalAlignment="Top">
-                                                    <TextBlock Text="{Binding ConfirmLabel}"
-                                                               FontSize="8" FontFamily="Consolas"
-                                                               Foreground="{DynamicResource AccentBase}"/>
-                                                </Border>
-                                            </Grid>
-                                        </Border>
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
-                        </ScrollViewer>
+                        <Border Grid.Row="2" Background="{DynamicResource AccentBgDarker}" BorderBrush="{DynamicResource AccentBgBorder2}" BorderThickness="0,1,0,0" Padding="14,10">
+                            <Grid>
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="140"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                <TextBox x:Name="MemoryCortexSearchBox" Style="{StaticResource InputBox}" Height="38" Padding="10,8" TextChanged="MemoryCortexSearchBox_TextChanged" ToolTip="Search memory cortex..."/>
+                                <Button Grid.Column="1" Content="Search" Style="{StaticResource BtnGhost}" Width="42" Height="38" Margin="8,0,12,0" Click="MemTabRefresh_Click"/>
+                                <Slider Grid.Column="2" x:Name="MemoryCortexZoomSlider" Minimum="0.65" Maximum="1.4" Value="1" VerticalAlignment="Center" ValueChanged="MemoryCortexZoomSlider_ValueChanged"/>
+                                <Button Grid.Column="3" Content="auto focus" Style="{StaticResource BtnGhost}" Height="38" Padding="12,0" Margin="12,0,0,0" Click="MemTabRefresh_Click"/>
+                            </Grid>
+                        </Border>
                     </Grid>
 
                     <!-- ╔══════════ PULSE TAB ══════════╗ -->
@@ -1959,7 +1959,7 @@
                           SizeChanged="PulseTab_SizeChanged">
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="180"/>
+                            <RowDefinition Height="220"/>
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="*"/>
                         </Grid.RowDefinitions>
@@ -1994,7 +1994,8 @@
 
                         <!-- ECG Canvas -->
                         <Border Grid.Row="1" Background="{DynamicResource AccentBgPanel}"
-                                BorderBrush="{DynamicResource AccentBgBorder2}" BorderThickness="0,0,0,1" Padding="20,10">
+                                BorderBrush="{DynamicResource AccentBgBorder2}" BorderThickness="1" CornerRadius="8"
+                                Padding="20,10" Margin="20,12,20,0">
                             <Grid>
                                 <TextBlock Text="ECG" FontSize="8" FontFamily="Consolas" Foreground="#FF4D6D"
                                            VerticalAlignment="Top" HorizontalAlignment="Left" Opacity="0.6"/>
@@ -2052,34 +2053,160 @@
                             </Border>
                         </Grid>
 
-                        <!-- Vital log -->
+                        <!-- Telemetry workspace -->
                         <Grid Grid.Row="3" Margin="20,12,20,12">
-                            <Grid.RowDefinitions>
-                                <RowDefinition Height="Auto"/>
-                                <RowDefinition Height="*"/>
-                            </Grid.RowDefinitions>
-                            <Border Grid.Row="0" Padding="0,0,0,8">
-                                <TextBlock Text="VITAL.LOG" FontSize="9" FontFamily="Consolas"
-                                           Foreground="{DynamicResource AccentDim}"/>
-                            </Border>
-                            <Border Grid.Row="1" Background="{DynamicResource AccentBgCard}"
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="220"/>
+                                <ColumnDefinition Width="12"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="12"/>
+                                <ColumnDefinition Width="330"/>
+                                <ColumnDefinition Width="12"/>
+                                <ColumnDefinition Width="300"/>
+                            </Grid.ColumnDefinitions>
+                            <Border Grid.Column="0" Background="{DynamicResource AccentBgCard}"
                                     BorderBrush="{DynamicResource AccentBgBorder2}" BorderThickness="1" CornerRadius="8"
                                     Padding="12">
-                                <ScrollViewer VerticalScrollBarVisibility="Auto">
-                                    <ItemsControl x:Name="PulseVitalLog">
+                                <Grid>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="*"/>
+                                    </Grid.RowDefinitions>
+                                    <TextBlock Text="VITAL LOG" FontSize="9" FontFamily="Consolas" FontWeight="Bold"
+                                               Foreground="#FF4D6D" Margin="0,0,0,10"/>
+                                    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+                                        <ItemsControl x:Name="PulseVitalLog">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate>
+                                                    <Grid Margin="0,2">
+                                                        <TextBlock Text="{Binding TimeStr}" FontSize="10" FontFamily="Consolas"
+                                                                   Foreground="{DynamicResource AccentDim}"/>
+                                                        <TextBlock Text="{Binding BpmStr}" FontSize="10" FontFamily="Consolas"
+                                                                   Foreground="#FF4D6D" HorizontalAlignment="Right"/>
+                                                    </Grid>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </ScrollViewer>
+                                </Grid>
+                            </Border>
+                            <Border Grid.Column="2" Background="{DynamicResource AccentBgCard}"
+                                    BorderBrush="{DynamicResource AccentBgBorder2}" BorderThickness="1" CornerRadius="8"
+                                    Padding="12">
+                                <Grid>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="*"/>
+                                        <RowDefinition Height="54"/>
+                                    </Grid.RowDefinitions>
+                                    <TextBlock Text="HEART RATE · LIVE WINDOW" FontSize="9" FontFamily="Consolas" FontWeight="Bold"
+                                               Foreground="#FF4D6D" Margin="0,0,0,8"/>
+                                    <Canvas x:Name="PulseHr24Canvas" Grid.Row="1" ClipToBounds="True"/>
+                                    <UniformGrid Grid.Row="2" Columns="4" Margin="0,10,0,0">
+                                        <StackPanel>
+                                            <TextBlock Text="AVG" FontSize="8" FontFamily="Consolas" Foreground="{DynamicResource AccentDim}"/>
+                                            <TextBlock x:Name="PulseAvgText" Text="-- bpm" FontSize="13" FontFamily="Consolas" Foreground="{DynamicResource AccentText}"/>
+                                        </StackPanel>
+                                        <StackPanel>
+                                            <TextBlock Text="PEAK" FontSize="8" FontFamily="Consolas" Foreground="{DynamicResource AccentDim}"/>
+                                            <TextBlock x:Name="PulsePeakText" Text="-- bpm" FontSize="13" FontFamily="Consolas" Foreground="#FF4D6D"/>
+                                        </StackPanel>
+                                        <StackPanel>
+                                            <TextBlock Text="LOWEST" FontSize="8" FontFamily="Consolas" Foreground="{DynamicResource AccentDim}"/>
+                                            <TextBlock x:Name="PulseLowText" Text="-- bpm" FontSize="13" FontFamily="Consolas" Foreground="{DynamicResource Brush_Info}"/>
+                                        </StackPanel>
+                                        <StackPanel>
+                                            <TextBlock Text="CONSISTENCY" FontSize="8" FontFamily="Consolas" Foreground="{DynamicResource AccentDim}"/>
+                                            <TextBlock x:Name="PulseConsistencyText" Text="--%" FontSize="13" FontFamily="Consolas" Foreground="{DynamicResource AccentBase}"/>
+                                        </StackPanel>
+                                    </UniformGrid>
+                                </Grid>
+                            </Border>
+                            <Border Grid.Column="4" Background="{DynamicResource AccentBgCard}"
+                                    BorderBrush="{DynamicResource AccentBgBorder2}" BorderThickness="1" CornerRadius="8"
+                                    Padding="12">
+                                <Grid>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="*"/>
+                                    </Grid.RowDefinitions>
+                                    <TextBlock Text="RECENT EVENTS" FontSize="9" FontFamily="Consolas" FontWeight="Bold"
+                                               Foreground="#FF4D6D" Margin="0,0,0,10"/>
+                                    <ItemsControl x:Name="PulseRecentEvents" Grid.Row="1">
                                         <ItemsControl.ItemTemplate>
                                             <DataTemplate>
-                                                <Grid Margin="0,2">
-                                                    <TextBlock Text="{Binding TimeStr}" FontSize="10" FontFamily="Consolas"
+                                                <Grid Margin="0,0,0,8">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="58"/>
+                                                        <ColumnDefinition Width="*"/>
+                                                        <ColumnDefinition Width="Auto"/>
+                                                    </Grid.ColumnDefinitions>
+                                                    <TextBlock Text="{Binding Time}" FontSize="9" FontFamily="Consolas"
                                                                Foreground="{DynamicResource AccentDim}"/>
-                                                    <TextBlock Text="{Binding BpmStr}" FontSize="10" FontFamily="Consolas"
-                                                               Foreground="#FF4D6D" HorizontalAlignment="Right"/>
+                                                    <TextBlock Grid.Column="1" Text="{Binding Text}" FontSize="10"
+                                                               Foreground="{DynamicResource AccentText}" TextWrapping="Wrap"/>
+                                                    <Ellipse Grid.Column="2" Width="5" Height="5" Fill="{Binding Brush}" Margin="8,6,0,0"/>
                                                 </Grid>
                                             </DataTemplate>
                                         </ItemsControl.ItemTemplate>
                                     </ItemsControl>
-                                </ScrollViewer>
+                                </Grid>
                             </Border>
+                            <StackPanel Grid.Column="6">
+                                <Border Background="{DynamicResource AccentBgCard}"
+                                        BorderBrush="{DynamicResource AccentBgBorder2}" BorderThickness="1" CornerRadius="8"
+                                        Padding="14" Margin="0,0,0,12">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel>
+                                            <TextBlock Text="PULSE" FontSize="9" FontFamily="Consolas" FontWeight="Bold" Foreground="#FF4D6D"/>
+                                            <StackPanel Orientation="Horizontal" Margin="0,12,0,6">
+                                                <TextBlock x:Name="PulseSideBpmText" Text="--" FontSize="34" FontWeight="Bold"
+                                                           FontFamily="Consolas" Foreground="#FF4D6D"/>
+                                                <TextBlock Text=" BPM" FontSize="11" FontFamily="Consolas"
+                                                           Foreground="{DynamicResource AccentText}" VerticalAlignment="Center" Margin="6,10,0,0"/>
+                                            </StackPanel>
+                                            <TextBlock x:Name="PulseSideStateText" Text="baseline · strain --"
+                                                       FontSize="9" FontFamily="Consolas" Foreground="{DynamicResource AccentDim}"/>
+                                        </StackPanel>
+                                        <TextBlock Grid.Column="1" Text="♥" FontSize="42" Foreground="#FF202A"
+                                                   VerticalAlignment="Center" Opacity="0.82">
+                                            <TextBlock.Effect>
+                                                <DropShadowEffect Color="#FF202A" BlurRadius="16" ShadowDepth="0" Opacity="0.55"/>
+                                            </TextBlock.Effect>
+                                        </TextBlock>
+                                    </Grid>
+                                </Border>
+                                <Border Background="{DynamicResource AccentBgCard}"
+                                        BorderBrush="{DynamicResource AccentBgBorder2}" BorderThickness="1" CornerRadius="8"
+                                        Padding="14" Margin="0,0,0,12">
+                                    <StackPanel>
+                                        <TextBlock Text="KOKONOE MOOD" FontSize="9" FontFamily="Consolas" FontWeight="Bold"
+                                                   Foreground="#FF4D6D" Margin="0,0,0,10"/>
+                                        <TextBlock x:Name="PulseMoodMainText" Text="CALM" FontSize="18" FontWeight="Bold"
+                                                   Foreground="{DynamicResource AccentTextLight}"/>
+                                        <TextBlock x:Name="PulseMoodDetailText" Text="annoyed -- · curiosity -- · trust --"
+                                                   FontSize="9" FontFamily="Consolas" Foreground="{DynamicResource AccentDim}"
+                                                   TextWrapping="Wrap" Margin="0,4,0,10"/>
+                                        <ProgressBar x:Name="PulseMoodBar" Height="4" Minimum="0" Maximum="100" Value="50"
+                                                     Foreground="#FF4D6D" Background="{DynamicResource AccentBgDarker}"/>
+                                    </StackPanel>
+                                </Border>
+                                <Border Background="{DynamicResource AccentBgCard}"
+                                        BorderBrush="{DynamicResource AccentBgBorder2}" BorderThickness="1" CornerRadius="8"
+                                        Padding="14">
+                                    <StackPanel>
+                                        <TextBlock Text="SYSTEM STATUS" FontSize="9" FontFamily="Consolas" FontWeight="Bold"
+                                                   Foreground="#FF4D6D" Margin="0,0,0,10"/>
+                                        <TextBlock x:Name="PulseSystemStatusText" Text="core online · memory synced · telemetry recording"
+                                                   FontSize="10" FontFamily="Consolas" Foreground="{DynamicResource AccentText}"
+                                                   TextWrapping="Wrap"/>
+                                    </StackPanel>
+                                </Border>
+                            </StackPanel>
                         </Grid>
                     </Grid>
 
@@ -2166,6 +2293,29 @@
                                             <Button Content="⊘ Clear" Style="{StaticResource BtnGhost}"
                                                     Padding="10,8" HorizontalAlignment="Right" Click="SandboxClear_Click"/>
                                         </Grid>
+                                    </StackPanel>
+                                </Border>
+                                <Border Background="{DynamicResource AccentBgCard}"
+                                        BorderBrush="{DynamicResource AccentBgBorder2}" BorderThickness="1" CornerRadius="8"
+                                        Padding="16,14" Margin="0,0,0,14">
+                                    <StackPanel>
+                                        <TextBlock Text="AGENT TASK BOARD" FontSize="9" FontFamily="Consolas"
+                                                   Foreground="{DynamicResource AccentBase}" FontWeight="Bold" Margin="0,0,0,8"/>
+                                        <TextBlock x:Name="AgentTaskStatusText" Text="idle"
+                                                   FontSize="10" Foreground="{DynamicResource AccentDim}" Margin="0,0,0,8"/>
+                                        <WrapPanel Margin="0,0,0,8">
+                                            <Button Content="Create task from prompt" Style="{StaticResource BtnPrimary}" Padding="12,7" Margin="0,0,6,0"
+                                                    Click="AgentCreateTask_Click"/>
+                                            <Button Content="Start runner" Style="{StaticResource BtnGhost}" Padding="12,7" Margin="0,0,6,0"
+                                                    Click="AgentStart_Click"/>
+                                            <Button Content="Stop runner" Style="{StaticResource BtnGhost}" Padding="12,7" Margin="0,0,6,0"
+                                                    Click="AgentStop_Click"/>
+                                            <Button Content="Refresh" Style="{StaticResource BtnGhost}" Padding="12,7"
+                                                    Click="AgentRefresh_Click"/>
+                                        </WrapPanel>
+                                        <TextBlock x:Name="AgentTaskBoardText" Text="No tasks."
+                                                   FontSize="11" FontFamily="Consolas" Foreground="{DynamicResource AccentText}"
+                                                   TextWrapping="Wrap"/>
                                     </StackPanel>
                                 </Border>
                                 <Border Background="{DynamicResource AccentBgCard}"
@@ -2315,6 +2465,22 @@
                                             <TextBlock x:Name="RightVaultSyncText" Text="sync --" FontSize="9" Foreground="{DynamicResource AccentText}" TextWrapping="Wrap"/>
                                         </StackPanel>
                                     </UniformGrid>
+                                    <Border Background="{DynamicResource AccentBgPanel}"
+                                            BorderBrush="{DynamicResource AccentBgBorder2}"
+                                            BorderThickness="1" CornerRadius="10"
+                                            Padding="9,7" Margin="0,0,0,8">
+                                        <StackPanel>
+                                            <TextBlock Text="// KOKONOE CONDITION" FontSize="8" FontFamily="Consolas"
+                                                       Foreground="{DynamicResource AccentDim}" Margin="0,0,0,4"/>
+                                            <TextBlock x:Name="RightKokoConditionText" Text="СТАБІЛЬНА"
+                                                       FontSize="13" FontWeight="Bold"
+                                                       Foreground="{DynamicResource AccentBase}" TextWrapping="Wrap"/>
+                                            <TextBlock x:Name="RightKokoConditionDetailText" Text="tone stable"
+                                                       FontSize="8" FontFamily="Consolas"
+                                                       Foreground="{DynamicResource AccentText}" TextWrapping="Wrap"
+                                                       Margin="0,3,0,0"/>
+                                        </StackPanel>
+                                    </Border>
                                     <TextBlock x:Name="RightAutonomyDetailText" Text="autonomy -"
                                                FontSize="9" Foreground="{DynamicResource Brush_8AC8A0}"
                                                TextWrapping="Wrap" Margin="0,0,0,6"/>
