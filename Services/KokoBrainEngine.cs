@@ -284,6 +284,7 @@ namespace KokonoeAssistant.Services
         private int _screenAwarenessInFlight;
         private int _vaultSyncInFlight;
         private DateTime _lastVaultFreshnessCheckAt = DateTime.MinValue;
+        private DateTime _lastAutonomousAgentTaskAt = DateTime.MinValue;
         private readonly object    _lock = new();
         private DateTime           _lastInAppSilenceMsgAt = DateTime.MinValue;
 
@@ -371,7 +372,11 @@ namespace KokonoeAssistant.Services
                 Log("ThinkAsync skipped — previous tick still in flight");
                 return;
             }
-            try { await SafeThinkAsync(); }
+            try
+            {
+                await SafeThinkAsync();
+                TryQueueAutonomousAgentCycle("think-timer");
+            }
             finally { Interlocked.Exchange(ref _thinkInFlight, 0); }
         }
 
@@ -382,8 +387,52 @@ namespace KokonoeAssistant.Services
                 Log("SpontaneousCheck skipped — previous tick still in flight");
                 return;
             }
-            try { await SafeSpontaneousCheckAsync(); }
+            try
+            {
+                await SafeSpontaneousCheckAsync();
+                TryQueueAutonomousAgentCycle("spontaneous-timer");
+            }
             finally { Interlocked.Exchange(ref _spontaneousInFlight, 0); }
+        }
+
+        private void TryQueueAutonomousAgentCycle(string source)
+        {
+            try
+            {
+                var now = DateTime.Now;
+                if (now - _lastAutonomousAgentTaskAt < TimeSpan.FromMinutes(20))
+                    return;
+
+                string? objective = null;
+                lock (_lock)
+                {
+                    objective = _state.PendingThoughts
+                        .LastOrDefault(t => !string.IsNullOrWhiteSpace(t) && t.Length > 18);
+                    if (string.IsNullOrWhiteSpace(objective) && _state.LastAutonomyShouldAct && !string.IsNullOrWhiteSpace(_state.LastAutonomyReason))
+                        objective = _state.LastAutonomyReason;
+                }
+
+                if (string.IsNullOrWhiteSpace(objective))
+                    return;
+
+                var task = ServiceContainer.AgentTasks.AddTask($"APEO/{source}: {objective}", priority: 3);
+                ServiceContainer.AgentTasks.Start();
+                _lastAutonomousAgentTaskAt = now;
+
+                lock (_lock)
+                {
+                    _state.LastAutonomyDecision = $"queued_agent_task:{task.Id}";
+                    _state.LastAutonomyDecisionAt = now;
+                    _state.AutonomyDecisionLog.Add($"[{now:HH:mm}] {source} queued agent task {task.Id}");
+                    if (_state.AutonomyDecisionLog.Count > 80)
+                        _state.AutonomyDecisionLog.RemoveRange(0, _state.AutonomyDecisionLog.Count - 80);
+                    SaveState();
+                }
+            }
+            catch (Exception ex)
+            {
+                Log($"TryQueueAutonomousAgentCycle: {ex.Message}");
+            }
         }
 
         private async Task GuardedScreenAwarenessAsync()

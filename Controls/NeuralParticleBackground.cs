@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Windows;
 using System.Windows.Media;
+using System.Windows.Threading;
 using MediaBrush = System.Windows.Media.Brush;
 using MediaColor = System.Windows.Media.Color;
 using MediaColorConverter = System.Windows.Media.ColorConverter;
@@ -15,13 +16,16 @@ namespace KokonoeAssistant.Controls
     public sealed class NeuralParticleBackground : FrameworkElement
     {
         private const double LinkDistance = 130.0;
-        private const double TargetAreaPerParticle = 14000.0;
-        private const int MinParticles = 42;
-        private const int MaxParticles = 190;
+        private const double TargetAreaPerParticle = 32000.0;
+        private const int MinParticles = 18;
+        private const int MaxParticles = 72;
+        private static readonly TimeSpan FrameInterval = TimeSpan.FromMilliseconds(95);
 
         private readonly List<Particle> _particles = new();
         private readonly Random _random = new(1309);
-        private TimeSpan _lastFrame;
+        private readonly DispatcherTimer _timer;
+        private DateTime _lastFrameUtc;
+        private DateTime _lastResizeUtc;
         private WSize _lastSize;
 
         private readonly MediaBrush _backgroundBrush;
@@ -38,23 +42,35 @@ namespace KokonoeAssistant.Controls
 
             _backgroundBrush = BuildBackgroundBrush();
             _vignetteBrush = BuildVignetteBrush();
-            _linePen = new MediaPen(new SolidColorBrush(MediaColor.FromArgb(31, 90, 160, 110)), 0.7);
+            _linePen = new MediaPen(new SolidColorBrush(MediaColor.FromArgb(19, 82, 132, 92)), 0.55);
             _linePen.Freeze();
-            _particleBrush = new SolidColorBrush(MediaColor.FromArgb(115, 150, 210, 90));
+            _particleBrush = new SolidColorBrush(MediaColor.FromArgb(84, 126, 168, 82));
             _particleBrush.Freeze();
-            _particleGlowBrush = new SolidColorBrush(MediaColor.FromArgb(20, 160, 255, 100));
+            _particleGlowBrush = new SolidColorBrush(MediaColor.FromArgb(10, 130, 210, 86));
             _particleGlowBrush.Freeze();
+            _timer = new DispatcherTimer(DispatcherPriority.Background)
+            {
+                Interval = FrameInterval
+            };
+            _timer.Tick += OnTimerTick;
 
             Loaded += (_, _) =>
             {
-                _lastFrame = TimeSpan.Zero;
-                CompositionTarget.Rendering += OnRendering;
+                _lastFrameUtc = DateTime.UtcNow;
                 EnsureParticleField(new WSize(ActualWidth, ActualHeight));
+                if (IsAnimated)
+                    _timer.Start();
             };
 
-            Unloaded += (_, _) => CompositionTarget.Rendering -= OnRendering;
-            SizeChanged += (_, e) => EnsureParticleField(e.NewSize);
+            Unloaded += (_, _) => _timer.Stop();
+            SizeChanged += (_, e) =>
+            {
+                _lastResizeUtc = DateTime.UtcNow;
+                EnsureParticleField(e.NewSize);
+            };
         }
+
+        public bool IsAnimated { get; set; } = false;
 
         protected override void OnRender(DrawingContext dc)
         {
@@ -67,17 +83,14 @@ namespace KokonoeAssistant.Controls
             dc.DrawRectangle(_vignetteBrush, null, bounds);
         }
 
-        private void OnRendering(object? sender, EventArgs e)
+        private void OnTimerTick(object? sender, EventArgs e)
         {
-            if (e is not RenderingEventArgs args) return;
-            if (_lastFrame == TimeSpan.Zero)
-            {
-                _lastFrame = args.RenderingTime;
+            if ((DateTime.UtcNow - _lastResizeUtc).TotalMilliseconds < 220)
                 return;
-            }
 
-            var delta = Math.Clamp((args.RenderingTime - _lastFrame).TotalSeconds, 0.0, 0.05);
-            _lastFrame = args.RenderingTime;
+            var now = DateTime.UtcNow;
+            var delta = Math.Clamp((now - _lastFrameUtc).TotalSeconds, 0.0, 0.12);
+            _lastFrameUtc = now;
             UpdateParticles(delta);
             InvalidateVisual();
         }
@@ -111,13 +124,13 @@ namespace KokonoeAssistant.Controls
 
         private Particle CreateParticle(WSize size)
         {
-            var speed = 2.0 + _random.NextDouble() * 7.0;
+            var speed = 0.55 + _random.NextDouble() * 2.2;
             var angle = _random.NextDouble() * Math.PI * 2.0;
             return new Particle
             {
                 Position = new WPoint(_random.NextDouble() * size.Width, _random.NextDouble() * size.Height),
                 Velocity = new WVector(Math.Cos(angle) * speed, Math.Sin(angle) * speed),
-                Radius = 1.0 + _random.NextDouble() * 1.8,
+                Radius = 0.9 + _random.NextDouble() * 1.35,
                 DriftPhase = _random.NextDouble() * Math.PI * 2.0
             };
         }
@@ -131,11 +144,11 @@ namespace KokonoeAssistant.Controls
             for (var i = 0; i < _particles.Count; i++)
             {
                 var particle = _particles[i];
-                particle.DriftPhase += delta * 0.18;
+                particle.DriftPhase += delta * 0.06;
 
                 var drift = new WVector(
-                    Math.Cos(particle.DriftPhase) * 0.45,
-                    Math.Sin(particle.DriftPhase * 0.83) * 0.45);
+                    Math.Cos(particle.DriftPhase) * 0.18,
+                    Math.Sin(particle.DriftPhase * 0.83) * 0.18);
 
                 var next = particle.Position + ((particle.Velocity + drift) * delta);
 
@@ -163,7 +176,7 @@ namespace KokonoeAssistant.Controls
                     if (distanceSq > LinkDistance * LinkDistance) continue;
 
                     var distance = Math.Sqrt(distanceSq);
-                    var opacity = Math.Pow(1.0 - distance / LinkDistance, 1.8) * 0.55;
+                    var opacity = Math.Pow(1.0 - distance / LinkDistance, 1.8) * 0.34;
                     if (opacity <= 0.01) continue;
 
                     dc.PushOpacity(opacity);
@@ -177,8 +190,8 @@ namespace KokonoeAssistant.Controls
         {
             foreach (var particle in _particles)
             {
-                dc.PushOpacity(0.65);
-                dc.DrawEllipse(_particleGlowBrush, null, particle.Position, particle.Radius * 4.8, particle.Radius * 4.8);
+                dc.PushOpacity(0.42);
+                dc.DrawEllipse(_particleGlowBrush, null, particle.Position, particle.Radius * 3.4, particle.Radius * 3.4);
                 dc.Pop();
 
                 dc.DrawEllipse(_particleBrush, null, particle.Position, particle.Radius, particle.Radius);

@@ -21,8 +21,12 @@ namespace KokonoeAssistant.Services
     public enum KokoAgentStepKind
     {
         Analyze,
+        Plan,
         Vault,
+        Vision,
+        Sandbox,
         Implement,
+        Respond,
         Verify,
         Report
     }
@@ -51,11 +55,23 @@ namespace KokonoeAssistant.Services
         public List<KokoAgentStep> Steps { get; set; } = new();
     }
 
+    public sealed class KokoAgentActivitySnapshot
+    {
+        public DateTime UpdatedAt { get; set; } = DateTime.Now;
+        public string Phase { get; set; } = "idle";
+        public string Tool { get; set; } = "none";
+        public string Focus { get; set; } = "No active task.";
+        public string Thought { get; set; } = "Waiting. Suspiciously peaceful.";
+        public string TaskId { get; set; } = "";
+        public string StepId { get; set; } = "";
+    }
+
     public sealed class KokoAgentTaskSnapshot
     {
         public DateTime TakenAt { get; set; } = DateTime.Now;
         public int MaxParallel { get; set; }
         public int RunningSteps { get; set; }
+        public KokoAgentActivitySnapshot Activity { get; set; } = new();
         public List<KokoAgentTask> Tasks { get; set; } = new();
     }
 
@@ -65,7 +81,9 @@ namespace KokonoeAssistant.Services
         private readonly string _path;
         private readonly LlmService? _llm;
         private readonly ObsidianMcpService? _obsidian;
+        private readonly KokoSandboxExecutor _sandbox;
         private readonly List<KokoAgentTask> _tasks = new();
+        private KokoAgentActivitySnapshot _activity = new();
         private CancellationTokenSource? _runnerCts;
         private int _runningSteps;
 
@@ -75,10 +93,12 @@ namespace KokonoeAssistant.Services
             _path = Path.Combine(dataDir, "agent-tasks.json");
             _llm = llm;
             _obsidian = obsidian;
+            _sandbox = new KokoSandboxExecutor(Path.Combine(dataDir, "agent-sandbox"));
             Load();
         }
 
         public int MaxParallel { get; set; } = 2;
+        public event Action<KokoAgentActivitySnapshot>? ActivityChanged;
 
         public KokoAgentTask AddTask(string objective, int priority = 5)
         {
@@ -98,6 +118,7 @@ namespace KokonoeAssistant.Services
                 SaveLocked();
             }
 
+            EmitActivity("plan", "KokoAgentTaskService", task.Objective, $"Created plan with {task.Steps.Count} steps.", task.Id);
             return Clone(task);
         }
 
@@ -109,6 +130,7 @@ namespace KokonoeAssistant.Services
                 {
                     MaxParallel = MaxParallel,
                     RunningSteps = _runningSteps,
+                    Activity = CloneActivity(_activity),
                     Tasks = _tasks.Select(Clone).ToList()
                 };
             }
@@ -120,6 +142,7 @@ namespace KokonoeAssistant.Services
             {
                 if (_runnerCts != null) return;
                 _runnerCts = new CancellationTokenSource();
+                EmitActivity("observe", "runner", "Agent runner active.", "Loop online: analyze, plan, execute, observe.");
                 _ = Task.Run(() => RunnerLoopAsync(_runnerCts.Token));
             }
         }
@@ -137,6 +160,7 @@ namespace KokonoeAssistant.Services
                 }
                 foreach (var step in _tasks.SelectMany(t => t.Steps).Where(s => s.Status == KokoAgentTaskStatus.Running))
                     step.Status = KokoAgentTaskStatus.Pending;
+                EmitActivity("idle", "runner", "Runner stopped.", "Paused. No autonomous steps are executing.");
                 SaveLocked();
             }
         }
@@ -151,6 +175,7 @@ namespace KokonoeAssistant.Services
                 task.UpdatedAt = DateTime.Now;
                 foreach (var step in task.Steps.Where(s => s.Status is KokoAgentTaskStatus.Pending or KokoAgentTaskStatus.Running))
                     step.Status = KokoAgentTaskStatus.Canceled;
+                EmitActivity("observe", "runner", task.Objective, "Task canceled.", task.Id);
                 SaveLocked();
                 return true;
             }
@@ -158,21 +183,8 @@ namespace KokonoeAssistant.Services
 
         public static IReadOnlyList<KokoAgentStep> BuildPlan(string objective)
         {
-            var text = objective.ToLowerInvariant();
-            var steps = new List<KokoAgentStep>
-            {
-                Step(1, "Understand objective and constraints", KokoAgentStepKind.Analyze)
-            };
-
-            if (text.Contains("obsidian") || text.Contains("vault") || text.Contains("пам") || text.Contains("нотат"))
-                steps.Add(Step(steps.Count + 1, "Inspect vault and related memory notes", KokoAgentStepKind.Vault));
-
-            if (text.Contains("код") || text.Contains("fix") || text.Contains("ui") || text.Contains("gui") || text.Contains("зроб") || text.Contains("реаліз"))
-                steps.Add(Step(steps.Count + 1, "Implement the required change", KokoAgentStepKind.Implement));
-
-            steps.Add(Step(steps.Count + 1, "Verify result and detect obvious regressions", KokoAgentStepKind.Verify));
-            steps.Add(Step(steps.Count + 1, "Prepare concise handoff report", KokoAgentStepKind.Report));
-            return steps;
+            var planned = KokoResponsePlannerEngine.BuildAgentStepsForObjective(objective);
+            return planned.Select(CloneStep).ToList();
         }
 
         public string RenderBoard()
@@ -180,6 +192,7 @@ namespace KokonoeAssistant.Services
             var snap = GetSnapshot();
             var sb = new StringBuilder();
             sb.AppendLine($"Agent Board | tasks {snap.Tasks.Count} | running {snap.RunningSteps}/{snap.MaxParallel}");
+            sb.AppendLine($"Focus: {snap.Activity.Phase} via {snap.Activity.Tool} :: {snap.Activity.Thought}");
             if (snap.Tasks.Count == 0)
             {
                 sb.AppendLine("No tasks. Peaceful. Suspicious.");
@@ -238,7 +251,9 @@ namespace KokonoeAssistant.Services
                          .OrderByDescending(t => t.Priority)
                          .ThenBy(t => t.CreatedAt))
             {
-                var step = task.Steps.OrderBy(s => s.Order).FirstOrDefault(s => s.Status == KokoAgentTaskStatus.Pending);
+                var step = task.Steps.OrderBy(s => s.Order).FirstOrDefault(s =>
+                    s.Status == KokoAgentTaskStatus.Pending &&
+                    task.Steps.Where(prev => prev.Order < s.Order).All(prev => prev.Status == KokoAgentTaskStatus.Completed));
                 if (step != null) return (task, step);
             }
             return (null, null);
@@ -257,6 +272,7 @@ namespace KokonoeAssistant.Services
                 }
 
                 if (task == null || step == null) return;
+                EmitActivity("execute", ToolNameFor(step.Kind), task.Objective, $"Running step {step.Order}: {step.Title}", task.Id, step.Id);
                 step.Result = await ExecuteStepCoreAsync(task, step, ct).ConfigureAwait(false);
 
                 lock (_lock)
@@ -268,13 +284,16 @@ namespace KokonoeAssistant.Services
                         task.Status = KokoAgentTaskStatus.Completed;
                     SaveLocked();
                 }
+                EmitActivity("observe", ToolNameFor(step.Kind), step.Result, $"Step {step.Order} completed.", task.Id, step.Id);
             }
             catch (OperationCanceledException)
             {
+                EmitActivity("observe", "runner", "Canceled by user or shutdown.", "Step canceled.");
                 MarkStepFinished(taskId, stepId, KokoAgentTaskStatus.Canceled, "Canceled.");
             }
             catch (Exception ex)
             {
+                EmitActivity("observe", "error", ex.Message, "Step failed. Not ideal. Obviously.");
                 MarkStepFinished(taskId, stepId, KokoAgentTaskStatus.Failed, ex.Message);
             }
             finally
@@ -285,12 +304,22 @@ namespace KokonoeAssistant.Services
 
         private async Task<string> ExecuteStepCoreAsync(KokoAgentTask task, KokoAgentStep step, CancellationToken ct)
         {
+            if (step.Kind == KokoAgentStepKind.Sandbox)
+            {
+                EmitActivity("execute", "PythonSandbox", task.Objective, "Running safe sandbox health probe.", task.Id, step.Id);
+                return await _sandbox.ExecutePythonAsync("print('sandbox ready')", ct: ct).ConfigureAwait(false);
+            }
+
             if (_llm == null)
                 return $"Simulated {step.Kind}: {step.Title}";
 
             var vaultHint = step.Kind == KokoAgentStepKind.Vault && _obsidian != null
                 ? "\nVault tools are allowed. Read before writing."
                 : "";
+            var toolCatalog = step.Kind is KokoAgentStepKind.Plan or KokoAgentStepKind.Implement or KokoAgentStepKind.Vault
+                ? "\nAvailable tools:\n" + _llm.DescribeAvailableTools()
+                : "";
+            EmitActivity("analyze", ToolNameFor(step.Kind), task.Objective, $"Asking model for {step.Kind} result.", task.Id, step.Id);
             var prompt = $"""
             You are Kokonoe's local task executor.
             Objective: {task.Objective}
@@ -298,8 +327,13 @@ namespace KokonoeAssistant.Services
             Step kind: {step.Kind}
             Return a concise result, risks, and next action. Do not claim external work unless actually done.
             {vaultHint}
+            {toolCatalog}
             """;
-            var result = await _llm.SendSystemQueryAsync(prompt, useTools: step.Kind == KokoAgentStepKind.Vault, ct).ConfigureAwait(false);
+            var result = await _llm.SendSystemQueryAsync(
+                prompt,
+                useTools: step.Kind == KokoAgentStepKind.Vault,
+                ct,
+                agentId: AgentIdFor(step.Kind)).ConfigureAwait(false);
             return string.IsNullOrWhiteSpace(result) ? "(empty result)" : result.Trim();
         }
 
@@ -326,6 +360,19 @@ namespace KokonoeAssistant.Services
             Kind = kind
         };
 
+        private static KokoAgentStep CloneStep(KokoAgentStep step) => new()
+        {
+            Id = step.Id,
+            Order = step.Order,
+            Title = step.Title,
+            Kind = step.Kind,
+            Status = step.Status,
+            Result = step.Result,
+            Error = step.Error,
+            StartedAt = step.StartedAt,
+            FinishedAt = step.FinishedAt
+        };
+
         private void Load()
         {
             try
@@ -344,9 +391,69 @@ namespace KokonoeAssistant.Services
             File.WriteAllText(_path, JsonConvert.SerializeObject(_tasks, Formatting.Indented));
         }
 
+        private void EmitActivity(string phase, string tool, string focus, string thought, string taskId = "", string stepId = "")
+        {
+            KokoAgentActivitySnapshot snapshot;
+            lock (_lock)
+            {
+                _activity = new KokoAgentActivitySnapshot
+                {
+                    UpdatedAt = DateTime.Now,
+                    Phase = phase,
+                    Tool = tool,
+                    Focus = Trim(focus, 420),
+                    Thought = Trim(thought, 220),
+                    TaskId = taskId,
+                    StepId = stepId
+                };
+                snapshot = CloneActivity(_activity);
+            }
+
+            try { ActivityChanged?.Invoke(snapshot); } catch { }
+        }
+
+        private static string ToolNameFor(KokoAgentStepKind kind) => kind switch
+        {
+            KokoAgentStepKind.Analyze => "KokoBrainEngine",
+            KokoAgentStepKind.Plan => "KokoResponsePlanner",
+            KokoAgentStepKind.Vault => "ObsidianMcpService",
+            KokoAgentStepKind.Vision => "VisionModel",
+            KokoAgentStepKind.Sandbox => "PythonSandbox",
+            KokoAgentStepKind.Implement => "LlmService",
+            KokoAgentStepKind.Respond => "LlmService",
+            KokoAgentStepKind.Verify => "Verifier",
+            KokoAgentStepKind.Report => "Reporter",
+            _ => "unknown"
+        };
+
+        private static string AgentIdFor(KokoAgentStepKind kind) => kind switch
+        {
+            KokoAgentStepKind.Vault => "obsidian",
+            KokoAgentStepKind.Sandbox => "coder",
+            KokoAgentStepKind.Implement => "coder",
+            KokoAgentStepKind.Verify => "system",
+            KokoAgentStepKind.Plan => "research",
+            _ => "system"
+        };
+
         private static KokoAgentTask Clone(KokoAgentTask task)
         {
             return JsonConvert.DeserializeObject<KokoAgentTask>(JsonConvert.SerializeObject(task)) ?? task;
+        }
+
+        private static KokoAgentActivitySnapshot CloneActivity(KokoAgentActivitySnapshot activity)
+        {
+            return JsonConvert.DeserializeObject<KokoAgentActivitySnapshot>(JsonConvert.SerializeObject(activity)) ?? activity;
+        }
+
+        private static bool ContainsAny(string text, params string[] needles)
+            => needles.Any(n => text.Contains(n, StringComparison.OrdinalIgnoreCase));
+
+        private static string Trim(string text, int max)
+        {
+            if (string.IsNullOrWhiteSpace(text)) return "";
+            text = text.Replace("\r", " ").Replace("\n", " ").Trim();
+            return text.Length <= max ? text : text[..max] + "...";
         }
     }
 }

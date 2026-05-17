@@ -16,6 +16,17 @@ namespace KokonoeAssistant
         public DateTime? CooldownUntil { get; set; }
     }
 
+    public class KokoAgentLlmProfile
+    {
+        public string AgentId { get; set; } = "";
+        public bool Enabled { get; set; } = true;
+        public string LlmProvider { get; set; } = "";
+        public string Url { get; set; } = "";
+        public string Model { get; set; } = "";
+        public string OllamaApiKey { get; set; } = "";
+        public double? Temperature { get; set; }
+    }
+
     public class AppSettings
     {
         public const string DefaultOllamaCloudModel = "gemma4:31b-cloud";
@@ -51,6 +62,10 @@ namespace KokonoeAssistant
         public double OllamaPoolRotateAt      { get; set; } = 0.9;
         public int    OllamaPoolCooldownMins  { get; set; } = 60;
         public int    OllamaActiveKeyIndex    { get; set; } = 0;
+
+        // Optional per-agent overrides. Keys are logical agent ids:
+        // obsidian, system, research, coder, vision, chat.
+        public Dictionary<string, KokoAgentLlmProfile> AgentLlmProfiles { get; set; } = new();
 
         // OpenAI (for Whisper STT)
         public string OpenAiApiKey { get; set; } = "";

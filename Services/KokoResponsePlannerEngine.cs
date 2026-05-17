@@ -72,6 +72,50 @@ namespace KokonoeAssistant.Services
             return sb.ToString();
         }
 
+        public IReadOnlyList<KokoAgentStep> BuildAgentSteps(KokoResponsePlanFrame frame)
+        {
+            var steps = new List<KokoAgentStep>
+            {
+                AgentStep(1, "Analyze objective, current context, risk, and constraints", KokoAgentStepKind.Analyze),
+                AgentStep(2, "Create executable APEO plan and select specialist agents/tools", KokoAgentStepKind.Plan)
+            };
+
+            if (frame.RequiresVaultRead || frame.Capability == "vault_memory")
+                steps.Add(AgentStep(steps.Count + 1, "Inspect relevant Obsidian vault and memory notes", KokoAgentStepKind.Vault));
+
+            if (frame.RequiresToolUse && frame.Capability == "codebase")
+                steps.Add(AgentStep(steps.Count + 1, "Prepare implementation route and affected files", KokoAgentStepKind.Implement));
+
+            if (frame.RequiresToolUse || frame.Capability == "codebase")
+                steps.Add(AgentStep(steps.Count + 1, "Run safe sandbox or tool probe when computation is needed", KokoAgentStepKind.Sandbox));
+
+            steps.Add(AgentStep(steps.Count + 1, "Execute the selected action or generate the response", KokoAgentStepKind.Respond));
+            steps.Add(AgentStep(steps.Count + 1, "Observe result, detect failures, and update task state", KokoAgentStepKind.Verify));
+            steps.Add(AgentStep(steps.Count + 1, "Report concise outcome to the UI", KokoAgentStepKind.Report));
+            return steps;
+        }
+
+        public static IReadOnlyList<KokoAgentStep> BuildAgentStepsForObjective(string objective)
+        {
+            var lower = (objective ?? "").ToLowerInvariant();
+            var pseudo = new KokoResponsePlanFrame
+            {
+                Intent = ClassifyIntent(lower),
+                Capability = ClassifyCapability(lower)
+            };
+            pseudo.RequiresVaultRead = NeedsVaultRead(lower, pseudo.Intent);
+            pseudo.RequiresToolUse = NeedsToolUse(lower, pseudo.Capability, pseudo.RequiresVaultRead);
+            pseudo.RequiresAction = IsActionIntent(pseudo.Intent);
+            return new KokoResponsePlannerEngine().BuildAgentSteps(pseudo);
+        }
+
+        private static KokoAgentStep AgentStep(int order, string title, KokoAgentStepKind kind) => new()
+        {
+            Order = order,
+            Title = title,
+            Kind = kind
+        };
+
         public static string BuildRepairRules(KokoResponsePlanFrame? frame)
         {
             if (frame == null) return "";

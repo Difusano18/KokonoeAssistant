@@ -26,7 +26,7 @@
         <!-- ═══ BORDERS / LINES ════════════════════════════════════ -->
         <SolidColorBrush x:Key="AccentBgBorder"    Color="#FFFFFF0A"/>  <!-- line-1 -->
         <SolidColorBrush x:Key="AccentBgBorder2"   Color="#FFFFFF14"/>  <!-- line-2 rgba(255,255,255,0.08) -->
-        <SolidColorBrush x:Key="AccentAsstBorder"  Color="#FFC3462E"/>  <!-- line-3 rgba(255,195,70,0.18) -->
+        <SolidColorBrush x:Key="AccentAsstBorder"  Color="#6D5DFB66"/>  <!-- line-3 kira violet -->
         <SolidColorBrush x:Key="AccentAmberLine"   Color="#FFB02066"/>  <!-- line-amber rgba(255,176,32,0.4) -->
 
         <!-- ═══ AMBER ACCENT ════════════════════════════════════════ -->
@@ -34,17 +34,17 @@
         <Color  x:Key="C_AmberHi">#FFC94A</Color>
         <Color  x:Key="C_AmberLo">#D18A00</Color>
 
-        <SolidColorBrush x:Key="AccentBase"        Color="#FFB020"/>
-        <Color           x:Key="AccentBaseColor"    >#FFB020</Color>
-        <SolidColorBrush x:Key="AccentPrimary"     Color="#FFC94A"/>
-        <SolidColorBrush x:Key="AccentDark"        Color="#D18A00"/>
-        <SolidColorBrush x:Key="AccentPale"        Color="#FFE199"/>
-        <SolidColorBrush x:Key="AccentText"        Color="#C8C4B6"/>
-        <SolidColorBrush x:Key="AccentTextLight"   Color="#F3F0E6"/>
-        <SolidColorBrush x:Key="AccentVeryLight"   Color="#FFF5E0"/>
-        <SolidColorBrush x:Key="AccentMuted"       Color="#8A8678"/>
-        <SolidColorBrush x:Key="AccentDim"         Color="#585548"/>
-        <SolidColorBrush x:Key="AccentNavBg"       Color="#FFB0201F"/> <!-- amber-soft 0x1F=12% -->
+        <SolidColorBrush x:Key="AccentBase"        Color="#8B5CF6"/>
+        <Color           x:Key="AccentBaseColor"    >#8B5CF6</Color>
+        <SolidColorBrush x:Key="AccentPrimary"     Color="#A78BFA"/>
+        <SolidColorBrush x:Key="AccentDark"        Color="#6D5DFB"/>
+        <SolidColorBrush x:Key="AccentPale"        Color="#C4B5FD"/>
+        <SolidColorBrush x:Key="AccentText"        Color="#C9C4DD"/>
+        <SolidColorBrush x:Key="AccentTextLight"   Color="#F2EEFF"/>
+        <SolidColorBrush x:Key="AccentVeryLight"   Color="#F7F2FF"/>
+        <SolidColorBrush x:Key="AccentMuted"       Color="#8E88A8"/>
+        <SolidColorBrush x:Key="AccentDim"         Color="#605A75"/>
+        <SolidColorBrush x:Key="AccentNavBg"       Color="#8B5CF61F"/> <!-- violet-soft -->
 
         <!-- ═══ STATUS COLORS ═══════════════════════════════════════ -->
         <SolidColorBrush x:Key="Brush_Ok"          Color="#7FD49A"/>
@@ -60,7 +60,7 @@
         <SolidColorBrush x:Key="Brush_163025"      Color="#FFB02040"/>
         <SolidColorBrush x:Key="Brush_142018"      Color="#1B212D"/>
         <SolidColorBrush x:Key="Brush_2A4030"      Color="#3A382F"/>
-        <SolidColorBrush x:Key="Brush_071209"      Color="#0F131B"/>
+        <SolidColorBrush x:Key="Brush_071209"      Color="#10111D"/>
         <SolidColorBrush x:Key="Brush_0A1A0D"      Color="#141923"/>
         <SolidColorBrush x:Key="Brush_08180C"      Color="#141923"/>
         <SolidColorBrush x:Key="Brush_071008"      Color="#07090D"/>
@@ -74,7 +74,7 @@
         <SolidColorBrush x:Key="AccentBgBorder1"   Color="#FFFFFF0A"/>
         <SolidColorBrush x:Key="Brush_3A2020"      Color="#8A8678"/>
         <SolidColorBrush x:Key="Brush_102818"      Color="#FFB0201F"/>
-        <SolidColorBrush x:Key="Brush_050D07"      Color="#0B0E14"/>
+        <SolidColorBrush x:Key="Brush_050D07"      Color="#090A13"/>
         <SolidColorBrush x:Key="Brush_2A6040"      Color="#8A8678"/>
 
         <!-- ═══ SCROLLBAR ══════════════════════════════════════════ -->

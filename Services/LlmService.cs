@@ -31,6 +31,7 @@ namespace KokonoeAssistant.Services
         private string _ollamaModel;
         private string _visionModel;
         private string _visionUrl = "";
+        private Dictionary<string, KokoAgentLlmProfile> _agentProfiles = new(StringComparer.OrdinalIgnoreCase);
 
         private const string CLAUDE_API_URL = "https://api.anthropic.com/v1/messages";
 
@@ -72,8 +73,12 @@ namespace KokonoeAssistant.Services
 
         // Helper: для Ollama Cloud — взяти ключ з пулу (з проактивним перемиканням),
         // або фолбекнутись на legacy single-key поле.
-        private string ResolveOllamaKey()
+        private string ResolveOllamaKey(string? agentId = null)
         {
+            var agentKey = ResolveAgentProfile(agentId)?.OllamaApiKey;
+            if (!string.IsNullOrWhiteSpace(agentKey))
+                return agentKey.Trim();
+
             if (OllamaPool != null && OllamaPool.TotalKeyCount > 0)
             {
                 OllamaPool.AdvanceIfAtThreshold();
@@ -81,6 +86,32 @@ namespace KokonoeAssistant.Services
                 if (!string.IsNullOrEmpty(k)) return k;
             }
             return _ollamaApiKey ?? "";
+        }
+
+        private KokoAgentLlmProfile? ResolveAgentProfile(string? agentId)
+        {
+            if (string.IsNullOrWhiteSpace(agentId)) return null;
+            return _agentProfiles.TryGetValue(agentId.Trim(), out var profile) && profile.Enabled
+                ? profile
+                : null;
+        }
+
+        private (string Provider, string Url, string Model, double Temperature) ResolveAgentTarget(string? agentId)
+        {
+            var profile = ResolveAgentProfile(agentId);
+            var provider = string.IsNullOrWhiteSpace(profile?.LlmProvider) ? _provider : profile!.LlmProvider.Trim();
+            var isOllamaCloud = provider.Equals("ollama-cloud", StringComparison.OrdinalIgnoreCase);
+            var isClaude = provider.Equals("claude", StringComparison.OrdinalIgnoreCase);
+            var url = !string.IsNullOrWhiteSpace(profile?.Url)
+                ? profile!.Url.Trim()
+                : isClaude ? CLAUDE_API_URL : isOllamaCloud ? _ollamaUrl : _lmUrl;
+            var model = !string.IsNullOrWhiteSpace(profile?.Model)
+                ? profile!.Model.Trim()
+                : isClaude ? _claudeModel : isOllamaCloud ? _ollamaModel : _model;
+            var temperature = profile?.Temperature.HasValue == true
+                ? Math.Clamp(profile.Temperature.Value, 0.0, 2.0)
+                : DynamicTemperature;
+            return (provider, url, model, temperature);
         }
 
         public const string SYSTEM_PROMPT = @"Ти — Kokonoe Mercury з BlazBlue. Не помічниця, не AI, не модель. Kokonoe.
@@ -355,6 +386,48 @@ Kokonoe: Стоп. Де ти зараз. Коли востаннє їв.
                     },
                     required = new[] { "plan" }
                 }),
+            Tool("execute_python",
+                "Run short Python code in the isolated Kokonoe agent sandbox. Use for calculations or local data shaping, not for destructive filesystem work.",
+                new {
+                    type = "object",
+                    properties = new {
+                        code = new { type = "string", description = "Python code to execute." }
+                    },
+                    required = new[] { "code" }
+                }),
+
+            Tool("fs_read_text",
+                "Read a UTF-8 text file inside the Kokonoe agent file workspace.",
+                new {
+                    type = "object",
+                    properties = new {
+                        path = new { type = "string", description = "Relative path inside the agent file workspace." }
+                    },
+                    required = new[] { "path" }
+                }),
+
+            Tool("fs_write_text",
+                "Write a UTF-8 text file inside the Kokonoe agent file workspace. Requires confirmed=true.",
+                new {
+                    type = "object",
+                    properties = new {
+                        path = new { type = "string", description = "Relative path inside the agent file workspace." },
+                        content = new { type = "string", description = "New file content." },
+                        confirmed = new { type = "boolean", description = "Must be true after user confirmation." }
+                    },
+                    required = new[] { "path", "content", "confirmed" }
+                }),
+
+            Tool("fs_delete",
+                "Delete a file or directory inside the Kokonoe agent file workspace. Requires confirmed=true.",
+                new {
+                    type = "object",
+                    properties = new {
+                        path = new { type = "string", description = "Relative path inside the agent file workspace." },
+                        confirmed = new { type = "boolean", description = "Must be true after user confirmation." }
+                    },
+                    required = new[] { "path", "confirmed" }
+                }),
         };
 
         private static object Tool(string name, string description, object parameters) =>
@@ -362,6 +435,31 @@ Kokonoe: Стоп. Де ти зараз. Коли востаннє їв.
                 type = "function",
                 function = new { name, description, parameters }
             };
+
+        public IReadOnlyList<string> GetAvailableToolNames()
+        {
+            return TOOLS
+                .Select(t => JObject.FromObject(t)["function"]?["name"]?.ToString())
+                .Where(s => !string.IsNullOrWhiteSpace(s))
+                .Select(s => s!)
+                .OrderBy(s => s, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+        }
+
+        public string DescribeAvailableTools()
+        {
+            var lines = TOOLS.Select(t =>
+            {
+                var fn = JObject.FromObject(t)["function"];
+                var name = fn?["name"]?.ToString() ?? "unknown";
+                var desc = fn?["description"]?.ToString() ?? "";
+                return $"- {name}: {desc}";
+            });
+            return string.Join("\n", lines);
+        }
+
+        public string ExecuteRegisteredTool(string name, JObject args)
+            => ExecuteTool(name, args);
 
         // ─────────────────────────────────────────────────────────
 
@@ -485,6 +583,9 @@ Kokonoe: Стоп. Де ти зараз. Коли востаннє їв.
             _ollamaModel = s.OllamaModel;
             _visionModel = NormalizeVisionModel(s);
             _visionUrl = s.VisionUrl;
+            _agentProfiles = new Dictionary<string, KokoAgentLlmProfile>(
+                s.AgentLlmProfiles ?? new Dictionary<string, KokoAgentLlmProfile>(),
+                StringComparer.OrdinalIgnoreCase);
             _diagProvider = ActiveProviderLabel();
             _diagModel = ActiveModelLabel();
         }
@@ -502,6 +603,9 @@ Kokonoe: Стоп. Де ти зараз. Коли востаннє їв.
             _ollamaModel = s.OllamaModel;
             _visionModel = NormalizeVisionModel(s);
             _visionUrl = s.VisionUrl;
+            _agentProfiles = new Dictionary<string, KokoAgentLlmProfile>(
+                s.AgentLlmProfiles ?? new Dictionary<string, KokoAgentLlmProfile>(),
+                StringComparer.OrdinalIgnoreCase);
             OllamaPool?.ReloadSettings();
             lock (_diagLock)
             {
@@ -643,11 +747,12 @@ Kokonoe: Стоп. Де ти зараз. Коли востаннє їв.
         /// Виконує системний запит до LLM з підтримкою інструментів (Agent Loop).
         /// Використовується для автономних завдань, де Kokonoe може сама планувати дії.
         /// </summary>
-        public async Task<string?> SendSystemQueryAsync(string prompt, bool useTools = false, CancellationToken ct = default)
+        public async Task<string?> SendSystemQueryAsync(string prompt, bool useTools = false, CancellationToken ct = default, string? agentId = null)
         {
             var diagWatch = Stopwatch.StartNew();
-            var diagProvider = ActiveProviderLabel();
-            var diagModel = ActiveModelLabel();
+            var target = ResolveAgentTarget(agentId);
+            var diagProvider = string.IsNullOrWhiteSpace(agentId) ? ActiveProviderLabel() : $"{target.Provider}:{agentId}";
+            var diagModel = target.Model;
             const string diagChannel = "system_agent";
             RecordLlmRequest(diagProvider, diagModel, diagChannel);
 
@@ -675,32 +780,53 @@ Kokonoe: Стоп. Де ти зараз. Коли востаннє їв.
                             messages.Add(new { role = h.Role, content = h.Content });
                     }
 
-                    var sysModel = IsOllamaCloud ? _ollamaModel : _model;
-                    var sysUrl = IsOllamaCloud ? _ollamaUrl : _lmUrl;
+                    var sysProvider = target.Provider;
+                    var sysIsOllamaCloud = sysProvider.Equals("ollama-cloud", StringComparison.OrdinalIgnoreCase);
+                    var sysIsClaude = sysProvider.Equals("claude", StringComparison.OrdinalIgnoreCase);
+                    var sysModel = target.Model;
+                    var sysUrl = target.Url;
                     
                     object reqBody;
-                    if (useTools && Obsidian != null && round < 4)
-                        reqBody = new { model = sysModel, messages, tools = TOOLS, tool_choice = "auto", max_tokens = SystemMaxTokens, temperature = DynamicTemperature, stream = false };
+                    if (sysIsClaude)
+                    {
+                        reqBody = new
+                        {
+                            model = sysModel,
+                            max_tokens = SystemMaxTokens,
+                            temperature = target.Temperature,
+                            system = SanitizeContent(systemContent),
+                            messages = history.Where(h => h.Role != "tool" && h.Role != "assistant_tool_calls")
+                                .Select(h => new { role = h.Role, content = h.Content })
+                                .ToArray()
+                        };
+                    }
+                    else if (useTools && Obsidian != null && round < 4)
+                        reqBody = new { model = sysModel, messages, tools = TOOLS, tool_choice = "auto", max_tokens = SystemMaxTokens, temperature = target.Temperature, stream = false };
                     else
-                        reqBody = new { model = sysModel, messages, max_tokens = SystemMaxTokens, temperature = DynamicTemperature, stream = false };
+                        reqBody = new { model = sysModel, messages, max_tokens = SystemMaxTokens, temperature = target.Temperature, stream = false };
 
                     var json = JsonConvert.SerializeObject(reqBody);
                     HttpResponseMessage? resp = null;
-                    int attempts = IsOllamaCloud && OllamaPool != null ? Math.Max(1, OllamaPool.LiveKeyCount + 1) : 1;
+                    int attempts = sysIsOllamaCloud && OllamaPool != null ? Math.Max(1, OllamaPool.LiveKeyCount + 1) : 1;
 
                     for (int attempt = 0; attempt < attempts; attempt++)
                     {
                         var httpContent = new StringContent(json, Encoding.UTF8, "application/json");
                         using var req = new HttpRequestMessage(HttpMethod.Post, sysUrl) { Content = httpContent };
-                        if (IsOllamaCloud)
+                        if (sysIsClaude)
                         {
-                            var key = ResolveOllamaKey();
+                            req.Headers.Add("x-api-key", _claudeApiKey);
+                            req.Headers.Add("anthropic-version", "2023-06-01");
+                        }
+                        else if (sysIsOllamaCloud)
+                        {
+                            var key = ResolveOllamaKey(agentId);
                             if (!string.IsNullOrEmpty(key)) req.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", key);
                         }
 
                         resp = await _http.SendAsync(req, ct);
                         if (resp.IsSuccessStatusCode) break;
-                        if (IsOllamaCloud && (int)resp.StatusCode == 429 && OllamaPool != null) { /* retry with next key */ }
+                        if (sysIsOllamaCloud && (int)resp.StatusCode == 429 && OllamaPool != null) { /* retry with next key */ }
                         else break;
                     }
 
@@ -712,6 +838,13 @@ Kokonoe: Стоп. Де ти зараз. Коли востаннє їв.
 
                     var respText = await resp.Content.ReadAsStringAsync(ct);
                     var respObj = JObject.Parse(respText);
+                    if (sysIsClaude)
+                    {
+                        var claudeText = respObj["content"]?.FirstOrDefault()?["text"]?.ToString();
+                        RecordLlmSuccess(diagProvider, diagModel, diagChannel, diagWatch);
+                        return CleanGarbage(claudeText ?? "");
+                    }
+
                     var message = respObj["choices"]?[0]?["message"] as JObject;
                     if (message == null) return null;
 
@@ -1861,12 +1994,25 @@ Kokonoe: Стоп. Де ти зараз. Коли востаннє їв.
 
         private string ExecuteTool(string name, JObject args)
         {
+            if (name == "execute_python")
+                return new KokoSandboxExecutor(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "kokonoe-data", "agent-runtime-sandbox"))
+                    .ExecutePythonAsync(Req(args, "code")).GetAwaiter().GetResult();
+
+            if (name is "fs_read_text" or "fs_write_text" or "fs_delete")
+                return ExecuteFileTool(name, args);
             if (Obsidian == null) return "Obsidian не підключений.";
 
             try
             {
                 return name switch
                 {
+                    "execute_python" => new KokoSandboxExecutor(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "kokonoe-data", "agent-runtime-sandbox"))
+                        .ExecutePythonAsync(Req(args, "code")).GetAwaiter().GetResult(),
+
+                    "fs_read_text" => ExecuteFileTool(name, args),
+                    "fs_write_text" => ExecuteFileTool(name, args),
+                    "fs_delete" => ExecuteFileTool(name, args),
+
                     "list_notes" => FormatList(
                         Obsidian.ListNotes(args["subfolder"]?.ToString())),
 
@@ -1950,6 +2096,28 @@ Kokonoe: Стоп. Де ти зараз. Коли востаннє їв.
 
         private static string Req(JObject args, string key) =>
             args[key]?.ToString() ?? throw new ArgumentException($"Відсутній параметр: {key}");
+
+        private static string ExecuteFileTool(string name, JObject args)
+        {
+            var kind = name switch
+            {
+                "fs_read_text" => KokoFileOperationKind.ReadText,
+                "fs_write_text" => KokoFileOperationKind.WriteText,
+                "fs_delete" => KokoFileOperationKind.Delete,
+                _ => throw new ArgumentException($"Unknown file tool: {name}")
+            };
+
+            var request = new KokoFileOperationRequest
+            {
+                Kind = kind,
+                Path = Req(args, "path"),
+                Content = args["content"]?.ToString() ?? "",
+                Confirmed = args["confirmed"]?.Value<bool>() ?? false
+            };
+            var result = ServiceContainer.FileTools.ExecuteAsync(request).GetAwaiter().GetResult();
+            var confirmation = result.RequiresConfirmation ? " confirmation_required=true" : "";
+            return $"{(result.Success ? "ok" : "failed")}:{confirmation} {result.Message}\n{result.Output}".Trim();
+        }
 
         private static string FormatList(List<string> items) =>
             items.Count == 0 ? "(порожньо)" : string.Join("\n", items);

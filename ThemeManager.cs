@@ -102,6 +102,20 @@ namespace KokonoeAssistant
                     }
                     SetB("Brush_" + hex, finalColor);
                 }
+
+                // Stable Kira-like shell colors. Keep the app from turning into random RGB soup
+                // when old green/red resource aliases are remapped by MatrixColor.
+                SetB("AccentBgMain",      System.Windows.Media.Color.FromRgb(5, 6, 12));
+                SetB("AccentBgDarker",    System.Windows.Media.Color.FromRgb(9, 10, 19));
+                SetB("AccentBgPanel",     System.Windows.Media.Color.FromRgb(14, 16, 29));
+                SetB("AccentBgCard",      System.Windows.Media.Color.FromRgb(18, 20, 36));
+                SetB("AccentBgBorder1",   System.Windows.Media.Color.FromArgb(24, 167, 139, 250));
+                SetB("AccentBgBorder2",   System.Windows.Media.Color.FromArgb(34, 167, 139, 250));
+                SetB("AccentAsstBorder",  System.Windows.Media.Color.FromArgb(72, 139, 92, 246));
+                SetB("AccentAsstBubble",  System.Windows.Media.Color.FromRgb(5, 17, 9));
+                SetB("AccentUserBubble",  System.Windows.Media.Color.FromRgb(75, 31, 122));
+                SetB("AccentNavBg",       System.Windows.Media.Color.FromArgb(35, 139, 92, 246));
+                SetB("AccentListHovBg",   System.Windows.Media.Color.FromArgb(18, 255, 255, 255));
             }
             catch { }
         }

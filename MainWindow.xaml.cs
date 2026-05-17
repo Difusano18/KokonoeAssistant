@@ -62,6 +62,7 @@ namespace KokonoeAssistant
         private CancellationTokenSource _llmCts = new();
         private bool _isGenerating;
         private FrameworkElement? _thinkingElement;
+        private TextBlock? _thinkingStatusText;
 
         // ── Pending image ─────────────────────────────────────────
         private byte[]?  _imgBytes;
@@ -105,6 +106,10 @@ namespace KokonoeAssistant
         private int _liveCoreMemoryItems;
         private int _liveCoreReviewActions;
         private int _liveCoreOpenTasks;
+        private bool _agentTaskEventsHooked;
+        private bool _agentRuntimeEventsHooked;
+        private readonly List<KokoAgentActivitySnapshot> _agentActivityTrace = new();
+        private int _agentDetailLevel = 1;
         private WinForms.NotifyIcon? _notifyIcon;
         private CancellationTokenSource? _noticeCts;
 
@@ -119,7 +124,10 @@ namespace KokonoeAssistant
         public MainWindow()
         {
             InitializeComponent();
-            _llm = ServiceContainer.LlmService;
+        }
+
+        private void HookLlmProgress()
+        {
             _llm.OnProgress += (type, content) => Dispatcher.InvokeAsync(() =>
             {
                 if (type == "thought")
@@ -746,6 +754,7 @@ tags: [kokonoe, live-core, diagnostics]
                 _llm      = ServiceContainer.LlmService;
                 _health   = ServiceContainer.HealthService;
                 _obsidian = ServiceContainer.ObsidianMcp;
+                HookLlmProgress();
 
                 SetLoadingProgress(20, "завантаження чату...");
                 LoadChatHistory();
@@ -1091,8 +1100,27 @@ tags: [kokonoe, live-core, diagnostics]
             }
 
             RightPanel.Visibility = (_activeTab == "Chat" || _activeTab == "Tools") ? Visibility.Visible : Visibility.Collapsed;
+            UpdateAdaptiveShellLayout();
             if (RightPanel.Visibility == Visibility.Visible)
                 RefreshRightOpsPanel();
+        }
+
+        private void BodyGrid_SizeChanged(object sender, SizeChangedEventArgs e) => UpdateAdaptiveShellLayout();
+
+        private void UpdateAdaptiveShellLayout()
+        {
+            if (RightPanel == null || BodyGrid == null) return;
+
+            var canShowRightPanel = _activeTab == "Chat" || _activeTab == "Tools";
+            if (!canShowRightPanel)
+            {
+                RightPanel.Visibility = Visibility.Collapsed;
+                return;
+            }
+
+            RightPanel.Visibility = BodyGrid.ActualWidth < 1240
+                ? Visibility.Collapsed
+                : Visibility.Visible;
         }
 
         // ══════════════════════════════════════════════════════════
@@ -1701,6 +1729,7 @@ tags: [kokonoe, live-core, diagnostics]
 
         private void AgentCreateTask_Click(object sender, RoutedEventArgs e)
         {
+            HookAgentTaskEvents();
             var objective = SandboxInput.Text.Trim();
             if (string.IsNullOrWhiteSpace(objective))
             {
@@ -1722,6 +1751,7 @@ tags: [kokonoe, live-core, diagnostics]
 
         private void AgentStart_Click(object sender, RoutedEventArgs e)
         {
+            HookAgentTaskEvents();
             try
             {
                 ServiceContainer.AgentTasks.Start();
@@ -1750,19 +1780,123 @@ tags: [kokonoe, live-core, diagnostics]
 
         private void AgentRefresh_Click(object sender, RoutedEventArgs e) => RefreshAgentTaskBoard();
 
+        private void AgentDetailLevel_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            _agentDetailLevel = AgentDetailLevelBox?.SelectedIndex ?? 1;
+            RefreshAgentTaskBoard();
+        }
+
+        private void HookAgentTaskEvents()
+        {
+            if (!_agentTaskEventsHooked)
+            {
+                _agentTaskEventsHooked = true;
+                ServiceContainer.AgentTasks.ActivityChanged += activity =>
+                {
+                    Dispatcher.InvokeAsync(() => UpdateAgentActivityPanel(activity), DispatcherPriority.Background);
+                };
+            }
+
+            if (!_agentRuntimeEventsHooked)
+            {
+                _agentRuntimeEventsHooked = true;
+                ServiceContainer.AgentRuntime.ActivityChanged += activity =>
+                {
+                    Dispatcher.InvokeAsync(() => UpdateAgentActivityPanel(activity), DispatcherPriority.Background);
+                };
+            }
+        }
+
         private void RefreshAgentTaskBoard()
         {
             try
             {
+                HookAgentTaskEvents();
                 var board = ServiceContainer.AgentTasks.RenderBoard();
-                AgentTaskBoardText.Text = board;
                 var snap = ServiceContainer.AgentTasks.GetSnapshot();
+                AgentTaskBoardText.Text = RenderAgentBoard(snap, board);
                 AgentTaskStatusText.Text = $"tasks {snap.Tasks.Count} | running {snap.RunningSteps}/{snap.MaxParallel}";
+                UpdateAgentActivityPanel(snap.Activity);
             }
             catch (Exception ex)
             {
                 AgentTaskStatusText.Text = $"refresh failed: {ex.Message}";
             }
+        }
+
+        private void UpdateAgentActivityPanel(KokoAgentActivitySnapshot activity)
+        {
+            AgentPhaseText.Text = $"phase: {activity.Phase}";
+            AgentToolText.Text = $"tool: {activity.Tool}";
+            AgentFocusText.Text = $"focus: {activity.Focus}";
+            AgentThoughtText.Text = $"thought: {activity.Thought}";
+            UpdateAgentEmotionLine();
+            AppendAgentActivity(activity);
+        }
+
+        private string RenderAgentBoard(KokoAgentTaskSnapshot snap, string fallback)
+        {
+            if (_agentDetailLevel <= 0)
+                return $"tasks {snap.Tasks.Count} | running {snap.RunningSteps}/{snap.MaxParallel}\n{snap.Activity.Phase} -> {snap.Activity.Tool}\n{snap.Activity.Thought}";
+
+            if (_agentDetailLevel == 1)
+            {
+                var sb = new StringBuilder();
+                sb.AppendLine($"Agent Board | tasks {snap.Tasks.Count} | running {snap.RunningSteps}/{snap.MaxParallel}");
+                foreach (var task in snap.Tasks.Take(6))
+                {
+                    var active = task.Steps.OrderBy(s => s.Order)
+                        .FirstOrDefault(s => s.Status is KokoAgentTaskStatus.Running or KokoAgentTaskStatus.Pending);
+                    var done = task.Steps.Count(s => s.Status == KokoAgentTaskStatus.Completed);
+                    sb.AppendLine($"[{task.Status}] {task.Id} p{task.Priority} | {done}/{task.Steps.Count} | {task.Objective}");
+                    if (active != null)
+                        sb.AppendLine($"  -> {active.Kind}: {active.Title}");
+                }
+                return sb.ToString();
+            }
+
+            return fallback;
+        }
+
+        private void UpdateAgentEmotionLine()
+        {
+            try
+            {
+                var brain = ServiceContainer.BrainEngine;
+                var emotion = DashboardEmotionLabel(brain.Emotion.Current);
+                var state = brain.State;
+                var detail = _agentDetailLevel switch { 0 => "compact", 2 => "verbose", _ => "normal" };
+                AgentEmotionStateText.Text = $"emotion: {emotion} | mood {state.MoodScore:F2} | detail: {detail}";
+                AgentEmotionStateText.Foreground = DashMakeBrush(brain.Emotion.Current);
+            }
+            catch
+            {
+                AgentEmotionStateText.Text = "emotion: offline | detail: ?";
+            }
+        }
+
+        private void AppendAgentActivity(KokoAgentActivitySnapshot activity)
+        {
+            if (string.IsNullOrWhiteSpace(activity.Phase) && string.IsNullOrWhiteSpace(activity.Tool))
+                return;
+
+            if (_agentActivityTrace.Count > 0)
+            {
+                var last = _agentActivityTrace[0];
+                if (last.Phase == activity.Phase &&
+                    last.Tool == activity.Tool &&
+                    last.Focus == activity.Focus &&
+                    last.Thought == activity.Thought)
+                    return;
+            }
+
+            _agentActivityTrace.Insert(0, activity);
+            if (_agentActivityTrace.Count > 18)
+                _agentActivityTrace.RemoveRange(18, _agentActivityTrace.Count - 18);
+
+            var take = _agentDetailLevel switch { 0 => 4, 2 => 14, _ => 8 };
+            AgentActivityLogText.Text = string.Join("\n", _agentActivityTrace.Take(take).Select(a =>
+                $"[{a.UpdatedAt:HH:mm:ss}] {a.Phase}/{a.Tool} :: {TrimLiveCoreLine(a.Thought, _agentDetailLevel == 2 ? 160 : 90)}"));
         }
 
         // ══════════════════════════════════════════════════════════
@@ -1953,40 +2087,51 @@ tags: [kokonoe, live-core, diagnostics]
             var sendText = effectiveText;
             ClearPendingImage();
 
-            // Brain state must observe the user message before context is built,
-            // otherwise temporal/presence logic answers from the previous turn.
-            try { ServiceContainer.BrainEngine?.ProcessUserMessage(sendText); } catch { }
 
             // Thinking indicator
-            AddThinkingBubble();
+            AddThinkingBubble("прийняла повідомлення");
             ScrollToBottom();
 
             try
             {
                 // Ensure UI updates (thinking bubble) before blocking operations
-                await Task.Yield();
+                await ShowKokoActivityAsync("оновлюю стан і наміри");
+
+                // Brain state must observe the user message before context is built.
+                // It can touch memory/pattern stores, so keep it off the UI thread.
+                await Task.Run(() =>
+                {
+                    try { ServiceContainer.BrainEngine?.ProcessUserMessage(sendText); } catch { }
+                }, _llmCts?.Token ?? default);
 
                 if (LooksLikeManualScreenScan(sendText))
                 {
+                    await ShowKokoActivityAsync("роблю знімок екрана");
                     await HandleManualScreenScanAsync(sendText, _llmCts?.Token ?? default);
                     return;
                 }
 
-                if (TryHandleDirectObsidianCommand(sendText, out var obsidianReply))
+                var obsidianCommand = await Task.Run(() =>
+                {
+                    var handled = TryHandleDirectObsidianCommand(sendText, out var replyText);
+                    return (handled, replyText);
+                }, _llmCts?.Token ?? default);
+
+                if (obsidianCommand.handled)
                 {
                     RemoveThinkingBubble();
                     var replyVm = new ChatMessageVm { Role = "assistant", Content = "" };
                     var replyTb = AddMessageBubble(replyVm);
                     if (replyTb != null)
-                        await TypeIntoAsync(replyTb, obsidianReply, _llmCts?.Token ?? default);
+                        await TypeIntoAsync(replyTb, obsidianCommand.replyText, _llmCts?.Token ?? default);
                     else
-                        replyVm.Content = obsidianReply;
+                        replyVm.Content = obsidianCommand.replyText;
 
                     try
                     {
                         ServiceContainer.ChatRepository.InsertMessage(new ChatRepository.ChatMessage
                         {
-                            Content = obsidianReply,
+                            Content = obsidianCommand.replyText,
                             Role = "assistant",
                             Author = "Kokonoe",
                             Timestamp = DateTime.Now
@@ -1994,7 +2139,7 @@ tags: [kokonoe, live-core, diagnostics]
                     }
                     catch { }
 
-                    _ = Task.Run(() => ServiceContainer.ChatLogger.LogExchange("app", sendText, obsidianReply));
+                    _ = Task.Run(() => ServiceContainer.ChatLogger.LogExchange("app", sendText, obsidianCommand.replyText));
                     return;
                 }
 
@@ -2008,104 +2153,14 @@ tags: [kokonoe, live-core, diagnostics]
                 string reply;
                 TextBlock? finalReplyTb = null;
 
-                // Build context on background thread (file I/O can be slow)
+                await ShowKokoActivityAsync("collecting context and memory");
                 var contextTask = Task.Run(() => BuildContext(sendText));
 
-                // ── Streaming path (no image) ────────────────────────────
-                if (imgBytes == null)
-                {
-                    var replyVm = new ChatMessageVm { Role = "assistant", Content = "" };
-                    TextBlock? streamTb = null;
+                var agentUi = await RunAgentChatAsync(sendText, imgBytes, imgMime, contextTask, _llmCts?.Token ?? default);
+                reply = agentUi.Reply;
+                finalReplyTb = agentUi.FinalTextBlock;
 
-                    var context = await contextTask;
-                    var streamedReply = await _llm.SendStreamingAsync(
-                        sendText, context,
-                        chunk => Dispatcher.InvokeAsync(() =>
-                        {
-                            if (streamTb == null)
-                            {
-                                RemoveThinkingBubble();
-                                streamTb = AddMessageBubble(replyVm);
-                            }
-                            replyVm.Content += chunk;
-                            ScrollToBottom();
-                        }, DispatcherPriority.Render),
-                        _llmCts?.Token ?? default);
-
-                    if (streamedReply != null)
-                    {
-                        reply = streamedReply;
-                        // If streamTb wasn't created by callback (e.g., response came all at once), create it now
-                        if (streamTb == null)
-                        {
-                            RemoveThinkingBubble();
-                            streamTb = AddMessageBubble(replyVm);
-                        }
-                        // Ensure the bubble shows the cleaned full text (streaming may have cleaned content)
-                        replyVm.Content = reply;
-                        if (streamTb != null)
-                            await Dispatcher.InvokeAsync(() => streamTb.Text = reply, DispatcherPriority.Render);
-                        finalReplyTb = streamTb;
-                    }
-                    else
-                    {
-                        // Tool calls detected — clear streaming garbage and re-do with SendAsync
-                        await Dispatcher.InvokeAsync(() =>
-                        {
-                            replyVm.Content = "";
-                            if (streamTb != null) streamTb.Text = "";
-                        }, DispatcherPriority.Render);
-
-                        AddThinkingBubble();
-
-                        reply = await _llm.SendAsync(sendText, null, imgMime, await contextTask, _llmCts?.Token ?? default);
-                        RemoveThinkingBubble();
-                        if (streamTb == null) streamTb = AddMessageBubble(replyVm);
-                        if (streamTb != null)
-                        {
-                            await TypeIntoAsync(streamTb, reply, _llmCts?.Token ?? default);
-                            finalReplyTb = streamTb;
-                        }
-                        else
-                            replyVm.Content = reply;
-                    }
-                }
-                else
-                {
-                    // ── Image path — use the same direct vision route as screen-awareness.
-                    var imageContext = await contextTask;
-                    var visionPrompt = $"""
-Ти Kokonoe. Проаналізуй вкладене зображення користувача.
-Запит користувача: {sendText}
-
-Контекст діалогу і пам'яті, який треба врахувати:
-{TrimForPrompt(imageContext, 3200)}
-
-Правила:
-- Відповідай українською.
-- 1-4 речення.
-- Не описуй фото ізольовано: прив'яжи його до останнього діалогу, гри, наміру або питання користувача.
-- Якщо на фото гра/скрін, назви що видно і коротко відреагуй як Kokonoe, а не як сухий OCR.
-- Якщо не можеш прочитати зображення, скажи це прямо без згадок Settings/model/HTTP.
-""";
-                    reply = await _llm.SendSystemVisionQueryAsync(
-                                visionPrompt,
-                                imgBytes,
-                                imgMime,
-                                _llmCts?.Token ?? default)
-                            ?? "Фото не прочиталось. Кинь інший файл або перезбереж зображення; вдавати, що я його бачу, не будемо.";
-                    RemoveThinkingBubble();
-                    var replyVm = new ChatMessageVm { Role = "assistant", Content = "" };
-                    var replyTb = AddMessageBubble(replyVm);
-                    if (replyTb != null)
-                    {
-                        await TypeIntoAsync(replyTb, reply, _llmCts?.Token ?? default);
-                        finalReplyTb = replyTb;
-                    }
-                    else
-                        replyVm.Content = reply;
-                }
-
+                await ShowKokoActivityAsync("перевіряю відповідь на тупості");
                 var guardedReply = await GuardAndRepairReplyAsync(sendText, reply, await contextTask, _llmCts?.Token ?? default);
                 if (!string.Equals(guardedReply, reply, StringComparison.Ordinal))
                 {
@@ -2156,6 +2211,79 @@ tags: [kokonoe, live-core, diagnostics]
                 ScrollToBottom();
                 InputBox.Focus();
             }
+        }
+
+        private sealed class AgentChatUiResult
+        {
+            public string Reply { get; set; } = "";
+            public TextBlock? FinalTextBlock { get; set; }
+        }
+
+        private async Task<AgentChatUiResult> RunAgentChatAsync(
+            string sendText,
+            byte[]? imgBytes,
+            string imgMime,
+            Task<string> contextTask,
+            CancellationToken ct)
+        {
+            HookAgentTaskEvents();
+
+            var replyVm = new ChatMessageVm { Role = "assistant", Content = "" };
+            TextBlock? replyTb = null;
+            var streamBuffer = new StringBuilder();
+            var streamLock = new object();
+            var lastStreamUi = DateTime.MinValue;
+
+            var context = await contextTask.ConfigureAwait(true);
+            var result = await ServiceContainer.AgentRuntime.ExecuteChatAsync(new KokoAgentChatRequest
+            {
+                UserText = sendText,
+                Context = context,
+                ImageBytes = imgBytes,
+                ImageMime = imgMime,
+                PreferStreaming = imgBytes == null,
+                OnStatus = status => ShowKokoActivityAsync(status),
+                OnChunk = chunk =>
+                {
+                    Dispatcher.InvokeAsync(() =>
+                    {
+                        if (replyTb == null)
+                        {
+                            RemoveThinkingBubble();
+                            replyTb = AddMessageBubble(replyVm);
+                        }
+
+                        lock (streamLock)
+                        {
+                            streamBuffer.Append(chunk);
+                            if ((DateTime.Now - lastStreamUi).TotalMilliseconds < 55)
+                                return;
+
+                            lastStreamUi = DateTime.Now;
+                            replyVm.Content = streamBuffer.ToString();
+                        }
+                        ScrollToBottom();
+                    }, DispatcherPriority.Render);
+                }
+            }, ct).ConfigureAwait(true);
+
+            var reply = result.Reply ?? "";
+            if (replyTb == null)
+            {
+                RemoveThinkingBubble();
+                replyTb = AddMessageBubble(replyVm);
+            }
+
+            replyVm.Content = reply;
+            if (replyTb != null)
+            {
+                if (result.UsedStreaming)
+                    await Dispatcher.InvokeAsync(() => replyTb.Text = reply, DispatcherPriority.Render);
+                else
+                    await TypeIntoAsync(replyTb, reply, ct);
+            }
+
+            return new AgentChatUiResult { Reply = reply, FinalTextBlock = replyTb };
         }
 
         private static bool LooksLikeManualScreenScan(string? text)
@@ -2892,13 +3020,26 @@ tags: []
         {
             try
             {
-                if (TryBuildProfileIdentityReply(userText, out var identityReply))
-                    return identityReply;
+                var precheck = await Task.Run(() =>
+                {
+                    if (TryBuildProfileIdentityReply(userText, out var identityReply))
+                        return (Reply: (string?)identityReply, Guard: (KokoPostReplyGuardResult?)null, HasBrain: true);
 
-                var brain = ServiceContainer.BrainEngine;
-                if (brain == null) return GuardTemporalReply(userText, reply);
+                    var brain = ServiceContainer.BrainEngine;
+                    if (brain == null)
+                        return (Reply: (string?)GuardTemporalReply(userText, reply), Guard: (KokoPostReplyGuardResult?)null, HasBrain: false);
 
-                var guard = brain.EvaluatePostReplyGuard(userText, reply);
+                    return (Reply: (string?)null, Guard: brain.EvaluatePostReplyGuard(userText, reply), HasBrain: true);
+                }, ct);
+
+                if (!string.IsNullOrWhiteSpace(precheck.Reply))
+                    return precheck.Reply!;
+                if (!precheck.HasBrain)
+                    return GuardTemporalReply(userText, reply);
+
+                var guard = precheck.Guard;
+                if (guard == null)
+                    return GuardTemporalReply(userText, reply);
                 if (guard.Passed) return reply;
                 if (!string.IsNullOrWhiteSpace(guard.HardReplacement))
                     return guard.HardReplacement!;
@@ -2912,7 +3053,9 @@ tags: []
                 if (string.IsNullOrWhiteSpace(repaired))
                     return GuardTemporalReply(userText, reply);
 
-                var secondGuard = brain.EvaluatePostReplyGuard(userText, repaired);
+                var secondGuard = await Task.Run(() =>
+                    ServiceContainer.BrainEngine?.EvaluatePostReplyGuard(userText, repaired) ?? new KokoPostReplyGuardResult(),
+                    ct);
                 if (!secondGuard.Passed && !string.IsNullOrWhiteSpace(secondGuard.HardReplacement))
                     return secondGuard.HardReplacement!;
 
@@ -3667,7 +3810,7 @@ tags: []
             return Math.Max(220, Math.Min(preferred, viewport - reserved));
         }
 
-        private void AddThinkingBubble()
+        private void AddThinkingBubble(string status = "думаю")
         {
             RemoveThinkingBubble();
 
@@ -3675,7 +3818,7 @@ tags: []
             {
                 HorizontalAlignment = System.Windows.HorizontalAlignment.Left,
                 Margin = new Thickness(16, 4, 16, 4),
-                MaxWidth = 160
+                MaxWidth = 360
             };
 
             var header = new StackPanel { Orientation = System.Windows.Controls.Orientation.Horizontal, Margin = new Thickness(2, 0, 0, 5) };
@@ -3702,6 +3845,17 @@ tags: []
                 BorderThickness = new Thickness(1)
             };
 
+            var statusText = new TextBlock
+            {
+                Text = status,
+                FontSize = 11,
+                FontFamily = new WpfFF("Consolas"),
+                Foreground = (System.Windows.Media.SolidColorBrush)System.Windows.Application.Current.Resources["AccentTextLight"],
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(0, 0, 0, 8)
+            };
+            _thinkingStatusText = statusText;
+
             // 3 animated dots
             var dotsPanel = new StackPanel { Orientation = System.Windows.Controls.Orientation.Horizontal };
             var dots = new TextBlock[3];
@@ -3718,7 +3872,10 @@ tags: []
                 };
                 dotsPanel.Children.Add(dots[i]);
             }
-            bubble.Child = dotsPanel;
+            var thinkingStack = new StackPanel();
+            thinkingStack.Children.Add(statusText);
+            thinkingStack.Children.Add(dotsPanel);
+            bubble.Child = thinkingStack;
 
             // Timer: cycle through dots 0→1→2→0...
             int frame = 0;
@@ -3737,6 +3894,21 @@ tags: []
             MessagesList.Children.Add(outer);
         }
 
+        private async Task ShowKokoActivityAsync(string status)
+        {
+            await Dispatcher.InvokeAsync(() =>
+            {
+                if (_thinkingElement == null)
+                    AddThinkingBubble(status);
+                else if (_thinkingStatusText != null)
+                    _thinkingStatusText.Text = status;
+
+                ScrollToBottom();
+            }, DispatcherPriority.Render);
+
+            await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.Background);
+        }
+
         private void RemoveThinkingBubble()
         {
             if (_thinkingElement != null)
@@ -3747,6 +3919,7 @@ tags: []
 
                 MessagesList.Children.Remove(_thinkingElement);
                 _thinkingElement = null;
+                _thinkingStatusText = null;
             }
         }
 
@@ -8082,24 +8255,11 @@ tags: [kokonoe, dashboard, live]
         private void MinimizeBtn_Click(object sender, RoutedEventArgs e)
             => WindowState = WindowState.Minimized;
 
-        private bool _isMaximized = true;
-        private Rect _restoreBounds;
-
         private void MaximizeBtn_Click(object sender, RoutedEventArgs e)
         {
-            if (_isMaximized)
-            {
-                _restoreBounds = new Rect(Left, Top, Width, Height);
-                Left = Left + Width * 0.1; Top = Top + Height * 0.05;
-                Width = Width * 0.8; Height = Height * 0.9;
-                _isMaximized = false;
-            }
-            else
-            {
-                var wa = _restoreBounds.IsEmpty ? SystemParameters.WorkArea : _restoreBounds;
-                Left = wa.Left; Top = wa.Top; Width = wa.Width; Height = wa.Height;
-                _isMaximized = true;
-            }
+            WindowState = WindowState == WindowState.Maximized
+                ? WindowState.Normal
+                : WindowState.Maximized;
         }
 
         private void CloseBtn_Click(object sender, RoutedEventArgs e)

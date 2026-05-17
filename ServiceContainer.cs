@@ -37,6 +37,8 @@ namespace KokonoeAssistant
         private static KokoHeartEngine?        _heart;
         private static OllamaKeyPoolService?   _ollamaPool;
         private static KokoAgentTaskService?   _agentTasks;
+        private static KokoAgentRuntimeService? _agentRuntime;
+        private static KokoFileSystemToolService? _fileTools;
 
         public static void Initialize(string vaultPath)
         {
@@ -174,6 +176,31 @@ namespace KokonoeAssistant
             }
         }
 
+        public static KokoAgentRuntimeService AgentRuntime
+        {
+            get
+            {
+                lock (_lock)
+                {
+                    return _agentRuntime ??= new KokoAgentRuntimeService(
+                        Path.Combine(_vault ?? AppDomain.CurrentDomain.BaseDirectory, "kokonoe-data"),
+                        LlmService);
+                }
+            }
+        }
+
+        public static KokoFileSystemToolService FileTools
+        {
+            get
+            {
+                lock (_lock)
+                {
+                    return _fileTools ??= new KokoFileSystemToolService(
+                        Path.Combine(_vault ?? AppDomain.CurrentDomain.BaseDirectory, "kokonoe-data", "agent-files"));
+                }
+            }
+        }
+
         public static HealthService HealthService
         {
             get { lock (_lock) { return _health ??= new HealthService(_vault ?? throw new InvalidOperationException("Not initialized")); } }
@@ -296,6 +323,8 @@ namespace KokonoeAssistant
                     _brain?.Dispose(); _brain = null;
                     _heart?.Dispose(); _heart = null;
                     _agentTasks?.Stop(); _agentTasks = null;
+                    _agentRuntime = null;
+                    _fileTools = null;
                 }
                 catch { }
             }
