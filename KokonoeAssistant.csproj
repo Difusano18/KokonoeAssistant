@@ -10,6 +10,7 @@
     <NoWarn>$(NoWarn);NU1701</NoWarn>
     <AssemblyName>KokonoeAssistant</AssemblyName>
     <RootNamespace>KokonoeAssistant</RootNamespace>
+    <StartupObject>KokonoeAssistant.Program</StartupObject>
     <ApplicationIcon>Logo\Logo_icon.ico</ApplicationIcon>
   </PropertyGroup>
   <ItemGroup>
@@ -26,6 +27,12 @@
     <Page Remove="Tests\**\*.xaml" />
   </ItemGroup>
   <ItemGroup>
+    <ApplicationDefinition Update="App.xaml">
+      <Generator>MSBuild:Compile</Generator>
+    </ApplicationDefinition>
+    <Page Update="MainWindow.xaml">
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
     <Compile Update="Services\KokoAgentRuntimeService.cs" />
     <Compile Update="Services\KokoFileSystemToolService.cs" />
     <Compile Update="Services\KokoSandboxExecutor.cs" />

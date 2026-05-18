@@ -9,6 +9,7 @@ namespace KokonoeAssistant.Services
 {
     public sealed class KokoAgentChatRequest
     {
+        public string AgentId { get; set; } = "chat";
         public string UserText { get; set; } = "";
         public string Context { get; set; } = "";
         public byte[]? ImageBytes { get; set; }
@@ -96,7 +97,7 @@ namespace KokonoeAssistant.Services
                 await MarkStepAsync(plan, KokoAgentStepKind.Vision, KokoAgentTaskStatus.Running, "Reading attached image.", request.OnStatus, ct);
                 await EmitAsync("execute", "VisionModel", "attached image + current dialogue context", "Дивлюсь на зображення і прив'язую його до розмови.", request.OnStatus, ct);
                 var prompt = BuildVisionPrompt(request.UserText, request.Context);
-                result.Reply = await _llm.SendSystemVisionQueryAsync(prompt, request.ImageBytes, request.ImageMime, ct).ConfigureAwait(false)
+                result.Reply = await _llm.SendSystemVisionQueryAsync(prompt, request.ImageBytes, request.ImageMime, ct, request.AgentId).ConfigureAwait(false)
                                ?? "Фото не прочиталось. Перезбережи як PNG або кинь інший файл; вигадувати картинку я не буду.";
                 result.UsedVision = true;
                 await MarkStepAsync(plan, KokoAgentStepKind.Vision, KokoAgentTaskStatus.Completed, "Vision response received.", request.OnStatus, ct);
@@ -109,7 +110,7 @@ namespace KokonoeAssistant.Services
                 string? streamed = null;
                 if (request.PreferStreaming && request.OnChunk != null)
                 {
-                    streamed = await _llm.SendStreamingAsync(request.UserText, request.Context, request.OnChunk, ct).ConfigureAwait(false);
+                    streamed = await _llm.SendStreamingAsync(request.UserText, request.Context, request.OnChunk, ct, request.AgentId).ConfigureAwait(false);
                     result.UsedStreaming = streamed != null;
                 }
 
@@ -117,7 +118,7 @@ namespace KokonoeAssistant.Services
                 {
                     result.UsedToolFallback = true;
                     await EmitAsync("execute", "ToolLoop", "non-streaming tool-capable pass", "Стрім віддав tool-call. Повторюю чистим проходом, бо сміття в UI — це для аматорів.", request.OnStatus, ct);
-                    result.Reply = await _llm.SendAsync(request.UserText, null, request.ImageMime, request.Context, ct).ConfigureAwait(false);
+                    result.Reply = await _llm.SendAsync(request.UserText, null, request.ImageMime, request.Context, ct, request.AgentId).ConfigureAwait(false);
                 }
                 else
                 {

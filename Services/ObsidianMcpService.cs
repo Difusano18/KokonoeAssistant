@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -8,7 +8,7 @@ using System.Text;
 namespace KokonoeAssistant.Services
 {
     /// <summary>
-    /// Obsidian MCP-style tools — повний набір для роботи з vault
+    /// Obsidian MCP-style tools вЂ” РїРѕРІРЅРёР№ РЅР°Р±С–СЂ РґР»СЏ СЂРѕР±РѕС‚Рё Р· vault
     /// </summary>
     public class ObsidianMcpService
     {
@@ -20,7 +20,7 @@ namespace KokonoeAssistant.Services
             _vault = Path.GetFullPath(vaultPath);
         }
 
-        // ── LIST ─────────────────────────────────────────────────
+        // в”Ђв”Ђ LIST в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
 
         public List<string> ListNotes(string? subfolder = null)
         {
@@ -41,7 +41,7 @@ namespace KokonoeAssistant.Services
                 .ToList();
         }
 
-        // ── READ ─────────────────────────────────────────────────
+        // в”Ђв”Ђ READ в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
 
         public string? ReadNote(string path)
         {
@@ -49,7 +49,7 @@ namespace KokonoeAssistant.Services
             return File.Exists(full) ? File.ReadAllText(full, Encoding.UTF8) : null;
         }
 
-        // ── WRITE / CREATE ────────────────────────────────────────
+        // в”Ђв”Ђ WRITE / CREATE в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
 
         public string WriteNote(string path, string content)
         {
@@ -86,7 +86,7 @@ tags: [{SanitizeTagsLine(tagsLine)}]
         public string AppendToNote(string path, string content)
         {
             var full = Resolve(path);
-            if (!File.Exists(full)) return "Нотатка не знайдена: " + path;
+            if (!File.Exists(full)) return "РќРѕС‚Р°С‚РєР° РЅРµ Р·РЅР°Р№РґРµРЅР°: " + path;
             File.AppendAllText(full, "\n" + content, Encoding.UTF8);
             return full;
         }
@@ -221,33 +221,33 @@ tags: [{SanitizeTagsLine(tagsLine)}]
             return accepted.Count;
         }
 
-        // ── DELETE ────────────────────────────────────────────────
+        // в”Ђв”Ђ DELETE в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
 
         public string DeleteNote(string path)
         {
             var full = Resolve(path);
-            if (!File.Exists(full)) return "Не знайдено";
+            if (!File.Exists(full)) return "РќРµ Р·РЅР°Р№РґРµРЅРѕ";
             File.Delete(full);
-            return "Видалено: " + path;
+            return "Р’РёРґР°Р»РµРЅРѕ: " + path;
         }
 
-        // ── MOVE / RENAME / FOLDER ────────────────────────────────
+        // в”Ђв”Ђ MOVE / RENAME / FOLDER в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
 
         public string MoveNote(string oldPath, string newPath)
         {
             var oldFull = Resolve(oldPath);
-            if (!File.Exists(oldFull)) return $"Не знайдено: {oldPath}";
+            if (!File.Exists(oldFull)) return $"РќРµ Р·РЅР°Р№РґРµРЅРѕ: {oldPath}";
             var newFull = Resolve(newPath);
             Directory.CreateDirectory(Path.GetDirectoryName(newFull)!);
             File.Move(oldFull, newFull, overwrite: false);
-            return $"Переміщено: {oldPath} → {newPath}";
+            return $"РџРµСЂРµРјС–С‰РµРЅРѕ: {oldPath} в†’ {newPath}";
         }
 
         public string CreateFolder(string folderPath)
         {
             var full = Path.Combine(_vault, folderPath.Replace('/', Path.DirectorySeparatorChar));
             Directory.CreateDirectory(full);
-            return $"Папка створена: {folderPath}";
+            return $"РџР°РїРєР° СЃС‚РІРѕСЂРµРЅР°: {folderPath}";
         }
 
         public string GetVaultTree(int maxDepth = 3)
@@ -268,16 +268,16 @@ tags: [{SanitizeTagsLine(tagsLine)}]
             var dirName = Path.GetFileName(current);
             if (dirName.StartsWith('.') || dirName == "kokonoe-data") return;
 
-            if (depth > 0) sb.AppendLine($"{indent}📁 {dirName}/");
+            if (depth > 0) sb.AppendLine($"{indent}рџ“Ѓ {dirName}/");
 
             foreach (var f in Directory.GetFiles(current, "*.md").OrderBy(x => x))
-                sb.AppendLine($"{indent}  📄 {Path.GetFileNameWithoutExtension(f)}");
+                sb.AppendLine($"{indent}  рџ“„ {Path.GetFileNameWithoutExtension(f)}");
 
             foreach (var d in Directory.GetDirectories(current).OrderBy(x => x))
                 BuildTree(sb, root, d, depth + 1, maxDepth);
         }
 
-        // ── SEARCH ────────────────────────────────────────────────
+        // в”Ђв”Ђ SEARCH в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
 
         public List<SearchResult> SearchNotes(string query, int max = 10)
         {
@@ -319,7 +319,7 @@ tags: [{SanitizeTagsLine(tagsLine)}]
             return count;
         }
 
-        // ── DAILY NOTE ────────────────────────────────────────────
+        // в”Ђв”Ђ DAILY NOTE в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
 
         public string GetOrCreateDailyNote()
         {
@@ -345,10 +345,10 @@ tags: [{SanitizeTagsLine(tagsLine)}]
             return AppendToNote(rel, content);
         }
 
-        // ── VAULT STATUS / HEALTH ─────────────────────────────────
+        // в”Ђв”Ђ VAULT STATUS / HEALTH в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
 
         /// <summary>
-        /// Повертає стан vault: порожні нотатки, осиротілі (без посилань), загальна статистика.
+        /// РџРѕРІРµСЂС‚Р°С” СЃС‚Р°РЅ vault: РїРѕСЂРѕР¶РЅС– РЅРѕС‚Р°С‚РєРё, РѕСЃРёСЂРѕС‚С–Р»С– (Р±РµР· РїРѕСЃРёР»Р°РЅСЊ), Р·Р°РіР°Р»СЊРЅР° СЃС‚Р°С‚РёСЃС‚РёРєР°.
         /// </summary>
         public VaultStatus GetVaultStatus()
         {
@@ -368,7 +368,7 @@ tags: [{SanitizeTagsLine(tagsLine)}]
                 if (IsKokonoeManagedNote(content))
                     continue;
 
-                // "Порожня" = тільки frontmatter або взагалі нічого
+                // "РџРѕСЂРѕР¶РЅСЏ" = С‚С–Р»СЊРєРё frontmatter Р°Р±Рѕ РІР·Р°РіР°Р»С– РЅС–С‡РѕРіРѕ
                 var bodyOnly = System.Text.RegularExpressions.Regex.Replace(
                     content, @"^---[\s\S]*?---\s*", "").Trim();
                 var hasHeader = System.Text.RegularExpressions.Regex.IsMatch(bodyOnly, @"^#+\s+\S");
@@ -381,7 +381,7 @@ tags: [{SanitizeTagsLine(tagsLine)}]
                     filledNotes.Add(rel);
             }
 
-            // Orphan = нотатка без жодного incoming або outgoing [[link]]
+            // Orphan = РЅРѕС‚Р°С‚РєР° Р±РµР· Р¶РѕРґРЅРѕРіРѕ incoming Р°Р±Рѕ outgoing [[link]]
             foreach (var rel in filledNotes)
             {
                 var outgoing  = GetOutgoingLinks(rel);
@@ -471,11 +471,11 @@ tags: [{SanitizeTagsLine(tagsLine)}]
         }
 
         /// <summary>
-        /// Видаляє порожні нотатки (без реального контенту), повертає список видалених.
-        /// Захищає нотатки автоматично за метаданими — без hardcoded назв:
-        /// - frontmatter type: brain-core або type: index → захищено
-        /// - 3+ backlinks → важливий вузол, захищено
-        /// - Daily/ папка → захищено
+        /// Р’РёРґР°Р»СЏС” РїРѕСЂРѕР¶РЅС– РЅРѕС‚Р°С‚РєРё (Р±РµР· СЂРµР°Р»СЊРЅРѕРіРѕ РєРѕРЅС‚РµРЅС‚Сѓ), РїРѕРІРµСЂС‚Р°С” СЃРїРёСЃРѕРє РІРёРґР°Р»РµРЅРёС….
+        /// Р—Р°С…РёС‰Р°С” РЅРѕС‚Р°С‚РєРё Р°РІС‚РѕРјР°С‚РёС‡РЅРѕ Р·Р° РјРµС‚Р°РґР°РЅРёРјРё вЂ” Р±РµР· hardcoded РЅР°Р·РІ:
+        /// - frontmatter type: brain-core Р°Р±Рѕ type: index в†’ Р·Р°С…РёС‰РµРЅРѕ
+        /// - 3+ backlinks в†’ РІР°Р¶Р»РёРІРёР№ РІСѓР·РѕР», Р·Р°С…РёС‰РµРЅРѕ
+        /// - Daily/ РїР°РїРєР° в†’ Р·Р°С…РёС‰РµРЅРѕ
         /// </summary>
         public List<string> CleanupEmptyNotes(bool dryRun = false)
         {
@@ -484,11 +484,11 @@ tags: [{SanitizeTagsLine(tagsLine)}]
 
             foreach (var rel in status.EmptyNotes)
             {
-                // 1. Daily/ завжди захищена
+                // 1. Daily/ Р·Р°РІР¶РґРё Р·Р°С…РёС‰РµРЅР°
                 if (rel.StartsWith("Daily/", StringComparison.OrdinalIgnoreCase))
                     continue;
 
-                // 2. Нотатки з type: brain-core або type: index — захищені
+                // 2. РќРѕС‚Р°С‚РєРё Р· type: brain-core Р°Р±Рѕ type: index вЂ” Р·Р°С…РёС‰РµРЅС–
                 try
                 {
                     var content = ReadNote(rel) ?? "";
@@ -499,7 +499,7 @@ tags: [{SanitizeTagsLine(tagsLine)}]
                 }
                 catch (Exception ex) { Debug.WriteLine($"[ObsidianMcp] CleanupEmptyNotes read failed: {ex.Message}"); continue; }
 
-                // 3. Нотатки з 3+ backlinks — важливий вузол, не чіпати
+                // 3. РќРѕС‚Р°С‚РєРё Р· 3+ backlinks вЂ” РІР°Р¶Р»РёРІРёР№ РІСѓР·РѕР», РЅРµ С‡С–РїР°С‚Рё
                 try
                 {
                     if (GetBacklinks(rel).Count >= 3)
@@ -517,11 +517,11 @@ tags: [{SanitizeTagsLine(tagsLine)}]
             return deleted;
         }
 
-        // ── BRAIN VAULT INITIALIZATION ────────────────────────────
+        // в”Ђв”Ђ BRAIN VAULT INITIALIZATION в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
 
         /// <summary>
-        /// Перевіряє стан vault і повертає статус ініціалізації.
-        /// НЕ створює hardcoded нотатки — LLM сама вирішує що і як назвати.
+        /// РџРµСЂРµРІС–СЂСЏС” СЃС‚Р°РЅ vault С– РїРѕРІРµСЂС‚Р°С” СЃС‚Р°С‚СѓСЃ С–РЅС–С†С–Р°Р»С–Р·Р°С†С–С—.
+        /// РќР• СЃС‚РІРѕСЂСЋС” hardcoded РЅРѕС‚Р°С‚РєРё вЂ” LLM СЃР°РјР° РІРёСЂС–С€СѓС” С‰Рѕ С– СЏРє РЅР°Р·РІР°С‚Рё.
         /// </summary>
         private HashSet<string> BuildWikiTargetIndex(List<string> files)
         {
@@ -554,7 +554,7 @@ tags: [{SanitizeTagsLine(tagsLine)}]
         }
 
         private static bool LooksLikeMojibake(string raw)
-            => System.Text.RegularExpressions.Regex.IsMatch(raw, @"(Рџ|РЅ|Р°|Рё|СЏ|СЊ|С–|Сѓ|С‚|СЃ|вЂ|Â|Ð|Ñ|�)");
+            => System.Text.RegularExpressions.Regex.IsMatch(raw, @"(Р Сџ|Р Р…|Р В°|Р С‘|РЎРЏ|РЎРЉ|РЎвЂ“|РЎС“|РЎвЂљ|РЎРѓ|РІР‚|Г‚|Гђ|Г‘|пїЅ)");
 
         private static string SanitizeTagValue(string value)
         {
@@ -593,7 +593,7 @@ created: {DateTime.Now:yyyy-MM-dd}
 
 # {title}
 
-Індекс-нотатка створена автоматично, бо на цей вузол уже посилався vault. Порожні вузли на графі залишимо для людей, які люблять дивитись у чорну діру.
+Р†РЅРґРµРєСЃ-РЅРѕС‚Р°С‚РєР° СЃС‚РІРѕСЂРµРЅР° Р°РІС‚РѕРјР°С‚РёС‡РЅРѕ, Р±Рѕ РЅР° С†РµР№ РІСѓР·РѕР» СѓР¶Рµ РїРѕСЃРёР»Р°РІСЃСЏ vault. РџРѕСЂРѕР¶РЅС– РІСѓР·Р»Рё РЅР° РіСЂР°С„С– Р·Р°Р»РёС€РёРјРѕ РґР»СЏ Р»СЋРґРµР№, СЏРєС– Р»СЋР±Р»СЏС‚СЊ РґРёРІРёС‚РёСЃСЊ Сѓ С‡РѕСЂРЅСѓ РґС–СЂСѓ.
 """;
                     File.WriteAllText(full, content, encoding);
                     report.RepairedFiles.Add(rel);
@@ -610,7 +610,7 @@ created: {DateTime.Now:yyyy-MM-dd}
             var allNotes = ListNotes();
             var noteCount = allNotes.Count;
 
-            // Шукаємо нотатки з type: brain-core в frontmatter
+            // РЁСѓРєР°С”РјРѕ РЅРѕС‚Р°С‚РєРё Р· type: brain-core РІ frontmatter
             var hasCoreNote = false;
             var coreNotePath = "";
             foreach (var rel in allNotes)
@@ -630,7 +630,7 @@ created: {DateTime.Now:yyyy-MM-dd}
                 catch (Exception ex) { Debug.WriteLine($"[ObsidianMcp] Brain-core check failed for {rel}: {ex.Message}"); }
             }
 
-            // Рахуємо загальну кількість [[links]] в vault
+            // Р Р°С…СѓС”РјРѕ Р·Р°РіР°Р»СЊРЅСѓ РєС–Р»СЊРєС–СЃС‚СЊ [[links]] РІ vault
             var totalLinks = 0;
             foreach (var rel in allNotes)
             {
@@ -643,13 +643,13 @@ created: {DateTime.Now:yyyy-MM-dd}
 
             string suggestedAction;
             if (isEmpty)
-                suggestedAction = "Vault порожній. Створи свої ключові нотатки: центральна нотатка мозку (type: brain-core), профіль творця, щоденник. Назви на свій розсуд.";
+                suggestedAction = "Vault РїРѕСЂРѕР¶РЅС–Р№. РЎС‚РІРѕСЂРё СЃРІРѕС— РєР»СЋС‡РѕРІС– РЅРѕС‚Р°С‚РєРё: С†РµРЅС‚СЂР°Р»СЊРЅР° РЅРѕС‚Р°С‚РєР° РјРѕР·РєСѓ (type: brain-core), РїСЂРѕС„С–Р»СЊ С‚РІРѕСЂС†СЏ, С‰РѕРґРµРЅРЅРёРє. РќР°Р·РІРё РЅР° СЃРІС–Р№ СЂРѕР·СЃСѓРґ.";
             else if (!hasCoreNote)
-                suggestedAction = "Немає центральної нотатки мозку. Створи одну з frontmatter: type: brain-core — це буде твій хаб.";
+                suggestedAction = "РќРµРјР°С” С†РµРЅС‚СЂР°Р»СЊРЅРѕС— РЅРѕС‚Р°С‚РєРё РјРѕР·РєСѓ. РЎС‚РІРѕСЂРё РѕРґРЅСѓ Р· frontmatter: type: brain-core вЂ” С†Рµ Р±СѓРґРµ С‚РІС–Р№ С…Р°Р±.";
             else if (isSparslyLinked)
-                suggestedAction = $"Мало зв'язків ({totalLinks} на {noteCount} нотаток). Виклич rebuild_links або додай [[посилання]] вручну.";
+                suggestedAction = $"РњР°Р»Рѕ Р·РІ'СЏР·РєС–РІ ({totalLinks} РЅР° {noteCount} РЅРѕС‚Р°С‚РѕРє). Р’РёРєР»РёС‡ rebuild_links Р°Р±Рѕ РґРѕРґР°Р№ [[РїРѕСЃРёР»Р°РЅРЅСЏ]] РІСЂСѓС‡РЅСѓ.";
             else
-                suggestedAction = "Vault здоровий.";
+                suggestedAction = "Vault Р·РґРѕСЂРѕРІРёР№.";
 
             return new VaultInitStatus
             {
@@ -662,20 +662,20 @@ created: {DateTime.Now:yyyy-MM-dd}
             };
         }
 
-        // Зворотна сумісність — тепер просто повертає статус у вигляді рядка
+        // Р—РІРѕСЂРѕС‚РЅР° СЃСѓРјС–СЃРЅС–СЃС‚СЊ вЂ” С‚РµРїРµСЂ РїСЂРѕСЃС‚Рѕ РїРѕРІРµСЂС‚Р°С” СЃС‚Р°С‚СѓСЃ Сѓ РІРёРіР»СЏРґС– СЂСЏРґРєР°
         public List<string> InitBrainVault()
         {
             var status = GetVaultInitStatus();
             var result = new List<string> { status.ToString() };
 
-            // Якщо vault зовсім порожній — тільки rebuild_links після першого запуску
+            // РЇРєС‰Рѕ vault Р·РѕРІСЃС–Рј РїРѕСЂРѕР¶РЅС–Р№ вЂ” С‚С–Р»СЊРєРё rebuild_links РїС–СЃР»СЏ РїРµСЂС€РѕРіРѕ Р·Р°РїСѓСЃРєСѓ
             if (!status.IsEmpty && status.TotalLinks < status.NoteCount)
                 RebuildLinks();
 
             return result;
         }
 
-        // ── TOOLS FOR LLM ─────────────────────────────────────────
+        // в”Ђв”Ђ TOOLS FOR LLM в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
 
         public VaultMaintenanceResult MaintainKokonoeVaultArchitecture(string reason = "manual")
         {
@@ -799,34 +799,34 @@ tags: [kokonoe, vault, architecture]
         {
             var sb = new StringBuilder();
             sb.Append(BuildManagedFrontmatter("vault-index"));
-            sb.AppendLine("# Індекс vault Коконое");
+            sb.AppendLine("# Р†РЅРґРµРєСЃ vault РљРѕРєРѕРЅРѕРµ");
             sb.AppendLine();
-            sb.AppendLine("## Ядро");
-            sb.AppendLine("- [[Kokonoe/Architecture/Manifest|Маніфест]]");
-            sb.AppendLine("- [[Kokonoe/Architecture/Map|Карта]]");
-            sb.AppendLine("- [[Kokonoe/Architecture/Health|Стан]]");
-            sb.AppendLine("- [[Kokonoe/Architecture/Backlog|Беклог]]");
-            sb.AppendLine("- [[Kokonoe/Automation/Obsidian Sync|Синхронізація Obsidian]]");
-            sb.AppendLine("- [[Kokonoe/AutoMemory|Автопам'ять]]");
-            sb.AppendLine("- [[Kokonoe/Project Log|Журнал проекту]]");
-            sb.AppendLine("- [[Kokonoe/Memory/Facts|Факти]]");
-            sb.AppendLine("- [[Kokonoe/Memory/Quality|Якість пам'яті]]");
-            sb.AppendLine("- [[Kokonoe/Memory/Cleanup|Очищення пам'яті]]");
-            sb.AppendLine("- [[Kokonoe/Memory/Review|Огляд пам'яті]]");
-            sb.AppendLine("- [[Kokonoe/Tasks Queue|Черга задач]]");
+            sb.AppendLine("## РЇРґСЂРѕ");
+            sb.AppendLine("- [[Kokonoe/Architecture/Manifest|РњР°РЅС–С„РµСЃС‚]]");
+            sb.AppendLine("- [[Kokonoe/Architecture/Map|РљР°СЂС‚Р°]]");
+            sb.AppendLine("- [[Kokonoe/Architecture/Health|РЎС‚Р°РЅ]]");
+            sb.AppendLine("- [[Kokonoe/Architecture/Backlog|Р‘РµРєР»РѕРі]]");
+            sb.AppendLine("- [[Kokonoe/Automation/Obsidian Sync|РЎРёРЅС…СЂРѕРЅС–Р·Р°С†С–СЏ Obsidian]]");
+            sb.AppendLine("- [[Kokonoe/AutoMemory|РђРІС‚РѕРїР°Рј'СЏС‚СЊ]]");
+            sb.AppendLine("- [[Kokonoe/Project Log|Р–СѓСЂРЅР°Р» РїСЂРѕРµРєС‚Сѓ]]");
+            sb.AppendLine("- [[Kokonoe/Memory/Facts|Р¤Р°РєС‚Рё]]");
+            sb.AppendLine("- [[Kokonoe/Memory/Quality|РЇРєС–СЃС‚СЊ РїР°Рј'СЏС‚С–]]");
+            sb.AppendLine("- [[Kokonoe/Memory/Cleanup|РћС‡РёС‰РµРЅРЅСЏ РїР°Рј'СЏС‚С–]]");
+            sb.AppendLine("- [[Kokonoe/Memory/Review|РћРіР»СЏРґ РїР°Рј'СЏС‚С–]]");
+            sb.AppendLine("- [[Kokonoe/Tasks Queue|Р§РµСЂРіР° Р·Р°РґР°С‡]]");
             sb.AppendLine();
-            sb.AppendLine("## Стан");
-            sb.AppendLine($"- Нотаток: {status.TotalNotes}");
-            sb.AppendLine($"- Заповнених нотаток: {status.FilledNotes}");
-            sb.AppendLine($"- Порожніх нотаток: {status.EmptyNotes.Count}");
-            sb.AppendLine($"- Осиротілих нотаток: {status.OrphanNotes.Count}");
-            sb.AppendLine($"- Ядро мозку: {(init.HasCoreNote ? init.CoreNotePath : "відсутнє")}");
+            sb.AppendLine("## РЎС‚Р°РЅ");
+            sb.AppendLine($"- РќРѕС‚Р°С‚РѕРє: {status.TotalNotes}");
+            sb.AppendLine($"- Р—Р°РїРѕРІРЅРµРЅРёС… РЅРѕС‚Р°С‚РѕРє: {status.FilledNotes}");
+            sb.AppendLine($"- РџРѕСЂРѕР¶РЅС–С… РЅРѕС‚Р°С‚РѕРє: {status.EmptyNotes.Count}");
+            sb.AppendLine($"- РћСЃРёСЂРѕС‚С–Р»РёС… РЅРѕС‚Р°С‚РѕРє: {status.OrphanNotes.Count}");
+            sb.AppendLine($"- РЇРґСЂРѕ РјРѕР·РєСѓ: {(init.HasCoreNote ? init.CoreNotePath : "РІС–РґСЃСѓС‚РЅС”")}");
             sb.AppendLine();
-            sb.AppendLine("## Основні папки");
+            sb.AppendLine("## РћСЃРЅРѕРІРЅС– РїР°РїРєРё");
             foreach (var folder in folders.Take(40))
                 sb.AppendLine($"- `{folder}/`");
             sb.AppendLine();
-            sb.AppendLine("## Змінено сьогодні");
+            sb.AppendLine("## Р—РјС–РЅРµРЅРѕ СЃСЊРѕРіРѕРґРЅС–");
             foreach (var note in modifiedToday)
                 sb.AppendLine($"- [[{Path.GetFileNameWithoutExtension(note)}]] ({note})");
             return sb.ToString();
@@ -836,25 +836,25 @@ tags: [kokonoe, vault, architecture]
         {
             var sb = new StringBuilder();
             sb.Append(BuildManagedFrontmatter("vault-manifest"));
-            sb.AppendLine("# Маніфест vault");
+            sb.AppendLine("# РњР°РЅС–С„РµСЃС‚ vault");
             sb.AppendLine();
-            sb.AppendLine("## Керовані області");
-            sb.AppendLine("- Kokonoe/: оперативна пам'ять, експорт стану, знання проекту.");
-            sb.AppendLine("- Kokonoe/Architecture/: згенеровані карти, звіти стану, беклог.");
-            sb.AppendLine("- Kokonoe/Memory/: стабільні факти та епізоди.");
-            sb.AppendLine("- Kokonoe/Automation/: правила синхронізації та автоматизація.");
-            sb.AppendLine("- Daily/: щоденні робочі нотатки.");
-            sb.AppendLine("- Chats/: сирі логи чатів.");
+            sb.AppendLine("## РљРµСЂРѕРІР°РЅС– РѕР±Р»Р°СЃС‚С–");
+            sb.AppendLine("- Kokonoe/: РѕРїРµСЂР°С‚РёРІРЅР° РїР°Рј'СЏС‚СЊ, РµРєСЃРїРѕСЂС‚ СЃС‚Р°РЅСѓ, Р·РЅР°РЅРЅСЏ РїСЂРѕРµРєС‚Сѓ.");
+            sb.AppendLine("- Kokonoe/Architecture/: Р·РіРµРЅРµСЂРѕРІР°РЅС– РєР°СЂС‚Рё, Р·РІС–С‚Рё СЃС‚Р°РЅСѓ, Р±РµРєР»РѕРі.");
+            sb.AppendLine("- Kokonoe/Memory/: СЃС‚Р°Р±С–Р»СЊРЅС– С„Р°РєС‚Рё С‚Р° РµРїС–Р·РѕРґРё.");
+            sb.AppendLine("- Kokonoe/Automation/: РїСЂР°РІРёР»Р° СЃРёРЅС…СЂРѕРЅС–Р·Р°С†С–С— С‚Р° Р°РІС‚РѕРјР°С‚РёР·Р°С†С–СЏ.");
+            sb.AppendLine("- Daily/: С‰РѕРґРµРЅРЅС– СЂРѕР±РѕС‡С– РЅРѕС‚Р°С‚РєРё.");
+            sb.AppendLine("- Chats/: СЃРёСЂС– Р»РѕРіРё С‡Р°С‚С–РІ.");
             sb.AppendLine();
-            sb.AppendLine("## Інвентар папок");
+            sb.AppendLine("## Р†РЅРІРµРЅС‚Р°СЂ РїР°РїРѕРє");
             foreach (var folder in folders.Take(80))
                 sb.AppendLine($"- {folder}");
             sb.AppendLine();
-            sb.AppendLine("## Інвентар нотаток");
+            sb.AppendLine("## Р†РЅРІРµРЅС‚Р°СЂ РЅРѕС‚Р°С‚РѕРє");
             foreach (var note in notes.Take(200))
                 sb.AppendLine($"- [[{Path.GetFileNameWithoutExtension(note)}]] ({note})");
             if (notes.Count > 200)
-                sb.AppendLine($"- ... ще {notes.Count - 200} нотаток");
+                sb.AppendLine($"- ... С‰Рµ {notes.Count - 200} РЅРѕС‚Р°С‚РѕРє");
             return sb.ToString();
         }
 
@@ -862,13 +862,13 @@ tags: [kokonoe, vault, architecture]
         {
             var sb = new StringBuilder();
             sb.Append(BuildManagedFrontmatter("vault-map"));
-            sb.AppendLine("# Карта vault");
+            sb.AppendLine("# РљР°СЂС‚Р° vault");
             sb.AppendLine();
-            sb.AppendLine("## Вузли посилань");
+            sb.AppendLine("## Р’СѓР·Р»Рё РїРѕСЃРёР»Р°РЅСЊ");
             foreach (var node in graph.OrderByDescending(x => x.Value.Count).Take(40))
-                sb.AppendLine($"- {node.Key}: вихідних посилань {node.Value.Count}");
+                sb.AppendLine($"- {node.Key}: РІРёС…С–РґРЅРёС… РїРѕСЃРёР»Р°РЅСЊ {node.Value.Count}");
             sb.AppendLine();
-            sb.AppendLine("## Зв'язки");
+            sb.AppendLine("## Р—РІ'СЏР·РєРё");
             foreach (var node in graph.OrderBy(x => x.Key).Take(120))
             {
                 if (node.Value.Count == 0) continue;
@@ -883,15 +883,15 @@ tags: [kokonoe, vault, architecture]
         {
             var sb = new StringBuilder();
             sb.Append(BuildManagedFrontmatter("vault-health"));
-            sb.AppendLine("# Стан vault");
+            sb.AppendLine("# РЎС‚Р°РЅ vault");
             sb.AppendLine();
-            sb.AppendLine("## Сигнали");
-            sb.AppendLine($"- Усього нотаток: {status.TotalNotes}");
-            sb.AppendLine($"- Заповнених нотаток: {status.FilledNotes}");
-            sb.AppendLine($"- Порожніх нотаток: {status.EmptyNotes.Count}");
-            sb.AppendLine($"- Осиротілих нотаток: {status.OrphanNotes.Count}");
-            sb.AppendLine($"- Ізольованих нотаток: {isolated.Count}");
-            sb.AppendLine($"- Ядро мозку: {(init.HasCoreNote ? init.CoreNotePath : "відсутнє")}");
+            sb.AppendLine("## РЎРёРіРЅР°Р»Рё");
+            sb.AppendLine($"- РЈСЃСЊРѕРіРѕ РЅРѕС‚Р°С‚РѕРє: {status.TotalNotes}");
+            sb.AppendLine($"- Р—Р°РїРѕРІРЅРµРЅРёС… РЅРѕС‚Р°С‚РѕРє: {status.FilledNotes}");
+            sb.AppendLine($"- РџРѕСЂРѕР¶РЅС–С… РЅРѕС‚Р°С‚РѕРє: {status.EmptyNotes.Count}");
+            sb.AppendLine($"- РћСЃРёСЂРѕС‚С–Р»РёС… РЅРѕС‚Р°С‚РѕРє: {status.OrphanNotes.Count}");
+            sb.AppendLine($"- Р†Р·РѕР»СЊРѕРІР°РЅРёС… РЅРѕС‚Р°С‚РѕРє: {isolated.Count}");
+            sb.AppendLine($"- РЇРґСЂРѕ РјРѕР·РєСѓ: {(init.HasCoreNote ? init.CoreNotePath : "РІС–РґСЃСѓС‚РЅС”")}");
             if (doctor != null)
             {
                 sb.AppendLine($"- Vault doctor: {(doctor.HasProblems ? "issues found" : "clean")} (score {doctor.HealthScore}/100)");
@@ -910,15 +910,15 @@ tags: [kokonoe, vault, architecture]
                     sb.AppendLine($"- Deleted empty: {string.Join(", ", doctor.DeletedEmptyFiles.Take(12))}");
             }
             sb.AppendLine();
-            sb.AppendLine("## Порожні нотатки");
+            sb.AppendLine("## РџРѕСЂРѕР¶РЅС– РЅРѕС‚Р°С‚РєРё");
             foreach (var note in status.EmptyNotes.Take(50))
                 sb.AppendLine($"- [[{Path.GetFileNameWithoutExtension(note)}]] ({note})");
             sb.AppendLine();
-            sb.AppendLine("## Осиротілі нотатки");
+            sb.AppendLine("## РћСЃРёСЂРѕС‚С–Р»С– РЅРѕС‚Р°С‚РєРё");
             foreach (var note in status.OrphanNotes.Take(50))
                 sb.AppendLine($"- [[{Path.GetFileNameWithoutExtension(note)}]] ({note})");
             sb.AppendLine();
-            sb.AppendLine("## Ізольовані нотатки");
+            sb.AppendLine("## Р†Р·РѕР»СЊРѕРІР°РЅС– РЅРѕС‚Р°С‚РєРё");
             foreach (var note in isolated.Take(50))
                 sb.AppendLine($"- [[{Path.GetFileNameWithoutExtension(note)}]] ({note})");
             return sb.ToString();
@@ -928,20 +928,20 @@ tags: [kokonoe, vault, architecture]
         {
             var sb = new StringBuilder();
             sb.Append(BuildManagedFrontmatter("vault-backlog"));
-            sb.AppendLine("# Беклог vault");
+            sb.AppendLine("# Р‘РµРєР»РѕРі vault");
             sb.AppendLine();
             if (!init.HasCoreNote)
-                sb.AppendLine("- [ ] Створити або позначити центральну нотатку з `type: brain-core`.");
+                sb.AppendLine("- [ ] РЎС‚РІРѕСЂРёС‚Рё Р°Р±Рѕ РїРѕР·РЅР°С‡РёС‚Рё С†РµРЅС‚СЂР°Р»СЊРЅСѓ РЅРѕС‚Р°С‚РєСѓ Р· `type: brain-core`.");
             if (status.EmptyNotes.Count > 0)
-                sb.AppendLine($"- [ ] Переглянути порожні нотатки: {status.EmptyNotes.Count}.");
+                sb.AppendLine($"- [ ] РџРµСЂРµРіР»СЏРЅСѓС‚Рё РїРѕСЂРѕР¶РЅС– РЅРѕС‚Р°С‚РєРё: {status.EmptyNotes.Count}.");
             if (status.OrphanNotes.Count > 0)
-                sb.AppendLine($"- [ ] Під'єднати осиротілі нотатки до графа: {status.OrphanNotes.Count}.");
+                sb.AppendLine($"- [ ] РџС–Рґ'С”РґРЅР°С‚Рё РѕСЃРёСЂРѕС‚С–Р»С– РЅРѕС‚Р°С‚РєРё РґРѕ РіСЂР°С„Р°: {status.OrphanNotes.Count}.");
             if (isolated.Count > 0)
-                sb.AppendLine($"- [ ] Визначити місце для ізольованих нотаток: {isolated.Count}.");
+                sb.AppendLine($"- [ ] Р’РёР·РЅР°С‡РёС‚Рё РјС–СЃС†Рµ РґР»СЏ С–Р·РѕР»СЊРѕРІР°РЅРёС… РЅРѕС‚Р°С‚РѕРє: {isolated.Count}.");
             if (status.EmptyNotes.Count == 0 && status.OrphanNotes.Count == 0 && init.HasCoreNote)
-                sb.AppendLine("- [x] Очевидного структурного боргу не знайдено.");
+                sb.AppendLine("- [x] РћС‡РµРІРёРґРЅРѕРіРѕ СЃС‚СЂСѓРєС‚СѓСЂРЅРѕРіРѕ Р±РѕСЂРіСѓ РЅРµ Р·РЅР°Р№РґРµРЅРѕ.");
             sb.AppendLine();
-            sb.AppendLine("## Кандидати");
+            sb.AppendLine("## РљР°РЅРґРёРґР°С‚Рё");
             foreach (var note in status.OrphanNotes.Concat(isolated).Distinct().Take(80))
                 sb.AppendLine($"- [ ] [[{Path.GetFileNameWithoutExtension(note)}]] ({note})");
             return sb.ToString();
@@ -951,17 +951,17 @@ tags: [kokonoe, vault, architecture]
         {
             var sb = new StringBuilder();
             sb.Append(BuildManagedFrontmatter("vault-language-policy"));
-            sb.AppendLine("# Мовна політика vault");
+            sb.AppendLine("# РњРѕРІРЅР° РїРѕР»С–С‚РёРєР° vault");
             sb.AppendLine();
-            sb.AppendLine("## Правило");
-            sb.AppendLine("- Людські записи, підсумки, журнали, пам'ять, задачі та архітектурні нотатки ведуться українською.");
-            sb.AppendLine("- Англійська дозволена тільки для технічних ключів, назв API, назв моделей, команд, шляхів, frontmatter, JSON-полів, тегів, коду та сталих термінів на кшталт health, mood, bpm, vault.");
-            sb.AppendLine("- Якщо службова нотатка генерується автоматично, її видимий текст має бути українським.");
-            sb.AppendLine("- Сирі історичні чати не переписуються агресивно, щоб не пошкодити архів розмов.");
+            sb.AppendLine("## РџСЂР°РІРёР»Рѕ");
+            sb.AppendLine("- Р›СЋРґСЃСЊРєС– Р·Р°РїРёСЃРё, РїС–РґСЃСѓРјРєРё, Р¶СѓСЂРЅР°Р»Рё, РїР°Рј'СЏС‚СЊ, Р·Р°РґР°С‡С– С‚Р° Р°СЂС…С–С‚РµРєС‚СѓСЂРЅС– РЅРѕС‚Р°С‚РєРё РІРµРґСѓС‚СЊСЃСЏ СѓРєСЂР°С—РЅСЃСЊРєРѕСЋ.");
+            sb.AppendLine("- РђРЅРіР»С–Р№СЃСЊРєР° РґРѕР·РІРѕР»РµРЅР° С‚С–Р»СЊРєРё РґР»СЏ С‚РµС…РЅС–С‡РЅРёС… РєР»СЋС‡С–РІ, РЅР°Р·РІ API, РЅР°Р·РІ РјРѕРґРµР»РµР№, РєРѕРјР°РЅРґ, С€Р»СЏС…С–РІ, frontmatter, JSON-РїРѕР»С–РІ, С‚РµРіС–РІ, РєРѕРґСѓ С‚Р° СЃС‚Р°Р»РёС… С‚РµСЂРјС–РЅС–РІ РЅР° РєС€С‚Р°Р»С‚ health, mood, bpm, vault.");
+            sb.AppendLine("- РЇРєС‰Рѕ СЃР»СѓР¶Р±РѕРІР° РЅРѕС‚Р°С‚РєР° РіРµРЅРµСЂСѓС”С‚СЊСЃСЏ Р°РІС‚РѕРјР°С‚РёС‡РЅРѕ, С—С— РІРёРґРёРјРёР№ С‚РµРєСЃС‚ РјР°С” Р±СѓС‚Рё СѓРєСЂР°С—РЅСЃСЊРєРёРј.");
+            sb.AppendLine("- РЎРёСЂС– С–СЃС‚РѕСЂРёС‡РЅС– С‡Р°С‚Рё РЅРµ РїРµСЂРµРїРёСЃСѓСЋС‚СЊСЃСЏ Р°РіСЂРµСЃРёРІРЅРѕ, С‰РѕР± РЅРµ РїРѕС€РєРѕРґРёС‚Рё Р°СЂС…С–РІ СЂРѕР·РјРѕРІ.");
             sb.AppendLine();
-            sb.AppendLine("## Контроль");
-            sb.AppendLine("- Після змін у генераторах треба запускати build і тести.");
-            sb.AppendLine("- Після масової чистки vault треба повторно сканувати Kokonoe/Daily на старі англійські заголовки.");
+            sb.AppendLine("## РљРѕРЅС‚СЂРѕР»СЊ");
+            sb.AppendLine("- РџС–СЃР»СЏ Р·РјС–РЅ Сѓ РіРµРЅРµСЂР°С‚РѕСЂР°С… С‚СЂРµР±Р° Р·Р°РїСѓСЃРєР°С‚Рё build С– С‚РµСЃС‚Рё.");
+            sb.AppendLine("- РџС–СЃР»СЏ РјР°СЃРѕРІРѕС— С‡РёСЃС‚РєРё vault С‚СЂРµР±Р° РїРѕРІС‚РѕСЂРЅРѕ СЃРєР°РЅСѓРІР°С‚Рё Kokonoe/Daily РЅР° СЃС‚Р°СЂС– Р°РЅРіР»С–Р№СЃСЊРєС– Р·Р°РіРѕР»РѕРІРєРё.");
             return sb.ToString();
         }
 
@@ -1080,26 +1080,26 @@ tags: [kokonoe, vault, architecture]
         {
             var sb = new StringBuilder();
             sb.Append(BuildManagedFrontmatter("memory-quality"));
-            sb.AppendLine("# Якість пам'яті");
+            sb.AppendLine("# РЇРєС–СЃС‚СЊ РїР°Рј'СЏС‚С–");
             sb.AppendLine();
-            sb.AppendLine("## Підсумок");
-            sb.AppendLine($"- Перевірено елементів пам'яті: {report.NormalizedItems.Count}");
-            sb.AppendLine($"- Груп точних дублікатів: {report.DuplicateGroups.Count}");
-            sb.AppendLine($"- Груп схожих дублікатів: {report.SimilarGroups.Count}");
+            sb.AppendLine("## РџС–РґСЃСѓРјРѕРє");
+            sb.AppendLine($"- РџРµСЂРµРІС–СЂРµРЅРѕ РµР»РµРјРµРЅС‚С–РІ РїР°Рј'СЏС‚С–: {report.NormalizedItems.Count}");
+            sb.AppendLine($"- Р“СЂСѓРї С‚РѕС‡РЅРёС… РґСѓР±Р»С–РєР°С‚С–РІ: {report.DuplicateGroups.Count}");
+            sb.AppendLine($"- Р“СЂСѓРї СЃС…РѕР¶РёС… РґСѓР±Р»С–РєР°С‚С–РІ: {report.SimilarGroups.Count}");
             sb.AppendLine();
-            sb.AppendLine("## Розмір нотаток");
+            sb.AppendLine("## Р РѕР·РјС–СЂ РЅРѕС‚Р°С‚РѕРє");
             foreach (var pair in report.NoteItemCounts.OrderByDescending(p => p.Value))
-                sb.AppendLine($"- {pair.Key}: елементів {pair.Value}");
+                sb.AppendLine($"- {pair.Key}: РµР»РµРјРµРЅС‚С–РІ {pair.Value}");
             sb.AppendLine();
-            sb.AppendLine("## Точні дублікати");
+            sb.AppendLine("## РўРѕС‡РЅС– РґСѓР±Р»С–РєР°С‚Рё");
             AppendMemoryGroups(sb, report.DuplicateGroups);
             sb.AppendLine();
-            sb.AppendLine("## Схожі дублікати");
+            sb.AppendLine("## РЎС…РѕР¶С– РґСѓР±Р»С–РєР°С‚Рё");
             AppendMemoryGroups(sb, report.SimilarGroups);
             sb.AppendLine();
-            sb.AppendLine("## Очищення");
-            sb.AppendLine("- Використай `cleanup_memory_duplicates` з `dry_run: true`, щоб переглянути точні дублікати перед видаленням.");
-            sb.AppendLine("- `dry_run: false` використовуй тільки після перегляду. Схожі дублікати лише показуються, автоматично не видаляються.");
+            sb.AppendLine("## РћС‡РёС‰РµРЅРЅСЏ");
+            sb.AppendLine("- Р’РёРєРѕСЂРёСЃС‚Р°Р№ `cleanup_memory_duplicates` Р· `dry_run: true`, С‰РѕР± РїРµСЂРµРіР»СЏРЅСѓС‚Рё С‚РѕС‡РЅС– РґСѓР±Р»С–РєР°С‚Рё РїРµСЂРµРґ РІРёРґР°Р»РµРЅРЅСЏРј.");
+            sb.AppendLine("- `dry_run: false` РІРёРєРѕСЂРёСЃС‚РѕРІСѓР№ С‚С–Р»СЊРєРё РїС–СЃР»СЏ РїРµСЂРµРіР»СЏРґСѓ. РЎС…РѕР¶С– РґСѓР±Р»С–РєР°С‚Рё Р»РёС€Рµ РїРѕРєР°Р·СѓСЋС‚СЊСЃСЏ, Р°РІС‚РѕРјР°С‚РёС‡РЅРѕ РЅРµ РІРёРґР°Р»СЏСЋС‚СЊСЃСЏ.");
             return sb.ToString();
         }
 
@@ -1107,15 +1107,15 @@ tags: [kokonoe, vault, architecture]
         {
             var sb = new StringBuilder();
             sb.Append(BuildManagedFrontmatter("memory-cleanup"));
-            sb.AppendLine("# Очищення пам'яті");
+            sb.AppendLine("# РћС‡РёС‰РµРЅРЅСЏ РїР°Рј'СЏС‚С–");
             sb.AppendLine();
-            sb.AppendLine("## Підсумок");
-            sb.AppendLine($"- Пробний режим: {result.DryRun}");
-            sb.AppendLine($"- Знайдено рядків-дублікатів: {result.TotalRemoved}");
+            sb.AppendLine("## РџС–РґСЃСѓРјРѕРє");
+            sb.AppendLine($"- РџСЂРѕР±РЅРёР№ СЂРµР¶РёРј: {result.DryRun}");
+            sb.AppendLine($"- Р—РЅР°Р№РґРµРЅРѕ СЂСЏРґРєС–РІ-РґСѓР±Р»С–РєР°С‚С–РІ: {result.TotalRemoved}");
             sb.AppendLine();
-            sb.AppendLine("## Кандидати на видалення");
+            sb.AppendLine("## РљР°РЅРґРёРґР°С‚Рё РЅР° РІРёРґР°Р»РµРЅРЅСЏ");
             if (result.TotalRemoved == 0)
-                sb.AppendLine("- немає");
+                sb.AppendLine("- РЅРµРјР°С”");
             foreach (var pair in result.RemovedByPath)
             {
                 sb.AppendLine($"### {pair.Key}");
@@ -1130,13 +1130,13 @@ tags: [kokonoe, vault, architecture]
         {
             if (groups.Count == 0)
             {
-                sb.AppendLine("- немає");
+                sb.AppendLine("- РЅРµРјР°С”");
                 return;
             }
 
             foreach (var group in groups.Take(20))
             {
-                sb.AppendLine("- група:");
+                sb.AppendLine("- РіСЂСѓРїР°:");
                 foreach (var item in group.Take(6))
                     sb.AppendLine($"  - {item.Path}: {item.Text}");
             }
@@ -1153,7 +1153,7 @@ tags: [kokonoe, vault, architecture]
                 review.Actions.Add(new MemoryReviewAction
                 {
                     Action = "merge",
-                    Reason = "точні дублікати в пам'яті",
+                    Reason = "С‚РѕС‡РЅС– РґСѓР±Р»С–РєР°С‚Рё РІ РїР°Рј'СЏС‚С–",
                     SourcePath = group.First().Path,
                     TargetPath = group.First().Path,
                     Confidence = 1.0,
@@ -1166,7 +1166,7 @@ tags: [kokonoe, vault, architecture]
                 review.Actions.Add(new MemoryReviewAction
                 {
                     Action = "confirm",
-                    Reason = "схожі елементи пам'яті потребують підтвердження перед об'єднанням",
+                    Reason = "СЃС…РѕР¶С– РµР»РµРјРµРЅС‚Рё РїР°Рј'СЏС‚С– РїРѕС‚СЂРµР±СѓСЋС‚СЊ РїС–РґС‚РІРµСЂРґР¶РµРЅРЅСЏ РїРµСЂРµРґ РѕР±'С”РґРЅР°РЅРЅСЏРј",
                     SourcePath = group.First().Path,
                     TargetPath = group.First().Path,
                     Confidence = 0.72,
@@ -1179,7 +1179,7 @@ tags: [kokonoe, vault, architecture]
                 review.Actions.Add(new MemoryReviewAction
                 {
                     Action = "keep",
-                    Reason = "відкрита задача ще потребує відстеження",
+                    Reason = "РІС–РґРєСЂРёС‚Р° Р·Р°РґР°С‡Р° С‰Рµ РїРѕС‚СЂРµР±СѓС” РІС–РґСЃС‚РµР¶РµРЅРЅСЏ",
                     SourcePath = task.Path,
                     TargetPath = "Kokonoe/Tasks Queue.md",
                     Confidence = 0.85,
@@ -1191,13 +1191,13 @@ tags: [kokonoe, vault, architecture]
                 .Where(i => i.Path.Contains("Preferences", StringComparison.OrdinalIgnoreCase) ||
                             i.Text.Contains("like", StringComparison.OrdinalIgnoreCase) ||
                             i.Text.Contains("prefer", StringComparison.OrdinalIgnoreCase) ||
-                            i.Text.Contains("подоба", StringComparison.OrdinalIgnoreCase))
+                            i.Text.Contains("РїРѕРґРѕР±Р°", StringComparison.OrdinalIgnoreCase))
                 .Take(20))
             {
                 review.Actions.Add(new MemoryReviewAction
                 {
                     Action = "promote_to_preference",
-                    Reason = "пам'ять схожа на вподобання, її треба легко знаходити",
+                    Reason = "РїР°Рј'СЏС‚СЊ СЃС…РѕР¶Р° РЅР° РІРїРѕРґРѕР±Р°РЅРЅСЏ, С—С— С‚СЂРµР±Р° Р»РµРіРєРѕ Р·РЅР°С…РѕРґРёС‚Рё",
                     SourcePath = item.Path,
                     TargetPath = "Kokonoe/Preferences.md",
                     Confidence = item.Path.Contains("Preferences", StringComparison.OrdinalIgnoreCase) ? 0.95 : 0.65,
@@ -1219,22 +1219,22 @@ tags: [kokonoe, vault, architecture]
         {
             var sb = new StringBuilder();
             sb.Append(BuildManagedFrontmatter("memory-review"));
-            sb.AppendLine("# Огляд пам'яті");
+            sb.AppendLine("# РћРіР»СЏРґ РїР°Рј'СЏС‚С–");
             sb.AppendLine();
-            sb.AppendLine("## Підсумок");
-            sb.AppendLine($"- Запропоновано дій: {review.Actions.Count}");
-            sb.AppendLine("- Це рекомендації. Нотатки пам'яті самі по собі не змінюються.");
+            sb.AppendLine("## РџС–РґСЃСѓРјРѕРє");
+            sb.AppendLine($"- Р—Р°РїСЂРѕРїРѕРЅРѕРІР°РЅРѕ РґС–Р№: {review.Actions.Count}");
+            sb.AppendLine("- Р¦Рµ СЂРµРєРѕРјРµРЅРґР°С†С–С—. РќРѕС‚Р°С‚РєРё РїР°Рј'СЏС‚С– СЃР°РјС– РїРѕ СЃРѕР±С– РЅРµ Р·РјС–РЅСЋСЋС‚СЊСЃСЏ.");
             sb.AppendLine();
             foreach (var actionGroup in review.Actions.GroupBy(a => a.Action).OrderBy(g => g.Key))
             {
                 sb.AppendLine($"## {MemoryReviewActionLabel(actionGroup.Key)}");
                 foreach (var action in actionGroup.Take(40))
                 {
-                    sb.AppendLine($"- впевненість {action.Confidence:0.00}: {action.Reason}");
-                    sb.AppendLine($"  - джерело: {action.SourcePath}");
-                    sb.AppendLine($"  - ціль: {action.TargetPath}");
+                    sb.AppendLine($"- РІРїРµРІРЅРµРЅС–СЃС‚СЊ {action.Confidence:0.00}: {action.Reason}");
+                    sb.AppendLine($"  - РґР¶РµСЂРµР»Рѕ: {action.SourcePath}");
+                    sb.AppendLine($"  - С†С–Р»СЊ: {action.TargetPath}");
                     foreach (var item in action.Items.Take(5))
-                        sb.AppendLine($"  - елемент: {item}");
+                        sb.AppendLine($"  - РµР»РµРјРµРЅС‚: {item}");
                 }
                 sb.AppendLine();
             }
@@ -1243,10 +1243,10 @@ tags: [kokonoe, vault, architecture]
 
         private static string MemoryReviewActionLabel(string action) => action switch
         {
-            "merge" => "Об'єднати",
-            "confirm" => "Підтвердити",
-            "keep" => "Залишити",
-            "promote_to_preference" => "Перенести у вподобання",
+            "merge" => "РћР±'С”РґРЅР°С‚Рё",
+            "confirm" => "РџС–РґС‚РІРµСЂРґРёС‚Рё",
+            "keep" => "Р—Р°Р»РёС€РёС‚Рё",
+            "promote_to_preference" => "РџРµСЂРµРЅРµСЃС‚Рё Сѓ РІРїРѕРґРѕР±Р°РЅРЅСЏ",
             _ => action
         };
 
@@ -1280,15 +1280,15 @@ tags: [kokonoe, vault, architecture]
         {
             var sb = new StringBuilder();
             sb.Append(BuildManagedFrontmatter("task-queue"));
-            sb.AppendLine("# Черга задач");
+            sb.AppendLine("# Р§РµСЂРіР° Р·Р°РґР°С‡");
             sb.AppendLine();
-            sb.AppendLine("## Підсумок");
-            sb.AppendLine($"- Відкритих задач: {snapshot.OpenTasks.Count}");
-            sb.AppendLine($"- Завершених задач знайдено: {snapshot.DoneTasks.Count}");
+            sb.AppendLine("## РџС–РґСЃСѓРјРѕРє");
+            sb.AppendLine($"- Р’С–РґРєСЂРёС‚РёС… Р·Р°РґР°С‡: {snapshot.OpenTasks.Count}");
+            sb.AppendLine($"- Р—Р°РІРµСЂС€РµРЅРёС… Р·Р°РґР°С‡ Р·РЅР°Р№РґРµРЅРѕ: {snapshot.DoneTasks.Count}");
             sb.AppendLine();
-            sb.AppendLine("## Відкриті");
+            sb.AppendLine("## Р’С–РґРєСЂРёС‚С–");
             if (snapshot.OpenTasks.Count == 0)
-                sb.AppendLine("- [x] Відкритих задач не знайдено.");
+                sb.AppendLine("- [x] Р’С–РґРєСЂРёС‚РёС… Р·Р°РґР°С‡ РЅРµ Р·РЅР°Р№РґРµРЅРѕ.");
             foreach (var task in snapshot.OpenTasks)
                 sb.AppendLine($"- [ ] {task.Text} ({task.Path})");
             return sb.ToString();
@@ -1308,6 +1308,9 @@ tags: [kokonoe, vault, architecture]
                    text.Contains("зроб") ||
                    text.Contains("реаліз") ||
                    text.Contains("дод") ||
+                   text.Contains("Р·СЂРѕР±") ||
+                   text.Contains("СЂРµР°Р»С–Р·") ||
+                   text.Contains("РґРѕРґ") ||
                    text.Contains("fix") ||
                    text.Contains("bug");
         }
@@ -1318,23 +1321,23 @@ tags: [kokonoe, vault, architecture]
             return item.Contains("[x]", StringComparison.OrdinalIgnoreCase) ||
                    text.Contains("done") ||
                    text.Contains("completed") ||
-                   text.Contains("готово") ||
-                   text.Contains("зроблено");
+                   text.Contains("РіРѕС‚РѕРІРѕ") ||
+                   text.Contains("Р·СЂРѕР±Р»РµРЅРѕ");
         }
 
         private static string BuildVaultAutomationNote()
         {
             var sb = new StringBuilder();
             sb.Append(BuildManagedFrontmatter("vault-automation"));
-            sb.AppendLine("# Синхронізація Obsidian");
+            sb.AppendLine("# РЎРёРЅС…СЂРѕРЅС–Р·Р°С†С–СЏ Obsidian");
             sb.AppendLine();
-            sb.AppendLine("## Правила");
-            sb.AppendLine("- Кожні 5 обмінів у чаті збираються в нотатки пам'яті Коконое.");
-            sb.AppendLine("- Архітектурні нотатки vault оновлюються після кожної пакетної синхронізації.");
-            sb.AppendLine("- Керовані нотатки перезаписуються, бо це згенеровані знімки стану.");
-            sb.AppendLine("- Нотатки, написані людиною, тільки доповнюються або зв'язуються звичайною синхронізацією пам'яті.");
+            sb.AppendLine("## РџСЂР°РІРёР»Р°");
+            sb.AppendLine("- РљРѕР¶РЅС– 5 РѕР±РјС–РЅС–РІ Сѓ С‡Р°С‚С– Р·Р±РёСЂР°СЋС‚СЊСЃСЏ РІ РЅРѕС‚Р°С‚РєРё РїР°Рј'СЏС‚С– РљРѕРєРѕРЅРѕРµ.");
+            sb.AppendLine("- РђСЂС…С–С‚РµРєС‚СѓСЂРЅС– РЅРѕС‚Р°С‚РєРё vault РѕРЅРѕРІР»СЋСЋС‚СЊСЃСЏ РїС–СЃР»СЏ РєРѕР¶РЅРѕС— РїР°РєРµС‚РЅРѕС— СЃРёРЅС…СЂРѕРЅС–Р·Р°С†С–С—.");
+            sb.AppendLine("- РљРµСЂРѕРІР°РЅС– РЅРѕС‚Р°С‚РєРё РїРµСЂРµР·Р°РїРёСЃСѓСЋС‚СЊСЃСЏ, Р±Рѕ С†Рµ Р·РіРµРЅРµСЂРѕРІР°РЅС– Р·РЅС–РјРєРё СЃС‚Р°РЅСѓ.");
+            sb.AppendLine("- РќРѕС‚Р°С‚РєРё, РЅР°РїРёСЃР°РЅС– Р»СЋРґРёРЅРѕСЋ, С‚С–Р»СЊРєРё РґРѕРїРѕРІРЅСЋСЋС‚СЊСЃСЏ Р°Р±Рѕ Р·РІ'СЏР·СѓСЋС‚СЊСЃСЏ Р·РІРёС‡Р°Р№РЅРѕСЋ СЃРёРЅС…СЂРѕРЅС–Р·Р°С†С–С”СЋ РїР°Рј'СЏС‚С–.");
             sb.AppendLine();
-            sb.AppendLine("## Керовані нотатки");
+            sb.AppendLine("## РљРµСЂРѕРІР°РЅС– РЅРѕС‚Р°С‚РєРё");
             sb.AppendLine("- [[Kokonoe/Vault Index]]");
             sb.AppendLine("- [[Kokonoe/Architecture/Manifest]]");
             sb.AppendLine("- [[Kokonoe/Architecture/Map]]");
@@ -1351,45 +1354,45 @@ tags: [kokonoe, vault, architecture]
         {
             var sb = new StringBuilder();
             sb.AppendLine($"\n## {result.RanAt:yyyy-MM-dd HH:mm}");
-            sb.AppendLine($"- Причина: {result.Reason}");
-            sb.AppendLine($"- Створено папок: {result.CreatedFolders.Count}");
-            sb.AppendLine($"- Створено нотаток: {result.CreatedNotes.Count}");
-            sb.AppendLine($"- Оновлено нотаток: {result.UpdatedNotes.Count}");
-            sb.AppendLine($"- Нотаток із зміненими посиланнями: {result.LinkTouchedNotes}");
-            sb.AppendLine($"- Додано посилань: {result.LinksAdded}");
-            sb.AppendLine($"- Груп дублікатів пам'яті: {result.MemoryDuplicateGroups}");
-            sb.AppendLine($"- Відкритих задач: {result.OpenTaskCount}");
-            sb.AppendLine($"- Дій огляду пам'яті: {result.MemoryReviewActionCount}");
-            sb.AppendLine($"- Нотаток: {status.TotalNotes}, осиротілих: {status.OrphanNotes.Count}, порожніх: {status.EmptyNotes.Count}");
-            sb.AppendLine($"- Ядро мозку: {(init.HasCoreNote ? init.CoreNotePath : "відсутнє")}");
+            sb.AppendLine($"- РџСЂРёС‡РёРЅР°: {result.Reason}");
+            sb.AppendLine($"- РЎС‚РІРѕСЂРµРЅРѕ РїР°РїРѕРє: {result.CreatedFolders.Count}");
+            sb.AppendLine($"- РЎС‚РІРѕСЂРµРЅРѕ РЅРѕС‚Р°С‚РѕРє: {result.CreatedNotes.Count}");
+            sb.AppendLine($"- РћРЅРѕРІР»РµРЅРѕ РЅРѕС‚Р°С‚РѕРє: {result.UpdatedNotes.Count}");
+            sb.AppendLine($"- РќРѕС‚Р°С‚РѕРє С–Р· Р·РјС–РЅРµРЅРёРјРё РїРѕСЃРёР»Р°РЅРЅСЏРјРё: {result.LinkTouchedNotes}");
+            sb.AppendLine($"- Р”РѕРґР°РЅРѕ РїРѕСЃРёР»Р°РЅСЊ: {result.LinksAdded}");
+            sb.AppendLine($"- Р“СЂСѓРї РґСѓР±Р»С–РєР°С‚С–РІ РїР°Рј'СЏС‚С–: {result.MemoryDuplicateGroups}");
+            sb.AppendLine($"- Р’С–РґРєСЂРёС‚РёС… Р·Р°РґР°С‡: {result.OpenTaskCount}");
+            sb.AppendLine($"- Р”С–Р№ РѕРіР»СЏРґСѓ РїР°Рј'СЏС‚С–: {result.MemoryReviewActionCount}");
+            sb.AppendLine($"- РќРѕС‚Р°С‚РѕРє: {status.TotalNotes}, РѕСЃРёСЂРѕС‚С–Р»РёС…: {status.OrphanNotes.Count}, РїРѕСЂРѕР¶РЅС–С…: {status.EmptyNotes.Count}");
+            sb.AppendLine($"- РЇРґСЂРѕ РјРѕР·РєСѓ: {(init.HasCoreNote ? init.CoreNotePath : "РІС–РґСЃСѓС‚РЅС”")}");
 
             var full = Resolve("Kokonoe/Architecture/Change Log.md");
             Directory.CreateDirectory(Path.GetDirectoryName(full)!);
             if (!File.Exists(full))
-                File.WriteAllText(full, BuildManagedFrontmatter("vault-change-log") + "# Журнал архітектурних змін\n", Encoding.UTF8);
+                File.WriteAllText(full, BuildManagedFrontmatter("vault-change-log") + "# Р–СѓСЂРЅР°Р» Р°СЂС…С–С‚РµРєС‚СѓСЂРЅРёС… Р·РјС–РЅ\n", Encoding.UTF8);
             File.AppendAllText(full, sb.ToString(), Encoding.UTF8);
         }
 
         public string GetToolsDescription() => """
 === OBSIDIAN TOOLS ===
-list_notes [folder] — список нотаток
-read_note <path> — читати нотатку
-write_note <path> <content> — перезаписати нотатку
-create_note <title> [folder] [tags] [content] — нова нотатка
-append_note <path> <content> — дописати в кінець
-search_notes <query> — пошук по тексту
-daily_note — сьогоднішня щоденна нотатка
-append_daily <content> — дописати в щоденну нотатку
-delete_note <path> — видалити нотатку
-vault_status — стан vault (порожні, осиротілі нотатки)
-cleanup_empty — видалити порожні нотатки
+list_notes [folder] вЂ” СЃРїРёСЃРѕРє РЅРѕС‚Р°С‚РѕРє
+read_note <path> вЂ” С‡РёС‚Р°С‚Рё РЅРѕС‚Р°С‚РєСѓ
+write_note <path> <content> вЂ” РїРµСЂРµР·Р°РїРёСЃР°С‚Рё РЅРѕС‚Р°С‚РєСѓ
+create_note <title> [folder] [tags] [content] вЂ” РЅРѕРІР° РЅРѕС‚Р°С‚РєР°
+append_note <path> <content> вЂ” РґРѕРїРёСЃР°С‚Рё РІ РєС–РЅРµС†СЊ
+search_notes <query> вЂ” РїРѕС€СѓРє РїРѕ С‚РµРєСЃС‚Сѓ
+daily_note вЂ” СЃСЊРѕРіРѕРґРЅС–С€РЅСЏ С‰РѕРґРµРЅРЅР° РЅРѕС‚Р°С‚РєР°
+append_daily <content> вЂ” РґРѕРїРёСЃР°С‚Рё РІ С‰РѕРґРµРЅРЅСѓ РЅРѕС‚Р°С‚РєСѓ
+delete_note <path> вЂ” РІРёРґР°Р»РёС‚Рё РЅРѕС‚Р°С‚РєСѓ
+vault_status вЂ” СЃС‚Р°РЅ vault (РїРѕСЂРѕР¶РЅС–, РѕСЃРёСЂРѕС‚С–Р»С– РЅРѕС‚Р°С‚РєРё)
+cleanup_empty вЂ” РІРёРґР°Р»РёС‚Рё РїРѕСЂРѕР¶РЅС– РЅРѕС‚Р°С‚РєРё
 """;
 
-        // ── GRAPH / LINKS ─────────────────────────────────────────
+        // в”Ђв”Ђ GRAPH / LINKS в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
 
         /// <summary>
-        /// Повертає словник: назва нотатки → відносний шлях.
-        /// Використовується для пошуку згадок і проставлення [[links]].
+        /// РџРѕРІРµСЂС‚Р°С” СЃР»РѕРІРЅРёРє: РЅР°Р·РІР° РЅРѕС‚Р°С‚РєРё в†’ РІС–РґРЅРѕСЃРЅРёР№ С€Р»СЏС….
+        /// Р’РёРєРѕСЂРёСЃС‚РѕРІСѓС”С‚СЊСЃСЏ РґР»СЏ РїРѕС€СѓРєСѓ Р·РіР°РґРѕРє С– РїСЂРѕСЃС‚Р°РІР»РµРЅРЅСЏ [[links]].
         /// </summary>
         public Dictionary<string, string> GetNoteIndex()
         {
@@ -1411,10 +1414,10 @@ cleanup_empty — видалити порожні нотатки
         }
 
         /// <summary>
-        /// Сканує всі нотатки vault. Де знаходить назву іншої нотатки як звичайний текст
-        /// (не всередині [[...]]) — загортає її в [[посилання]].
-        /// Використовує split-and-replace: розбиває текст на [[link]] і plain-text сегменти,
-        /// замінює тільки в plain-text — гарантовано без дублікатів і вкладень.
+        /// РЎРєР°РЅСѓС” РІСЃС– РЅРѕС‚Р°С‚РєРё vault. Р”Рµ Р·РЅР°С…РѕРґРёС‚СЊ РЅР°Р·РІСѓ С–РЅС€РѕС— РЅРѕС‚Р°С‚РєРё СЏРє Р·РІРёС‡Р°Р№РЅРёР№ С‚РµРєСЃС‚
+        /// (РЅРµ РІСЃРµСЂРµРґРёРЅС– [[...]]) вЂ” Р·Р°РіРѕСЂС‚Р°С” С—С— РІ [[РїРѕСЃРёР»Р°РЅРЅСЏ]].
+        /// Р’РёРєРѕСЂРёСЃС‚РѕРІСѓС” split-and-replace: СЂРѕР·Р±РёРІР°С” С‚РµРєСЃС‚ РЅР° [[link]] С– plain-text СЃРµРіРјРµРЅС‚Рё,
+        /// Р·Р°РјС–РЅСЋС” С‚С–Р»СЊРєРё РІ plain-text вЂ” РіР°СЂР°РЅС‚РѕРІР°РЅРѕ Р±РµР· РґСѓР±Р»С–РєР°С‚С–РІ С– РІРєР»Р°РґРµРЅСЊ.
         /// </summary>
         public (int changed, int linksAdded) RebuildLinks()
         {
@@ -1422,7 +1425,7 @@ cleanup_empty — видалити порожні нотатки
             var changed = 0;
             var total   = 0;
 
-            // Titles sorted longest first — щоб "Python Tips" не перекрилось "Python"
+            // Titles sorted longest first вЂ” С‰РѕР± "Python Tips" РЅРµ РїРµСЂРµРєСЂРёР»РѕСЃСЊ "Python"
             var titles = index.Keys
                 .Where(t => t.Length > 3 && !IsSuppressedAutoLinkTitle(t))
                 .OrderByDescending(t => t.Length)
@@ -1473,7 +1476,7 @@ cleanup_empty — видалити порожні нотатки
                         foreach (var title in titles)
                         {
                             if (string.Equals(title, thisTitle, StringComparison.OrdinalIgnoreCase))
-                                continue; // не посилатись на себе
+                                continue; // РЅРµ РїРѕСЃРёР»Р°С‚РёСЃСЊ РЅР° СЃРµР±Рµ
 
                             var rx = titleRegexes[title];
                             var before = seg;
@@ -1516,7 +1519,7 @@ cleanup_empty — видалити порожні нотатки
         }
 
         /// <summary>
-        /// Повертає список нотаток, на які посилається дана нотатка (вихідні посилання).
+        /// РџРѕРІРµСЂС‚Р°С” СЃРїРёСЃРѕРє РЅРѕС‚Р°С‚РѕРє, РЅР° СЏРєС– РїРѕСЃРёР»Р°С”С‚СЊСЃСЏ РґР°РЅР° РЅРѕС‚Р°С‚РєР° (РІРёС…С–РґРЅС– РїРѕСЃРёР»Р°РЅРЅСЏ).
         /// </summary>
         public List<string> GetOutgoingLinks(string path)
         {
@@ -1528,7 +1531,7 @@ cleanup_empty — видалити порожні нотатки
         }
 
         /// <summary>
-        /// Повертає список нотаток, які посилаються на дану (вхідні посилання / backlinks).
+        /// РџРѕРІРµСЂС‚Р°С” СЃРїРёСЃРѕРє РЅРѕС‚Р°С‚РѕРє, СЏРєС– РїРѕСЃРёР»Р°СЋС‚СЊСЃСЏ РЅР° РґР°РЅСѓ (РІС…С–РґРЅС– РїРѕСЃРёР»Р°РЅРЅСЏ / backlinks).
         /// </summary>
         public List<string> GetBacklinks(string path)
         {
@@ -1556,13 +1559,13 @@ cleanup_empty — видалити порожні нотатки
             return backlinks;
         }
 
-        // ── HELPERS ───────────────────────────────────────────────
+        // в”Ђв”Ђ HELPERS в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
 
-        // ── SEMANTIC SEARCH ───────────────────────────────────────────
+        // в”Ђв”Ђ SEMANTIC SEARCH в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
 
         /// <summary>
-        /// Пошук нотаток за змістом з TF-IDF ранжуванням.
-        /// Повертає топ результати з score та preview.
+        /// РџРѕС€СѓРє РЅРѕС‚Р°С‚РѕРє Р·Р° Р·РјС–СЃС‚РѕРј Р· TF-IDF СЂР°РЅР¶СѓРІР°РЅРЅСЏРј.
+        /// РџРѕРІРµСЂС‚Р°С” С‚РѕРї СЂРµР·СѓР»СЊС‚Р°С‚Рё Р· score С‚Р° preview.
         /// </summary>
         public List<SearchResult> SearchSemantic(string query, int max = 8)
         {
@@ -1584,11 +1587,11 @@ cleanup_empty — видалити порожні нотатки
                     if (IsKokonoeManagedNote(content))
                         continue;
                     var lower   = content.ToLower();
-                    // TF: кількість співпадінь
+                    // TF: РєС–Р»СЊРєС–СЃС‚СЊ СЃРїС–РІРїР°РґС–РЅСЊ
                     var tf = queryWords.Sum(w => CountOccurrences(lower, w));
                     if (tf == 0) continue;
 
-                    // Бонус якщо слово є в заголовку
+                    // Р‘РѕРЅСѓСЃ СЏРєС‰Рѕ СЃР»РѕРІРѕ С” РІ Р·Р°РіРѕР»РѕРІРєСѓ
                     var title = Path.GetFileNameWithoutExtension(file).ToLower();
                     var titleBonus = queryWords.Count(w => title.Contains(w)) * 3;
 
@@ -1615,12 +1618,12 @@ cleanup_empty — видалити порожні нотатки
             if (idx < 0) return content[..Math.Min(maxLen, content.Length)];
             var start = Math.Max(0, idx - 60);
             var end   = Math.Min(content.Length, start + maxLen);
-            return (start > 0 ? "…" : "") + content[start..end].Trim() + (end < content.Length ? "…" : "");
+            return (start > 0 ? "вЂ¦" : "") + content[start..end].Trim() + (end < content.Length ? "вЂ¦" : "");
         }
 
-        // ── NOTE GRAPH ────────────────────────────────────────────────
+        // в”Ђв”Ђ NOTE GRAPH в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
 
-        /// <summary>Граф посилань: словник {нотатка → список куди веде}</summary>
+        /// <summary>Р“СЂР°С„ РїРѕСЃРёР»Р°РЅСЊ: СЃР»РѕРІРЅРёРє {РЅРѕС‚Р°С‚РєР° в†’ СЃРїРёСЃРѕРє РєСѓРґРё РІРµРґРµ}</summary>
         public Dictionary<string, List<string>> GetNoteGraph()
         {
             var graph = new Dictionary<string, List<string>>();
@@ -1648,12 +1651,12 @@ cleanup_empty — видалити порожні нотатки
             return graph;
         }
 
-        // ── MERGE NOTES ───────────────────────────────────────────────
+        // в”Ђв”Ђ MERGE NOTES в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
 
-        /// <summary>Злити кілька нотаток в одну (перша — destination, решта — source)</summary>
+        /// <summary>Р—Р»РёС‚Рё РєС–Р»СЊРєР° РЅРѕС‚Р°С‚РѕРє РІ РѕРґРЅСѓ (РїРµСЂС€Р° вЂ” destination, СЂРµС€С‚Р° вЂ” source)</summary>
         public string MergeNotes(string[] paths, string separator = "\n\n---\n\n")
         {
-            if (paths.Length < 2) throw new ArgumentException("Потрібно хоча б 2 нотатки");
+            if (paths.Length < 2) throw new ArgumentException("РџРѕС‚СЂС–Р±РЅРѕ С…РѕС‡Р° Р± 2 РЅРѕС‚Р°С‚РєРё");
 
             var destPath = Resolve(paths[0]);
             var sb = new StringBuilder();
@@ -1669,7 +1672,7 @@ cleanup_empty — видалити порожні нотатки
             var merged = sb.ToString().TrimEnd();
             File.WriteAllText(destPath, merged);
 
-            // Видалити джерела (крім першої)
+            // Р’РёРґР°Р»РёС‚Рё РґР¶РµСЂРµР»Р° (РєСЂС–Рј РїРµСЂС€РѕС—)
             foreach (var rel in paths.Skip(1))
             {
                 try { var f = Resolve(rel); if (File.Exists(f)) File.Delete(f); } catch (Exception ex) { Debug.WriteLine($"[ObsidianMcp] MergeNotes delete failed for {rel}: {ex.Message}"); }
@@ -1678,9 +1681,9 @@ cleanup_empty — видалити порожні нотатки
             return paths[0];
         }
 
-        // ── MODIFIED TODAY ────────────────────────────────────────────
+        // в”Ђв”Ђ MODIFIED TODAY в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
 
-        /// <summary>Нотатки змінені сьогодні</summary>
+        /// <summary>РќРѕС‚Р°С‚РєРё Р·РјС–РЅРµРЅС– СЃСЊРѕРіРѕРґРЅС–</summary>
         public List<string> GetNotesModifiedToday()
         {
             if (!Directory.Exists(_vault)) return new();
@@ -1691,19 +1694,19 @@ cleanup_empty — видалити порожні нотатки
                 .ToList();
         }
 
-        // ── AUTO TAG ──────────────────────────────────────────────────
+        // в”Ђв”Ђ AUTO TAG в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
 
-        /// <summary>Додати теги в frontmatter нотатки на основі її змісту</summary>
+        /// <summary>Р”РѕРґР°С‚Рё С‚РµРіРё РІ frontmatter РЅРѕС‚Р°С‚РєРё РЅР° РѕСЃРЅРѕРІС– С—С— Р·РјС–СЃС‚Сѓ</summary>
         public string AutoTagNote(string relPath, string[] tags)
         {
             var full = Resolve(relPath);
-            if (!File.Exists(full)) throw new FileNotFoundException($"Нотатка не знайдена: {relPath}");
+            if (!File.Exists(full)) throw new FileNotFoundException($"РќРѕС‚Р°С‚РєР° РЅРµ Р·РЅР°Р№РґРµРЅР°: {relPath}");
 
             var content = File.ReadAllText(full);
 
             if (content.StartsWith("---"))
             {
-                // Вже є frontmatter — оновити теги
+                // Р’Р¶Рµ С” frontmatter вЂ” РѕРЅРѕРІРёС‚Рё С‚РµРіРё
                 var end = content.IndexOf("---", 3);
                 if (end > 0)
                 {
@@ -1718,7 +1721,7 @@ cleanup_empty — видалити порожні нотатки
             }
             else
             {
-                // Немає frontmatter — додати
+                // РќРµРјР°С” frontmatter вЂ” РґРѕРґР°С‚Рё
                 var front = $"---\ntags: [{SanitizeTagsLine(string.Join(", ", tags))}]\n---\n\n";
                 content = front + content;
             }
@@ -1727,9 +1730,9 @@ cleanup_empty — видалити порожні нотатки
             return relPath;
         }
 
-        // ── CLUSTER ORPHANS ───────────────────────────────────────────
+        // в”Ђв”Ђ CLUSTER ORPHANS в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
 
-        /// <summary>Знайти нотатки без жодних зв'язків (ні вхідних ні вихідних)</summary>
+        /// <summary>Р—РЅР°Р№С‚Рё РЅРѕС‚Р°С‚РєРё Р±РµР· Р¶РѕРґРЅРёС… Р·РІ'СЏР·РєС–РІ (РЅС– РІС…С–РґРЅРёС… РЅС– РІРёС…С–РґРЅРёС…)</summary>
         public List<string> GetIsolatedNotes()
         {
             var graph     = GetNoteGraph();
@@ -1755,7 +1758,6 @@ cleanup_empty — видалити порожні нотатки
                 var trimmed = line.Trim();
                 if (!trimmed.StartsWith("- ")) continue;
                 var item = trimmed[2..].Trim();
-                item = System.Text.RegularExpressions.Regex.Replace(item, @"^\[[^\]]+\]\s*", "").Trim();
                 if (item.Length > 0) items.Add(item);
             }
             return items;
@@ -1816,7 +1818,7 @@ cleanup_empty — видалити порожні нотатки
         }
 
         /// <summary>
-        /// Безпечний аналог Directory.GetDirectories з AllDirectories.
+        /// Р‘РµР·РїРµС‡РЅРёР№ Р°РЅР°Р»РѕРі Directory.GetDirectories Р· AllDirectories.
         /// </summary>
         private static IEnumerable<string> SafeGetDirectories(string root)
         {
@@ -1840,8 +1842,8 @@ cleanup_empty — видалити порожні нотатки
         }
 
         /// <summary>
-        /// Безпечний аналог Directory.GetFiles з AllDirectories.
-        /// Скіпає папки з UnauthorizedAccessException (System Volume Information тощо).
+        /// Р‘РµР·РїРµС‡РЅРёР№ Р°РЅР°Р»РѕРі Directory.GetFiles Р· AllDirectories.
+        /// РЎРєС–РїР°С” РїР°РїРєРё Р· UnauthorizedAccessException (System Volume Information С‚РѕС‰Рѕ).
         /// </summary>
         private static IEnumerable<string> SafeGetFiles(string root, string pattern = "*.md")
         {
@@ -1887,9 +1889,9 @@ cleanup_empty — видалити порожні нотатки
         public override string ToString()
         {
             var sb = new System.Text.StringBuilder();
-            sb.AppendLine($"Vault: {NoteCount} нотаток, {TotalLinks} [[посилань]]");
-            sb.AppendLine($"Центральна нотатка (brain-core): {(HasCoreNote ? CoreNotePath : "відсутня")}");
-            sb.AppendLine($"Дія: {SuggestedAction}");
+            sb.AppendLine($"Vault: {NoteCount} РЅРѕС‚Р°С‚РѕРє, {TotalLinks} [[РїРѕСЃРёР»Р°РЅСЊ]]");
+            sb.AppendLine($"Р¦РµРЅС‚СЂР°Р»СЊРЅР° РЅРѕС‚Р°С‚РєР° (brain-core): {(HasCoreNote ? CoreNotePath : "РІС–РґСЃСѓС‚РЅСЏ")}");
+            sb.AppendLine($"Р”С–СЏ: {SuggestedAction}");
             return sb.ToString().Trim();
         }
     }
@@ -1904,11 +1906,11 @@ cleanup_empty — видалити порожні нотатки
         public override string ToString()
         {
             var sb = new System.Text.StringBuilder();
-            sb.AppendLine($"Всього нотаток: {TotalNotes} (заповнених: {FilledNotes})");
+            sb.AppendLine($"Р’СЃСЊРѕРіРѕ РЅРѕС‚Р°С‚РѕРє: {TotalNotes} (Р·Р°РїРѕРІРЅРµРЅРёС…: {FilledNotes})");
             if (EmptyNotes.Count > 0)
-                sb.AppendLine($"Порожніх ({EmptyNotes.Count}): {string.Join(", ", EmptyNotes.Take(10))}");
+                sb.AppendLine($"РџРѕСЂРѕР¶РЅС–С… ({EmptyNotes.Count}): {string.Join(", ", EmptyNotes.Take(10))}");
             if (OrphanNotes.Count > 0)
-                sb.AppendLine($"Осиротілих без [[links]] ({OrphanNotes.Count}): {string.Join(", ", OrphanNotes.Take(10))}");
+                sb.AppendLine($"РћСЃРёСЂРѕС‚С–Р»РёС… Р±РµР· [[links]] ({OrphanNotes.Count}): {string.Join(", ", OrphanNotes.Take(10))}");
             return sb.ToString().Trim();
         }
     }

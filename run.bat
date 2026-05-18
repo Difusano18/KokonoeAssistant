@@ -1,34 +1,74 @@
 @echo off
+chcp 65001 >nul
 setlocal enabledelayedexpansion
 
 cd /d "%~dp0"
 
-echo [KILL] Убиваю старий процес...
-taskkill /IM KokonoeAssistant.exe /F 2>nul
+set "APP=KokonoeAssistant"
+set "CFG=Debug"
+set "TFM=net8.0-windows"
+set "EXE=%~dp0bin\%CFG%\%TFM%\%APP%.exe"
+set "OUT_LOG=%~dp0run_stdout.log"
+set "ERR_LOG=%~dp0run_stderr.log"
+set "STARTUP_LOG=%~dp0bin\%CFG%\%TFM%\startup.log"
+set "CRASH_LOG=%~dp0bin\%CFG%\%TFM%\crash.log"
+
+echo [KILL] Stopping old Kokonoe process...
+taskkill /IM "%APP%.exe" /F >nul 2>nul
 timeout /t 1 /nobreak >nul
 
-echo [BUILD] Очищення та видалення bin папки...
-rmdir /s /q bin 2>nul
-rmdir /s /q obj 2>nul
-
-echo [BUILD] Компіляція проекту...
-dotnet build --configuration Debug --nologo
-
+echo [BUILD] Cleaning project through MSBuild...
+dotnet clean "%~dp0KokonoeAssistant.csproj" --configuration %CFG% --nologo
 if errorlevel 1 (
-    echo [ERROR] Білд не вдався!
+    echo [ERROR] dotnet clean failed.
     pause
     exit /b 1
 )
 
-echo [RUN] Запуск Kokonoe Assistant...
-timeout /t 1 /nobreak >nul
-
-REM Run in foreground so we can see errors
-"%~dp0bin\Debug\net8.0-windows\KokonoeAssistant.exe"
-
+echo [BUILD] Building project...
+dotnet build "%~dp0KokonoeAssistant.csproj" --configuration %CFG% --nologo
 if errorlevel 1 (
-    echo [ERROR] Додаток завершив з помилкою код %errorlevel%
+    echo [ERROR] Build failed.
     pause
+    exit /b 1
+)
+
+if not exist "%EXE%" (
+    echo [ERROR] EXE not found: "%EXE%"
+    pause
+    exit /b 1
+)
+
+echo [RUN] Starting Kokonoe Assistant...
+del "%OUT_LOG%" >nul 2>nul
+del "%ERR_LOG%" >nul 2>nul
+
+"%EXE%" 1>>"%OUT_LOG%" 2>>"%ERR_LOG%"
+set "APP_EXIT=%ERRORLEVEL%"
+
+if not "%APP_EXIT%"=="0" (
+    echo [ERROR] App exited with code %APP_EXIT%.
+    echo [ERROR] stdout: "%OUT_LOG%"
+    echo [ERROR] stderr: "%ERR_LOG%"
+    echo [ERROR] startup: "%STARTUP_LOG%"
+    echo [ERROR] crash: "%CRASH_LOG%"
+    if exist "%ERR_LOG%" (
+        echo.
+        echo [STDERR]
+        type "%ERR_LOG%"
+    )
+    if exist "%CRASH_LOG%" (
+        echo.
+        echo [CRASH]
+        type "%CRASH_LOG%"
+    )
+    if exist "%STARTUP_LOG%" (
+        echo.
+        echo [STARTUP]
+        type "%STARTUP_LOG%"
+    )
+    pause
+    exit /b %APP_EXIT%
 )
 
 endlocal

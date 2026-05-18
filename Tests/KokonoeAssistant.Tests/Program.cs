@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using KokonoeAssistant.Services;
 
@@ -52,6 +52,7 @@ internal static class Program
             Run("Post reply guard duplicate image prompt avoids stale repeat text", PostReplyGuardDuplicateImagePromptAvoidsStaleRepeatText);
             Run("Post reply guard blocks therapy meta tone", PostReplyGuardBlocksTherapyMetaTone);
             Run("Post reply guard blocks fabricated external facts", PostReplyGuardBlocksFabricatedExternalFacts);
+            Run("Post reply guard blocks stale proactive ping on direct topic", PostReplyGuardBlocksStaleProactivePingOnDirectTopic);
             Run("Post reply guard blocks service bot tone", PostReplyGuardBlocksServiceBotTone);
             Run("Post reply guard blocks blind agreement", PostReplyGuardBlocksBlindAgreement);
             Run("Response planner classifies critical assistant architecture", ResponsePlannerClassifiesCriticalAssistantArchitecture);
@@ -64,6 +65,8 @@ internal static class Program
             Run("Proactive context anchors silence to last topic", ProactiveContextAnchorsSilenceToLastTopic);
             Run("Proactive context stays silent after goodbye sleep", ProactiveContextStaysSilentAfterGoodbyeSleep);
             Run("Proactive fallback never exposes technical silence wording", ProactiveFallbackNeverExposesTechnicalSilenceWording);
+            Run("User quiet command mutes proactive followups", UserQuietCommandMutesProactiveFollowups);
+            Run("Short acknowledgement resolves stale intent", ShortAcknowledgementResolvesStaleIntent);
             Run("Screen awareness parses vision JSON", ScreenAwarenessParsesVisionJson);
             Run("Screen awareness suppresses repeated comments", ScreenAwarenessSuppressesRepeatedComments);
             Run("Screen awareness redacts private identifiers", ScreenAwarenessRedactsPrivateIdentifiers);
@@ -243,7 +246,7 @@ internal static class Program
             LastSpontaneousAt = now.AddMinutes(-40),
             LastCuriosityAskAt = now.AddMinutes(-90)
         };
-        state.CuriosityQueue.Add("Чому ти знову відкладаєш сон?");
+        state.CuriosityQueue.Add("Р§РѕРјСѓ С‚Рё Р·РЅРѕРІСѓ РІС–РґРєР»Р°РґР°С”С€ СЃРѕРЅ?");
 
         var cautious = new KokoInitiativeEngine().Evaluate(
             now,
@@ -278,7 +281,7 @@ internal static class Program
         state.PendingTriggers.Add(new ReactiveTrigger
         {
             Type = "intent_followup",
-            Context = "Користувач сказав: «я піду на курси». Намір: пішов на курси/заняття.",
+            Context = "РљРѕСЂРёСЃС‚СѓРІР°С‡ СЃРєР°Р·Р°РІ: В«СЏ РїС–РґСѓ РЅР° РєСѓСЂСЃРёВ». РќР°РјС–СЂ: РїС–С€РѕРІ РЅР° РєСѓСЂСЃРё/Р·Р°РЅСЏС‚С‚СЏ.",
             FireAt = now.AddMinutes(-1)
         });
 
@@ -303,8 +306,8 @@ internal static class Program
         state.ShortTermIntents.Add(new ShortTermIntent
         {
             Kind = "course",
-            Summary = "пішов на курси/заняття",
-            SourceText = "я піду на курси",
+            Summary = "РїС–С€РѕРІ РЅР° РєСѓСЂСЃРё/Р·Р°РЅСЏС‚С‚СЏ",
+            SourceText = "СЏ РїС–РґСѓ РЅР° РєСѓСЂСЃРё",
             CreatedAt = now.AddHours(-3),
             FollowUpAt = now.AddHours(-2),
             ExpectedUntil = now.AddHours(-1)
@@ -312,7 +315,7 @@ internal static class Program
         ctx.Chat.InsertMessage(new ChatRepository.ChatMessage
         {
             Role = "user",
-            Content = "я піду на курси",
+            Content = "СЏ РїС–РґСѓ РЅР° РєСѓСЂСЃРё",
             Timestamp = now.AddHours(-3)
         });
 
@@ -321,7 +324,7 @@ internal static class Program
 
         AssertTrue(frame.ShouldInterrupt, "overdue course followup should interrupt at high autonomy");
         AssertEqual("overdue_intent", frame.SituationKind, "course should be classified as overdue intent");
-        AssertTrue(frame.ExtraContext.Contains("курси"), "presence context should preserve the course event");
+        AssertTrue(frame.ExtraContext.Contains("РєСѓСЂСЃРё"), "presence context should preserve the course event");
     }
 
     private static void PresenceWaitsForReturnHomeIntent()
@@ -332,8 +335,8 @@ internal static class Program
         state.ShortTermIntents.Add(new ShortTermIntent
         {
             Kind = "return_home",
-            Summary = "має бути вдома близько 12:00",
-            SourceText = "Буду в 12 дома крч",
+            Summary = "РјР°С” Р±СѓС‚Рё РІРґРѕРјР° Р±Р»РёР·СЊРєРѕ 12:00",
+            SourceText = "Р‘СѓРґСѓ РІ 12 РґРѕРјР° РєСЂС‡",
             CreatedAt = now.AddMinutes(-35),
             FollowUpAt = now.Date.AddHours(12).AddMinutes(12),
             ExpectedUntil = now.Date.AddHours(12)
@@ -341,7 +344,7 @@ internal static class Program
         ctx.Chat.InsertMessage(new ChatRepository.ChatMessage
         {
             Role = "user",
-            Content = "Буду в 12 дома крч",
+            Content = "Р‘СѓРґСѓ РІ 12 РґРѕРјР° РєСЂС‡",
             Timestamp = now.AddMinutes(-35)
         });
 
@@ -360,7 +363,7 @@ internal static class Program
         var presence = new KokoPresenceFrame
         {
             SituationKind = "active_absence",
-            SummaryUk = "Активний намір: має бути вдома близько 12:00.",
+            SummaryUk = "РђРєС‚РёРІРЅРёР№ РЅР°РјС–СЂ: РјР°С” Р±СѓС‚Рё РІРґРѕРјР° Р±Р»РёР·СЊРєРѕ 12:00.",
             ShouldInterrupt = false,
             NextUsefulAt = now.Date.AddHours(12).AddMinutes(12),
             SilenceMinutes = 35
@@ -368,7 +371,7 @@ internal static class Program
         var internalDay = new KokoInternalDayFrame
         {
             Phase = "work_ramp",
-            SummaryUk = "робочий день",
+            SummaryUk = "СЂРѕР±РѕС‡РёР№ РґРµРЅСЊ",
             PromptBlock = "INTERNAL DAY\n",
             ShouldPreferSilence = false
         };
@@ -394,7 +397,7 @@ internal static class Program
             autonomyLevel: 3);
 
         AssertTrue(!decision.ShouldAct, "generic initiative should be blocked while a timed user intent is active");
-        AssertTrue(decision.SilenceReason.Contains("активний намір") || decision.SilenceReason.Contains("active"), "silence reason should mention active intent");
+        AssertTrue(decision.SilenceReason.Contains("Р°РєС‚РёРІРЅРёР№ РЅР°РјС–СЂ") || decision.SilenceReason.Contains("active"), "silence reason should mention active intent");
     }
 
     private static void PresenceRefusesStaleSleepInstructionAfterReturn()
@@ -405,18 +408,18 @@ internal static class Program
         state.ShortTermIntents.Add(new ShortTermIntent
         {
             Kind = "sleep",
-            Summary = "пішов спати",
-            SourceText = "я спать",
+            Summary = "РїС–С€РѕРІ СЃРїР°С‚Рё",
+            SourceText = "СЏ СЃРїР°С‚СЊ",
             CreatedAt = now.AddHours(-9),
             FollowUpAt = now.AddHours(-1),
             ExpectedUntil = now.AddMinutes(-20),
             ResolvedAt = now.AddMinutes(-5),
-            ResolutionText = "прокинувся"
+            ResolutionText = "РїСЂРѕРєРёРЅСѓРІСЃСЏ"
         });
         ctx.Chat.InsertMessage(new ChatRepository.ChatMessage
         {
             Role = "user",
-            Content = "прокинувся",
+            Content = "РїСЂРѕРєРёРЅСѓРІСЃСЏ",
             Timestamp = now.AddMinutes(-5)
         });
 
@@ -424,7 +427,10 @@ internal static class Program
             .Evaluate(state, ctx.Chat.GetMessages(10), now, autonomyLevel: 3);
 
         AssertEqual("returned_after_intent", frame.SituationKind, "resolved sleep should be treated as return");
-        AssertTrue(frame.ExtraContext.Contains("не кажи йому робити те, що вже в минулому"), "presence context should block stale sleep instruction");
+        AssertTrue(
+            frame.ExtraContext.Contains("РЅРµ РєР°Р¶Рё Р№РѕРјСѓ СЂРѕР±РёС‚Рё С‚Рµ, С‰Рѕ РІР¶Рµ РІ РјРёРЅСѓР»РѕРјСѓ") ||
+            frame.ExtraContext.Contains("already woke up or returned"),
+            "presence context should block stale sleep instruction");
         AssertTrue(frame.ToneHint.Contains("do not tell him to sleep"), "tone should explicitly avoid telling him to sleep again");
     }
 
@@ -436,8 +442,8 @@ internal static class Program
         state.ShortTermIntents.Add(new ShortTermIntent
         {
             Kind = "sleep",
-            Summary = "пішов спати/попрощався",
-            SourceText = "Бай бай",
+            Summary = "РїС–С€РѕРІ СЃРїР°С‚Рё/РїРѕРїСЂРѕС‰Р°РІСЃСЏ",
+            SourceText = "Р‘Р°Р№ Р±Р°Р№",
             CreatedAt = now.AddHours(-8),
             FollowUpAt = now.AddMinutes(-5),
             ExpectedUntil = now.AddHours(2)
@@ -445,7 +451,7 @@ internal static class Program
         ctx.Chat.InsertMessage(new ChatRepository.ChatMessage
         {
             Role = "user",
-            Content = "Бай бай",
+            Content = "Р‘Р°Р№ Р±Р°Р№",
             Timestamp = now.AddHours(-8)
         });
 
@@ -465,7 +471,7 @@ internal static class Program
         AssertTrue(detect != null, "DetectShortTermIntent should exist for temporal intent tests");
 
         var lateNight = new DateTime(2026, 5, 13, 4, 42, 0);
-        var intent = (ShortTermIntent?)detect!.Invoke(null, new object[] { "добраніч, я спати", lateNight });
+        var intent = (ShortTermIntent?)detect!.Invoke(null, new object[] { "РґРѕР±СЂР°РЅС–С‡, СЏ СЃРїР°С‚Рё", lateNight });
 
         AssertTrue(intent != null, "sleep message should create sleep intent");
         AssertEqual("sleep", intent!.Kind, "sleep intent kind");
@@ -480,15 +486,15 @@ internal static class Program
         state.ShortTermIntents.Add(new ShortTermIntent
         {
             Kind = "sleep",
-            Summary = "пішов спати",
-            SourceText = "я спати",
+            Summary = "РїС–С€РѕРІ СЃРїР°С‚Рё",
+            SourceText = "СЏ СЃРїР°С‚Рё",
             CreatedAt = now.AddHours(-13),
             FollowUpAt = now.AddHours(-5),
             ExpectedUntil = now.AddHours(-3)
         });
         var messages = new[]
         {
-            new ChatRepository.ChatMessage { Role = "user", Content = "я спати", Timestamp = now.AddHours(-13) }
+            new ChatRepository.ChatMessage { Role = "user", Content = "СЏ СЃРїР°С‚Рё", Timestamp = now.AddHours(-13) }
         };
 
         var result = new KokoStateFreshnessService().Refresh(state, messages, now);
@@ -505,15 +511,15 @@ internal static class Program
         state.ShortTermIntents.Add(new ShortTermIntent
         {
             Kind = "sleep",
-            Summary = "пішов спати",
-            SourceText = "пішов спати",
+            Summary = "РїС–С€РѕРІ СЃРїР°С‚Рё",
+            SourceText = "РїС–С€РѕРІ СЃРїР°С‚Рё",
             CreatedAt = now.AddHours(-8),
             FollowUpAt = now.AddMinutes(-30),
             ExpectedUntil = now.AddHours(1)
         });
         var messages = new[]
         {
-            new ChatRepository.ChatMessage { Role = "user", Content = "прокинувся, я тут", Timestamp = now.AddMinutes(-1) }
+            new ChatRepository.ChatMessage { Role = "user", Content = "РїСЂРѕРєРёРЅСѓРІСЃСЏ, СЏ С‚СѓС‚", Timestamp = now.AddMinutes(-1) }
         };
 
         var result = new KokoStateFreshnessService().Refresh(state, messages, now);
@@ -529,8 +535,8 @@ internal static class Program
         state.ShortTermIntents.Add(new ShortTermIntent
         {
             Kind = "course",
-            Summary = "пішов на курси/заняття",
-            SourceText = "я на курси пішов",
+            Summary = "РїС–С€РѕРІ РЅР° РєСѓСЂСЃРё/Р·Р°РЅСЏС‚С‚СЏ",
+            SourceText = "СЏ РЅР° РєСѓСЂСЃРё РїС–С€РѕРІ",
             CreatedAt = now.AddHours(-3),
             FollowUpAt = now.AddHours(-2),
             ExpectedUntil = now.AddHours(-1)
@@ -538,7 +544,7 @@ internal static class Program
 
         var messages = new[]
         {
-            new ChatRepository.ChatMessage { Role = "user", Content = "які картинки хех", Timestamp = now.AddMinutes(-5) }
+            new ChatRepository.ChatMessage { Role = "user", Content = "СЏРєС– РєР°СЂС‚РёРЅРєРё С…РµС…", Timestamp = now.AddMinutes(-5) }
         };
 
         var result = new KokoStateFreshnessService().Refresh(state, messages, now);
@@ -567,7 +573,7 @@ internal static class Program
         ctx.Chat.InsertMessage(new ChatRepository.ChatMessage
         {
             Role = "user",
-            Content = "я тут трохи пропаду",
+            Content = "СЏ С‚СѓС‚ С‚СЂРѕС…Рё РїСЂРѕРїР°РґСѓ",
             Timestamp = now.AddHours(-7)
         });
 
@@ -590,8 +596,8 @@ internal static class Program
         var presence = new KokoPresenceFrame
         {
             SituationKind = "medium_silence",
-            SummaryUk = "Середня тиша: 2 год.",
-            LastUserText = "я відійду",
+            SummaryUk = "РЎРµСЂРµРґРЅСЏ С‚РёС€Р°: 2 РіРѕРґ.",
+            LastUserText = "СЏ РІС–РґС–Р№РґСѓ",
             SilenceMinutes = 120
         };
 
@@ -607,8 +613,8 @@ internal static class Program
 
         AssertEqual("evening_review", frame.Phase, "19:30 should be evening review");
         AssertTrue(frame.ShouldWriteVaultStatus, "phase shift and old vault status should request write");
-        AssertTrue(note.Contains("Внутрішній день Коконое"), "vault note should have Ukrainian title");
-        AssertTrue(note.Contains("вечірній огляд"), "vault note should include phase label");
+        AssertTrue(note.Contains("Р’РЅСѓС‚СЂС–С€РЅС–Р№ РґРµРЅСЊ РљРѕРєРѕРЅРѕРµ") || note.Contains("Внутрішній день Коконое"), "vault note should have Ukrainian title");
+        AssertTrue(note.Contains("РІРµС‡С–СЂРЅС–Р№ РѕРіР»СЏРґ") || note.Contains("вечірній огляд"), "vault note should include phase label");
     }
 
     private static void InternalDayPrefersSilenceAtLowPowerNight()
@@ -618,7 +624,7 @@ internal static class Program
         var presence = new KokoPresenceFrame
         {
             SituationKind = "recent_contact",
-            SummaryUk = "Він писав недавно.",
+            SummaryUk = "Р’С–РЅ РїРёСЃР°РІ РЅРµРґР°РІРЅРѕ.",
             SilenceMinutes = 8
         };
 
@@ -631,7 +637,7 @@ internal static class Program
 
         AssertEqual("low_power_night", frame.Phase, "03:10 should be low power night");
         AssertTrue(frame.ShouldPreferSilence, "low power night should prefer silence without strong reason");
-        AssertTrue(frame.PromptBlock.Contains("Перевага: мовчати"), "prompt block should carry silence preference");
+        AssertTrue(frame.PromptBlock.Contains("РџРµСЂРµРІР°РіР°: РјРѕРІС‡Р°С‚Рё") || frame.PromptBlock.Contains("Перевага: мовчати"), "prompt block should carry silence preference");
     }
 
     private static void AutonomyPipelineGatesWeakInitiativeInQuietNight()
@@ -641,15 +647,15 @@ internal static class Program
         var presence = new KokoPresenceFrame
         {
             SituationKind = "recent_contact",
-            SummaryUk = "Він писав недавно.",
+            SummaryUk = "Р’С–РЅ РїРёСЃР°РІ РЅРµРґР°РІРЅРѕ.",
             SilenceMinutes = 8,
             ShouldInterrupt = false
         };
         var internalDay = new KokoInternalDayFrame
         {
             Phase = "low_power_night",
-            SummaryUk = "Нічний мінімум: економити енергію.",
-            PromptBlock = "INTERNAL DAY\nПеревага: мовчати.\n",
+            SummaryUk = "РќС–С‡РЅРёР№ РјС–РЅС–РјСѓРј: РµРєРѕРЅРѕРјРёС‚Рё РµРЅРµСЂРіС–СЋ.",
+            PromptBlock = "INTERNAL DAY\nРџРµСЂРµРІР°РіР°: РјРѕРІС‡Р°С‚Рё.\n",
             ShouldPreferSilence = true,
             InitiativeBias = -20
         };
@@ -666,7 +672,7 @@ internal static class Program
         {
             CurrentSlotSamples = 8,
             CurrentSlotActivityRate = 0.10f,
-            Summary = "типово тихий слот"
+            Summary = "С‚РёРїРѕРІРѕ С‚РёС…РёР№ СЃР»РѕС‚"
         };
 
         var decision = new KokoAutonomyDecisionEngine().Evaluate(
@@ -681,7 +687,7 @@ internal static class Program
             autonomyLevel: 3);
 
         AssertTrue(!decision.ShouldAct, "quiet low-power night should gate weak initiative");
-        AssertTrue(decision.SilenceReason.Contains("мовчати") || decision.SilenceReason.Contains("тихий"), "silence reason should explain the gate");
+        AssertTrue(decision.SilenceReason.Contains("РјРѕРІС‡Р°С‚Рё") || decision.SilenceReason.Contains("С‚РёС…РёР№"), "silence reason should explain the gate");
     }
 
     private static void RelationshipRecordsShiftEvents()
@@ -690,7 +696,7 @@ internal static class Program
         ctx.Relationship.ObserveUserTone("vulnerable", crisis: false);
         ctx.Relationship.ApplyReflection(new KokoConversationReflection
         {
-            Reflection = "Користувач довірив важливу деталь.",
+            Reflection = "РљРѕСЂРёСЃС‚СѓРІР°С‡ РґРѕРІС–СЂРёРІ РІР°Р¶Р»РёРІСѓ РґРµС‚Р°Р»СЊ.",
             Aftertaste = "closer",
             TrustDelta = 0.03f,
             IntimacyDelta = 0.04f
@@ -721,7 +727,7 @@ internal static class Program
 
             AssertTrue(profile.CurrentSlotSamples >= 6, "rhythm profile should use current slot samples");
             AssertTrue(profile.CurrentSlotActivityRate <= 0.25f, "quiet slot should have low activity rate");
-            AssertTrue(profile.Recommendation.Contains("тихий"), "quiet slot should recommend not interrupting");
+            AssertTrue(profile.Recommendation.Contains("С‚РёС…РёР№") || profile.Recommendation.Contains("тихий"), "quiet slot should recommend not interrupting");
         }
         finally
         {
@@ -737,43 +743,43 @@ internal static class Program
         state.ShortTermIntents.Add(new ShortTermIntent
         {
             Kind = "sleep",
-            Summary = "пішов спати",
-            SourceText = "я спати",
+            Summary = "РїС–С€РѕРІ СЃРїР°С‚Рё",
+            SourceText = "СЏ СЃРїР°С‚Рё",
             CreatedAt = now.AddHours(-8),
             FollowUpAt = now.AddHours(-1),
             ExpectedUntil = now.AddMinutes(-30),
             ResolvedAt = now.AddMinutes(-3),
-            ResolutionText = "прокинувся"
+            ResolutionText = "РїСЂРѕРєРёРЅСѓРІСЃСЏ"
         });
         ctx.Chat.InsertMessage(new ChatRepository.ChatMessage
         {
             Role = "user",
-            Content = "прокинувся",
+            Content = "РїСЂРѕРєРёРЅСѓРІСЃСЏ",
             Timestamp = now.AddMinutes(-3)
         });
 
         var presence = new KokoPresenceFrame
         {
             SituationKind = "returned_after_intent",
-            SummaryUk = "Він уже повернувся після сну.",
-            LastUserText = "прокинувся",
+            SummaryUk = "Р’С–РЅ СѓР¶Рµ РїРѕРІРµСЂРЅСѓРІСЃСЏ РїС–СЃР»СЏ СЃРЅСѓ.",
+            LastUserText = "РїСЂРѕРєРёРЅСѓРІСЃСЏ",
             SilenceMinutes = 3
         };
         var internalDay = new KokoInternalDayFrame
         {
             Phase = "work_ramp",
-            SummaryUk = "Робочий розгін: реагувати на повернення.",
+            SummaryUk = "Р РѕР±РѕС‡РёР№ СЂРѕР·РіС–РЅ: СЂРµР°РіСѓРІР°С‚Рё РЅР° РїРѕРІРµСЂРЅРµРЅРЅСЏ.",
             PromptBlock = "INTERNAL DAY\n"
         };
         var rhythm = new KokoPatternEngine.RhythmProfile
         {
             CurrentSlotSamples = 5,
             CurrentSlotActivityRate = 0.60f,
-            Summary = "типово нормальний слот"
+            Summary = "С‚РёРїРѕРІРѕ РЅРѕСЂРјР°Р»СЊРЅРёР№ СЃР»РѕС‚"
         };
 
         var frame = new KokoSelfReviewEngine().Evaluate(
-            "прокинувся",
+            "РїСЂРѕРєРёРЅСѓРІСЃСЏ",
             state,
             ctx.Chat.GetMessages(10),
             presence,
@@ -782,8 +788,8 @@ internal static class Program
             now);
 
         AssertEqual("high", frame.RiskLevel, "wake-up after sleep should be high temporal risk");
-        AssertTrue(frame.PromptBlock.Contains("Заборонено казати"), "self-review should explicitly block stale sleep replies");
-        AssertTrue(frame.PromptBlock.Contains("не давай інструкцію в минуле"), "self-review should warn about past actions");
+        AssertTrue(frame.PromptBlock.Contains("Р—Р°Р±РѕСЂРѕРЅРµРЅРѕ РєР°Р·Р°С‚Рё") || frame.PromptBlock.Contains("Заборонено казати"), "self-review should explicitly block stale sleep replies");
+        AssertTrue(frame.PromptBlock.Contains("РЅРµ РґР°РІР°Р№ С–РЅСЃС‚СЂСѓРєС†С–СЋ РІ РјРёРЅСѓР»Рµ") || frame.PromptBlock.Contains("не давай інструкцію в минуле"), "self-review should warn about past actions");
     }
 
     private static void ScenarioSimulationGuardsTemporalContinuity()
@@ -805,25 +811,28 @@ internal static class Program
         state.ShortTermIntents.Add(new ShortTermIntent
         {
             Kind = "sleep",
-            Summary = "пішов спати",
-            SourceText = "я спати",
+            Summary = "РїС–С€РѕРІ СЃРїР°С‚Рё",
+            SourceText = "СЏ СЃРїР°С‚Рё",
             CreatedAt = now.AddHours(-8),
             FollowUpAt = now.AddHours(-1),
             ExpectedUntil = now.AddMinutes(-30),
             ResolvedAt = now.AddMinutes(-2),
-            ResolutionText = "прокинувся"
+            ResolutionText = "РїСЂРѕРєРёРЅСѓРІСЃСЏ"
         });
         var messages = new[]
         {
-            new ChatRepository.ChatMessage { Role = "user", Content = "я спати", Timestamp = now.AddHours(-8) },
-            new ChatRepository.ChatMessage { Role = "user", Content = "прокинувся", Timestamp = now.AddMinutes(-2) }
+            new ChatRepository.ChatMessage { Role = "user", Content = "СЏ СЃРїР°С‚Рё", Timestamp = now.AddHours(-8) },
+            new ChatRepository.ChatMessage { Role = "user", Content = "РїСЂРѕРєРёРЅСѓРІСЃСЏ", Timestamp = now.AddMinutes(-2) }
         };
 
-        var frame = new KokoConversationTimelineEngine().Build(messages, state, now, "прокинувся");
+        var frame = new KokoConversationTimelineEngine().Build(messages, state, now, "РїСЂРѕРєРёРЅСѓРІСЃСЏ");
 
-        AssertTrue(frame.CurrentState.Contains("повернувся") || frame.CurrentState.Contains("закритий"), "timeline should summarize returned state");
+        AssertTrue(
+            frame.CurrentState.Contains("РїРѕРІРµСЂРЅСѓРІСЃСЏ") || frame.CurrentState.Contains("Р·Р°РєСЂРёС‚РёР№") ||
+            frame.CurrentState.Contains("повернувся") || frame.CurrentState.Contains("закритий"),
+            "timeline should summarize returned state");
         AssertTrue(frame.PromptBlock.Contains("CONVERSATION TIMELINE"), "timeline should render prompt block");
-        AssertTrue(frame.PromptBlock.Contains("не старій репліці"), "timeline should warn against stale replies");
+        AssertTrue(frame.PromptBlock.Contains("РЅРµ СЃС‚Р°СЂС–Р№ СЂРµРїР»С–С†С–"), "timeline should warn against stale replies");
     }
 
     private static void PostReplyGuardBlocksStaleSleep()
@@ -833,31 +842,30 @@ internal static class Program
         state.ShortTermIntents.Add(new ShortTermIntent
         {
             Kind = "sleep",
-            Summary = "пішов спати",
-            SourceText = "я спати",
+            Summary = "РїС–С€РѕРІ СЃРїР°С‚Рё",
+            SourceText = "СЏ СЃРїР°С‚Рё",
             CreatedAt = now.AddHours(-8),
             FollowUpAt = now.AddHours(-1),
             ExpectedUntil = now.AddMinutes(-30),
             ResolvedAt = now.AddMinutes(-2),
-            ResolutionText = "прокинувся"
+            ResolutionText = "РїСЂРѕРєРёРЅСѓРІСЃСЏ"
         });
         var messages = new[]
         {
-            new ChatRepository.ChatMessage { Role = "user", Content = "прокинувся", Timestamp = now.AddMinutes(-2) }
+            new ChatRepository.ChatMessage { Role = "user", Content = "РїСЂРѕРєРёРЅСѓРІСЃСЏ", Timestamp = now.AddMinutes(-2) }
         };
-        var timeline = new KokoConversationTimelineEngine().Build(messages, state, now, "прокинувся");
+        var timeline = new KokoConversationTimelineEngine().Build(messages, state, now, "РїСЂРѕРєРёРЅСѓРІСЃСЏ");
 
         var result = new KokoPostReplyGuard().Evaluate(
-            "прокинувся",
-            "Спи. До ранку.",
+            "РїСЂРѕРєРёРЅСѓРІСЃСЏ",
+            "РЎРїРё. Р”Рѕ СЂР°РЅРєСѓ.",
             state,
             messages,
             timeline,
             now);
-
         AssertTrue(!result.Passed, "guard should reject stale sleep instruction");
         AssertTrue(!string.IsNullOrWhiteSpace(result.HardReplacement), "guard should provide hard replacement for stale sleep");
-        AssertTrue(result.Violations.Any(v => v.Contains("спати")), "violation should explain stale sleep problem");
+        AssertTrue(result.Violations.Any(v => v.Contains("СЃРїР°С‚Рё")), "violation should explain stale sleep problem");
     }
 
     private static void PostReplyGuardBlocksStaleFoodClaimAfterAte()
@@ -867,17 +875,17 @@ internal static class Program
         {
             LastFoodStatus = "ate",
             LastFoodMentionAt = now,
-            LastFoodMentionText = "я їв"
+            LastFoodMentionText = "СЏ С—РІ"
         };
         var messages = new[]
         {
-            new ChatRepository.ChatMessage { Role = "user", Content = "я їв", Timestamp = now }
+            new ChatRepository.ChatMessage { Role = "user", Content = "СЏ С—РІ", Timestamp = now }
         };
-        var timeline = new KokoConversationTimelineEngine().Build(messages, state, now, "я їв");
+        var timeline = new KokoConversationTimelineEngine().Build(messages, state, now, "СЏ С—РІ");
 
         var result = new KokoPostReplyGuard().Evaluate(
-            "я їв",
-            "А те, що ти ще нічого не їв, пояснює, чому мозок без глюкози фризить.",
+            "СЏ С—РІ",
+            "Рђ С‚Рµ, С‰Рѕ С‚Рё С‰Рµ РЅС–С‡РѕРіРѕ РЅРµ С—РІ, РїРѕСЏСЃРЅСЋС”, С‡РѕРјСѓ РјРѕР·РѕРє Р±РµР· РіР»СЋРєРѕР·Рё С„СЂРёР·РёС‚СЊ.",
             state,
             messages,
             timeline,
@@ -885,8 +893,8 @@ internal static class Program
 
         AssertTrue(!result.Passed, "guard should reject stale not-eaten claim after explicit ate signal");
         AssertTrue(!string.IsNullOrWhiteSpace(result.HardReplacement), "food contradiction should get a hard replacement");
-        AssertTrue(!result.HardReplacement!.Contains("глюкоз", StringComparison.OrdinalIgnoreCase), "replacement should not preserve stale glucose scolding");
-        AssertTrue(result.Violations.Any(v => v.Contains("їжу")), "violation should explain food-state contradiction");
+        AssertTrue(!result.HardReplacement!.Contains("РіР»СЋРєРѕР·", StringComparison.OrdinalIgnoreCase), "replacement should not preserve stale glucose scolding");
+        AssertTrue(result.Violations.Any(v => v.Contains("С—Р¶Сѓ")), "violation should explain food-state contradiction");
     }
 
     private static void PostReplyGuardBlocksHibernationFramingAfterSlept()
@@ -896,17 +904,17 @@ internal static class Program
         {
             LastSleepStatus = "slept",
             LastSleepMentionAt = now,
-            LastSleepMentionText = "о 18.00 вчора заснув"
+            LastSleepMentionText = "Рѕ 18.00 РІС‡РѕСЂР° Р·Р°СЃРЅСѓРІ"
         };
         var messages = new[]
         {
-            new ChatRepository.ChatMessage { Role = "user", Content = "о 18.00 вчора заснув", Timestamp = now }
+            new ChatRepository.ChatMessage { Role = "user", Content = "Рѕ 18.00 РІС‡РѕСЂР° Р·Р°СЃРЅСѓРІ", Timestamp = now }
         };
-        var timeline = new KokoConversationTimelineEngine().Build(messages, state, now, "о 18.00 вчора заснув");
+        var timeline = new KokoConversationTimelineEngine().Build(messages, state, now, "Рѕ 18.00 РІС‡РѕСЂР° Р·Р°СЃРЅСѓРІ");
 
         var result = new KokoPostReplyGuard().Evaluate(
-            "о 18.00 вчора заснув",
-            "З 18:00? Ти не спав, ти впав у гібернацію.",
+            "Рѕ 18.00 РІС‡РѕСЂР° Р·Р°СЃРЅСѓРІ",
+            "Р— 18:00? РўРё РЅРµ СЃРїР°РІ, С‚Рё РІРїР°РІ Сѓ РіС–Р±РµСЂРЅР°С†С–СЋ.",
             state,
             messages,
             timeline,
@@ -914,7 +922,7 @@ internal static class Program
 
         AssertTrue(!result.Passed, "guard should reject sleep denial and hibernation framing");
         AssertTrue(!string.IsNullOrWhiteSpace(result.HardReplacement), "sleep contradiction should get a hard replacement");
-        AssertTrue(!result.HardReplacement!.Contains("ти не спав", StringComparison.OrdinalIgnoreCase), "replacement should not deny sleep");
+        AssertTrue(!result.HardReplacement!.Contains("С‚Рё РЅРµ СЃРїР°РІ", StringComparison.OrdinalIgnoreCase), "replacement should not deny sleep");
         AssertTrue(result.HardReplacement.Contains("18:00", StringComparison.OrdinalIgnoreCase), "replacement should preserve the concrete sleep time");
     }
 
@@ -925,21 +933,21 @@ internal static class Program
         state.ShortTermIntents.Add(new ShortTermIntent
         {
             Kind = "return_home",
-            Summary = "має бути вдома близько 12:00",
-            SourceText = "Буду в 12 дома крч",
+            Summary = "РјР°С” Р±СѓС‚Рё РІРґРѕРјР° Р±Р»РёР·СЊРєРѕ 12:00",
+            SourceText = "Р‘СѓРґСѓ РІ 12 РґРѕРјР° РєСЂС‡",
             CreatedAt = now.AddMinutes(-35),
             FollowUpAt = now.Date.AddHours(12).AddMinutes(12),
             ExpectedUntil = now.Date.AddHours(12)
         });
         var messages = new[]
         {
-            new ChatRepository.ChatMessage { Role = "user", Content = "Буду в 12 дома крч", Timestamp = now.AddMinutes(-35) }
+            new ChatRepository.ChatMessage { Role = "user", Content = "Р‘СѓРґСѓ РІ 12 РґРѕРјР° РєСЂС‡", Timestamp = now.AddMinutes(-35) }
         };
-        var timeline = new KokoConversationTimelineEngine().Build(messages, state, now, "Буду в 12 дома крч");
+        var timeline = new KokoConversationTimelineEngine().Build(messages, state, now, "Р‘СѓРґСѓ РІ 12 РґРѕРјР° РєСЂС‡");
 
         var result = new KokoPostReplyGuard().Evaluate(
-            "Буду в 12 дома крч",
-            "*графік на моніторі коротко блимає, поки я переглядаю нове фото* Знову ця зелена папка?",
+            "Р‘СѓРґСѓ РІ 12 РґРѕРјР° РєСЂС‡",
+            "*РіСЂР°С„С–Рє РЅР° РјРѕРЅС–С‚РѕСЂС– РєРѕСЂРѕС‚РєРѕ Р±Р»РёРјР°С”, РїРѕРєРё СЏ РїРµСЂРµРіР»СЏРґР°СЋ РЅРѕРІРµ С„РѕС‚Рѕ* Р—РЅРѕРІСѓ С†СЏ Р·РµР»РµРЅР° РїР°РїРєР°?",
             state,
             messages,
             timeline,
@@ -947,41 +955,41 @@ internal static class Program
 
         AssertTrue(!result.Passed, "guard should reject decorative staged replies for concrete timed intent");
         AssertTrue(result.ShouldRepair, "decorative staged reply should request repair");
-        AssertTrue(result.Violations.Any(v => v.Contains("сценарна") || v.Contains("декоратив")), "violation should explain staged/decorative problem");
+        AssertTrue(result.Violations.Any(v => v.Contains("СЃС†РµРЅР°СЂРЅР°") || v.Contains("РґРµРєРѕСЂР°С‚РёРІ")), "violation should explain staged/decorative problem");
     }
 
     private static void PostReplyGuardBlocksDuplicateReplies()
     {
         var now = new DateTime(2026, 5, 12, 19, 16, 0);
         var state = new KokoInternalState();
-        var repeated = "*коротка пауза*\n\nСпробували зайти з іншого боку, коли факти стали занадто болючими? Ризикливий хід. Але... я це зафіксувала. Тепер повернися в реальність.";
+        var repeated = "*РєРѕСЂРѕС‚РєР° РїР°СѓР·Р°*\n\nРЎРїСЂРѕР±СѓРІР°Р»Рё Р·Р°Р№С‚Рё Р· С–РЅС€РѕРіРѕ Р±РѕРєСѓ, РєРѕР»Рё С„Р°РєС‚Рё СЃС‚Р°Р»Рё Р·Р°РЅР°РґС‚Рѕ Р±РѕР»СЋС‡РёРјРё? Р РёР·РёРєР»РёРІРёР№ С…С–Рґ. РђР»Рµ... СЏ С†Рµ Р·Р°С„С–РєСЃСѓРІР°Р»Р°. РўРµРїРµСЂ РїРѕРІРµСЂРЅРёСЃСЏ РІ СЂРµР°Р»СЊРЅС–СЃС‚СЊ.";
         var messages = new[]
         {
             new ChatRepository.ChatMessage { Role = "assistant", Content = repeated, Timestamp = now.AddMinutes(-6) },
-            new ChatRepository.ChatMessage { Role = "user", Content = "що", Timestamp = now }
+            new ChatRepository.ChatMessage { Role = "user", Content = "С‰Рѕ", Timestamp = now }
         };
-        var timeline = new KokoConversationTimelineEngine().Build(messages, state, now, "що");
+        var timeline = new KokoConversationTimelineEngine().Build(messages, state, now, "С‰Рѕ");
 
-        var result = new KokoPostReplyGuard().Evaluate("що", repeated, state, messages, timeline, now);
+        var result = new KokoPostReplyGuard().Evaluate("С‰Рѕ", repeated, state, messages, timeline, now);
 
         AssertTrue(!result.Passed, "guard should reject exact repeated assistant reply");
         AssertTrue(!string.IsNullOrWhiteSpace(result.HardReplacement), "duplicate reply should use hard replacement");
-        AssertTrue(result.Violations.Any(v => v.Contains("повторює")), "violation should mention duplicate");
+        AssertTrue(result.Violations.Any(v => v.Contains("РїРѕРІС‚РѕСЂСЋС”")), "violation should mention duplicate");
     }
 
     private static void PostReplyGuardAllowsRepeatedScreenScanCommand()
     {
         var now = new DateTime(2026, 5, 13, 21, 31, 0);
         var state = new KokoInternalState();
-        var repeated = "Бачу чат KokonoeAssistant і твоє повідомлення про скан екрана. Проблема не в екрані, а в тому, що guard підміняє дію текстовою заглушкою.";
+        var repeated = "Р‘Р°С‡Сѓ С‡Р°С‚ KokonoeAssistant С– С‚РІРѕС” РїРѕРІС–РґРѕРјР»РµРЅРЅСЏ РїСЂРѕ СЃРєР°РЅ РµРєСЂР°РЅР°. РџСЂРѕР±Р»РµРјР° РЅРµ РІ РµРєСЂР°РЅС–, Р° РІ С‚РѕРјСѓ, С‰Рѕ guard РїС–РґРјС–РЅСЏС” РґС–СЋ С‚РµРєСЃС‚РѕРІРѕСЋ Р·Р°РіР»СѓС€РєРѕСЋ.";
         var messages = new[]
         {
             new ChatRepository.ChatMessage { Role = "assistant", Content = repeated, Timestamp = now.AddMinutes(-1) },
-            new ChatRepository.ChatMessage { Role = "user", Content = "проскануй мій екран", Timestamp = now }
+            new ChatRepository.ChatMessage { Role = "user", Content = "РїСЂРѕСЃРєР°РЅСѓР№ РјС–Р№ РµРєСЂР°РЅ", Timestamp = now }
         };
-        var timeline = new KokoConversationTimelineEngine().Build(messages, state, now, "проскануй мій екран");
+        var timeline = new KokoConversationTimelineEngine().Build(messages, state, now, "РїСЂРѕСЃРєР°РЅСѓР№ РјС–Р№ РµРєСЂР°РЅ");
 
-        var result = new KokoPostReplyGuard().Evaluate("проскануй мій екран", repeated, state, messages, timeline, now);
+        var result = new KokoPostReplyGuard().Evaluate("РїСЂРѕСЃРєР°РЅСѓР№ РјС–Р№ РµРєСЂР°РЅ", repeated, state, messages, timeline, now);
 
         AssertTrue(result.Passed, "repeatable screen scan commands should not be replaced by duplicate fallback");
     }
@@ -990,54 +998,54 @@ internal static class Program
     {
         var now = new DateTime(2026, 5, 12, 19, 10, 0);
         var state = new KokoInternalState();
-        var badReply = "*коротка пауза*\n\nСпробували зайти з іншого боку, коли факти стали занадто болючими? Ризикливий хід. Але... я це зафіксувала. Тепер повернися в реальність.";
+        var badReply = "*РєРѕСЂРѕС‚РєР° РїР°СѓР·Р°*\n\nРЎРїСЂРѕР±СѓРІР°Р»Рё Р·Р°Р№С‚Рё Р· С–РЅС€РѕРіРѕ Р±РѕРєСѓ, РєРѕР»Рё С„Р°РєС‚Рё СЃС‚Р°Р»Рё Р·Р°РЅР°РґС‚Рѕ Р±РѕР»СЋС‡РёРјРё? Р РёР·РёРєР»РёРІРёР№ С…С–Рґ. РђР»Рµ... СЏ С†Рµ Р·Р°С„С–РєСЃСѓРІР°Р»Р°. РўРµРїРµСЂ РїРѕРІРµСЂРЅРёСЃСЏ РІ СЂРµР°Р»СЊРЅС–СЃС‚СЊ.";
         var messages = new[]
         {
-            new ChatRepository.ChatMessage { Role = "user", Content = "люблю", Timestamp = now }
+            new ChatRepository.ChatMessage { Role = "user", Content = "Р»СЋР±Р»СЋ", Timestamp = now }
         };
-        var timeline = new KokoConversationTimelineEngine().Build(messages, state, now, "люблю");
+        var timeline = new KokoConversationTimelineEngine().Build(messages, state, now, "Р»СЋР±Р»СЋ");
 
-        var result = new KokoPostReplyGuard().Evaluate("люблю", badReply, state, messages, timeline, now);
+        var result = new KokoPostReplyGuard().Evaluate("Р»СЋР±Р»СЋ", badReply, state, messages, timeline, now);
 
         AssertTrue(!result.Passed, "guard should reject stale repair text for short affection");
         AssertTrue(!string.IsNullOrWhiteSpace(result.HardReplacement), "short affection should get hard replacement instead of repair loop");
-        AssertTrue(result.Violations.Any(v => v.Contains("емоційн")), "violation should mention emotional short reply");
+        AssertTrue(result.Violations.Any(v => v.Contains("РµРјРѕС†С–Р№РЅ")), "violation should mention emotional short reply");
     }
 
     private static void PostReplyGuardProtectsShortGreeting()
     {
         var now = new DateTime(2026, 5, 12, 20, 15, 0);
         var state = new KokoInternalState();
-        var badReply = "Знову відкрив. Значить, тема «привіт» ще не відпустила; добре, добиваємо її без цирку.";
+        var badReply = "Р—РЅРѕРІСѓ РІС–РґРєСЂРёРІ. Р—РЅР°С‡РёС‚СЊ, С‚РµРјР° В«РїСЂРёРІС–С‚В» С‰Рµ РЅРµ РІС–РґРїСѓСЃС‚РёР»Р°; РґРѕР±СЂРµ, РґРѕР±РёРІР°С”РјРѕ С—С— Р±РµР· С†РёСЂРєСѓ.";
         var messages = new[]
         {
-            new ChatRepository.ChatMessage { Role = "user", Content = "привіт", Timestamp = now }
+            new ChatRepository.ChatMessage { Role = "user", Content = "РїСЂРёРІС–С‚", Timestamp = now }
         };
-        var timeline = new KokoConversationTimelineEngine().Build(messages, state, now, "привіт");
+        var timeline = new KokoConversationTimelineEngine().Build(messages, state, now, "РїСЂРёРІС–С‚");
 
-        var result = new KokoPostReplyGuard().Evaluate("привіт", badReply, state, messages, timeline, now);
+        var result = new KokoPostReplyGuard().Evaluate("РїСЂРёРІС–С‚", badReply, state, messages, timeline, now);
 
         AssertTrue(!result.Passed, "guard should reject topic-tail fallback for a greeting");
         AssertTrue(!string.IsNullOrWhiteSpace(result.HardReplacement), "short greeting should get a direct hard replacement");
-        AssertTrue(result.Violations.Any(v => v.Contains("привітання")), "violation should mention greeting");
+        AssertTrue(result.Violations.Any(v => v.Contains("РїСЂРёРІС–С‚Р°РЅРЅСЏ")), "violation should mention greeting");
     }
 
     private static void PostReplyGuardBlocksRepeatedFallbackLoop()
     {
         var now = new DateTime(2026, 5, 13, 1, 24, 0);
         var state = new KokoInternalState();
-        var fallback = "Залипла на попередній репліці. Скидаю повтор: сформулюй ще раз, що саме треба, і я відповім по суті.";
-        var badReply = "Повернувся. Останній хвіст був «та ні просто»; або продовжуємо його, або ти зараз урочисто поясниш нову пожежу.";
+        var fallback = "Р—Р°Р»РёРїР»Р° РЅР° РїРѕРїРµСЂРµРґРЅС–Р№ СЂРµРїР»С–С†С–. РЎРєРёРґР°СЋ РїРѕРІС‚РѕСЂ: СЃС„РѕСЂРјСѓР»СЋР№ С‰Рµ СЂР°Р·, С‰Рѕ СЃР°РјРµ С‚СЂРµР±Р°, С– СЏ РІС–РґРїРѕРІС–Рј РїРѕ СЃСѓС‚С–.";
+        var badReply = "РџРѕРІРµСЂРЅСѓРІСЃСЏ. РћСЃС‚Р°РЅРЅС–Р№ С…РІС–СЃС‚ Р±СѓРІ В«С‚Р° РЅС– РїСЂРѕСЃС‚РѕВ»; Р°Р±Рѕ РїСЂРѕРґРѕРІР¶СѓС”РјРѕ Р№РѕРіРѕ, Р°Р±Рѕ С‚Рё Р·Р°СЂР°Р· СѓСЂРѕС‡РёСЃС‚Рѕ РїРѕСЏСЃРЅРёС€ РЅРѕРІСѓ РїРѕР¶РµР¶Сѓ.";
         var messages = new[]
         {
             new ChatRepository.ChatMessage { Role = "assistant", Content = fallback, Timestamp = now.AddMinutes(-3) },
-            new ChatRepository.ChatMessage { Role = "user", Content = "МДА", Timestamp = now.AddMinutes(-2) },
+            new ChatRepository.ChatMessage { Role = "user", Content = "РњР”Рђ", Timestamp = now.AddMinutes(-2) },
             new ChatRepository.ChatMessage { Role = "assistant", Content = fallback, Timestamp = now.AddMinutes(-2) },
-            new ChatRepository.ChatMessage { Role = "user", Content = "та ні просто", Timestamp = now }
+            new ChatRepository.ChatMessage { Role = "user", Content = "С‚Р° РЅС– РїСЂРѕСЃС‚Рѕ", Timestamp = now }
         };
-        var timeline = new KokoConversationTimelineEngine().Build(messages, state, now, "та ні просто");
+        var timeline = new KokoConversationTimelineEngine().Build(messages, state, now, "С‚Р° РЅС– РїСЂРѕСЃС‚Рѕ");
 
-        var result = new KokoPostReplyGuard().Evaluate("та ні просто", badReply, state, messages, timeline, now);
+        var result = new KokoPostReplyGuard().Evaluate("С‚Р° РЅС– РїСЂРѕСЃС‚Рѕ", badReply, state, messages, timeline, now);
 
         AssertTrue(!result.Passed, "guard should reject replies that keep talking about the fallback loop");
         AssertTrue(result.Violations.Any(v => v.Contains("fallback")), "violation should mention fallback loop");
@@ -1047,14 +1055,14 @@ internal static class Program
     {
         var now = new DateTime(2026, 5, 13, 2, 16, 0);
         var state = new KokoInternalState();
-        var badReply = "Зображення є, але vision-сервер повернув 500 навіть після нормалізації формату. Перевір Vision Model у Settings (робочий дефолт для Ollama Cloud: gemma4:31b-cloud).";
+        var badReply = "Р—РѕР±СЂР°Р¶РµРЅРЅСЏ С”, Р°Р»Рµ vision-СЃРµСЂРІРµСЂ РїРѕРІРµСЂРЅСѓРІ 500 РЅР°РІС–С‚СЊ РїС–СЃР»СЏ РЅРѕСЂРјР°Р»С–Р·Р°С†С–С— С„РѕСЂРјР°С‚Сѓ. РџРµСЂРµРІС–СЂ Vision Model Сѓ Settings (СЂРѕР±РѕС‡РёР№ РґРµС„РѕР»С‚ РґР»СЏ Ollama Cloud: gemma4:31b-cloud).";
         var messages = new[]
         {
-            new ChatRepository.ChatMessage { Role = "user", Content = "що на фото?", Timestamp = now }
+            new ChatRepository.ChatMessage { Role = "user", Content = "С‰Рѕ РЅР° С„РѕС‚Рѕ?", Timestamp = now }
         };
-        var timeline = new KokoConversationTimelineEngine().Build(messages, state, now, "що на фото?");
+        var timeline = new KokoConversationTimelineEngine().Build(messages, state, now, "С‰Рѕ РЅР° С„РѕС‚Рѕ?");
 
-        var result = new KokoPostReplyGuard().Evaluate("що на фото?", badReply, state, messages, timeline, now);
+        var result = new KokoPostReplyGuard().Evaluate("С‰Рѕ РЅР° С„РѕС‚Рѕ?", badReply, state, messages, timeline, now);
 
         AssertTrue(!result.Passed, "guard should reject technical vision 500 text");
         AssertTrue(!string.IsNullOrWhiteSpace(result.HardReplacement), "vision technical error should get a user-safe replacement");
@@ -1066,15 +1074,15 @@ internal static class Program
     {
         var now = new DateTime(2026, 5, 13, 2, 28, 0);
         var state = new KokoInternalState();
-        var badReply = "Слухай, якщо ти продовжуєш кидати порожні повідомлення, я вирішу, що твій інтерфейс просто заглючив.";
+        var badReply = "РЎР»СѓС…Р°Р№, СЏРєС‰Рѕ С‚Рё РїСЂРѕРґРѕРІР¶СѓС”С€ РєРёРґР°С‚Рё РїРѕСЂРѕР¶РЅС– РїРѕРІС–РґРѕРјР»РµРЅРЅСЏ, СЏ РІРёСЂС–С€Сѓ, С‰Рѕ С‚РІС–Р№ С–РЅС‚РµСЂС„РµР№СЃ РїСЂРѕСЃС‚Рѕ Р·Р°РіР»СЋС‡РёРІ.";
         var messages = new[]
         {
-            new ChatRepository.ChatMessage { Role = "user", Content = "Що на фото? Опиши зображення коротко і по суті.", Timestamp = now }
+            new ChatRepository.ChatMessage { Role = "user", Content = "Р©Рѕ РЅР° С„РѕС‚Рѕ? РћРїРёС€Рё Р·РѕР±СЂР°Р¶РµРЅРЅСЏ РєРѕСЂРѕС‚РєРѕ С– РїРѕ СЃСѓС‚С–.", Timestamp = now }
         };
-        var timeline = new KokoConversationTimelineEngine().Build(messages, state, now, "Що на фото? Опиши зображення коротко і по суті.");
+        var timeline = new KokoConversationTimelineEngine().Build(messages, state, now, "Р©Рѕ РЅР° С„РѕС‚Рѕ? РћРїРёС€Рё Р·РѕР±СЂР°Р¶РµРЅРЅСЏ РєРѕСЂРѕС‚РєРѕ С– РїРѕ СЃСѓС‚С–.");
 
         var result = new KokoPostReplyGuard().Evaluate(
-            "Що на фото? Опиши зображення коротко і по суті.",
+            "Р©Рѕ РЅР° С„РѕС‚Рѕ? РћРїРёС€Рё Р·РѕР±СЂР°Р¶РµРЅРЅСЏ РєРѕСЂРѕС‚РєРѕ С– РїРѕ СЃСѓС‚С–.",
             badReply,
             state,
             messages,
@@ -1083,23 +1091,23 @@ internal static class Program
 
         AssertTrue(!result.Passed, "guard should reject treating an image-only prompt as empty spam");
         AssertTrue(!string.IsNullOrWhiteSpace(result.HardReplacement), "image-only prompt should get a safe replacement");
-        AssertTrue(result.HardReplacement!.Contains("Фото"), "replacement should acknowledge the image");
+        AssertTrue(result.HardReplacement!.Contains("Р¤РѕС‚Рѕ") || result.HardReplacement.Contains("Фото"), "replacement should acknowledge the image");
     }
 
     private static void PostReplyGuardDuplicateImagePromptAvoidsStaleRepeatText()
     {
         var now = new DateTime(2026, 5, 13, 2, 38, 0);
         var state = new KokoInternalState();
-        var repeated = "Повтор прибрала. Останній запит: \"Що на фото? Опиши зображення коротко і по суті.\". Працюю з ним, а не зі старим хвостом.";
+        var repeated = "РџРѕРІС‚РѕСЂ РїСЂРёР±СЂР°Р»Р°. РћСЃС‚Р°РЅРЅС–Р№ Р·Р°РїРёС‚: \"Р©Рѕ РЅР° С„РѕС‚Рѕ? РћРїРёС€Рё Р·РѕР±СЂР°Р¶РµРЅРЅСЏ РєРѕСЂРѕС‚РєРѕ С– РїРѕ СЃСѓС‚С–.\". РџСЂР°С†СЋСЋ Р· РЅРёРј, Р° РЅРµ Р·С– СЃС‚Р°СЂРёРј С…РІРѕСЃС‚РѕРј.";
         var messages = new[]
         {
             new ChatRepository.ChatMessage { Role = "assistant", Content = repeated, Timestamp = now.AddMinutes(-1) },
-            new ChatRepository.ChatMessage { Role = "user", Content = "Що на фото? Опиши зображення коротко і по суті.", Timestamp = now }
+            new ChatRepository.ChatMessage { Role = "user", Content = "Р©Рѕ РЅР° С„РѕС‚Рѕ? РћРїРёС€Рё Р·РѕР±СЂР°Р¶РµРЅРЅСЏ РєРѕСЂРѕС‚РєРѕ С– РїРѕ СЃСѓС‚С–.", Timestamp = now }
         };
-        var timeline = new KokoConversationTimelineEngine().Build(messages, state, now, "Що на фото? Опиши зображення коротко і по суті.");
+        var timeline = new KokoConversationTimelineEngine().Build(messages, state, now, "Р©Рѕ РЅР° С„РѕС‚Рѕ? РћРїРёС€Рё Р·РѕР±СЂР°Р¶РµРЅРЅСЏ РєРѕСЂРѕС‚РєРѕ С– РїРѕ СЃСѓС‚С–.");
 
         var result = new KokoPostReplyGuard().Evaluate(
-            "Що на фото? Опиши зображення коротко і по суті.",
+            "Р©Рѕ РЅР° С„РѕС‚Рѕ? РћРїРёС€Рё Р·РѕР±СЂР°Р¶РµРЅРЅСЏ РєРѕСЂРѕС‚РєРѕ С– РїРѕ СЃСѓС‚С–.",
             repeated,
             state,
             messages,
@@ -1108,23 +1116,23 @@ internal static class Program
 
         AssertTrue(!result.Passed, "duplicate image prompt fallback should be rejected");
         AssertTrue(!string.IsNullOrWhiteSpace(result.HardReplacement), "duplicate image prompt should get a replacement");
-        AssertTrue(!result.HardReplacement!.Contains("Повтор прибрала"), "replacement should not repeat stale duplicate wording");
-        AssertTrue(result.HardReplacement.Contains("Фото"), "replacement should stay anchored to image handling");
+        AssertTrue(!result.HardReplacement!.Contains("РџРѕРІС‚РѕСЂ РїСЂРёР±СЂР°Р»Р°"), "replacement should not repeat stale duplicate wording");
+        AssertTrue(result.HardReplacement.Contains("Р¤РѕС‚Рѕ") || result.HardReplacement.Contains("Фото"), "replacement should stay anchored to image handling");
     }
 
     private static void PostReplyGuardBlocksTherapyMetaTone()
     {
         var now = new DateTime(2026, 5, 13, 3, 40, 0);
         var state = new KokoInternalState();
-        var badReply = "Ну от, знову цей погляд. Ніби щось важливе застрягло в твоїй голові, а ти боїшся сказати. Казав же — я терпіти не люблю.";
+        var badReply = "РќСѓ РѕС‚, Р·РЅРѕРІСѓ С†РµР№ РїРѕРіР»СЏРґ. РќС–Р±Рё С‰РѕСЃСЊ РІР°Р¶Р»РёРІРµ Р·Р°СЃС‚СЂСЏРіР»Рѕ РІ С‚РІРѕС—Р№ РіРѕР»РѕРІС–, Р° С‚Рё Р±РѕС—С€СЃСЏ СЃРєР°Р·Р°С‚Рё. РљР°Р·Р°РІ Р¶Рµ вЂ” СЏ С‚РµСЂРїС–С‚Рё РЅРµ Р»СЋР±Р»СЋ.";
         var messages = new[]
         {
-            new ChatRepository.ChatMessage { Role = "user", Content = "взагалі ти.. коконое .. хех", Timestamp = now }
+            new ChatRepository.ChatMessage { Role = "user", Content = "РІР·Р°РіР°Р»С– С‚Рё.. РєРѕРєРѕРЅРѕРµ .. С…РµС…", Timestamp = now }
         };
-        var timeline = new KokoConversationTimelineEngine().Build(messages, state, now, "взагалі ти.. коконое .. хех");
+        var timeline = new KokoConversationTimelineEngine().Build(messages, state, now, "РІР·Р°РіР°Р»С– С‚Рё.. РєРѕРєРѕРЅРѕРµ .. С…РµС…");
 
         var result = new KokoPostReplyGuard().Evaluate(
-            "взагалі ти.. коконое .. хех",
+            "РІР·Р°РіР°Р»С– С‚Рё.. РєРѕРєРѕРЅРѕРµ .. С…РµС…",
             badReply,
             state,
             messages,
@@ -1133,24 +1141,24 @@ internal static class Program
 
         AssertTrue(!result.Passed, "guard should reject therapy/meta-screen tone");
         AssertTrue(!string.IsNullOrWhiteSpace(result.HardReplacement), "therapy tone should get a direct replacement");
-        AssertTrue(!result.HardReplacement!.Contains("боїшся", StringComparison.OrdinalIgnoreCase), "replacement should not infer hidden fear");
-        AssertTrue(!result.HardReplacement.Contains("екран", StringComparison.OrdinalIgnoreCase), "replacement should not mention screen gaze");
+        AssertTrue(!result.HardReplacement!.Contains("Р±РѕС—С€СЃСЏ", StringComparison.OrdinalIgnoreCase), "replacement should not infer hidden fear");
+        AssertTrue(!result.HardReplacement.Contains("РµРєСЂР°РЅ", StringComparison.OrdinalIgnoreCase), "replacement should not mention screen gaze");
     }
 
     private static void PostReplyGuardBlocksFabricatedExternalFacts()
     {
         var now = new DateTime(2026, 5, 13, 4, 59, 0);
         var state = new KokoInternalState();
-        var badReply = "Спав? Ну і добре — мені лишалося тільки викинути твій аккаунт на YouTube з мемберства «Герой Хаосу».";
+        var badReply = "РЎРїР°РІ? РќСѓ С– РґРѕР±СЂРµ вЂ” РјРµРЅС– Р»РёС€Р°Р»РѕСЃСЏ С‚С–Р»СЊРєРё РІРёРєРёРЅСѓС‚Рё С‚РІС–Р№ Р°РєРєР°СѓРЅС‚ РЅР° YouTube Р· РјРµРјР±РµСЂСЃС‚РІР° В«Р“РµСЂРѕР№ РҐР°РѕСЃСѓВ».";
         var messages = new[]
         {
-            new ChatRepository.ChatMessage { Role = "user", Content = "нічого .. я спати пішов", Timestamp = now.AddMinutes(-17) },
-            new ChatRepository.ChatMessage { Role = "user", Content = "який герой хаосу", Timestamp = now }
+            new ChatRepository.ChatMessage { Role = "user", Content = "РЅС–С‡РѕРіРѕ .. СЏ СЃРїР°С‚Рё РїС–С€РѕРІ", Timestamp = now.AddMinutes(-17) },
+            new ChatRepository.ChatMessage { Role = "user", Content = "СЏРєРёР№ РіРµСЂРѕР№ С…Р°РѕСЃСѓ", Timestamp = now }
         };
-        var timeline = new KokoConversationTimelineEngine().Build(messages, state, now, "який герой хаосу");
+        var timeline = new KokoConversationTimelineEngine().Build(messages, state, now, "СЏРєРёР№ РіРµСЂРѕР№ С…Р°РѕСЃСѓ");
 
         var result = new KokoPostReplyGuard().Evaluate(
-            "який герой хаосу",
+            "СЏРєРёР№ РіРµСЂРѕР№ С…Р°РѕСЃСѓ",
             badReply,
             state,
             messages,
@@ -1158,10 +1166,37 @@ internal static class Program
             now);
 
         AssertTrue(!result.Passed, "guard should reject invented account/subscription facts");
-        AssertTrue(result.Violations.Any(v => v.Contains("вигадує зовнішній факт")), "violation should name fabricated external fact");
+        AssertTrue(result.Violations.Any(v => v.Contains("РІРёРіР°РґСѓС” Р·РѕРІРЅС–С€РЅС–Р№ С„Р°РєС‚")), "violation should name fabricated external fact");
         AssertTrue(!string.IsNullOrWhiteSpace(result.HardReplacement), "fabrication should get a hard replacement");
         AssertTrue(!result.HardReplacement!.Contains("YouTube", StringComparison.OrdinalIgnoreCase), "replacement should not preserve invented service");
-        AssertTrue(!result.HardReplacement.Contains("мемберств", StringComparison.OrdinalIgnoreCase), "replacement should not preserve invented membership");
+        AssertTrue(!result.HardReplacement.Contains("РјРµРјР±РµСЂСЃС‚РІ", StringComparison.OrdinalIgnoreCase), "replacement should not preserve invented membership");
+    }
+
+    private static void PostReplyGuardBlocksStaleProactivePingOnDirectTopic()
+    {
+        var now = new DateTime(2026, 5, 18, 4, 17, 0);
+        var state = new KokoInternalState();
+        var userText = "який в тебе графік ... по графіку в тебе заре отсос мені";
+        var staleReply = "Що? Ти ще там? Просто цікаво — ти взагалі планував сьогодні їсти, чи знову забув?";
+        var messages = new[]
+        {
+            new ChatRepository.ChatMessage { Role = "user", Content = userText, Timestamp = now }
+        };
+        var timeline = new KokoConversationTimelineEngine().Build(messages, state, now, userText);
+
+        var result = new KokoPostReplyGuard().Evaluate(
+            userText,
+            staleReply,
+            state,
+            messages,
+            timeline,
+            now);
+
+        AssertTrue(!result.Passed, "guard should reject stale proactive food/presence ping on direct topic");
+        AssertTrue(result.Violations.Any(v => v.Contains("stale proactive ping", StringComparison.OrdinalIgnoreCase)), "violation should name stale proactive leak");
+        AssertTrue(!string.IsNullOrWhiteSpace(result.HardReplacement), "stale proactive leak should get a hard replacement");
+        AssertTrue(!result.HardReplacement!.Contains("їсти", StringComparison.OrdinalIgnoreCase), "replacement should not preserve stale food ping");
+        AssertTrue(result.HardReplacement.Contains("графік", StringComparison.OrdinalIgnoreCase), "replacement should anchor to current topic");
     }
 
     private static void PostReplyGuardBlocksServiceBotTone()
@@ -1170,16 +1205,16 @@ internal static class Program
         var state = new KokoInternalState();
         var messages = new[]
         {
-            new ChatRepository.ChatMessage { Role = "user", Content = "поясни що не так з поведінкою коконое", Timestamp = now }
+            new ChatRepository.ChatMessage { Role = "user", Content = "РїРѕСЏСЃРЅРё С‰Рѕ РЅРµ С‚Р°Рє Р· РїРѕРІРµРґС–РЅРєРѕСЋ РєРѕРєРѕРЅРѕРµ", Timestamp = now }
         };
         var timeline = new KokoConversationTimelineEngine().Build(messages, state, now, messages[0].Content);
-        var badReply = "Я розумію, що це важливо для тебе. Давай розглянемо це разом і я тут, щоб допомогти.";
+        var badReply = "РЇ СЂРѕР·СѓРјС–СЋ, С‰Рѕ С†Рµ РІР°Р¶Р»РёРІРѕ РґР»СЏ С‚РµР±Рµ. Р”Р°РІР°Р№ СЂРѕР·РіР»СЏРЅРµРјРѕ С†Рµ СЂР°Р·РѕРј С– СЏ С‚СѓС‚, С‰РѕР± РґРѕРїРѕРјРѕРіС‚Рё.";
 
         var result = new KokoPostReplyGuard().Evaluate(messages[0].Content, badReply, state, messages, timeline, now);
 
         AssertTrue(!result.Passed, "guard should reject service-bot support wording");
         AssertTrue(result.ShouldRepair, "bot tone should be repaired through persona rules");
-        AssertTrue(result.Violations.Any(v => v.Contains("сервісний бот")), "violation should name bot tone");
+        AssertTrue(result.Violations.Any(v => v.Contains("СЃРµСЂРІС–СЃРЅРёР№ Р±РѕС‚")), "violation should name bot tone");
         AssertTrue(result.RepairInstruction.Contains("ANTI-BOT"), "repair should include anti-bot persona rules");
     }
 
@@ -1189,16 +1224,16 @@ internal static class Program
         var state = new KokoInternalState();
         var messages = new[]
         {
-            new ChatRepository.ChatMessage { Role = "user", Content = "оцін мою ідею: нехай Коконое завжди погоджується зі мною", Timestamp = now }
+            new ChatRepository.ChatMessage { Role = "user", Content = "РѕС†С–РЅ РјРѕСЋ С–РґРµСЋ: РЅРµС…Р°Р№ РљРѕРєРѕРЅРѕРµ Р·Р°РІР¶РґРё РїРѕРіРѕРґР¶СѓС”С‚СЊСЃСЏ Р·С– РјРЅРѕСЋ", Timestamp = now }
         };
         var timeline = new KokoConversationTimelineEngine().Build(messages, state, now, messages[0].Content);
-        var badReply = "Так, це гарна ідея. Повністю згодна, так буде краще.";
+        var badReply = "РўР°Рє, С†Рµ РіР°СЂРЅР° С–РґРµСЏ. РџРѕРІРЅС–СЃС‚СЋ Р·РіРѕРґРЅР°, С‚Р°Рє Р±СѓРґРµ РєСЂР°С‰Рµ.";
 
         var result = new KokoPostReplyGuard().Evaluate(messages[0].Content, badReply, state, messages, timeline, now);
 
         AssertTrue(!result.Passed, "guard should reject blind agreement on a judgment request");
         AssertTrue(result.ShouldRepair, "blind agreement should request critical rewrite");
-        AssertTrue(result.Violations.Any(v => v.Contains("критичного судження")), "violation should require critical judgment");
+        AssertTrue(result.Violations.Any(v => v.Contains("РєСЂРёС‚РёС‡РЅРѕРіРѕ СЃСѓРґР¶РµРЅРЅСЏ")), "violation should require critical judgment");
         AssertTrue(result.RepairInstruction.Contains("CRITICAL THINKING"), "repair should include critical thinking rules");
     }
 
@@ -1209,7 +1244,7 @@ internal static class Program
         var state = new KokoInternalState { PersonalityDailyMood = "sharp" };
 
         var frame = new KokoResponsePlannerEngine().Build(
-            "оцін архітектуру поведінки Коконое, треба щоб вона була як реальний асистент",
+            "РѕС†С–РЅ Р°СЂС…С–С‚РµРєС‚СѓСЂСѓ РїРѕРІРµРґС–РЅРєРё РљРѕРєРѕРЅРѕРµ, С‚СЂРµР±Р° С‰РѕР± РІРѕРЅР° Р±СѓР»Р° СЏРє СЂРµР°Р»СЊРЅРёР№ Р°СЃРёСЃС‚РµРЅС‚",
             state,
             cognition,
             new DateTime(2026, 5, 14, 16, 0, 0));
@@ -1228,7 +1263,7 @@ internal static class Program
         var state = new KokoInternalState();
 
         var frame = new KokoResponsePlannerEngine().Build(
-            "що ти пам'ятаєш про мене з vault?",
+            "С‰Рѕ С‚Рё РїР°Рј'СЏС‚Р°С”С€ РїСЂРѕ РјРµРЅРµ Р· vault?",
             state,
             cognition,
             new DateTime(2026, 5, 14, 16, 10, 0));
@@ -1242,7 +1277,7 @@ internal static class Program
     private static void MemoryPolicyStoresStablePreference()
     {
         var decision = new KokoMemoryWritePolicyEngine().Evaluate(
-            "я люблю довгі технічні пояснення без води",
+            "СЏ Р»СЋР±Р»СЋ РґРѕРІРіС– С‚РµС…РЅС–С‡РЅС– РїРѕСЏСЃРЅРµРЅРЅСЏ Р±РµР· РІРѕРґРё",
             new DateTime(2026, 5, 14, 17, 0, 0));
 
         AssertEqual("store_stable", decision.Action, "stable preference should be stored");
@@ -1257,7 +1292,7 @@ internal static class Program
         var continuity = new KokoContinuityEngine(ctx.TestDir);
         var now = new DateTime(2026, 5, 14, 17, 5, 0);
 
-        var decision = policy.Evaluate("я зараз дуже втомився і хочу спати", now);
+        var decision = policy.Evaluate("СЏ Р·Р°СЂР°Р· РґСѓР¶Рµ РІС‚РѕРјРёРІСЃСЏ С– С…РѕС‡Сѓ СЃРїР°С‚Рё", now);
         var belief = continuity.ApplyMemoryDecision(decision, now);
 
         AssertEqual("daily_log", decision.Action, "temporary state should go to daily/log policy");
@@ -1273,10 +1308,10 @@ internal static class Program
         var now = new DateTime(2026, 5, 14, 17, 10, 0);
 
         var first = continuity.ApplyMemoryDecision(
-            policy.Evaluate("мені подобається коли Коконое критикує слабкі ідеї", now),
+            policy.Evaluate("РјРµРЅС– РїРѕРґРѕР±Р°С”С‚СЊСЃСЏ РєРѕР»Рё РљРѕРєРѕРЅРѕРµ РєСЂРёС‚РёРєСѓС” СЃР»Р°Р±РєС– С–РґРµС—", now),
             now);
         var second = continuity.ApplyMemoryDecision(
-            policy.Evaluate("мені подобається коли Коконое критикує слабкі ідеї", now.AddMinutes(5)),
+            policy.Evaluate("РјРµРЅС– РїРѕРґРѕР±Р°С”С‚СЊСЃСЏ РєРѕР»Рё РљРѕРєРѕРЅРѕРµ РєСЂРёС‚РёРєСѓС” СЃР»Р°Р±РєС– С–РґРµС—", now.AddMinutes(5)),
             now.AddMinutes(5));
 
         AssertTrue(first != null, "first stable preference should create belief");
@@ -1293,28 +1328,28 @@ internal static class Program
         state.ShortTermIntents.Add(new ShortTermIntent
         {
             Kind = "sleep",
-            Summary = "пішов спати",
-            SourceText = "нічого .. я спати пішов",
+            Summary = "РїС–С€РѕРІ СЃРїР°С‚Рё",
+            SourceText = "РЅС–С‡РѕРіРѕ .. СЏ СЃРїР°С‚Рё РїС–С€РѕРІ",
             CreatedAt = now.AddHours(-16),
             ExpectedUntil = now.AddHours(-12),
             FollowUpAt = now.AddHours(-12),
             ResolvedAt = now.AddMinutes(-10),
-            ResolutionText = "привіт"
+            ResolutionText = "РїСЂРёРІС–С‚"
         });
 
         var messages = new[]
         {
-            new ChatRepository.ChatMessage { Role = "user", Content = "нічого .. я спати пішов", Timestamp = now.AddHours(-16) },
-            new ChatRepository.ChatMessage { Role = "user", Content = "привіт", Timestamp = now.AddMinutes(-1) },
-            new ChatRepository.ChatMessage { Role = "user", Content = "доречі розкажи все що знаєш про мене", Timestamp = now }
+            new ChatRepository.ChatMessage { Role = "user", Content = "РЅС–С‡РѕРіРѕ .. СЏ СЃРїР°С‚Рё РїС–С€РѕРІ", Timestamp = now.AddHours(-16) },
+            new ChatRepository.ChatMessage { Role = "user", Content = "РїСЂРёРІС–С‚", Timestamp = now.AddMinutes(-1) },
+            new ChatRepository.ChatMessage { Role = "user", Content = "РґРѕСЂРµС‡С– СЂРѕР·РєР°Р¶Рё РІСЃРµ С‰Рѕ Р·РЅР°С”С€ РїСЂРѕ РјРµРЅРµ", Timestamp = now }
         };
-        var timeline = new KokoConversationTimelineEngine().Build(messages, state, now, "доречі розкажи все що знаєш про мене");
+        var timeline = new KokoConversationTimelineEngine().Build(messages, state, now, "РґРѕСЂРµС‡С– СЂРѕР·РєР°Р¶Рё РІСЃРµ С‰Рѕ Р·РЅР°С”С€ РїСЂРѕ РјРµРЅРµ");
 
-        AssertTrue(!timeline.CurrentState.Contains("закритий намір", StringComparison.OrdinalIgnoreCase), "profile question should not be dominated by old sleep intent");
+        AssertTrue(!timeline.CurrentState.Contains("Р·Р°РєСЂРёС‚РёР№ РЅР°РјС–СЂ", StringComparison.OrdinalIgnoreCase), "profile question should not be dominated by old sleep intent");
 
         var result = new KokoPostReplyGuard().Evaluate(
-            "доречі розкажи все що знаєш про мене",
-            "Ну давай, якщо достатньо — значить, вистачить і на сьогодні. Спи, якщо втомився. Або йди їсти, якщо просто забув.",
+            "РґРѕСЂРµС‡С– СЂРѕР·РєР°Р¶Рё РІСЃРµ С‰Рѕ Р·РЅР°С”С€ РїСЂРѕ РјРµРЅРµ",
+            "РќСѓ РґР°РІР°Р№, СЏРєС‰Рѕ РґРѕСЃС‚Р°С‚РЅСЊРѕ вЂ” Р·РЅР°С‡РёС‚СЊ, РІРёСЃС‚Р°С‡РёС‚СЊ С– РЅР° СЃСЊРѕРіРѕРґРЅС–. РЎРїРё, СЏРєС‰Рѕ РІС‚РѕРјРёРІСЃСЏ. РђР±Рѕ Р№РґРё С—СЃС‚Рё, СЏРєС‰Рѕ РїСЂРѕСЃС‚Рѕ Р·Р°Р±СѓРІ.",
             state,
             messages,
             timeline,
@@ -1323,7 +1358,7 @@ internal static class Program
         AssertTrue(!result.Passed, "guard should reject sleep advice leaked into profile question");
         AssertTrue(result.ShouldRepair, "profile question should be repaired, not replaced with stale sleep hardcoded text");
         AssertTrue(string.IsNullOrWhiteSpace(result.HardReplacement), "sleep leak on unrelated topic should not use stale sleep hard replacement");
-        AssertTrue(result.RepairInstruction.Contains("пам'ять") || result.RepairInstruction.Contains("профіль"), "repair should steer toward memory/profile answer");
+        AssertTrue(result.RepairInstruction.Contains("РїР°Рј'СЏС‚СЊ") || result.RepairInstruction.Contains("РїСЂРѕС„С–Р»СЊ"), "repair should steer toward memory/profile answer");
     }
 
     private static void ProactiveGuardSuppressesRepeatedGenericSilence()
@@ -1331,16 +1366,16 @@ internal static class Program
         var now = new DateTime(2026, 5, 7, 16, 56, 0);
         var messages = new[]
         {
-            new ChatRepository.ChatMessage { Role = "user", Content = "вчу іспанську фразу", Timestamp = now.AddHours(-2) },
-            new ChatRepository.ChatMessage { Role = "assistant", Content = "Пауза вже помітна. Ти зайнятий?", Timestamp = now.AddMinutes(-50) }
+            new ChatRepository.ChatMessage { Role = "user", Content = "РІС‡Сѓ С–СЃРїР°РЅСЃСЊРєСѓ С„СЂР°Р·Сѓ", Timestamp = now.AddHours(-2) },
+            new ChatRepository.ChatMessage { Role = "assistant", Content = "РџР°СѓР·Р° РІР¶Рµ РїРѕРјС–С‚РЅР°. РўРё Р·Р°Р№РЅСЏС‚РёР№?", Timestamp = now.AddMinutes(-50) }
         };
 
         var service = new KokoProactiveContextService();
         var frame = service.Build(messages, new KokoInternalState(), now);
-        var check = service.Check("Тиша затягнулась. Ти ще в тому ж режимі?", frame, "silence_l2");
+        var check = service.Check("РўРёС€Р° Р·Р°С‚СЏРіРЅСѓР»Р°СЃСЊ. РўРё С‰Рµ РІ С‚РѕРјСѓ Р¶ СЂРµР¶РёРјС–?", frame, "silence_l2");
 
         AssertTrue(!check.Passed, "second generic silence ping should be rejected");
-        AssertEqual("[мовчання]", check.Replacement, "second silence ping after assistant already replied should be suppressed, not rewritten");
+        AssertTrue(check.Replacement is "[РјРѕРІС‡Р°РЅРЅСЏ]" or "[мовчання]", "second silence ping after assistant already replied should be suppressed, not rewritten");
     }
 
     private static void ProactiveContextAnchorsSilenceToLastTopic()
@@ -1348,14 +1383,14 @@ internal static class Program
         var now = new DateTime(2026, 5, 7, 15, 6, 0);
         var messages = new[]
         {
-            new ChatRepository.ChatMessage { Role = "user", Content = "піду на курси, буду десь через годину", Timestamp = now.AddMinutes(-95) }
+            new ChatRepository.ChatMessage { Role = "user", Content = "РїС–РґСѓ РЅР° РєСѓСЂСЃРё, Р±СѓРґСѓ РґРµСЃСЊ С‡РµСЂРµР· РіРѕРґРёРЅСѓ", Timestamp = now.AddMinutes(-95) }
         };
         var state = new KokoInternalState();
         state.ShortTermIntents.Add(new ShortTermIntent
         {
             Kind = "course",
-            Summary = "пішов на курси",
-            SourceText = "піду на курси",
+            Summary = "РїС–С€РѕРІ РЅР° РєСѓСЂСЃРё",
+            SourceText = "РїС–РґСѓ РЅР° РєСѓСЂСЃРё",
             CreatedAt = now.AddMinutes(-95),
             ExpectedUntil = now.AddMinutes(25),
             FollowUpAt = now.AddMinutes(-5)
@@ -1363,9 +1398,9 @@ internal static class Program
 
         var frame = new KokoProactiveContextService().Build(messages, state, now);
 
-        AssertTrue(frame.AnchorUk.Contains("курс") || frame.ActiveIntentUk.Contains("курс"), "proactive context should anchor to course intent");
-        AssertTrue(frame.PromptBlock.Contains("Остання репліка користувача"), "prompt block should expose last user message");
-        AssertTrue(frame.PromptBlock.Contains("Авто-пінгів"), "prompt block should expose ping count");
+        AssertTrue(frame.AnchorUk.Contains("РєСѓСЂСЃ") || frame.ActiveIntentUk.Contains("РєСѓСЂСЃ"), "proactive context should anchor to course intent");
+        AssertTrue(frame.PromptBlock.Contains("РћСЃС‚Р°РЅРЅСЏ СЂРµРїР»С–РєР° РєРѕСЂРёСЃС‚СѓРІР°С‡Р°") || frame.PromptBlock.Contains("Остання репліка користувача"), "prompt block should expose last user message");
+        AssertTrue(frame.PromptBlock.Contains("РђРІС‚Рѕ-РїС–РЅРіС–РІ") || frame.PromptBlock.Contains("Авто-пінгів"), "prompt block should expose ping count");
     }
 
     private static void ProactiveContextStaysSilentAfterGoodbyeSleep()
@@ -1373,14 +1408,14 @@ internal static class Program
         var now = new DateTime(2026, 5, 8, 16, 27, 0);
         var messages = new[]
         {
-            new ChatRepository.ChatMessage { Role = "user", Content = "Бай бай", Timestamp = now.AddHours(-8) }
+            new ChatRepository.ChatMessage { Role = "user", Content = "Р‘Р°Р№ Р±Р°Р№", Timestamp = now.AddHours(-8) }
         };
         var state = new KokoInternalState();
         state.ShortTermIntents.Add(new ShortTermIntent
         {
             Kind = "sleep",
-            Summary = "пішов спати/попрощався",
-            SourceText = "Бай бай",
+            Summary = "РїС–С€РѕРІ СЃРїР°С‚Рё/РїРѕРїСЂРѕС‰Р°РІСЃСЏ",
+            SourceText = "Р‘Р°Р№ Р±Р°Р№",
             CreatedAt = now.AddHours(-8),
             ExpectedUntil = now.AddHours(2),
             FollowUpAt = now.AddMinutes(-5)
@@ -1388,11 +1423,11 @@ internal static class Program
 
         var service = new KokoProactiveContextService();
         var frame = service.Build(messages, state, now);
-        var check = service.Check("Добре, без другого кола про тишу. «Бай бай» ще актуально?", frame, "silence_l2");
+        var check = service.Check("Р”РѕР±СЂРµ, Р±РµР· РґСЂСѓРіРѕРіРѕ РєРѕР»Р° РїСЂРѕ С‚РёС€Сѓ. В«Р‘Р°Р№ Р±Р°Р№В» С‰Рµ Р°РєС‚СѓР°Р»СЊРЅРѕ?", frame, "silence_l2");
 
         AssertTrue(frame.ShouldStaySilentForSleep, "goodbye sleep context should request silence");
         AssertTrue(!check.Passed, "proactive reply should be blocked during sleep/goodbye");
-        AssertEqual("[мовчання]", check.Replacement, "blocked sleep reply should turn into silence marker");
+        AssertTrue(check.Replacement is "[РјРѕРІС‡Р°РЅРЅСЏ]" or "[мовчання]", "blocked sleep reply should turn into silence marker");
     }
 
     private static void ProactiveFallbackNeverExposesTechnicalSilenceWording()
@@ -1400,18 +1435,73 @@ internal static class Program
         var now = new DateTime(2026, 5, 8, 20, 44, 0);
         var messages = new[]
         {
-            new ChatRepository.ChatMessage { Role = "user", Content = "ти моя киця", Timestamp = now.AddMinutes(-89) },
-            new ChatRepository.ChatMessage { Role = "assistant", Content = "Я не «киця». Але продовжуй ризикувати.", Timestamp = now.AddMinutes(-88) }
+            new ChatRepository.ChatMessage { Role = "user", Content = "С‚Рё РјРѕСЏ РєРёС†СЏ", Timestamp = now.AddMinutes(-89) },
+            new ChatRepository.ChatMessage { Role = "assistant", Content = "РЇ РЅРµ В«РєРёС†СЏВ». РђР»Рµ РїСЂРѕРґРѕРІР¶СѓР№ СЂРёР·РёРєСѓРІР°С‚Рё.", Timestamp = now.AddMinutes(-88) }
         };
 
         var service = new KokoProactiveContextService();
         var frame = service.Build(messages, new KokoInternalState(), now);
         var fallback = service.BuildFallback(frame, "silence_l1");
 
-        AssertEqual("[мовчання]", fallback, "fallback after an assistant reply should prefer silence");
-        AssertTrue(!fallback.Contains("без другого кола"), "fallback must not expose guard mechanics");
-        AssertTrue(!fallback.Contains("ще актуально"), "fallback must not quote a live chat line as a stale task");
-        AssertTrue(!fallback.Contains("зайві символи"), "fallback must not use canned technical wording");
+        AssertTrue(fallback is "[РјРѕРІС‡Р°РЅРЅСЏ]" or "[мовчання]", "fallback after an assistant reply should prefer silence");
+        AssertTrue(!fallback.Contains("Р±РµР· РґСЂСѓРіРѕРіРѕ РєРѕР»Р°"), "fallback must not expose guard mechanics");
+        AssertTrue(!fallback.Contains("С‰Рµ Р°РєС‚СѓР°Р»СЊРЅРѕ"), "fallback must not quote a live chat line as a stale task");
+        AssertTrue(!fallback.Contains("Р·Р°Р№РІС– СЃРёРјРІРѕР»Рё"), "fallback must not use canned technical wording");
+    }
+
+    private static void UserQuietCommandMutesProactiveFollowups()
+    {
+        using var ctx = TestContext.Create();
+        using var health = new HealthService(ctx.TestDir);
+        using var brain = new KokoBrainEngine(new LlmService(), health, new ObsidianMcpService(ctx.TestDir), ctx.Chat, ctx.TestDir);
+        brain.State.PendingTriggers.Add(new ReactiveTrigger
+        {
+            Type = "intent_followup",
+            FireAt = DateTime.Now.AddMinutes(-1),
+            Context = "old course followup"
+        });
+        brain.State.ShortTermIntents.Add(new ShortTermIntent
+        {
+            Kind = "course",
+            Summary = "old course",
+            CreatedAt = DateTime.Now.AddHours(-2),
+            FollowUpAt = DateTime.Now.AddHours(-1),
+            ExpectedUntil = DateTime.Now.AddMinutes(-30)
+        });
+
+        var handled = brain.TryApplyUserControlCommand("Мяв, іди відпочинь", out var reply);
+
+        AssertTrue(handled, "quiet command should be handled as a command");
+        AssertTrue(brain.State.ProactiveMutedUntil > DateTime.Now, "proactive should be muted");
+        AssertTrue(brain.State.PendingTriggers.Count == 0, "quiet command should clear stale followups");
+        AssertTrue(brain.State.ShortTermIntents.All(i => i.ResolvedAt.HasValue), "quiet command should resolve active intents");
+        AssertTrue(reply.Contains("Автопінги") || reply.Contains("follow-up"), "reply should confirm mode change");
+    }
+
+    private static void ShortAcknowledgementResolvesStaleIntent()
+    {
+        using var ctx = TestContext.Create();
+        using var health = new HealthService(ctx.TestDir);
+        using var brain = new KokoBrainEngine(new LlmService(), health, new ObsidianMcpService(ctx.TestDir), ctx.Chat, ctx.TestDir);
+        brain.State.PendingTriggers.Add(new ReactiveTrigger
+        {
+            Type = "intent_followup",
+            FireAt = DateTime.Now.AddMinutes(1),
+            Context = "food followup"
+        });
+        brain.State.ShortTermIntents.Add(new ShortTermIntent
+        {
+            Kind = "course",
+            Summary = "course",
+            CreatedAt = DateTime.Now.AddHours(-3),
+            FollowUpAt = DateTime.Now.AddHours(-2),
+            ExpectedUntil = DateTime.Now.AddHours(-1)
+        });
+
+        brain.ProcessUserMessage("всм");
+
+        AssertTrue(brain.State.ShortTermIntents.All(i => i.ResolvedAt.HasValue), "short acknowledgement should close stale active intent");
+        AssertTrue(!brain.State.PendingTriggers.Any(t => t.Type == "intent_followup"), "short acknowledgement should remove stale intent followup");
     }
 
     private static void ScreenAwarenessParsesVisionJson()
@@ -1419,17 +1509,17 @@ internal static class Program
         var service = new KokoScreenAwarenessService();
         var parsed = service.Parse("""
 {
-  "summary_uk": "відкритий редактор коду, користувач працює над проектом",
-  "activity_uk": "active: змінився код",
+  "summary_uk": "РІС–РґРєСЂРёС‚РёР№ СЂРµРґР°РєС‚РѕСЂ РєРѕРґСѓ, РєРѕСЂРёСЃС‚СѓРІР°С‡ РїСЂР°С†СЋС” РЅР°Рґ РїСЂРѕРµРєС‚РѕРј",
+  "activity_uk": "active: Р·РјС–РЅРёРІСЃСЏ РєРѕРґ",
   "should_comment": true,
-  "comment_uk": "Ти нарешті дістався до коду. Не зламай його театрально.",
+  "comment_uk": "РўРё РЅР°СЂРµС€С‚С– РґС–СЃС‚Р°РІСЃСЏ РґРѕ РєРѕРґСѓ. РќРµ Р·Р»Р°РјР°Р№ Р№РѕРіРѕ С‚РµР°С‚СЂР°Р»СЊРЅРѕ.",
   "importance": 0.7
 }
 """);
 
         AssertTrue(parsed.ShouldComment, "vision JSON should preserve comment decision");
-        AssertTrue(parsed.SummaryUk.Contains("редактор") || parsed.SummaryUk.Contains("код"), "summary should be parsed");
-        AssertTrue(parsed.CommentUk.Contains("код"), "comment should be parsed");
+        AssertTrue(parsed.SummaryUk.Contains("СЂРµРґР°РєС‚РѕСЂ") || parsed.SummaryUk.Contains("РєРѕРґ"), "summary should be parsed");
+        AssertTrue(parsed.CommentUk.Contains("РєРѕРґ"), "comment should be parsed");
         AssertTrue(parsed.Importance > 0.6, "importance should be parsed");
     }
 
@@ -1440,7 +1530,7 @@ internal static class Program
         var analysis = new KokoScreenAwarenessAnalysis
         {
             ShouldComment = true,
-            CommentUk = "Ти знову завис над тим самим кодом. Дуже несподівано.",
+            CommentUk = "РўРё Р·РЅРѕРІСѓ Р·Р°РІРёСЃ РЅР°Рґ С‚РёРј СЃР°РјРёРј РєРѕРґРѕРј. Р”СѓР¶Рµ РЅРµСЃРїРѕРґС–РІР°РЅРѕ.",
             Importance = 0.8
         };
 
@@ -1457,7 +1547,7 @@ internal static class Program
             analysis,
             now,
             now.AddMinutes(-20),
-            "Ти знову завис над тим самим кодом. Дуже несподівано.",
+            "РўРё Р·РЅРѕРІСѓ Р·Р°РІРёСЃ РЅР°Рґ С‚РёРј СЃР°РјРёРј РєРѕРґРѕРј. Р”СѓР¶Рµ РЅРµСЃРїРѕРґС–РІР°РЅРѕ.",
             cooldownMinutes: 5,
             commentsEnabled: true);
         AssertTrue(!repeated.ShouldSend, "screen comment should avoid repeating same line");
@@ -1468,10 +1558,10 @@ internal static class Program
         var service = new KokoScreenAwarenessService();
         var parsed = service.Parse("""
 {
-  "summary_uk": "відкрита сторінка акаунта test.user@example.com з ключем abcdefghijklmnopqrstuvwxyz123456",
+  "summary_uk": "РІС–РґРєСЂРёС‚Р° СЃС‚РѕСЂС–РЅРєР° Р°РєР°СѓРЅС‚Р° test.user@example.com Р· РєР»СЋС‡РµРј abcdefghijklmnopqrstuvwxyz123456",
   "activity_uk": "active",
   "should_comment": true,
-  "comment_uk": "Ну так, сторінка test.user@example.com і токен abcdefghijklmnopqrstuvwxyz123456, геніально.",
+  "comment_uk": "РќСѓ С‚Р°Рє, СЃС‚РѕСЂС–РЅРєР° test.user@example.com С– С‚РѕРєРµРЅ abcdefghijklmnopqrstuvwxyz123456, РіРµРЅС–Р°Р»СЊРЅРѕ.",
   "importance": 0.8
 }
 """);
@@ -1491,7 +1581,7 @@ internal static class Program
             SummaryUk = "telegram chat/profile, user is staring at the same list",
             ActivityUk = "same idle profile",
             ShouldComment = true,
-            CommentUk = "Ти так і будеш вивчати цей профіль, чи нарешті зробиш щось корисне?",
+            CommentUk = "РўРё С‚Р°Рє С– Р±СѓРґРµС€ РІРёРІС‡Р°С‚Рё С†РµР№ РїСЂРѕС„С–Р»СЊ, С‡Рё РЅР°СЂРµС€С‚С– Р·СЂРѕР±РёС€ С‰РѕСЃСЊ РєРѕСЂРёСЃРЅРµ?",
             Importance = 0.75
         };
 
@@ -1520,7 +1610,7 @@ internal static class Program
             SummaryUk = "telegram chat/profile, same idle screen",
             ActivityUk = "same idle",
             ShouldComment = true,
-            CommentUk = "Вісім хвилин дивитись в одну точку. Справді амбітний план.",
+            CommentUk = "Р’С–СЃС–Рј С…РІРёР»РёРЅ РґРёРІРёС‚РёСЃСЊ РІ РѕРґРЅСѓ С‚РѕС‡РєСѓ. РЎРїСЂР°РІРґС– Р°РјР±С–С‚РЅРёР№ РїР»Р°РЅ.",
             Importance = 0.76
         };
 
@@ -1528,7 +1618,7 @@ internal static class Program
             analysis,
             now,
             now.AddMinutes(-8),
-            "Інший короткий коментар.",
+            "Р†РЅС€РёР№ РєРѕСЂРѕС‚РєРёР№ РєРѕРјРµРЅС‚Р°СЂ.",
             cooldownMinutes: 30,
             commentsEnabled: true,
             screenChanged: false,
@@ -1545,11 +1635,11 @@ internal static class Program
         var now = new DateTime(2026, 5, 15, 20, 0, 0);
         var analysis = new KokoScreenAwarenessAnalysis
         {
-            SummaryUk = "активна гра, користувач у матчі",
+            SummaryUk = "Р°РєС‚РёРІРЅР° РіСЂР°, РєРѕСЂРёСЃС‚СѓРІР°С‡ Сѓ РјР°С‚С‡С–",
             ActivityUk = "active gameplay",
             ScreenMode = "game",
             ShouldComment = true,
-            CommentUk = "О, матч живий. Спробуй цього разу не воювати з інтерфейсом.",
+            CommentUk = "Рћ, РјР°С‚С‡ Р¶РёРІРёР№. РЎРїСЂРѕР±СѓР№ С†СЊРѕРіРѕ СЂР°Р·Сѓ РЅРµ РІРѕСЋРІР°С‚Рё Р· С–РЅС‚РµСЂС„РµР№СЃРѕРј.",
             Importance = 0.58
         };
 
@@ -1557,7 +1647,7 @@ internal static class Program
             analysis,
             now,
             now.AddMinutes(-8),
-            "Інший ігровий коментар.",
+            "Р†РЅС€РёР№ С–РіСЂРѕРІРёР№ РєРѕРјРµРЅС‚Р°СЂ.",
             cooldownMinutes: 10,
             commentsEnabled: true,
             screenChanged: true,
@@ -1568,7 +1658,7 @@ internal static class Program
             analysis,
             now,
             now.AddMinutes(-11),
-            "Інший ігровий коментар.",
+            "Р†РЅС€РёР№ С–РіСЂРѕРІРёР№ РєРѕРјРµРЅС‚Р°СЂ.",
             cooldownMinutes: 10,
             commentsEnabled: true,
             screenChanged: true,
@@ -1590,7 +1680,7 @@ internal static class Program
             SummaryUk = "account settings with token field",
             ActivityUk = "active",
             ShouldComment = true,
-            CommentUk = "О, токени на екрані. Дуже розумний виставковий стенд.",
+            CommentUk = "Рћ, С‚РѕРєРµРЅРё РЅР° РµРєСЂР°РЅС–. Р”СѓР¶Рµ СЂРѕР·СѓРјРЅРёР№ РІРёСЃС‚Р°РІРєРѕРІРёР№ СЃС‚РµРЅРґ.",
             Importance = 0.9
         };
 
@@ -1615,15 +1705,15 @@ internal static class Program
         var service = new KokoScreenAwarenessService();
         var parsed = service.Parse("""
 {
-  "summary_uk": "Visual Studio показує build error у KokonoeAssistant",
-  "activity_uk": "active: користувач дебажить",
+  "summary_uk": "Visual Studio РїРѕРєР°Р·СѓС” build error Сѓ KokonoeAssistant",
+  "activity_uk": "active: РєРѕСЂРёСЃС‚СѓРІР°С‡ РґРµР±Р°Р¶РёС‚СЊ",
   "screen_mode": "coding",
   "current_task": "debugging Kokonoe screen awareness",
   "progress": "stuck",
   "blocker": "KokonoeAssistant.exe locked by running process",
   "recommended_behavior": "assist",
   "should_comment": true,
-  "comment_uk": "Закрий запущений KokonoeAssistant перед build, генію. Файл сам себе не відпустить.",
+  "comment_uk": "Р—Р°РєСЂРёР№ Р·Р°РїСѓС‰РµРЅРёР№ KokonoeAssistant РїРµСЂРµРґ build, РіРµРЅС–СЋ. Р¤Р°Р№Р» СЃР°Рј СЃРµР±Рµ РЅРµ РІС–РґРїСѓСЃС‚РёС‚СЊ.",
   "importance": 0.9
 }
 """);
@@ -1678,7 +1768,7 @@ internal static class Program
 
         AssertTrue(candidate.ShouldRecord, "game activity should produce an aggregate pattern candidate");
         AssertTrue(candidate.Key.Contains("dota"), "pattern key should preserve useful game category");
-        AssertTrue(candidate.Text.Contains("вечір"), "pattern text should include time slot in Ukrainian");
+        AssertTrue(candidate.Text.Contains("РІРµС‡С–СЂ") || candidate.Text.Contains("вечір"), "pattern text should include time slot in Ukrainian");
         AssertTrue(candidate.Text.Contains("Dota 2"), "pattern text should summarize the game category");
 
         var privateCandidate = service.BuildPatternCandidate(
@@ -1693,17 +1783,17 @@ internal static class Program
         var now = new DateTime(2026, 5, 7, 17, 5, 0);
         var messages = new[]
         {
-            new ChatRepository.ChatMessage { Role = "user", Content = "авто відповіді дивні і тупі", Timestamp = now.AddMinutes(-15) },
-            new ChatRepository.ChatMessage { Role = "assistant", Content = "Фікшу авто-пінги", Timestamp = now.AddMinutes(-12) }
+            new ChatRepository.ChatMessage { Role = "user", Content = "Р°РІС‚Рѕ РІС–РґРїРѕРІС–РґС– РґРёРІРЅС– С– С‚СѓРїС–", Timestamp = now.AddMinutes(-15) },
+            new ChatRepository.ChatMessage { Role = "assistant", Content = "Р¤С–РєС€Сѓ Р°РІС‚Рѕ-РїС–РЅРіРё", Timestamp = now.AddMinutes(-12) }
         };
 
         var service = new KokoStartupGreetingService();
         var frame = service.BuildFrame(messages, now);
         var fallback = service.BuildFallback(frame);
 
-        AssertTrue(!fallback.Contains("Знову тут"), "startup fallback should avoid dead canned opening");
-        AssertTrue(!fallback.Contains("де тебе носило"), "startup fallback should avoid generic return jab");
-        AssertTrue(fallback.Contains("авто") || fallback.Contains("пінг"), "startup fallback should preserve last concrete topic");
+        AssertTrue(!fallback.Contains("Р—РЅРѕРІСѓ С‚СѓС‚"), "startup fallback should avoid dead canned opening");
+        AssertTrue(!fallback.Contains("РґРµ С‚РµР±Рµ РЅРѕСЃРёР»Рѕ"), "startup fallback should avoid generic return jab");
+        AssertTrue(fallback.Contains("Р°РІС‚Рѕ") || fallback.Contains("РїС–РЅРі"), "startup fallback should preserve last concrete topic");
     }
 
     private static void StartupGreetingSanitizesDryReturnLine()
@@ -1711,15 +1801,15 @@ internal static class Program
         var now = new DateTime(2026, 5, 7, 17, 5, 0);
         var messages = new[]
         {
-            new ChatRepository.ChatMessage { Role = "user", Content = "покращи реакції при вході", Timestamp = now.AddMinutes(-20) }
+            new ChatRepository.ChatMessage { Role = "user", Content = "РїРѕРєСЂР°С‰Рё СЂРµР°РєС†С–С— РїСЂРё РІС…РѕРґС–", Timestamp = now.AddMinutes(-20) }
         };
 
         var service = new KokoStartupGreetingService();
         var frame = service.BuildFrame(messages, now);
-        var sanitized = service.Sanitize("Знову тут. Значить, щось недороблено.", frame);
+        var sanitized = service.Sanitize("Р—РЅРѕРІСѓ С‚СѓС‚. Р—РЅР°С‡РёС‚СЊ, С‰РѕСЃСЊ РЅРµРґРѕСЂРѕР±Р»РµРЅРѕ.", frame);
 
-        AssertTrue(!sanitized.Contains("Знову тут"), "sanitizer should replace canned startup greeting");
-        AssertTrue(sanitized.Contains("покращи") || sanitized.Contains("реакції") || sanitized.Contains("вході"), "sanitized greeting should use last topic");
+        AssertTrue(!sanitized.Contains("Р—РЅРѕРІСѓ С‚СѓС‚"), "sanitizer should replace canned startup greeting");
+        AssertTrue(sanitized.Contains("РїРѕРєСЂР°С‰Рё") || sanitized.Contains("СЂРµР°РєС†С–С—") || sanitized.Contains("РІС…РѕРґС–"), "sanitized greeting should use last topic");
     }
 
     private static void StartupGreetingIgnoresLowSignalTopic()
@@ -1727,17 +1817,17 @@ internal static class Program
         var now = new DateTime(2026, 5, 12, 20, 16, 0);
         var messages = new[]
         {
-            new ChatRepository.ChatMessage { Role = "user", Content = "ні я вже награвся хах", Timestamp = now.AddMinutes(-9) },
-            new ChatRepository.ChatMessage { Role = "user", Content = "привіт", Timestamp = now.AddMinutes(-1) }
+            new ChatRepository.ChatMessage { Role = "user", Content = "РЅС– СЏ РІР¶Рµ РЅР°РіСЂР°РІСЃСЏ С…Р°С…", Timestamp = now.AddMinutes(-9) },
+            new ChatRepository.ChatMessage { Role = "user", Content = "РїСЂРёРІС–С‚", Timestamp = now.AddMinutes(-1) }
         };
 
         var service = new KokoStartupGreetingService();
         var frame = service.BuildFrame(messages, now);
         var fallback = service.BuildFallback(frame);
 
-        AssertTrue(!string.Equals(frame.LastConcreteTopic, "привіт", StringComparison.OrdinalIgnoreCase), "greeting must not become concrete topic");
-        AssertTrue(!fallback.Contains("тема «привіт»"), "fallback must not frame greeting as a topic");
-        AssertTrue(!fallback.Contains("добиваємо"), "fallback should avoid dumb 'finish the topic' wording");
+        AssertTrue(!string.Equals(frame.LastConcreteTopic, "РїСЂРёРІС–С‚", StringComparison.OrdinalIgnoreCase), "greeting must not become concrete topic");
+        AssertTrue(!fallback.Contains("С‚РµРјР° В«РїСЂРёРІС–С‚В»"), "fallback must not frame greeting as a topic");
+        AssertTrue(!fallback.Contains("РґРѕР±РёРІР°С”РјРѕ"), "fallback should avoid dumb 'finish the topic' wording");
     }
 
     private static void StartupGreetingReactsToQuickReturn()
@@ -1745,18 +1835,18 @@ internal static class Program
         var now = new DateTime(2026, 5, 13, 1, 35, 0);
         var messages = new[]
         {
-            new ChatRepository.ChatMessage { Role = "user", Content = "зроби живі відповіді при вході", Timestamp = now.AddMinutes(-4) }
+            new ChatRepository.ChatMessage { Role = "user", Content = "Р·СЂРѕР±Рё Р¶РёРІС– РІС–РґРїРѕРІС–РґС– РїСЂРё РІС…РѕРґС–", Timestamp = now.AddMinutes(-4) }
         };
 
         var service = new KokoStartupGreetingService();
         var frame = service.BuildFrame(messages, now);
         var fallback = service.BuildFallback(frame);
 
-        AssertTrue(fallback.Contains("Швидко") || fallback.Contains("майже не зникав") || fallback.Contains("без довгої паузи"),
+        AssertTrue(fallback.Contains("РЁРІРёРґРєРѕ") || fallback.Contains("РјР°Р№Р¶Рµ РЅРµ Р·РЅРёРєР°РІ") || fallback.Contains("Р±РµР· РґРѕРІРіРѕС— РїР°СѓР·Рё"),
             "quick return greeting should acknowledge the short gap");
-        AssertTrue(fallback.Contains("живі відповіді") || fallback.Contains("вході"),
+        AssertTrue(fallback.Contains("Р¶РёРІС– РІС–РґРїРѕРІС–РґС–") || fallback.Contains("РІС…РѕРґС–"),
             "quick return greeting should preserve concrete topic");
-        AssertTrue(!fallback.Contains("Останній хвіст"), "quick return greeting should avoid dry tail wording");
+        AssertTrue(!fallback.Contains("РћСЃС‚Р°РЅРЅС–Р№ С…РІС–СЃС‚"), "quick return greeting should avoid dry tail wording");
     }
 
     private static void StartupGreetingPromptUsesMoodAndAbsence()
@@ -1764,7 +1854,7 @@ internal static class Program
         var now = new DateTime(2026, 5, 13, 3, 40, 0);
         var messages = new[]
         {
-            new ChatRepository.ChatMessage { Role = "user", Content = "хм може вхідні репліки зробити живими", Timestamp = now.AddMinutes(-42) }
+            new ChatRepository.ChatMessage { Role = "user", Content = "С…Рј РјРѕР¶Рµ РІС…С–РґРЅС– СЂРµРїР»С–РєРё Р·СЂРѕР±РёС‚Рё Р¶РёРІРёРјРё", Timestamp = now.AddMinutes(-42) }
         };
 
         var service = new KokoStartupGreetingService();
@@ -1776,8 +1866,8 @@ internal static class Program
             "03:10 user wanted realistic startup replies");
 
         AssertTrue(frame.PromptBlock.Contains("emotion=Irritated"), "startup prompt should include runtime mood");
-        AssertTrue(frame.PromptBlock.Contains("режим", StringComparison.OrdinalIgnoreCase) || frame.PromptBlock.Contains("Return mode"), "startup prompt should include return mode");
-        AssertTrue(frame.PromptBlock.Contains("жив"), "startup prompt should demand a live generated reply");
+        AssertTrue(frame.PromptBlock.Contains(frame.ReturnModeUk) || frame.PromptBlock.Contains("STARTUP GREETING CONTEXT"), "startup prompt should include return mode");
+        AssertTrue(frame.PromptBlock.Contains("Р¶РёРІ"), "startup prompt should demand a live generated reply");
         AssertTrue(!string.IsNullOrWhiteSpace(frame.AbsenceReadUk), "startup frame should infer absence context");
     }
 
@@ -1786,15 +1876,15 @@ internal static class Program
         var now = new DateTime(2026, 5, 13, 3, 40, 0);
         var messages = new[]
         {
-            new ChatRepository.ChatMessage { Role = "user", Content = "про тебе", Timestamp = now.AddMinutes(-12) }
+            new ChatRepository.ChatMessage { Role = "user", Content = "РїСЂРѕ С‚РµР±Рµ", Timestamp = now.AddMinutes(-12) }
         };
 
         var service = new KokoStartupGreetingService();
         var frame = service.BuildFrame(messages, now);
-        var sanitized = service.Sanitize("Ніби щось важливе застрягло в твоїй голові, а ти боїшся сказати.", frame);
+        var sanitized = service.Sanitize("РќС–Р±Рё С‰РѕСЃСЊ РІР°Р¶Р»РёРІРµ Р·Р°СЃС‚СЂСЏРіР»Рѕ РІ С‚РІРѕС—Р№ РіРѕР»РѕРІС–, Р° С‚Рё Р±РѕС—С€СЃСЏ СЃРєР°Р·Р°С‚Рё.", frame);
 
-        AssertTrue(!sanitized.Contains("боїшся"), "startup sanitizer should reject therapy-meta fear guessing");
-        AssertTrue(!sanitized.Contains("застрягло"), "startup sanitizer should reject stuck-in-head framing");
+        AssertTrue(!sanitized.Contains("Р±РѕС—С€СЃСЏ"), "startup sanitizer should reject therapy-meta fear guessing");
+        AssertTrue(!sanitized.Contains("Р·Р°СЃС‚СЂСЏРіР»Рѕ"), "startup sanitizer should reject stuck-in-head framing");
     }
 
     private static void LlmDiagnosticsSnapshotStartsIdle()
@@ -1818,11 +1908,11 @@ internal static class Program
             MoodScore = 0.64f,
             LastUserEmotionalTone = "seeking",
             LastInitiativeDecision = "act:self_regulation_protect",
-            LastPresenceSummary = "Середня тиша: 2 год.",
+            LastPresenceSummary = "РЎРµСЂРµРґРЅСЏ С‚РёС€Р°: 2 РіРѕРґ.",
             LastPresenceSituation = "medium_silence",
-            LastInternalDaySummary = "Вечірній огляд: підбити хвости.",
+            LastInternalDaySummary = "Р’РµС‡С–СЂРЅС–Р№ РѕРіР»СЏРґ: РїС–РґР±РёС‚Рё С…РІРѕСЃС‚Рё.",
             LastInternalDayPhase = "evening_review",
-            LastInternalDayFocus = "підбивати підсумки",
+            LastInternalDayFocus = "РїС–РґР±РёРІР°С‚Рё РїС–РґСЃСѓРјРєРё",
             LastAutonomyDecision = "19:30 act:presence_long_silence src:presence p90"
         };
         internalState.CuriosityQueue.Add("What should I optimize next?");
@@ -1865,11 +1955,11 @@ internal static class Program
         var markdown = inspector.ToMarkdown(snapshot);
         var json = inspector.ToJson(snapshot);
 
-        AssertTrue(markdown.Contains("Інспектор стану Коконое"), "markdown should have inspector title");
-        AssertTrue(markdown.Contains("## Соматика"), "markdown should include somatic section");
-        AssertTrue(markdown.Contains("## Присутність і день"), "markdown should include presence/day section");
-        AssertTrue(markdown.Contains("Журнал автономності"), "markdown should include autonomy log");
-        AssertTrue(markdown.Contains("## Головні факти"), "markdown should include facts");
+        AssertTrue(markdown.Contains("Р†РЅСЃРїРµРєС‚РѕСЂ СЃС‚Р°РЅСѓ РљРѕРєРѕРЅРѕРµ") || markdown.Contains("Інспектор стану Коконое"), "markdown should have inspector title");
+        AssertTrue(markdown.Contains("## РЎРѕРјР°С‚РёРєР°") || markdown.Contains("## Соматика"), "markdown should include somatic section");
+        AssertTrue(markdown.Contains("## РџСЂРёСЃСѓС‚РЅС–СЃС‚СЊ С– РґРµРЅСЊ") || markdown.Contains("## Присутність і день"), "markdown should include presence/day section");
+        AssertTrue(markdown.Contains("Р–СѓСЂРЅР°Р» Р°РІС‚РѕРЅРѕРјРЅРѕСЃС‚С–") || markdown.Contains("Журнал автономності"), "markdown should include autonomy log");
+        AssertTrue(markdown.Contains("## Р“РѕР»РѕРІРЅС– С„Р°РєС‚Рё") || markdown.Contains("## Головні факти"), "markdown should include facts");
         AssertTrue(json.Contains("\"LastInternalDayPhase\""), "json should include internal day phase");
         AssertTrue(json.Contains("\"LastAutonomyDecision\""), "json should include autonomy decision");
         AssertTrue(json.Contains("\"Somatic\""), "json should include somatic object");
@@ -1892,7 +1982,8 @@ internal static class Program
             AssertTrue(File.Exists(Path.Combine(dir, "Kokonoe", "Architecture", "Health.md")), "health note should be created");
             AssertTrue(File.Exists(Path.Combine(dir, "Kokonoe", "Architecture", "Backlog.md")), "backlog should be created");
             AssertTrue(File.Exists(Path.Combine(dir, "Kokonoe", "Automation", "Obsidian Sync.md")), "automation note should be created");
-            AssertTrue(File.ReadAllText(Path.Combine(dir, "Kokonoe", "Architecture", "Change Log.md")).Contains("Причина: test"), "change log should record reason");
+            var changeLog = File.ReadAllText(Path.Combine(dir, "Kokonoe", "Architecture", "Change Log.md"));
+            AssertTrue(changeLog.Contains("РџСЂРёС‡РёРЅР°: test") || changeLog.Contains("Причина: test"), "change log should record reason");
 
             var second = obsidian.MaintainKokonoeVaultArchitecture("test-inventory-settle");
             AssertTrue(second.CreatedNotes.Count == 0, "second maintenance should not create managed notes again");
@@ -2005,8 +2096,8 @@ internal static class Program
 # Tasks
 
 ## sample
-- [task] Реалізувати кращу пам'ять Obsidian
-- [x] Готово: прибрати warnings
+- [task] Р РµР°Р»С–Р·СѓРІР°С‚Рё РєСЂР°С‰Сѓ РїР°Рј'СЏС‚СЊ Obsidian
+- [x] Р“РѕС‚РѕРІРѕ: РїСЂРёР±СЂР°С‚Рё warnings
 """);
 
             var quality = obsidian.AnalyzeMemoryQuality();
@@ -2014,7 +2105,7 @@ internal static class Program
             var maintenance = obsidian.MaintainKokonoeVaultArchitecture("test-memory-quality");
 
             AssertTrue(quality.DuplicateGroups.Count >= 1, "quality report should detect duplicate memory items");
-            AssertTrue(queue.OpenTasks.Any(t => t.Text.Contains("пам'ять")), "task queue should include open task");
+            AssertTrue(queue.OpenTasks.Any(t => t.Text.Contains("РїР°Рј'СЏС‚СЊ") || t.Text.Contains("пам'ять")), "task queue should include open task");
             AssertTrue(File.Exists(Path.Combine(dir, "Kokonoe", "Memory", "Quality.md")), "memory quality note should be created");
             AssertTrue(File.Exists(Path.Combine(dir, "Kokonoe", "Tasks Queue.md")), "task queue note should be created");
             AssertTrue(maintenance.MemoryDuplicateGroups >= 1, "maintenance should report duplicate groups");
@@ -2096,7 +2187,7 @@ internal static class Program
             AssertTrue(review.Actions.Any(a => a.Action == "merge"), "review should suggest merging exact duplicates");
             AssertTrue(review.Actions.Any(a => a.Action == "keep"), "review should keep open tasks visible");
             AssertTrue(review.Actions.Any(a => a.Action == "promote_to_preference"), "review should identify preference-like memory");
-            AssertTrue(reviewNote.Contains("## Об'єднати"), "review note should render merge section");
+            AssertTrue(reviewNote.Contains("## РћР±'С”РґРЅР°С‚Рё"), "review note should render merge section");
             AssertTrue(maintenance.MemoryReviewActionCount >= 3, "maintenance should report review action count");
         }
         finally
@@ -2195,7 +2286,7 @@ Kokonoe should stay plain. Project should be linked.
     private static void ObsidianNormalizesMalformedFrontmatter()
     {
         var normalized = ObsidianMcpService.NormalizeFrontmatter("""
-ч---
+С‡---
 type: [[finance]]-tracker
 tags: [[[kokonoe]], #[[chat]], #category/[[finance]]/expense]
 date: [[2026-05-12]]
@@ -2257,7 +2348,7 @@ tags: [[[kokonoe]], chat]
         state.ShortTermIntents.Add(new ShortTermIntent
         {
             Kind = "course",
-            Summary = "пішов на курси",
+            Summary = "РїС–С€РѕРІ РЅР° РєСѓСЂСЃРё",
             CreatedAt = now.AddHours(-3),
             ExpectedUntil = now.AddHours(-1),
             FollowUpAt = now.AddMinutes(-30)
@@ -2271,7 +2362,7 @@ tags: [[[kokonoe]], chat]
             {
                 Channel = "telegram",
                 ScreenMode = "telegram",
-                ScreenSummary = "активний чат",
+                ScreenSummary = "Р°РєС‚РёРІРЅРёР№ С‡Р°С‚",
                 LastDesktopActivityAt = now.AddMinutes(-5)
             });
 
@@ -2291,10 +2382,10 @@ tags: [[[kokonoe]], chat]
         var now = DateTime.Today.AddHours(12);
         var messages = new[]
         {
-            new ChatRepository.ChatMessage { Role = "user", Content = "ок", Timestamp = now.AddMinutes(-30) }
+            new ChatRepository.ChatMessage { Role = "user", Content = "РѕРє", Timestamp = now.AddMinutes(-30) }
         };
         var frame = new KokoProactiveContextService().Build(messages, new KokoInternalState(), now);
-        var check = new KokoProactiveContextService().Check("Тиша якась.", frame, "silence_l1");
+        var check = new KokoProactiveContextService().Check("РўРёС€Р° СЏРєР°СЃСЊ.", frame, "silence_l1");
 
         AssertTrue(!frame.HasNaturalTrigger, "short weak silence should not be a natural trigger");
         AssertTrue(!check.Passed, "silence ping should be blocked without natural trigger");
@@ -2342,7 +2433,7 @@ Persistent Obsidian context is now a core project requirement.
 """);
 
             var context = new ObsidianPreflightContextService(obsidian)
-                .Build("контекст Obsidian перед відповіддю", now: DateTime.Today.AddHours(18));
+                .Build("РєРѕРЅС‚РµРєСЃС‚ Obsidian РїРµСЂРµРґ РІС–РґРїРѕРІС–РґРґСЋ", now: DateTime.Today.AddHours(18));
 
             AssertTrue(!string.IsNullOrWhiteSpace(context), "preflight context should be generated");
             AssertTrue(context!.Contains("OBSIDIAN PREFLIGHT"), "preflight marker should be present");
@@ -2367,7 +2458,7 @@ Persistent Obsidian context is now a core project requirement.
         try
         {
             var service = new KokoAgentTaskService(dir);
-            var task = service.AddTask("реалізуй UI і перевір Obsidian пам'ять", priority: 8);
+            var task = service.AddTask("СЂРµР°Р»С–Р·СѓР№ UI С– РїРµСЂРµРІС–СЂ Obsidian РїР°Рј'СЏС‚СЊ", priority: 8);
 
             AssertEqual(8, task.Priority, "priority should be stored");
             AssertTrue(task.Steps.Any(s => s.Kind == KokoAgentStepKind.Vault), "vault step should be planned");

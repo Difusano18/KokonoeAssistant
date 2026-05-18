@@ -2914,85 +2914,122 @@
                                            Margin="0,0,0,12" TextWrapping="Wrap"/>
                             </StackPanel>
 
-                            <!-- Ollama Cloud — пул ключів (тільки для провайдера ollama-cloud) -->
+                            <!-- Ollama Cloud -->
                             <StackPanel x:Name="SP_OllamaPoolGroup" Visibility="Collapsed">
-                                <TextBlock Text="Pool параметри" Style="{StaticResource SettingsLabel}"/>
-                                <Grid Margin="0,0,0,10">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*"/>
-                                        <ColumnDefinition Width="*"/>
-                                        <ColumnDefinition Width="*"/>
-                                    </Grid.ColumnDefinitions>
-                                    <StackPanel Grid.Column="0" Margin="0,0,4,0">
-                                        <TextBlock Text="Ліміт/год" Foreground="#6B6B80"
-                                                   FontFamily="Segoe UI Variable, Segoe UI" FontSize="10" Margin="0,0,0,2"/>
-                                        <TextBox x:Name="SP_OllamaMaxPerHour" Style="{StaticResource SettingInput}"/>
-                                    </StackPanel>
-                                    <StackPanel Grid.Column="1" Margin="2,0,2,0">
-                                        <TextBlock Text="Ротація на %" Foreground="#6B6B80"
-                                                   FontFamily="Segoe UI Variable, Segoe UI" FontSize="10" Margin="0,0,0,2"/>
-                                        <TextBox x:Name="SP_OllamaRotateAt" Style="{StaticResource SettingInput}"/>
-                                    </StackPanel>
-                                    <StackPanel Grid.Column="2" Margin="4,0,0,0">
-                                        <TextBlock Text="Cooldown (хв)" Foreground="#6B6B80"
-                                                   FontFamily="Segoe UI Variable, Segoe UI" FontSize="10" Margin="0,0,0,2"/>
-                                        <TextBox x:Name="SP_OllamaCooldown" Style="{StaticResource SettingInput}"/>
-                                    </StackPanel>
-                                </Grid>
+                                <StackPanel x:Name="SP_LegacyOllamaPoolPanel" Visibility="Collapsed">
+                                    <TextBlock Text="&#1055;&#1072;&#1088;&#1072;&#1084;&#1077;&#1090;&#1088;&#1080; &#1087;&#1091;&#1083;&#1091;" Style="{StaticResource SettingsLabel}"/>
+                                    <Grid Margin="0,0,0,10">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0" Margin="0,0,4,0">
+                                            <TextBlock Text="&#1051;&#1110;&#1084;&#1110;&#1090;/&#1075;&#1086;&#1076;" Foreground="#6B6B80" FontFamily="Segoe UI Variable, Segoe UI" FontSize="10" Margin="0,0,0,2"/>
+                                            <TextBox x:Name="SP_OllamaMaxPerHour" Style="{StaticResource SettingInput}"/>
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="1" Margin="2,0,2,0">
+                                            <TextBlock Text="&#1056;&#1086;&#1090;&#1072;&#1094;&#1110;&#1103; &#1085;&#1072; %" Foreground="#6B6B80" FontFamily="Segoe UI Variable, Segoe UI" FontSize="10" Margin="0,0,0,2"/>
+                                            <TextBox x:Name="SP_OllamaRotateAt" Style="{StaticResource SettingInput}"/>
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="2" Margin="4,0,0,0">
+                                            <TextBlock Text="Cooldown (&#1093;&#1074;)" Foreground="#6B6B80" FontFamily="Segoe UI Variable, Segoe UI" FontSize="10" Margin="0,0,0,2"/>
+                                            <TextBox x:Name="SP_OllamaCooldown" Style="{StaticResource SettingInput}"/>
+                                        </StackPanel>
+                                    </Grid>
 
-                                <TextBlock Text="Ключі" Style="{StaticResource SettingsLabel}"/>
-                                <ItemsControl x:Name="SP_OllamaKeysList" Margin="0,0,0,8">
-                                    <ItemsControl.ItemTemplate>
-                                        <DataTemplate>
-                                            <Border Background="#0A0A12" BorderBrush="#1A1A22" BorderThickness="1"
-                                                    CornerRadius="4" Padding="8,6" Margin="0,0,0,4">
-                                                <Grid>
-                                                    <Grid.ColumnDefinitions>
-                                                        <ColumnDefinition Width="14"/>
-                                                        <ColumnDefinition Width="100"/>
-                                                        <ColumnDefinition Width="*"/>
-                                                        <ColumnDefinition Width="Auto"/>
-                                                        <ColumnDefinition Width="Auto"/>
-                                                    </Grid.ColumnDefinitions>
-                                                    <Ellipse Grid.Column="0" Width="8" Height="8"
-                                                             Fill="{Binding ActiveDotBrush}" VerticalAlignment="Center"/>
-                                                    <TextBox Grid.Column="1"
-                                                             Text="{Binding Name, UpdateSourceTrigger=PropertyChanged}"
-                                                             Style="{StaticResource SettingInput}"
-                                                             Margin="6,0,6,0" Padding="6,3"/>
-                                                    <TextBox Grid.Column="2"
-                                                             Text="{Binding Key, UpdateSourceTrigger=PropertyChanged}"
-                                                             Style="{StaticResource SettingInput}"
-                                                             FontFamily="Consolas" Padding="6,3"/>
-                                                    <TextBlock Grid.Column="3" Text="{Binding StatusText}"
-                                                               Foreground="{Binding StatusBrush}"
-                                                               FontFamily="Consolas" FontSize="11"
-                                                               Margin="8,0,4,0" VerticalAlignment="Center"/>
-                                                    <Button Grid.Column="4" Content="✕"
-                                                            Click="SP_RemoveKey_Click" Tag="{Binding}"
-                                                            Background="Transparent" BorderThickness="0"
-                                                            Foreground="#6B6B80" FontSize="11"
-                                                            Padding="6,2" Cursor="Hand"/>
-                                                </Grid>
-                                            </Border>
-                                        </DataTemplate>
-                                    </ItemsControl.ItemTemplate>
-                                </ItemsControl>
+                                    <TextBlock Text="&#1050;&#1083;&#1102;&#1095;&#1110; &#1087;&#1091;&#1083;&#1091;" Style="{StaticResource SettingsLabel}"/>
+                                    <ItemsControl x:Name="SP_OllamaKeysList" Margin="0,0,0,8">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <Border Background="#0A0A12" BorderBrush="#1A1A22" BorderThickness="1"
+                                                        CornerRadius="4" Padding="8,6" Margin="0,0,0,4">
+                                                    <Grid>
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="14"/>
+                                                            <ColumnDefinition Width="100"/>
+                                                            <ColumnDefinition Width="*"/>
+                                                            <ColumnDefinition Width="Auto"/>
+                                                            <ColumnDefinition Width="Auto"/>
+                                                        </Grid.ColumnDefinitions>
+                                                        <Ellipse Grid.Column="0" Width="8" Height="8"
+                                                                 Fill="{Binding ActiveDotBrush}" VerticalAlignment="Center"/>
+                                                        <TextBox Grid.Column="1"
+                                                                 Text="{Binding Name, UpdateSourceTrigger=PropertyChanged}"
+                                                                 Style="{StaticResource SettingInput}"
+                                                                 Margin="6,0,6,0" Padding="6,3"/>
+                                                        <TextBox Grid.Column="2"
+                                                                 Text="{Binding Key, UpdateSourceTrigger=PropertyChanged}"
+                                                                 Style="{StaticResource SettingInput}"
+                                                                 FontFamily="Consolas" Padding="6,3"/>
+                                                        <TextBlock Grid.Column="3" Text="{Binding StatusText}"
+                                                                   Foreground="{Binding StatusBrush}"
+                                                                   FontFamily="Consolas" FontSize="11"
+                                                                   Margin="8,0,4,0" VerticalAlignment="Center"/>
+                                                        <Button Grid.Column="4" Content="x"
+                                                                Click="SP_RemoveKey_Click" Tag="{Binding}"
+                                                                Background="Transparent" BorderThickness="0"
+                                                                Foreground="#6B6B80" FontSize="11"
+                                                                Padding="6,2" Cursor="Hand"/>
+                                                    </Grid>
+                                                </Border>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
 
-                                <Button x:Name="SP_AddKeyBtn" Content="+ Додати ключ"
-                                        Click="SP_AddKey_Click"
-                                        Background="#1A1A22" BorderBrush="#2A2A35" BorderThickness="1"
-                                        Foreground="#9090A8" FontFamily="Segoe UI Variable, Segoe UI"
-                                        FontSize="11" Padding="10,6" Cursor="Hand" HorizontalAlignment="Left"
-                                        Margin="0,0,0,8"/>
+                                    <Button x:Name="SP_AddKeyBtn" Content="+ &#1044;&#1086;&#1076;&#1072;&#1090;&#1080; &#1082;&#1083;&#1102;&#1095;"
+                                            Click="SP_AddKey_Click"
+                                            Background="#1A1A22" BorderBrush="#2A2A35" BorderThickness="1"
+                                            Foreground="#9090A8" FontFamily="Segoe UI Variable, Segoe UI"
+                                            FontSize="11" Padding="10,6" Cursor="Hand" HorizontalAlignment="Left"
+                                            Margin="0,0,0,8"/>
 
-                                <TextBlock Text="Ollama Cloud free-tier має квоту на акаунт. Додай 5-10 ключів з різних акаунтів — Коконое автоматично переключиться коли активний дотягне порогу."
-                                           Foreground="#3A3A4E" FontFamily="Segoe UI Variable, Segoe UI" FontSize="10"
-                                           TextWrapping="Wrap" Margin="0,0,0,12"/>
+                                    <TextBlock Text="&#1055;&#1091;&#1083; - &#1079;&#1072;&#1087;&#1072;&#1089;&#1085;&#1110; &#1082;&#1083;&#1102;&#1095;&#1110;. &#1071;&#1082;&#1097;&#1086; &#1074; &#1072;&#1075;&#1077;&#1085;&#1090;&#1072; &#1082;&#1083;&#1102;&#1095; &#1085;&#1077; &#1079;&#1072;&#1076;&#1072;&#1085;&#1080;&#1081;, &#1074;&#1110;&#1085; &#1073;&#1077;&#1088;&#1077; &#1082;&#1083;&#1102;&#1095; &#1110;&#1079; &#1087;&#1091;&#1083;&#1091; &#1072;&#1073;&#1086; legacy &#1082;&#1083;&#1102;&#1095;."
+                                               Foreground="#3A3A4E" FontFamily="Segoe UI Variable, Segoe UI" FontSize="10"
+                                               TextWrapping="Wrap" Margin="0,0,0,12"/>
+                                </StackPanel>
+
+                                <TextBlock Text="&#1050;&#1086;&#1082;&#1086;&#1085;&#1086;&#1077; &#1090;&#1072; &#1076;&#1086;&#1087;&#1086;&#1084;&#1110;&#1078;&#1085;&#1110; &#1072;&#1075;&#1077;&#1085;&#1090;&#1080;" Style="{StaticResource SettingsLabel}"/>
+                                <Expander Header="&#1043;&#1086;&#1083;&#1086;&#1074;&#1085;&#1080;&#1081; &#1072;&#1075;&#1077;&#1085;&#1090; - &#1050;&#1086;&#1082;&#1086;&#1085;&#1086;&#1077;" IsExpanded="True" Foreground="#E0E0EE" FontFamily="Segoe UI Variable, Segoe UI" Margin="0,0,0,8">
+                                    <Border Background="#0A0A12" BorderBrush="#1A1A22" BorderThickness="1" CornerRadius="4" Padding="10" Margin="0,6,0,0">
+                                        <StackPanel>
+                                            <TextBlock Text="&#1050;&#1083;&#1102;&#1095;&#1110; Ollama Cloud (&#1086;&#1076;&#1080;&#1085; &#1085;&#1072; &#1088;&#1103;&#1076;&#1086;&#1082;)" Foreground="#6B6B80" FontFamily="Segoe UI Variable, Segoe UI" FontSize="10" Margin="0,0,0,2"/>
+                                            <TextBox x:Name="SP_AgentChatKey" Style="{StaticResource SettingInput}" FontFamily="Consolas" Margin="0,0,0,8" MinHeight="72" AcceptsReturn="True" TextWrapping="NoWrap" VerticalScrollBarVisibility="Auto"/>
+                                            <TextBlock Text="&#1052;&#1086;&#1076;&#1077;&#1083;&#1100; (&#1087;&#1086;&#1088;&#1086;&#1078;&#1085;&#1100;&#1086; = &#1075;&#1083;&#1086;&#1073;&#1072;&#1083;&#1100;&#1085;&#1072;)" Foreground="#6B6B80" FontFamily="Segoe UI Variable, Segoe UI" FontSize="10" Margin="0,0,0,2"/>
+                                            <ComboBox x:Name="SP_AgentChatModelBox" Style="{StaticResource SettingComboBox}" IsEditable="True" Margin="0,0,0,8">
+                                                <ComboBoxItem Content="gemma4:31b-cloud"/>
+                                                <ComboBoxItem Content="qwen3-coder:480b-cloud"/>
+                                                <ComboBoxItem Content="deepseek-v3.1:671b-cloud"/>
+                                                <ComboBoxItem Content="gpt-oss:120b-cloud"/>
+                                                <ComboBoxItem Content="gpt-oss:20b-cloud"/>
+                                            </ComboBox>
+                                            <TextBlock Text="&#1058;&#1077;&#1084;&#1087;&#1077;&#1088;&#1072;&#1090;&#1091;&#1088;&#1072;" Foreground="#6B6B80" FontFamily="Segoe UI Variable, Segoe UI" FontSize="10" Margin="0,0,0,2"/>
+                                            <TextBox x:Name="SP_AgentChatTemp" Style="{StaticResource SettingInput}" FontFamily="Consolas"/>
+                                        </StackPanel>
+                                    </Border>
+                                </Expander>
+                                <Expander Header="&#1044;&#1086;&#1087;&#1086;&#1084;&#1110;&#1078;&#1085;&#1080;&#1081; &#1072;&#1075;&#1077;&#1085;&#1090; - coder" IsExpanded="False" Foreground="#E0E0EE" FontFamily="Segoe UI Variable, Segoe UI" Margin="0,0,0,12">
+                                    <Border Background="#0A0A12" BorderBrush="#1A1A22" BorderThickness="1" CornerRadius="4" Padding="10" Margin="0,6,0,0">
+                                        <StackPanel>
+                                            <TextBlock Text="&#1050;&#1083;&#1102;&#1095;&#1110; Ollama Cloud (&#1086;&#1076;&#1080;&#1085; &#1085;&#1072; &#1088;&#1103;&#1076;&#1086;&#1082;)" Foreground="#6B6B80" FontFamily="Segoe UI Variable, Segoe UI" FontSize="10" Margin="0,0,0,2"/>
+                                            <TextBox x:Name="SP_AgentCoderKey" Style="{StaticResource SettingInput}" FontFamily="Consolas" Margin="0,0,0,8" MinHeight="72" AcceptsReturn="True" TextWrapping="NoWrap" VerticalScrollBarVisibility="Auto"/>
+                                            <TextBlock Text="&#1052;&#1086;&#1076;&#1077;&#1083;&#1100; (&#1087;&#1086;&#1088;&#1086;&#1078;&#1085;&#1100;&#1086; = &#1075;&#1083;&#1086;&#1073;&#1072;&#1083;&#1100;&#1085;&#1072;)" Foreground="#6B6B80" FontFamily="Segoe UI Variable, Segoe UI" FontSize="10" Margin="0,0,0,2"/>
+                                            <ComboBox x:Name="SP_AgentCoderModelBox" Style="{StaticResource SettingComboBox}" IsEditable="True" Margin="0,0,0,8">
+                                                <ComboBoxItem Content="qwen3-coder:480b-cloud"/>
+                                                <ComboBoxItem Content="deepseek-v3.1:671b-cloud"/>
+                                                <ComboBoxItem Content="gpt-oss:120b-cloud"/>
+                                                <ComboBoxItem Content="gpt-oss:20b-cloud"/>
+                                                <ComboBoxItem Content="gemma4:31b-cloud"/>
+                                            </ComboBox>
+                                            <TextBlock Text="&#1058;&#1077;&#1084;&#1087;&#1077;&#1088;&#1072;&#1090;&#1091;&#1088;&#1072;" Foreground="#6B6B80" FontFamily="Segoe UI Variable, Segoe UI" FontSize="10" Margin="0,0,0,2"/>
+                                            <TextBox x:Name="SP_AgentCoderTemp" Style="{StaticResource SettingInput}" FontFamily="Consolas"/>
+                                        </StackPanel>
+                                    </Border>
+                                </Expander>
                             </StackPanel>
 
                             <!-- Model -->
-                            <TextBlock Text="Модель" Style="{StaticResource SettingsLabel}"/>
+                            <TextBlock x:Name="SP_ModelLabel" Text="&#1052;&#1086;&#1076;&#1077;&#1083;&#1100;" Style="{StaticResource SettingsLabel}"/>
                             <ComboBox x:Name="SP_ModelBox" Style="{StaticResource SettingComboBox}"
                                       Margin="0,0,0,6" IsEditable="True">
                                 <ComboBoxItem Content="gemma4:31b-cloud"/>
@@ -3010,7 +3047,7 @@
                                        Margin="0,0,0,16" TextWrapping="Wrap"/>
 
                             <!-- Vision Model -->
-                            <TextBlock Text="Vision Модель" Style="{StaticResource SettingsLabel}"/>
+                            <TextBlock Text="Vision &#1084;&#1086;&#1076;&#1077;&#1083;&#1100;" Style="{StaticResource SettingsLabel}"/>
                             <ComboBox x:Name="SP_VisionModelBox" Style="{StaticResource SettingComboBox}"
                                       Margin="0,0,0,4" IsEditable="True">
                                 <ComboBoxItem Content="gemma4:31b-cloud"/>
@@ -3018,7 +3055,7 @@
                                 <ComboBoxItem Content="llava-llama3:latest"/>
                                 <ComboBoxItem Content="bakllava:latest"/>
                             </ComboBox>
-                            <TextBlock Text="Vision модель для фото. Перевірено для Ollama Cloud: gemma4:31b-cloud; перед відправкою фото нормалізується в PNG."
+                            <TextBlock Text="Vision &#1084;&#1086;&#1076;&#1077;&#1083;&#1100; &#1076;&#1083;&#1103; &#1092;&#1086;&#1090;&#1086;. &#1044;&#1083;&#1103; Ollama Cloud &#1087;&#1077;&#1088;&#1077;&#1074;&#1110;&#1088;&#1077;&#1085;&#1086; gemma4:31b-cloud; &#1092;&#1086;&#1090;&#1086; &#1087;&#1077;&#1088;&#1077;&#1076; &#1074;&#1110;&#1076;&#1087;&#1088;&#1072;&#1074;&#1082;&#1086;&#1102; &#1085;&#1086;&#1088;&#1084;&#1072;&#1083;&#1110;&#1079;&#1091;&#1108;&#1090;&#1100;&#1089;&#1103; &#1074; PNG."
                                        Foreground="#3A3A4E" FontFamily="Segoe UI Variable, Segoe UI" FontSize="10"
                                        Margin="0,0,0,16" TextWrapping="Wrap"/>
 

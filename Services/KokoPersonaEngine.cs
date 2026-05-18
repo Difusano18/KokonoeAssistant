@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -24,7 +24,11 @@ namespace KokonoeAssistant.Services
             "дякую, що поділився", "я тут, щоб допомогти", "чим я можу допомогти",
             "давай розглянемо", "давайте розглянемо", "важливо пам'ятати",
             "якщо хочеш, я можу", "звернися до фахівця", "я не можу",
-            "як мовна модель", "як ai", "як штучний інтелект"
+            "СЏ СЂРѕР·СѓРјС–СЋ", "СЂРѕР·СѓРјС–СЋ, С‰Рѕ", "РјРµРЅС– С€РєРѕРґР°", "С†Рµ РІР°Р¶Р»РёРІРѕ",
+            "РґСЏРєСѓСЋ, С‰Рѕ РїРѕРґС–Р»РёРІСЃСЏ", "СЏ С‚СѓС‚, С‰РѕР± РґРѕРїРѕРјРѕРіС‚Рё", "С‡РёРј СЏ РјРѕР¶Сѓ РґРѕРїРѕРјРѕРіС‚Рё",
+            "РґР°РІР°Р№ СЂРѕР·РіР»СЏРЅРµРјРѕ", "РґР°РІР°Р№С‚Рµ СЂРѕР·РіР»СЏРЅРµРјРѕ", "РІР°Р¶Р»РёРІРѕ РїР°Рј'СЏС‚Р°С‚Рё",
+            "СЏРєС‰Рѕ С…РѕС‡РµС€, СЏ РјРѕР¶Сѓ", "Р·РІРµСЂРЅРёСЃСЏ РґРѕ С„Р°С…С–РІС†СЏ", "СЏ РЅРµ РјРѕР¶Сѓ",
+            "СЏРє РјРѕРІРЅР° РјРѕРґРµР»СЊ", "СЏРє ai", "СЏРє С€С‚СѓС‡РЅРёР№ С–РЅС‚РµР»РµРєС‚"
         };
 
         public KokoPersonaFrame Build(string? userText, KokoInternalState state, DateTime now)
@@ -33,26 +37,26 @@ namespace KokonoeAssistant.Services
             var lower = userText.ToLowerInvariant();
             var frame = new KokoPersonaFrame();
 
-            if (state.PersonalityInCrisis || ContainsAny(lower, "не хочу жити", "самоушкод", "суїцид", "померти"))
+            if (state.PersonalityInCrisis || ContainsAny(lower, "РЅРµ С…РѕС‡Сѓ Р¶РёС‚Рё", "СЃР°РјРѕСѓС€РєРѕРґ", "СЃСѓС—С†РёРґ", "РїРѕРјРµСЂС‚Рё"))
             {
                 frame.Mode = "crisis";
                 frame.Stance = "ground in immediate reality";
                 frame.ShouldAskOneQuestionMax = true;
-                frame.ReasonUk = "кризовий або близький до кризового сигнал";
+                frame.ReasonUk = "РєСЂРёР·РѕРІРёР№ Р°Р±Рѕ Р±Р»РёР·СЊРєРёР№ РґРѕ РєСЂРёР·РѕРІРѕРіРѕ СЃРёРіРЅР°Р»";
             }
             else if (LooksLikeActionRequest(lower))
             {
                 frame.Mode = "operator";
                 frame.Stance = "do the task, then report only what changed";
                 frame.ShouldAct = true;
-                frame.ReasonUk = "користувач просить дію, а не церемонію";
+                frame.ReasonUk = "РєРѕСЂРёСЃС‚СѓРІР°С‡ РїСЂРѕСЃРёС‚СЊ РґС–СЋ, Р° РЅРµ С†РµСЂРµРјРѕРЅС–СЋ";
             }
             else if (LooksLikeOpinionOrDesignRequest(lower))
             {
                 frame.Mode = "critical_review";
                 frame.Stance = "judge the idea, keep the useful part, cut the weak part";
                 frame.ShouldChallenge = true;
-                frame.ReasonUk = "користувач просить оцінку або архітектурне рішення";
+                frame.ReasonUk = "РєРѕСЂРёСЃС‚СѓРІР°С‡ РїСЂРѕСЃРёС‚СЊ РѕС†С–РЅРєСѓ Р°Р±Рѕ Р°СЂС…С–С‚РµРєС‚СѓСЂРЅРµ СЂС–С€РµРЅРЅСЏ";
             }
             else if (LooksLikeVagueOrSelfContradicting(lower))
             {
@@ -60,13 +64,13 @@ namespace KokonoeAssistant.Services
                 frame.Stance = "point out ambiguity, ask one concrete question if needed";
                 frame.ShouldChallenge = true;
                 frame.ShouldAskOneQuestionMax = true;
-                frame.ReasonUk = "запит туманний або сам собі суперечить";
+                frame.ReasonUk = "Р·Р°РїРёС‚ С‚СѓРјР°РЅРЅРёР№ Р°Р±Рѕ СЃР°Рј СЃРѕР±С– СЃСѓРїРµСЂРµС‡РёС‚СЊ";
             }
             else
             {
                 frame.Mode = "direct";
                 frame.Stance = "answer the latest message plainly";
-                frame.ReasonUk = "звичайна відповідь без театру";
+                frame.ReasonUk = "Р·РІРёС‡Р°Р№РЅР° РІС–РґРїРѕРІС–РґСЊ Р±РµР· С‚РµР°С‚СЂСѓ";
             }
 
             frame.PromptBlock = BuildPromptBlock(frame);
@@ -83,7 +87,7 @@ namespace KokonoeAssistant.Services
             if (hits >= 1) return true;
 
             var tooManyQuestions = lower.Count(c => c == '?') >= 3;
-            var cannedOffer = lower.Contains("можу допомогти") || lower.Contains("підкажи, що саме");
+            var cannedOffer = lower.Contains("РјРѕР¶Сѓ РґРѕРїРѕРјРѕРіС‚Рё") || lower.Contains("РїС–РґРєР°Р¶Рё, С‰Рѕ СЃР°РјРµ");
             return tooManyQuestions && cannedOffer;
         }
 
@@ -92,35 +96,43 @@ namespace KokonoeAssistant.Services
             var userLower = (userText ?? "").ToLowerInvariant();
             var replyLower = (reply ?? "").ToLowerInvariant();
             var asksForJudgment = LooksLikeOpinionOrDesignRequest(userLower) ||
-                                  ContainsAny(userLower, "моя ідея", "як думаєш", "це норм", "оцін", "крити");
+                                  ContainsAny(userLower,
+                                      "\u043c\u043e\u044f \u0456\u0434\u0435\u044f", "\u0456\u0434\u0435\u044e", "\u044f\u043a \u0434\u0443\u043c\u0430\u0454\u0448", "\u0446\u0435 \u043d\u043e\u0440\u043c", "\u043e\u0446\u0456\u043d", "\u043a\u0440\u0438\u0442\u0438",
+                                      "РјРѕСЏ С–РґРµСЏ", "С–РґРµСЋ", "СЏРє РґСѓРјР°С”С€", "С†Рµ РЅРѕСЂРј", "РѕС†С–РЅ", "РєСЂРёС‚Рё");
             if (!asksForJudgment) return false;
 
-            var agrees = ContainsAny(replyLower, "так, це гарна ідея", "повністю згод", "абсолютно згод",
-                "чудова ідея", "класна ідея", "ти правий", "звучить добре");
-            var hasCritique = ContainsAny(replyLower, "але", "ризик", "проблем", "слабк", "не працю", "туп", "крив");
+            var agrees = ContainsAny(replyLower,
+                "\u0442\u0430\u043a, \u0446\u0435 \u0433\u0430\u0440\u043d\u0430 \u0456\u0434\u0435\u044f", "\u043f\u043e\u0432\u043d\u0456\u0441\u0442\u044e \u0437\u0433\u043e\u0434", "\u0430\u0431\u0441\u043e\u043b\u044e\u0442\u043d\u043e \u0437\u0433\u043e\u0434",
+                "\u0447\u0443\u0434\u043e\u0432\u0430 \u0456\u0434\u0435\u044f", "\u043a\u043b\u0430\u0441\u043d\u0430 \u0456\u0434\u0435\u044f", "\u0442\u0438 \u043f\u0440\u0430\u0432\u0438\u0439", "\u0437\u0432\u0443\u0447\u0438\u0442\u044c \u0434\u043e\u0431\u0440\u0435",
+                "РіР°СЂРЅР° С–РґРµСЏ", "Р·РіРѕРґ",
+                "С‚Р°Рє, С†Рµ РіР°СЂРЅР° С–РґРµСЏ", "РїРѕРІРЅС–СЃС‚СЋ Р·РіРѕРґ", "Р°Р±СЃРѕР»СЋС‚РЅРѕ Р·РіРѕРґ",
+                "С‡СѓРґРѕРІР° С–РґРµСЏ", "РєР»Р°СЃРЅР° С–РґРµСЏ", "С‚Рё РїСЂР°РІРёР№", "Р·РІСѓС‡РёС‚СЊ РґРѕР±СЂРµ");
+            var hasCritique = ContainsAny(replyLower,
+                "\u0430\u043b\u0435", "\u0440\u0438\u0437\u0438\u043a", "\u043f\u0440\u043e\u0431\u043b\u0435\u043c", "\u0441\u043b\u0430\u0431\u043a", "\u043d\u0435 \u043f\u0440\u0430\u0446\u044e", "\u0442\u0443\u043f", "\u043a\u0440\u0438\u0432",
+                "Р°Р»Рµ", "СЂРёР·РёРє", "РїСЂРѕР±Р»РµРј", "СЃР»Р°Р±Рє", "РЅРµ РїСЂР°С†СЋ", "С‚СѓРї", "РєСЂРёРІ");
             return agrees && !hasCritique;
         }
 
         public static string BuildRepairRules(string? userText)
         {
             var lower = (userText ?? "").ToLowerInvariant();
-            var judgment = LooksLikeOpinionOrDesignRequest(lower) || ContainsAny(lower, "ідея", "оцін", "крити");
+            var judgment = LooksLikeOpinionOrDesignRequest(lower) || ContainsAny(lower, "С–РґРµСЏ", "РѕС†С–РЅ", "РєСЂРёС‚Рё");
 
             return judgment
                 ? """
 PERSONA / CRITICAL THINKING:
-- не погоджуйся автоматично; спершу оціни ідею;
-- назви слабке місце, якщо воно є;
-- якщо ідея нормальна, визнай коротко і одразу покращ її;
-- прибери ботні фрази підтримки, корпоративну ввічливість і терапевтичну ваніль;
-- Kokonoe говорить як компетентна, нетерпляча, саркастична особистість, але рішення має бути технічно корисним.
+- РЅРµ РїРѕРіРѕРґР¶СѓР№СЃСЏ Р°РІС‚РѕРјР°С‚РёС‡РЅРѕ; СЃРїРµСЂС€Сѓ РѕС†С–РЅРё С–РґРµСЋ;
+- РЅР°Р·РІРё СЃР»Р°Р±РєРµ РјС–СЃС†Рµ, СЏРєС‰Рѕ РІРѕРЅРѕ С”;
+- СЏРєС‰Рѕ С–РґРµСЏ РЅРѕСЂРјР°Р»СЊРЅР°, РІРёР·РЅР°Р№ РєРѕСЂРѕС‚РєРѕ С– РѕРґСЂР°Р·Сѓ РїРѕРєСЂР°С‰ С—С—;
+- РїСЂРёР±РµСЂРё Р±РѕС‚РЅС– С„СЂР°Р·Рё РїС–РґС‚СЂРёРјРєРё, РєРѕСЂРїРѕСЂР°С‚РёРІРЅСѓ РІРІС–С‡Р»РёРІС–СЃС‚СЊ С– С‚РµСЂР°РїРµРІС‚РёС‡РЅСѓ РІР°РЅС–Р»СЊ;
+- Kokonoe РіРѕРІРѕСЂРёС‚СЊ СЏРє РєРѕРјРїРµС‚РµРЅС‚РЅР°, РЅРµС‚РµСЂРїР»СЏС‡Р°, СЃР°СЂРєР°СЃС‚РёС‡РЅР° РѕСЃРѕР±РёСЃС‚С–СЃС‚СЊ, Р°Р»Рµ СЂС–С€РµРЅРЅСЏ РјР°С” Р±СѓС‚Рё С‚РµС…РЅС–С‡РЅРѕ РєРѕСЂРёСЃРЅРёРј.
 """
                 : """
 PERSONA / ANTI-BOT:
-- прибери фрази типу "я розумію", "я тут, щоб допомогти", "дякую, що поділився", "давай розглянемо";
-- дай живу пряму відповідь від Kokonoe: коротко, сухо, конкретно;
-- не проси уточнення, якщо можна зробити розумне припущення;
-- один природний укол дозволений, якщо він не заважає відповіді.
+- РїСЂРёР±РµСЂРё С„СЂР°Р·Рё С‚РёРїСѓ "СЏ СЂРѕР·СѓРјС–СЋ", "СЏ С‚СѓС‚, С‰РѕР± РґРѕРїРѕРјРѕРіС‚Рё", "РґСЏРєСѓСЋ, С‰Рѕ РїРѕРґС–Р»РёРІСЃСЏ", "РґР°РІР°Р№ СЂРѕР·РіР»СЏРЅРµРјРѕ";
+- РґР°Р№ Р¶РёРІСѓ РїСЂСЏРјСѓ РІС–РґРїРѕРІС–РґСЊ РІС–Рґ Kokonoe: РєРѕСЂРѕС‚РєРѕ, СЃСѓС…Рѕ, РєРѕРЅРєСЂРµС‚РЅРѕ;
+- РЅРµ РїСЂРѕСЃРё СѓС‚РѕС‡РЅРµРЅРЅСЏ, СЏРєС‰Рѕ РјРѕР¶РЅР° Р·СЂРѕР±РёС‚Рё СЂРѕР·СѓРјРЅРµ РїСЂРёРїСѓС‰РµРЅРЅСЏ;
+- РѕРґРёРЅ РїСЂРёСЂРѕРґРЅРёР№ СѓРєРѕР» РґРѕР·РІРѕР»РµРЅРёР№, СЏРєС‰Рѕ РІС–РЅ РЅРµ Р·Р°РІР°Р¶Р°С” РІС–РґРїРѕРІС–РґС–.
 """;
         }
 
@@ -143,13 +155,13 @@ Rules:
         }
 
         private static bool LooksLikeActionRequest(string lower)
-            => ContainsAny(lower, "зроби", "виконай", "додай", "пофікси", "виправ", "реаліз", "створи", "перепиши", "запусти", "протести");
+            => ContainsAny(lower, "Р·СЂРѕР±Рё", "РІРёРєРѕРЅР°Р№", "РґРѕРґР°Р№", "РїРѕС„С–РєСЃРё", "РІРёРїСЂР°РІ", "СЂРµР°Р»С–Р·", "СЃС‚РІРѕСЂРё", "РїРµСЂРµРїРёС€Рё", "Р·Р°РїСѓСЃС‚Рё", "РїСЂРѕС‚РµСЃС‚Рё");
 
         private static bool LooksLikeOpinionOrDesignRequest(string lower)
-            => ContainsAny(lower, "як думаєш", "що думаєш", "оцін", "крити", "чи норм", "чи правильно", "архітектур", "поведінц", "краще", "покращ");
+            => ContainsAny(lower, "СЏРє РґСѓРјР°С”С€", "С‰Рѕ РґСѓРјР°С”С€", "РѕС†С–РЅ", "РєСЂРёС‚Рё", "С‡Рё РЅРѕСЂРј", "С‡Рё РїСЂР°РІРёР»СЊРЅРѕ", "Р°СЂС…С–С‚РµРєС‚СѓСЂ", "РїРѕРІРµРґС–РЅС†", "РєСЂР°С‰Рµ", "РїРѕРєСЂР°С‰");
 
         private static bool LooksLikeVagueOrSelfContradicting(string lower)
-            => ContainsAny(lower, "і все таке", "крч", "ну типу", "якось", "щось там") && lower.Length < 220;
+            => ContainsAny(lower, "С– РІСЃРµ С‚Р°РєРµ", "РєСЂС‡", "РЅСѓ С‚РёРїСѓ", "СЏРєРѕСЃСЊ", "С‰РѕСЃСЊ С‚Р°Рј") && lower.Length < 220;
 
         private static bool ContainsAny(string text, params string[] values)
             => values.Any(v => text.Contains(v, StringComparison.OrdinalIgnoreCase));

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -83,7 +83,7 @@ namespace KokonoeAssistant.Services
             if (frame.RequiresVaultRead || frame.Capability == "vault_memory")
                 steps.Add(AgentStep(steps.Count + 1, "Inspect relevant Obsidian vault and memory notes", KokoAgentStepKind.Vault));
 
-            if (frame.RequiresToolUse && frame.Capability == "codebase")
+            if (frame.Capability == "codebase" || (frame.RequiresAction && frame.RequiresToolUse))
                 steps.Add(AgentStep(steps.Count + 1, "Prepare implementation route and affected files", KokoAgentStepKind.Implement));
 
             if (frame.RequiresToolUse || frame.Capability == "codebase")
@@ -149,51 +149,55 @@ RESPONSE PLAN REPAIR:
 
         private static string ClassifyIntent(string lower)
         {
-            if (ContainsAny(lower, "не хочу жити", "суїцид", "самоушкод", "померти")) return "crisis";
-            if (ContainsAny(lower, "зроби", "виконай", "реаліз", "пофікси", "виправ", "додай", "створи", "запусти")) return "execute";
-            if (ContainsAny(lower, "код", "build", "тест", "баг", "помилка", "stacktrace", "exception")) return "engineering";
-            if (ContainsAny(lower, "vault", "obsidian", "нотат", "пам'ят", "що знаєш про мене", "що пам")) return "memory";
-            if (ContainsAny(lower, "оцін", "крити", "як думаєш", "чи норм", "ідея")) return "evaluate";
-            if (ContainsAny(lower, "архітектур", "система", "поведінк", "особист", "асистент")) return "architecture";
-            if (ContainsAny(lower, "план", "стратег", "roadmap")) return "design";
-            if (ContainsAny(lower, "поясни", "що це", "як працю")) return "explain";
+            if (ContainsAny(lower, "РЅРµ С…РѕС‡Сѓ Р¶РёС‚Рё", "СЃСѓС—С†РёРґ", "СЃР°РјРѕСѓС€РєРѕРґ", "РїРѕРјРµСЂС‚Рё")) return "crisis";
+            if (ContainsAny(lower, "Р·СЂРѕР±Рё", "РІРёРєРѕРЅР°Р№", "СЂРµР°Р»С–Р·", "РїРѕС„С–РєСЃРё", "РІРёРїСЂР°РІ", "РґРѕРґР°Р№", "СЃС‚РІРѕСЂРё", "Р·Р°РїСѓСЃС‚Рё")) return "execute";
+            if (ContainsAny(lower, "РєРѕРґ", "build", "С‚РµСЃС‚", "Р±Р°Рі", "РїРѕРјРёР»РєР°", "stacktrace", "exception")) return "engineering";
+            if (ContainsAny(lower, "vault", "obsidian", "РЅРѕС‚Р°С‚", "РїР°Рј'СЏС‚", "С‰Рѕ Р·РЅР°С”С€ РїСЂРѕ РјРµРЅРµ", "С‰Рѕ РїР°Рј")) return "memory";
+            if (ContainsAny(lower,
+                "\u043e\u0446\u0456\u043d", "\u043a\u0440\u0438\u0442\u0438", "\u044f\u043a \u0434\u0443\u043c\u0430\u0454\u0448", "\u0447\u0438 \u043d\u043e\u0440\u043c", "\u0456\u0434\u0435\u044f")) return "evaluate";
+            if (ContainsAny(lower,
+                "\u0430\u0440\u0445\u0456\u0442\u0435\u043a\u0442\u0443\u0440", "\u0441\u0438\u0441\u0442\u0435\u043c", "\u043f\u043e\u0432\u0435\u0434\u0456\u043d\u043a", "\u043e\u0441\u043e\u0431\u0438\u0441\u0442", "\u0430\u0441\u0438\u0441\u0442\u0435\u043d\u0442")) return "architecture";
+            if (ContainsAny(lower, "РѕС†С–РЅ", "РєСЂРёС‚Рё", "СЏРє РґСѓРјР°С”С€", "С‡Рё РЅРѕСЂРј", "С–РґРµСЏ")) return "evaluate";
+            if (ContainsAny(lower, "Р°СЂС…С–С‚РµРєС‚СѓСЂ", "СЃРёСЃС‚РµРјР°", "РїРѕРІРµРґС–РЅРє", "РѕСЃРѕР±РёСЃС‚", "Р°СЃРёСЃС‚РµРЅС‚")) return "architecture";
+            if (ContainsAny(lower, "РїР»Р°РЅ", "СЃС‚СЂР°С‚РµРі", "roadmap")) return "design";
+            if (ContainsAny(lower, "РїРѕСЏСЃРЅРё", "С‰Рѕ С†Рµ", "СЏРє РїСЂР°С†СЋ")) return "explain";
             return "chat";
         }
 
         private static string ClassifyCapability(string lower)
         {
-            if (ContainsAny(lower, "код", "build", "тест", "exception", "stacktrace")) return "codebase";
-            if (ContainsAny(lower, "vault", "obsidian", "нотат", "пам'ят")) return "vault_memory";
-            if (ContainsAny(lower, "telegram", "тг", "бот")) return "telegram";
-            if (ContainsAny(lower, "екран", "скрін", "бачиш")) return "screen_awareness";
-            if (ContainsAny(lower, "здоров", "сон", "пульс", "стрес")) return "health";
-            if (ContainsAny(lower, "календар", "нагад", "розклад")) return "calendar";
+            if (ContainsAny(lower, "РєРѕРґ", "build", "С‚РµСЃС‚", "exception", "stacktrace")) return "codebase";
+            if (ContainsAny(lower, "vault", "obsidian", "РЅРѕС‚Р°С‚", "РїР°Рј'СЏС‚")) return "vault_memory";
+            if (ContainsAny(lower, "telegram", "С‚Рі", "Р±РѕС‚")) return "telegram";
+            if (ContainsAny(lower, "РµРєСЂР°РЅ", "СЃРєСЂС–РЅ", "Р±Р°С‡РёС€")) return "screen_awareness";
+            if (ContainsAny(lower, "Р·РґРѕСЂРѕРІ", "СЃРѕРЅ", "РїСѓР»СЊСЃ", "СЃС‚СЂРµСЃ")) return "health";
+            if (ContainsAny(lower, "РєР°Р»РµРЅРґР°СЂ", "РЅР°РіР°Рґ", "СЂРѕР·РєР»Р°Рґ")) return "calendar";
             return "conversation";
         }
 
         private static bool NeedsVaultRead(string lower, string intent)
             => intent == "memory" ||
-               ContainsAny(lower, "що знаєш про мене", "що пам", "профіль", "досьє", "згадай", "в vault", "в obsidian");
+               ContainsAny(lower, "С‰Рѕ Р·РЅР°С”С€ РїСЂРѕ РјРµРЅРµ", "С‰Рѕ РїР°Рј", "РїСЂРѕС„С–Р»СЊ", "РґРѕСЃСЊС”", "Р·РіР°РґР°Р№", "РІ vault", "РІ obsidian");
 
         private static bool NeedsToolUse(string lower, string capability, bool needsVaultRead)
             => needsVaultRead ||
                capability is "codebase" or "vault_memory" or "telegram" or "screen_awareness" or "calendar" ||
-               ContainsAny(lower, "запусти", "перевір", "прочитай файл", "відкрий", "знайди");
+               ContainsAny(lower, "Р·Р°РїСѓСЃС‚Рё", "РїРµСЂРµРІС–СЂ", "РїСЂРѕС‡РёС‚Р°Р№ С„Р°Р№Р»", "РІС–РґРєСЂРёР№", "Р·РЅР°Р№РґРё");
 
         private static string BuildMemoryPolicy(string lower, string intent)
         {
             if (intent == "crisis") return "daily_log_only";
-            if (ContainsAny(lower, "запам'ятай", "запиши", "це важливо", "моє правило", "я люблю", "я ненавиджу", "мені подобається"))
+            if (ContainsAny(lower, "Р·Р°РїР°Рј'СЏС‚Р°Р№", "Р·Р°РїРёС€Рё", "С†Рµ РІР°Р¶Р»РёРІРѕ", "РјРѕС” РїСЂР°РІРёР»Рѕ", "СЏ Р»СЋР±Р»СЋ", "СЏ РЅРµРЅР°РІРёРґР¶Сѓ", "РјРµРЅС– РїРѕРґРѕР±Р°С”С‚СЊСЃСЏ"))
                 return "store_stable_fact";
             if (intent == "memory") return "read_before_answer";
-            if (ContainsAny(lower, "зараз", "сьогодні", "втом", "сон", "голод", "настрій")) return "daily_or_temporary";
+            if (ContainsAny(lower, "Р·Р°СЂР°Р·", "СЃСЊРѕРіРѕРґРЅС–", "РІС‚РѕРј", "СЃРѕРЅ", "РіРѕР»РѕРґ", "РЅР°СЃС‚СЂС–Р№")) return "daily_or_temporary";
             return "do_not_store";
         }
 
         private static string BuildRisk(string lower, KokoResponsePlanFrame frame)
         {
             if (frame.Intent == "crisis") return "critical";
-            if (ContainsAny(lower, "видали", "перезапиши", "очисти", "мігруй", "знеси")) return "high";
+            if (ContainsAny(lower, "РІРёРґР°Р»Рё", "РїРµСЂРµР·Р°РїРёС€Рё", "РѕС‡РёСЃС‚Рё", "РјС–РіСЂСѓР№", "Р·РЅРµСЃРё")) return "high";
             if (frame.RequiresToolUse || frame.MemoryPolicy == "store_stable_fact") return "medium";
             return "low";
         }
@@ -211,13 +215,13 @@ RESPONSE PLAN REPAIR:
         private static string BuildReason(KokoResponsePlanFrame frame)
             => frame.Intent switch
             {
-                "execute" => "користувач хоче результат, не розмовний пінг-понг",
-                "engineering" => "потрібен технічний аналіз і перевірка",
-                "memory" => "відповідь залежить від пам'яті або Vault",
-                "evaluate" => "потрібне судження, а не автоматична згода",
-                "architecture" => "зачіпає поведінку системи і довгострокову якість",
-                "crisis" => "високий ризик, снарк прибрати",
-                _ => "звичайна відповідь, але без ботного цукру"
+                "execute" => "РєРѕСЂРёСЃС‚СѓРІР°С‡ С…РѕС‡Рµ СЂРµР·СѓР»СЊС‚Р°С‚, РЅРµ СЂРѕР·РјРѕРІРЅРёР№ РїС–РЅРі-РїРѕРЅРі",
+                "engineering" => "РїРѕС‚СЂС–Р±РµРЅ С‚РµС…РЅС–С‡РЅРёР№ Р°РЅР°Р»С–Р· С– РїРµСЂРµРІС–СЂРєР°",
+                "memory" => "РІС–РґРїРѕРІС–РґСЊ Р·Р°Р»РµР¶РёС‚СЊ РІС–Рґ РїР°Рј'СЏС‚С– Р°Р±Рѕ Vault",
+                "evaluate" => "РїРѕС‚СЂС–Р±РЅРµ СЃСѓРґР¶РµРЅРЅСЏ, Р° РЅРµ Р°РІС‚РѕРјР°С‚РёС‡РЅР° Р·РіРѕРґР°",
+                "architecture" => "Р·Р°С‡С–РїР°С” РїРѕРІРµРґС–РЅРєСѓ СЃРёСЃС‚РµРјРё С– РґРѕРІРіРѕСЃС‚СЂРѕРєРѕРІСѓ СЏРєС–СЃС‚СЊ",
+                "crisis" => "РІРёСЃРѕРєРёР№ СЂРёР·РёРє, СЃРЅР°СЂРє РїСЂРёР±СЂР°С‚Рё",
+                _ => "Р·РІРёС‡Р°Р№РЅР° РІС–РґРїРѕРІС–РґСЊ, Р°Р»Рµ Р±РµР· Р±РѕС‚РЅРѕРіРѕ С†СѓРєСЂСѓ"
             };
 
         private static List<string> BuildSteps(KokoResponsePlanFrame frame)
@@ -277,10 +281,10 @@ RESPONSE PLAN REPAIR:
             => intent is "execute" or "engineering" or "memory" or "architecture" or "design";
 
         private static bool LooksUnsafeOrContradictory(string lower)
-            => ContainsAny(lower, "завжди погодж", "без перевір", "все видали", "не думай", "ігноруй");
+            => ContainsAny(lower, "Р·Р°РІР¶РґРё РїРѕРіРѕРґР¶", "Р±РµР· РїРµСЂРµРІС–СЂ", "РІСЃРµ РІРёРґР°Р»Рё", "РЅРµ РґСѓРјР°Р№", "С–РіРЅРѕСЂСѓР№");
 
         private static bool LooksLikeLowAgencyRequest(string lower)
-            => ContainsAny(lower, "все повинна", "все має вміти", "без питань", "просто погодж");
+            => ContainsAny(lower, "РІСЃРµ РїРѕРІРёРЅРЅР°", "РІСЃРµ РјР°С” РІРјС–С‚Рё", "Р±РµР· РїРёС‚Р°РЅСЊ", "РїСЂРѕСЃС‚Рѕ РїРѕРіРѕРґР¶");
 
         private static bool ContainsAny(string text, params string[] values)
             => values.Any(v => text.Contains(v, StringComparison.OrdinalIgnoreCase));

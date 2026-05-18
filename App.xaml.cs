@@ -9,6 +9,8 @@ namespace KokonoeAssistant
 {
     public partial class App : WinApp
     {
+        private static DateTime _lastUiHeartbeat = DateTime.UtcNow;
+
         protected override void OnStartup(StartupEventArgs e)
         {
             // base MUST run first so App.xaml BAML resources are loaded
@@ -49,6 +51,40 @@ namespace KokonoeAssistant
                 LogCrash(ex.Exception.ToString());
                 ex.SetObserved();
             };
+
+            StartUiWatchdog();
+        }
+
+        private void StartUiWatchdog()
+        {
+            _lastUiHeartbeat = DateTime.UtcNow;
+            var startedAt = DateTime.UtcNow;
+            var timer = new DispatcherTimer
+            {
+                Interval = TimeSpan.FromSeconds(1)
+            };
+            timer.Tick += (_, _) => _lastUiHeartbeat = DateTime.UtcNow;
+            timer.Start();
+
+            _ = Task.Run(async () =>
+            {
+                var lastLogged = DateTime.MinValue;
+                while (true)
+                {
+                    await Task.Delay(TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+                    if (DateTime.UtcNow - startedAt < TimeSpan.FromSeconds(20))
+                        continue;
+
+                    var lag = DateTime.UtcNow - _lastUiHeartbeat;
+                    if (lag < TimeSpan.FromSeconds(8))
+                        continue;
+                    if (DateTime.UtcNow - lastLogged < TimeSpan.FromSeconds(30))
+                        continue;
+
+                    lastLogged = DateTime.UtcNow;
+                    LogCrash($"UI hang suspected. Dispatcher heartbeat lag: {lag.TotalSeconds:F1}s");
+                }
+            });
         }
 
         private static void LogCrash(string msg)

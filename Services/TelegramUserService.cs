@@ -34,18 +34,21 @@ namespace KokonoeAssistant.Services
         private readonly string _apiHash;
         private readonly string _phone;
         private readonly bool   _dmOnly;
+        private readonly bool   _respondToOutgoing;
 
         // Кеш імен: peer_id → display name, input peer
         private readonly Dictionary<long, string>    _names = new();
         private readonly Dictionary<long, InputPeer> _peers = new();
+        private readonly List<(long ChatId, string Text, DateTime At)> _sentByService = new();
 
-        public TelegramUserService(int apiId, string apiHash, string phone, string dataDir, bool dmOnly = false)
+        public TelegramUserService(int apiId, string apiHash, string phone, string dataDir, bool dmOnly = false, bool respondToOutgoing = true)
         {
-            _apiId       = apiId;
-            _apiHash     = apiHash;
-            _phone       = phone;
-            _dmOnly      = dmOnly;
-            _sessionPath = Path.Combine(dataDir, "tg_session.dat");
+            _apiId             = apiId;
+            _apiHash           = apiHash;
+            _phone             = phone;
+            _dmOnly            = dmOnly;
+            _respondToOutgoing = respondToOutgoing;
+            _sessionPath       = Path.Combine(dataDir, "tg_session.dat");
             Directory.CreateDirectory(dataDir);
         }
 
@@ -155,19 +158,24 @@ namespace KokonoeAssistant.Services
                 // Ігноруємо вихідні повідомлення (надіслані з цього акаунту)
                 // flags.HasFlag(out_) — надійніший спосіб ніж перевірка from_id,
                 // бо для вихідних повідомлень from_id часто null
-                if ((msg.flags & TL.Message.Flags.out_) != 0) return;
+                var isOutgoing = (msg.flags & TL.Message.Flags.out_) != 0;
 
                 // Додатковий захист: ігноруємо якщо from_id явно вказує на нас
-                if (msg.from_id is PeerUser selfCheck && selfCheck.user_id == MyUserId) return;
+                if (isOutgoing)
+                {
+                    if (!_respondToOutgoing) return;
+                }
+                else if (msg.from_id is PeerUser selfCheck && selfCheck.user_id == MyUserId) return;
 
                 var text = msg.message;
                 if (string.IsNullOrWhiteSpace(text)) return;
 
                 var (chatId, chatName, chatType) = ResolvePeer(msg.peer_id, users, chats);
+                if (isOutgoing && WasSentByService(chatId, text)) return;
 
                 if (_dmOnly && chatType != TgChatType.Private) return;
 
-                var senderName = ResolveUser(msg.from_id, users);
+                var senderName = isOutgoing ? MySelf : ResolveUser(msg.from_id, users);
 
                 var incoming = new TgIncomingMessage
                 {
@@ -176,6 +184,7 @@ namespace KokonoeAssistant.Services
                     ChatType  = chatType,
                     Sender    = senderName,
                     Text      = text,
+                    IsOutgoing = isOutgoing,
                     MessageId = msg.id,
                     Date      = msg.date.ToLocalTime()
                 };
@@ -210,13 +219,43 @@ namespace KokonoeAssistant.Services
                 }
 
                 if (peer != null)
+                {
                     await _client.SendMessageAsync(peer, text);
+                    RememberServiceSend(chatId, text);
+                }
             }
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"[TgUser] Send failed to {chatId}: {ex.Message}");
             }
         }
+
+        private void RememberServiceSend(long chatId, string text)
+        {
+            lock (_sentByService)
+            {
+                var cutoff = DateTime.UtcNow.AddMinutes(-3);
+                _sentByService.RemoveAll(x => x.At < cutoff);
+                _sentByService.Add((chatId, NormalizeEchoText(text), DateTime.UtcNow));
+            }
+        }
+
+        private bool WasSentByService(long chatId, string text)
+        {
+            lock (_sentByService)
+            {
+                var cutoff = DateTime.UtcNow.AddMinutes(-3);
+                _sentByService.RemoveAll(x => x.At < cutoff);
+                var normalized = NormalizeEchoText(text);
+                var index = _sentByService.FindIndex(x => x.ChatId == chatId && x.Text == normalized);
+                if (index < 0) return false;
+                _sentByService.RemoveAt(index);
+                return true;
+            }
+        }
+
+        private static string NormalizeEchoText(string text)
+            => (text ?? "").Replace("\r\n", "\n").Trim();
 
         // ── Get dialogs for UI ─────────────────────────────────────
 
@@ -326,6 +365,7 @@ namespace KokonoeAssistant.Services
         public TgChatType ChatType  { get; set; }
         public string     Sender    { get; set; } = "";
         public string     Text      { get; set; } = "";
+        public bool       IsOutgoing { get; set; }
         public int        MessageId { get; set; }
         public DateTime   Date      { get; set; }
     }

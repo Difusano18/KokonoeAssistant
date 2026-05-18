@@ -43,28 +43,28 @@ using WinForms     = System.Windows.Forms;
 
 namespace KokonoeAssistant
 {
-    // ══════════════════════════════════════════════════════════════
+    // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
     // VIEW MODELS
-    // ══════════════════════════════════════════════════════════════
+    // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
 
-    // ══════════════════════════════════════════════════════════════
+    // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
     // MAIN WINDOW
-    // ══════════════════════════════════════════════════════════════
+    // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
 
     public partial class MainWindow : Window
     {
-        // ── Services ─────────────────────────────────────────────
+        // в”Ђв”Ђ Services в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
         private LlmService         _llm = null!;
         private HealthService      _health = null!;
         private ObsidianMcpService _obsidian = null!;
 
-        // ── Chat ─────────────────────────────────────────────────
+        // в”Ђв”Ђ Chat в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
         private CancellationTokenSource _llmCts = new();
         private bool _isGenerating;
         private FrameworkElement? _thinkingElement;
         private TextBlock? _thinkingStatusText;
 
-        // ── Pending image ─────────────────────────────────────────
+        // в”Ђв”Ђ Pending image в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
         private byte[]?  _imgBytes;
         private string   _imgMime = "image/jpeg";
         private BitmapImage? _imgThumb;
@@ -73,25 +73,25 @@ namespace KokonoeAssistant
         private readonly List<MemoryCortexNodeVm> _memoryCortexNodes = new();
         private double _memoryCortexZoom = 1.0;
 
-        // ── Voice ─────────────────────────────────────────────────
+        // в”Ђв”Ђ Voice в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
         private bool _isRecording;
 
-        // ── Telegram Bot ─────────────────────────────────────────
+        // в”Ђв”Ђ Telegram Bot в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
         private TelegramBotClient? _tgBot;
 
         private CancellationTokenSource _tgCts = new();
         private readonly ObservableCollection<string> _tgMessages = new();
 
-        // ── Telegram UserClient (MTProto) ─────────────────────────
+        // в”Ђв”Ђ Telegram UserClient (MTProto) в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
         private CancellationTokenSource _tgUserCts = new();
 
-        // ── Vault ─────────────────────────────────────────────────
+        // в”Ђв”Ђ Vault в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
         private string? _currentNotePath;
 
-        // ── Tab ───────────────────────────────────────────────────
+        // в”Ђв”Ђ Tab в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
         private string _activeTab = "Chat";
 
-        // ── Dashboard ─────────────────────────────────────────────
+        // в”Ђв”Ђ Dashboard в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
         private DispatcherTimer? _dashTimer;
         private bool _activeDashTabDev = false;
         private readonly ObservableCollection<DashThoughtVm> _dashThoughts    = new();
@@ -101,6 +101,7 @@ namespace KokonoeAssistant
         private DateTime _rightOpsVaultScanAt = DateTime.MinValue;
         private string _rightOpsVaultLine = "vault doctor -";
         private DispatcherTimer? _liveCoreTimer;
+        private DispatcherTimer? _uiRepairTimer;
         private DateTime _liveCoreLastVaultScan = DateTime.MinValue;
         private DateTime _lastObsidianPreflightAt = DateTime.MinValue;
         private int _liveCoreMemoryItems;
@@ -113,13 +114,13 @@ namespace KokonoeAssistant
         private WinForms.NotifyIcon? _notifyIcon;
         private CancellationTokenSource? _noticeCts;
 
-        // ── Session chat log (auto-saved to Obsidian) ─────────────
+        // в”Ђв”Ђ Session chat log (auto-saved to Obsidian) в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
         // Created on first message, appended after every exchange.
         private string? _sessionChatPath;
 
-        // ══════════════════════════════════════════════════════════
+        // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
         // INIT
-        // ══════════════════════════════════════════════════════════
+        // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
 
         public MainWindow()
         {
@@ -153,7 +154,7 @@ namespace KokonoeAssistant
             });
         }
 
-        // ── Fill work area (above taskbar, not WindowState=Maximized) ──
+        // в”Ђв”Ђ Fill work area (above taskbar, not WindowState=Maximized) в”Ђв”Ђ
         protected override void OnSourceInitialized(EventArgs e)
         {
             base.OnSourceInitialized(e);
@@ -322,7 +323,7 @@ namespace KokonoeAssistant
 
         [DllImport("user32.dll")]
         private static extern bool FlashWindowEx(ref FLASHWINFO pwfi);
-        // ──────────────────────────────────────────────────────────────
+        // в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
 
         private void Window_Loaded(object sender, RoutedEventArgs e)
         {
@@ -330,11 +331,12 @@ namespace KokonoeAssistant
             CommandBindings.Add(new CommandBinding(ApplicationCommands.Paste, OnPaste));
             _ = StartupSequenceAsync();
             SetupHeartUI();
+            StartUiTextRepairTimer();
         }
 
-        // ══════════════════════════════════════════════════════════════════
-        // HEART UI — pulsing dot + BPM, driven by KokoHeartEngine
-        // ══════════════════════════════════════════════════════════════════
+        // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
+        // HEART UI вЂ” pulsing dot + BPM, driven by KokoHeartEngine
+        // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
         private Storyboard? _beatStoryboard;
         private readonly Queue<(DateTime t, double bpm)> _heartHistory = new();
         private readonly Queue<double> _heartRR = new(); // last RR intervals (ms)
@@ -348,10 +350,9 @@ namespace KokonoeAssistant
 
         private void StartLiveCoreMonitor()
         {
-            UpdateLiveCorePanel(forceVaultScan: true);
             if (_liveCoreTimer != null) return;
 
-            _liveCoreTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
+            _liveCoreTimer = new DispatcherTimer { Interval = TimeSpan.FromMinutes(2) };
             _liveCoreTimer.Tick += (s, e) => UpdateLiveCorePanel();
             _liveCoreTimer.Start();
         }
@@ -368,16 +369,16 @@ namespace KokonoeAssistant
                 var selfReg = brain.GetSelfRegulationFrame(somatic);
                 var telemetry = brain.BuildTelemetrySnapshot();
 
-                LiveCoreEmotionText.Text = $"емоція: {DashboardEmotionLabel(emotion.Current)}".ToUpper();
+                LiveCoreEmotionText.Text = $"РµРјРѕС†С–СЏ: {DashboardEmotionLabel(emotion.Current)}".ToUpper();
                 LiveCoreEmotionText.Foreground = DashMakeBrush(emotion.Current);
                 var attachment = emotion.Attachment;
-                LiveCoreBondText.Text = $"довіра {attachment.Trust:F2} | прив'яз. {attachment.CompositeScore():F2} | настрій {state.MoodScore:F2}";
+                LiveCoreBondText.Text = $"РґРѕРІС–СЂР° {attachment.Trust:F2} | РїСЂРёРІ'СЏР·. {attachment.CompositeScore():F2} | РЅР°СЃС‚СЂС–Р№ {state.MoodScore:F2}";
 
-                LiveCoreBodyText.Text = $"{DashboardSomaticLabel(somatic.State).ToUpper()} | напруга {somatic.Strain:F2}";
-                LiveCoreRegulationText.Text = $"{DashboardRegulationLabel(selfReg.Reaction)} -> {DashboardRegulationLabel(selfReg.Regulation)} | контроль {selfReg.Control:F2}";
+                LiveCoreBodyText.Text = $"{DashboardSomaticLabel(somatic.State).ToUpper()} | РЅР°РїСЂСѓРіР° {somatic.Strain:F2}";
+                LiveCoreRegulationText.Text = $"{DashboardRegulationLabel(selfReg.Reaction)} -> {DashboardRegulationLabel(selfReg.Regulation)} | РєРѕРЅС‚СЂРѕР»СЊ {selfReg.Control:F2}";
 
                 LiveCorePulseText.Text = heart.CurrentBpm > 0
-                    ? $"{heart.CurrentBpm:0} bpm | зміна {heart.BpmDelta:+0;-0;0}"
+                    ? $"{heart.CurrentBpm:0} bpm | Р·РјС–РЅР° {heart.BpmDelta:+0;-0;0}"
                     : "-- bpm";
                 LiveCoreStrainBar.Value = Math.Clamp(somatic.Strain * 100.0, 0, 100);
 
@@ -400,8 +401,8 @@ namespace KokonoeAssistant
                     catch { }
                 }
 
-                LiveCoreMemoryText.Text = $"синхронізація {state.PendingVaultExchangeCount}/5 | пам'ять {_liveCoreMemoryItems}";
-                LiveCoreVaultText.Text = $"огляд {_liveCoreReviewActions} | задачі {_liveCoreOpenTasks}";
+                LiveCoreMemoryText.Text = $"СЃРёРЅС…СЂРѕРЅС–Р·Р°С†С–СЏ {state.PendingVaultExchangeCount}/5 | РїР°Рј'СЏС‚СЊ {_liveCoreMemoryItems}";
+                LiveCoreVaultText.Text = $"РѕРіР»СЏРґ {_liveCoreReviewActions} | Р·Р°РґР°С‡С– {_liveCoreOpenTasks}";
                 if (state.LastAutoVaultSyncAt > DateTime.MinValue)
                     LiveCoreVaultText.Text += $" | sync {state.LastAutoVaultSyncAt:dd.MM HH:mm}";
                 if (_lastObsidianPreflightAt > DateTime.MinValue)
@@ -409,8 +410,8 @@ namespace KokonoeAssistant
                 if (!string.IsNullOrWhiteSpace(telemetry.ScenarioHealth))
                     LiveCoreVaultText.Text += $" | {telemetry.ScenarioHealth}";
                 LiveCoreCompactText.Text =
-                    $"Kokonoe · {DashboardEmotionLabel(emotion.Current).ToLowerInvariant()} · {DashboardSomaticLabel(somatic.State).ToLowerInvariant()} {somatic.Strain:F2} · " +
-                    $"{(heart.CurrentBpm > 0 ? $"{heart.CurrentBpm:0} bpm" : "-- bpm")} · vault {state.PendingVaultExchangeCount}/5 · " +
+                    $"Kokonoe В· {DashboardEmotionLabel(emotion.Current).ToLowerInvariant()} В· {DashboardSomaticLabel(somatic.State).ToLowerInvariant()} {somatic.Strain:F2} В· " +
+                    $"{(heart.CurrentBpm > 0 ? $"{heart.CurrentBpm:0} bpm" : "-- bpm")} В· vault {state.PendingVaultExchangeCount}/5 В· " +
                     $"vision {BuildVisionStatusLabel(state, DateTime.Now).ToLowerInvariant()}";
                 if (RightPanel.Visibility == Visibility.Visible)
                     RefreshRightOpsPanel();
@@ -419,14 +420,14 @@ namespace KokonoeAssistant
             {
                 try
                 {
-                    LiveCoreEmotionText.Text = "емоція: офлайн";
-                    LiveCoreBodyText.Text = "соматика: офлайн";
+                    LiveCoreEmotionText.Text = "РµРјРѕС†С–СЏ: РѕС„Р»Р°Р№РЅ";
+                    LiveCoreBodyText.Text = "СЃРѕРјР°С‚РёРєР°: РѕС„Р»Р°Р№РЅ";
                     LiveCorePulseText.Text = "-- bpm";
-                    LiveCoreCompactText.Text = "Kokonoe · offline · -- bpm · vault -- · vision --";
-                    LiveCoreAutonomyText.Text = "автономність недоступна";
+                    LiveCoreCompactText.Text = "Kokonoe В· offline В· -- bpm В· vault -- В· vision --";
+                    LiveCoreAutonomyText.Text = "Р°РІС‚РѕРЅРѕРјРЅС–СЃС‚СЊ РЅРµРґРѕСЃС‚СѓРїРЅР°";
                     LiveCorePresenceText.Text = "";
                     LiveCoreRhythmText.Text = "";
-                    LiveCoreMemoryText.Text = "пам'ять недоступна";
+                    LiveCoreMemoryText.Text = "РїР°Рј'СЏС‚СЊ РЅРµРґРѕСЃС‚СѓРїРЅР°";
                     LiveCoreVaultText.Text = ex.Message;
                 }
                 catch { }
@@ -454,13 +455,13 @@ type: live-core-log
 tags: [kokonoe, live-core, diagnostics]
 ---
 
-# Живе ядро
+# Р–РёРІРµ СЏРґСЂРѕ
 
 """;
                 }
 
                 _obsidian.WriteNote(path, existing.TrimEnd() + "\n\n" + report);
-                LiveCoreVaultText.Text = $"знімок збережено | {DateTime.Now:HH:mm}";
+                LiveCoreVaultText.Text = $"Р·РЅС–РјРѕРє Р·Р±РµСЂРµР¶РµРЅРѕ | {DateTime.Now:HH:mm}";
             }
             catch (Exception ex)
             {
@@ -481,68 +482,68 @@ tags: [kokonoe, live-core, diagnostics]
 
             sb.AppendLine($"## {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
             sb.AppendLine();
-            sb.AppendLine("| Шар | Значення |");
+            sb.AppendLine("| РЁР°СЂ | Р—РЅР°С‡РµРЅРЅСЏ |");
             sb.AppendLine("|---|---|");
-            sb.AppendLine($"| Емоція | {emotion.Current} / інтенсивність {emotion.Data.Intensity:F2} / зв'язок {emotion.Bond} |");
-            sb.AppendLine($"| Прив'язаність | {telemetry.Attachment.Replace("|", "/")} |");
+            sb.AppendLine($"| Р•РјРѕС†С–СЏ | {emotion.Current} / С–РЅС‚РµРЅСЃРёРІРЅС–СЃС‚СЊ {emotion.Data.Intensity:F2} / Р·РІ'СЏР·РѕРє {emotion.Bond} |");
+            sb.AppendLine($"| РџСЂРёРІ'СЏР·Р°РЅС–СЃС‚СЊ | {telemetry.Attachment.Replace("|", "/")} |");
             if (emotion.Secondary.HasValue)
-                sb.AppendLine($"| Вторинна емоція | {emotion.Secondary.Value} / {emotion.SecondaryIntensity:F2} |");
-            sb.AppendLine($"| Настрій | {state.CurrentMood} / оцінка {state.MoodScore:F2} / база {state.BaselineMood:F2} |");
-            sb.AppendLine($"| Тіло | {somatic.State} / {somatic.Label} |");
-            sb.AppendLine($"| Пульс | {heart.CurrentBpm:F0} bpm / база {heart.BaselineBpm:F0} / зміна {heart.BpmDelta:+0;-0;0} |");
-            sb.AppendLine($"| Соматичне навантаження | strain {somatic.Strain:F2} / calm {somatic.Calm:F2} / volatility {somatic.Volatility:F2} |");
-            sb.AppendLine($"| Саморегуляція | {LiveCoreCodeLabel(selfReg.Reaction)} -> {LiveCoreCodeLabel(selfReg.Regulation)} / контроль {selfReg.Control:F2} / імпульс {selfReg.Drive:F2} |");
-            sb.AppendLine($"| Автономність | {telemetry.Autonomy.Replace("|", "/")} |");
+                sb.AppendLine($"| Р’С‚РѕСЂРёРЅРЅР° РµРјРѕС†С–СЏ | {emotion.Secondary.Value} / {emotion.SecondaryIntensity:F2} |");
+            sb.AppendLine($"| РќР°СЃС‚СЂС–Р№ | {state.CurrentMood} / РѕС†С–РЅРєР° {state.MoodScore:F2} / Р±Р°Р·Р° {state.BaselineMood:F2} |");
+            sb.AppendLine($"| РўС–Р»Рѕ | {somatic.State} / {somatic.Label} |");
+            sb.AppendLine($"| РџСѓР»СЊСЃ | {heart.CurrentBpm:F0} bpm / Р±Р°Р·Р° {heart.BaselineBpm:F0} / Р·РјС–РЅР° {heart.BpmDelta:+0;-0;0} |");
+            sb.AppendLine($"| РЎРѕРјР°С‚РёС‡РЅРµ РЅР°РІР°РЅС‚Р°Р¶РµРЅРЅСЏ | strain {somatic.Strain:F2} / calm {somatic.Calm:F2} / volatility {somatic.Volatility:F2} |");
+            sb.AppendLine($"| РЎР°РјРѕСЂРµРіСѓР»СЏС†С–СЏ | {LiveCoreCodeLabel(selfReg.Reaction)} -> {LiveCoreCodeLabel(selfReg.Regulation)} / РєРѕРЅС‚СЂРѕР»СЊ {selfReg.Control:F2} / С–РјРїСѓР»СЊСЃ {selfReg.Drive:F2} |");
+            sb.AppendLine($"| РђРІС‚РѕРЅРѕРјРЅС–СЃС‚СЊ | {telemetry.Autonomy.Replace("|", "/")} |");
             sb.AppendLine($"| Autonomy debug | {telemetry.AutonomyDebug.Replace("|", "/")} |");
             sb.AppendLine($"| Presence | {telemetry.Presence.Replace("|", "/")} |");
             sb.AppendLine($"| Timeline | {telemetry.Timeline.Replace("|", "/")} |");
             sb.AppendLine($"| State freshness | {telemetry.StateFreshness.Replace("|", "/")} |");
-            sb.AppendLine($"| Внутрішній день | {telemetry.InternalDay.Replace("|", "/")} |");
-            sb.AppendLine($"| Ритм | {telemetry.Rhythm.Replace("|", "/")} |");
+            sb.AppendLine($"| Р’РЅСѓС‚СЂС–С€РЅС–Р№ РґРµРЅСЊ | {telemetry.InternalDay.Replace("|", "/")} |");
+            sb.AppendLine($"| Р РёС‚Рј | {telemetry.Rhythm.Replace("|", "/")} |");
             sb.AppendLine($"| Self-review | {telemetry.SelfReview.Replace("|", "/")} |");
             sb.AppendLine($"| Post-reply guard | {telemetry.PostReplyGuard.Replace("|", "/")} |");
             sb.AppendLine($"| LLM | {telemetry.LlmStatus.Replace("|", "/")} / {telemetry.LlmProvider} / {telemetry.LlmModel} |");
             if (!string.IsNullOrWhiteSpace(telemetry.LlmLastError))
                 sb.AppendLine($"| LLM error | {telemetry.LlmLastError.Replace("|", "/")} |");
             sb.AppendLine($"| Core checks | {telemetry.ScenarioHealth.Replace("|", "/")} |");
-            sb.AppendLine($"| Синхронізація пам'яті | очікує {state.PendingVaultExchangeCount}/5 / остання {(state.LastAutoVaultSyncAt > DateTime.MinValue ? state.LastAutoVaultSyncAt.ToString("yyyy-MM-dd HH:mm") : "ніколи")} |");
-            sb.AppendLine($"| Vault | пам'ять {_liveCoreMemoryItems} / огляд {_liveCoreReviewActions} / задачі {_liveCoreOpenTasks} |");
+            sb.AppendLine($"| РЎРёРЅС…СЂРѕРЅС–Р·Р°С†С–СЏ РїР°Рј'СЏС‚С– | РѕС‡С–РєСѓС” {state.PendingVaultExchangeCount}/5 / РѕСЃС‚Р°РЅРЅСЏ {(state.LastAutoVaultSyncAt > DateTime.MinValue ? state.LastAutoVaultSyncAt.ToString("yyyy-MM-dd HH:mm") : "РЅС–РєРѕР»Рё")} |");
+            sb.AppendLine($"| Vault | РїР°Рј'СЏС‚СЊ {_liveCoreMemoryItems} / РѕРіР»СЏРґ {_liveCoreReviewActions} / Р·Р°РґР°С‡С– {_liveCoreOpenTasks} |");
             if (!string.IsNullOrWhiteSpace(selfReg.PrivateThought))
-                sb.AppendLine($"| Внутрішня думка | {selfReg.PrivateThought.Replace("|", "/")} |");
+                sb.AppendLine($"| Р’РЅСѓС‚СЂС–С€РЅСЏ РґСѓРјРєР° | {selfReg.PrivateThought.Replace("|", "/")} |");
             if (!string.IsNullOrWhiteSpace(selfReg.BehaviorDirective))
-                sb.AppendLine($"| Поведінка | {selfReg.BehaviorDirective.Replace("|", "/")} |");
+                sb.AppendLine($"| РџРѕРІРµРґС–РЅРєР° | {selfReg.BehaviorDirective.Replace("|", "/")} |");
 
             return sb.ToString().TrimEnd();
         }
 
         private static string TrimLiveCoreLine(string? text, int max)
         {
-            if (string.IsNullOrWhiteSpace(text)) return "—";
+            if (string.IsNullOrWhiteSpace(text)) return "вЂ”";
             text = text.Replace("\r", " ").Replace("\n", " ").Trim();
             return text.Length <= max ? text : text[..max].TrimEnd() + "...";
         }
 
         private static string LiveCoreCodeLabel(string code) => code switch
         {
-            "protective_override" => "захисне перевизначення",
-            "pulse_spike" => "стрибок пульсу",
-            "anger_contained" => "стримане роздратування",
-            "combat_focus" => "бойовий фокус",
-            "pressure_rise" => "зростання тиску",
-            "low_power" => "низький заряд",
-            "recovered_calm" => "повернення спокою",
-            "steady_calm" => "стабільний спокій",
-            "stable_loop" => "стабільний цикл",
-            "clean_focus" => "чистий фокус",
-            "unknown_body" => "невідомий тілесний сигнал",
-            "protect" => "захист",
-            "clamp" => "затиск",
-            "contain" => "стримування",
-            "focus" => "фокус",
-            "compress" => "стиснення",
-            "conserve" => "збереження ресурсу",
-            "release" => "відпускання",
-            "baseline" => "базовий режим",
+            "protective_override" => "Р·Р°С…РёСЃРЅРµ РїРµСЂРµРІРёР·РЅР°С‡РµРЅРЅСЏ",
+            "pulse_spike" => "СЃС‚СЂРёР±РѕРє РїСѓР»СЊСЃСѓ",
+            "anger_contained" => "СЃС‚СЂРёРјР°РЅРµ СЂРѕР·РґСЂР°С‚СѓРІР°РЅРЅСЏ",
+            "combat_focus" => "Р±РѕР№РѕРІРёР№ С„РѕРєСѓСЃ",
+            "pressure_rise" => "Р·СЂРѕСЃС‚Р°РЅРЅСЏ С‚РёСЃРєСѓ",
+            "low_power" => "РЅРёР·СЊРєРёР№ Р·Р°СЂСЏРґ",
+            "recovered_calm" => "РїРѕРІРµСЂРЅРµРЅРЅСЏ СЃРїРѕРєРѕСЋ",
+            "steady_calm" => "СЃС‚Р°Р±С–Р»СЊРЅРёР№ СЃРїРѕРєС–Р№",
+            "stable_loop" => "СЃС‚Р°Р±С–Р»СЊРЅРёР№ С†РёРєР»",
+            "clean_focus" => "С‡РёСЃС‚РёР№ С„РѕРєСѓСЃ",
+            "unknown_body" => "РЅРµРІС–РґРѕРјРёР№ С‚С–Р»РµСЃРЅРёР№ СЃРёРіРЅР°Р»",
+            "protect" => "Р·Р°С…РёСЃС‚",
+            "clamp" => "Р·Р°С‚РёСЃРє",
+            "contain" => "СЃС‚СЂРёРјСѓРІР°РЅРЅСЏ",
+            "focus" => "С„РѕРєСѓСЃ",
+            "compress" => "СЃС‚РёСЃРЅРµРЅРЅСЏ",
+            "conserve" => "Р·Р±РµСЂРµР¶РµРЅРЅСЏ СЂРµСЃСѓСЂСЃСѓ",
+            "release" => "РІС–РґРїСѓСЃРєР°РЅРЅСЏ",
+            "baseline" => "Р±Р°Р·РѕРІРёР№ СЂРµР¶РёРј",
             _ => code
         };
 
@@ -573,7 +574,6 @@ tags: [kokonoe, live-core, diagnostics]
                     PushHeartSample(bpm);
                     DrawHeartBpmGraph();
                     UpdateHeartStats(bpm);
-                    UpdateLiveCorePanel();
                     if (PulseTab.Visibility == Visibility.Visible)
                         UpdatePulseTabNumbers();
                 });
@@ -720,18 +720,18 @@ tags: [kokonoe, live-core, diagnostics]
 
             // Interpretive state text
             string state;
-            if (currentBpm < 55)        state = "глибокий спокій або сон";
-            else if (currentBpm < 70)   state = "спокій";
-            else if (currentBpm < 85)   state = "активна увага";
-            else if (currentBpm < 100)  state = "збудження / інтерес";
-            else if (currentBpm < 120)  state = "стрес або сильна емоція";
-            else                        state = "тахікардія — щось не так";
+            if (currentBpm < 55)        state = "РіР»РёР±РѕРєРёР№ СЃРїРѕРєС–Р№ Р°Р±Рѕ СЃРѕРЅ";
+            else if (currentBpm < 70)   state = "СЃРїРѕРєС–Р№";
+            else if (currentBpm < 85)   state = "Р°РєС‚РёРІРЅР° СѓРІР°РіР°";
+            else if (currentBpm < 100)  state = "Р·Р±СѓРґР¶РµРЅРЅСЏ / С–РЅС‚РµСЂРµСЃ";
+            else if (currentBpm < 120)  state = "СЃС‚СЂРµСЃ Р°Р±Рѕ СЃРёР»СЊРЅР° РµРјРѕС†С–СЏ";
+            else                        state = "С‚Р°С…С–РєР°СЂРґС–СЏ вЂ” С‰РѕСЃСЊ РЅРµ С‚Р°Рє";
             DashHeartStateText.Text = state;
                 try
                 {
                     var somatic = ServiceContainer.BrainEngine.GetSomaticSnapshot();
                     var selfReg = ServiceContainer.BrainEngine.GetSelfRegulationFrame(somatic);
-                    DashHeartStateText.Text = $"{somatic.State.ToUpper()} // {selfReg.Reaction} · {selfReg.Regulation} · strain {somatic.Strain:P0}";
+                    DashHeartStateText.Text = $"{somatic.State.ToUpper()} // {selfReg.Reaction} В· {selfReg.Regulation} В· strain {somatic.Strain:P0}";
                 }
                 catch { }
         }
@@ -741,9 +741,9 @@ tags: [kokonoe, live-core, diagnostics]
             try
             {
                 StartMatrixRain();
-                SetLoadingProgress(0, "ініціалізація сервісів...");
+                SetLoadingProgress(0, "С–РЅС–С†С–Р°Р»С–Р·Р°С†С–СЏ СЃРµСЂРІС–СЃС–РІ...");
 
-                // 1 — init services (background thread)
+                // 1 вЂ” init services (background thread)
                 await Task.Run(() =>
                 {
                     var settings = AppSettings.Load();
@@ -756,36 +756,37 @@ tags: [kokonoe, live-core, diagnostics]
                 _obsidian = ServiceContainer.ObsidianMcp;
                 HookLlmProgress();
 
-                SetLoadingProgress(20, "завантаження чату...");
+                SetLoadingProgress(20, "Р·Р°РІР°РЅС‚Р°Р¶РµРЅРЅСЏ С‡Р°С‚Сѓ...");
                 LoadChatHistory();
 
                 SetLoadingProgress(35, "vault...");
                 LoadVaultSidebar();
 
-                SetLoadingProgress(50, "календар...");
+                SetLoadingProgress(50, "РєР°Р»РµРЅРґР°СЂ...");
                 LoadCalendarTab();
                 LoadToolsTab();
 
                 SetLoadingProgress(65, "telegram...");
-                // InitTelegram(); // Removed web/miniapp dependency
-                _ = InitTelegramUserAsync();
+                InitTelegram();
+                if (AppSettings.Load().TgUserEnabled)
+                    _ = InitTelegramUserAsync();
 
-                SetLoadingProgress(75, "мозок...");
+                SetLoadingProgress(75, "РјРѕР·РѕРє...");
                 InitBrain();
                 StartLiveCoreMonitor();
 
                 TgMessagesList.ItemsSource = _tgMessages;
 
-                SetLoadingProgress(85, "готово...");
-                var greeting = await GenerateStartupGreetingWithFallbackAsync();
+                SetLoadingProgress(85, "РіРѕС‚РѕРІРѕ...");
+                var greeting = GenerateFastGreeting();
 
-                SetLoadingProgress(100, "готово");
+                SetLoadingProgress(100, "РіРѕС‚РѕРІРѕ");
                 await Task.Delay(150);
 
-                // 3 — ховаємо overlay з анімацією
+                // 3 вЂ” С…РѕРІР°С”РјРѕ overlay Р· Р°РЅС–РјР°С†С–С”СЋ
                 await FadeOutLoadingAsync();
 
-                // 4 — додаємо привітання як перше повідомлення чату
+                // 4 вЂ” РґРѕРґР°С”РјРѕ РїСЂРёРІС–С‚Р°РЅРЅСЏ СЏРє РїРµСЂС€Рµ РїРѕРІС–РґРѕРјР»РµРЅРЅСЏ С‡Р°С‚Сѓ
                 if (!string.IsNullOrEmpty(greeting))
                 {
                     AddMessageBubble(new ChatMessageVm { Role = "assistant", Content = greeting });
@@ -801,14 +802,14 @@ tags: [kokonoe, live-core, diagnostics]
             }
         }
 
-        // ══════════════════════════════════════════════════════════
+        // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
         // MATRIX RAIN
-        // ══════════════════════════════════════════════════════════
+        // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
 
         private System.Windows.Threading.DispatcherTimer? _matrixTimer;
         private readonly Random _matrixRng = new();
         private readonly List<MatrixColumn> _matrixCols = new();
-        private const string MatrixChars = "アイウエオカキクケコサシスセソタチツテトナニヌネノ0123456789ABCDEF∑∆∇∫≈≠∞";
+        private const string MatrixChars = "г‚ўг‚¤г‚¦г‚Ёг‚Єг‚«г‚­г‚Їг‚±г‚іг‚µг‚·г‚№г‚»г‚Ѕг‚їгѓЃгѓ„гѓ†гѓ€гѓЉгѓ‹гѓЊгѓЌгѓЋ0123456789ABCDEFв€‘в€†в€‡в€«в‰€в‰ в€ћ";
 
         private class MatrixColumn
         {
@@ -939,7 +940,7 @@ tags: [kokonoe, live-core, diagnostics]
                 var now = DateTime.Now;
                 var service = new Services.KokoStartupGreetingService();
 
-                // Беремо останні повідомлення З timestamp
+                // Р‘РµСЂРµРјРѕ РѕСЃС‚Р°РЅРЅС– РїРѕРІС–РґРѕРјР»РµРЅРЅСЏ Р— timestamp
                 var recent = new List<Services.ChatRepository.ChatMessage>();
                 try { recent = ServiceContainer.ChatRepository.GetMessages(12).OrderBy(x => x.Timestamp).TakeLast(8).ToList(); }
                 catch { }
@@ -957,7 +958,7 @@ tags: [kokonoe, live-core, diagnostics]
                         $"lastUserTone={st.LastUserEmotionalTone}; lastPresence={st.LastPresenceSummary}; situation={st.LastPresenceSituation}; tone={st.LastPresenceTone}";
                     presenceContext = string.Join(" | ", st.PresenceTrace.TakeLast(4));
                     if (st.Observations.Any())
-                        brainObs = $"Твоє останнє спостереження: {st.Observations.TakeLast(2).Last()}\n";
+                        brainObs = $"РўРІРѕС” РѕСЃС‚Р°РЅРЅС” СЃРїРѕСЃС‚РµСЂРµР¶РµРЅРЅСЏ: {st.Observations.TakeLast(2).Last()}\n";
                 }
                 catch { }
 
@@ -977,8 +978,8 @@ tags: [kokonoe, live-core, diagnostics]
 
                 var prompt = $@"{frame.PromptBlock}
 {brainObs}
-Напиши стартову репліку повністю через модель. Вона має відчуватись як жива реакція Kokonoe на повернення користувача: врахуй час, паузу, mood, presence і останню тему.
-Не пояснюй правила. Не пиши службовий статус. Тільки текст.";
+РќР°РїРёС€Рё СЃС‚Р°СЂС‚РѕРІСѓ СЂРµРїР»С–РєСѓ РїРѕРІРЅС–СЃС‚СЋ С‡РµСЂРµР· РјРѕРґРµР»СЊ. Р’РѕРЅР° РјР°С” РІС–РґС‡СѓРІР°С‚РёСЃСЊ СЏРє Р¶РёРІР° СЂРµР°РєС†С–СЏ Kokonoe РЅР° РїРѕРІРµСЂРЅРµРЅРЅСЏ РєРѕСЂРёСЃС‚СѓРІР°С‡Р°: РІСЂР°С…СѓР№ С‡Р°СЃ, РїР°СѓР·Сѓ, mood, presence С– РѕСЃС‚Р°РЅРЅСЋ С‚РµРјСѓ.
+РќРµ РїРѕСЏСЃРЅСЋР№ РїСЂР°РІРёР»Р°. РќРµ РїРёС€Рё СЃР»СѓР¶Р±РѕРІРёР№ СЃС‚Р°С‚СѓСЃ. РўС–Р»СЊРєРё С‚РµРєСЃС‚.";
 
                 var task = _llm.SendSystemQueryAsync(prompt, ct: CancellationToken.None);
                 var completed = await Task.WhenAny(task, Task.Delay(9000));
@@ -1000,13 +1001,13 @@ tags: [kokonoe, live-core, diagnostics]
             }
             catch
             {
-                return "Я на місці. Давай, показуй що сьогодні добиваємо.";
+                return "РЇ РЅР° РјС–СЃС†С–. Р”Р°РІР°Р№, РїРѕРєР°Р·СѓР№ С‰Рѕ СЃСЊРѕРіРѕРґРЅС– РґРѕР±РёРІР°С”РјРѕ.";
             }
         }
 
-        // ══════════════════════════════════════════════════════════
+        // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
         // TAB NAVIGATION
-        // ══════════════════════════════════════════════════════════
+        // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
 
         private void Tab_Click(object sender, RoutedEventArgs e)
         {
@@ -1123,9 +1124,9 @@ tags: [kokonoe, live-core, diagnostics]
                 : Visibility.Visible;
         }
 
-        // ══════════════════════════════════════════════════════════
+        // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
         // MEMORY TAB
-        // ══════════════════════════════════════════════════════════
+        // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
 
         private void MemTabRefresh_Click(object sender, RoutedEventArgs e) => MemTabRefreshData();
 
@@ -1390,7 +1391,7 @@ tags: [kokonoe, live-core, diagnostics]
         }
 
         // PULSE TAB
-        // ══════════════════════════════════════════════════════════
+        // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
 
         private void PulseTab_SizeChanged(object sender, SizeChangedEventArgs e)
         {
@@ -1416,16 +1417,16 @@ tags: [kokonoe, live-core, diagnostics]
                 var heart = ServiceContainer.Heart;
                 if (heart == null) return;
                 var cur = heart.CurrentBpm;
-                PulseTabBpmBig.Text   = cur > 0 ? $"{cur:0}" : "—";
-                PulseTabCurText.Text  = cur > 0 ? $"{cur:0.0}" : "—";
+                PulseTabBpmBig.Text   = cur > 0 ? $"{cur:0}" : "вЂ”";
+                PulseTabCurText.Text  = cur > 0 ? $"{cur:0.0}" : "вЂ”";
                 PulseTabBaseText.Text = $"{heart.BaselineBpm:0.0}";
                 PulseSideBpmText.Text = cur > 0 ? $"{cur:0}" : "--";
                 try
                 {
                     var somatic = ServiceContainer.BrainEngine.GetSomaticSnapshot();
                     var selfReg = ServiceContainer.BrainEngine.GetSelfRegulationFrame(somatic);
-                    PulseTabStateLabel.Text = $"{somatic.State.ToUpper()} · {selfReg.Regulation} · strain {somatic.Strain:P0}";
-                    PulseSideStateText.Text = $"{somatic.State.ToLowerInvariant()} · baseline {heart.BaselineBpm:0} · strain {somatic.Strain:P0}";
+                    PulseTabStateLabel.Text = $"{somatic.State.ToUpper()} В· {selfReg.Regulation} В· strain {somatic.Strain:P0}";
+                    PulseSideStateText.Text = $"{somatic.State.ToLowerInvariant()} В· baseline {heart.BaselineBpm:0} В· strain {somatic.Strain:P0}";
                 }
                 catch { }
 
@@ -1476,14 +1477,14 @@ tags: [kokonoe, live-core, diagnostics]
                 var trust = Math.Clamp(emotion.ConnectionScore * 100, 0, 100);
 
                 PulseMoodMainText.Text = DashboardEmotionLabel(emotion.Current).ToUpperInvariant();
-                PulseMoodDetailText.Text = $"annoyed {annoyed:0}% · curiosity {curiosity:0}% · trust {trust:0}% · sleep depr. {Math.Clamp((1.0 - state.MoodScore) * 100, 0, 100):0}%";
+                PulseMoodDetailText.Text = $"annoyed {annoyed:0}% В· curiosity {curiosity:0}% В· trust {trust:0}% В· sleep depr. {Math.Clamp((1.0 - state.MoodScore) * 100, 0, 100):0}%";
                 PulseMoodBar.Value = Math.Clamp(state.MoodScore * 100, 0, 100);
 
                 var status = currentBpm <= 0
                     ? "telemetry standby"
                     : currentBpm > 95
-                        ? "core online · memory synced · telemetry elevated"
-                        : "core online · memory synced · telemetry recording";
+                        ? "core online В· memory synced В· telemetry elevated"
+                        : "core online В· memory synced В· telemetry recording";
                 PulseSystemStatusText.Text = status;
 
                 var now = DateTime.Now;
@@ -1557,7 +1558,7 @@ tags: [kokonoe, live-core, diagnostics]
             canvas.Children.Add(dot);
         }
 
-        // ── ECG REAL-TIME ANIMATION ─────────────────────────────────
+        // в”Ђв”Ђ ECG REAL-TIME ANIMATION в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
         private const double EcgFps       = 40.0;  // frames per second
         private const double EcgScrollPps = 120.0; // pixels per second scroll speed
 
@@ -1664,7 +1665,7 @@ tags: [kokonoe, live-core, diagnostics]
                 }
             };
 
-            // Map [-0.20, 1.0] → [h*0.90, h*0.05]
+            // Map [-0.20, 1.0] в†’ [h*0.90, h*0.05]
             const double ampLo = -0.25, ampHi = 1.05;
             double ampRng = ampHi - ampLo;
             double mid = h * 0.5;
@@ -1703,9 +1704,9 @@ tags: [kokonoe, live-core, diagnostics]
             DrawEcgBuffer(canvas, _ecgLastBpm);
         }
 
-        // ══════════════════════════════════════════════════════════
+        // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
         // SANDBOX TAB
-        // ══════════════════════════════════════════════════════════
+        // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
 
         private async void SandboxRun_Click(object sender, RoutedEventArgs e)
         {
@@ -1899,9 +1900,9 @@ tags: [kokonoe, live-core, diagnostics]
                 $"[{a.UpdatedAt:HH:mm:ss}] {a.Phase}/{a.Tool} :: {TrimLiveCoreLine(a.Thought, _agentDetailLevel == 2 ? 160 : 90)}"));
         }
 
-        // ══════════════════════════════════════════════════════════
+        // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
         // MCP ENHANCED CATALOG
-        // ══════════════════════════════════════════════════════════
+        // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
 
         private void McpSyncNotes_Click(object sender, RoutedEventArgs e)
         {
@@ -1922,8 +1923,8 @@ tags: [kokonoe, live-core, diagnostics]
                 var report = _obsidian.RunVaultDoctor(repair: true);
                 var linkProblems = report.FolderWikiLinkCount + report.SuppressedActorLinkCount;
                 _rightOpsVaultLine =
-                    $"vault doctor {report.HealthScore}/100 · empty {report.EmptyMarkdownFiles.Count} · links {linkProblems} · " +
-                    $"fm {report.FrontmatterIssues.Count} · moj {report.MojibakeSuspects.Count} · miss {report.MissingWikiTargets.Count}";
+                    $"vault doctor {report.HealthScore}/100 В· empty {report.EmptyMarkdownFiles.Count} В· links {linkProblems} В· " +
+                    $"fm {report.FrontmatterIssues.Count} В· moj {report.MojibakeSuspects.Count} В· miss {report.MissingWikiTargets.Count}";
                 _rightOpsVaultScanAt = DateTime.Now;
                 RightVaultDoctorText.Text = _rightOpsVaultLine;
                 McpOutput.Text =
@@ -1988,9 +1989,9 @@ tags: [kokonoe, live-core, diagnostics]
             catch (Exception ex) { McpOutput.Text = $"Error: {ex.Message}"; }
         }
 
-        // ══════════════════════════════════════════════════════════
-        // CHAT — SEND MESSAGE
-        // ══════════════════════════════════════════════════════════
+        // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
+        // CHAT вЂ” SEND MESSAGE
+        // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
 
         private async void Send_Click(object sender, RoutedEventArgs e) => await SendMessage();
 
@@ -2015,7 +2016,7 @@ tags: [kokonoe, live-core, diagnostics]
                 return;
             }
 
-            // Ctrl+V з зображенням у буфері — перехоплюємо щоб не вставляти текст
+            // Ctrl+V Р· Р·РѕР±СЂР°Р¶РµРЅРЅСЏРј Сѓ Р±СѓС„РµСЂС– вЂ” РїРµСЂРµС…РѕРїР»СЋС”РјРѕ С‰РѕР± РЅРµ РІСЃС‚Р°РІР»СЏС‚Рё С‚РµРєСЃС‚
             if (e.Key == Key.V && Keyboard.Modifiers == ModifierKeys.Control)
             {
                 if (WClipboard.ContainsImage() || WClipboard.ContainsData(WDataFmts.FileDrop))
@@ -2032,26 +2033,26 @@ tags: [kokonoe, live-core, diagnostics]
             if (string.IsNullOrWhiteSpace(text) && _imgBytes == null && string.IsNullOrWhiteSpace(_pendingFileContext)) return;
             if (_isGenerating) return;
 
-            // Slash команди для діагностики
+            // Slash РєРѕРјР°РЅРґРё РґР»СЏ РґС–Р°РіРЅРѕСЃС‚РёРєРё
             if (text.Equals("/tgtest", StringComparison.OrdinalIgnoreCase))
             {
                 InputBox.Clear();
-                AddMessageBubble(new ChatMessageVm { Role = "system", Content = "Тестуємо TG..." });
+                AddMessageBubble(new ChatMessageVm { Role = "system", Content = "РўРµСЃС‚СѓС”РјРѕ TG..." });
                 try
                 {
-                    if (_tgBot == null) { AddMessageBubble(new ChatMessageVm { Role = "system", Content = "⚠️ _tgBot = null" }); return; }
+                    if (_tgBot == null) { AddMessageBubble(new ChatMessageVm { Role = "system", Content = "вљ пёЏ _tgBot = null" }); return; }
                     var s2 = AppSettings.Load();
-                    await _tgBot.SendMessage(s2.TelegramChatId, "🔧 TG тест від Kokonoe");
-                    AddMessageBubble(new ChatMessageVm { Role = "system", Content = "✅ TG працює" });
+                    await _tgBot.SendMessage(s2.TelegramChatId, "рџ”§ TG С‚РµСЃС‚ РІС–Рґ Kokonoe");
+                    AddMessageBubble(new ChatMessageVm { Role = "system", Content = "вњ… TG РїСЂР°С†СЋС”" });
                 }
-                catch (Exception ex) { AddMessageBubble(new ChatMessageVm { Role = "system", Content = $"❌ TG error: {ex.Message}" }); }
+                catch (Exception ex) { AddMessageBubble(new ChatMessageVm { Role = "system", Content = $"вќЊ TG error: {ex.Message}" }); }
                 return;
             }
 
             if (text.Equals("/brain", StringComparison.OrdinalIgnoreCase))
             {
                 InputBox.Clear();
-                AddMessageBubble(new ChatMessageVm { Role = "system", Content = "Запускаємо brain trigger..." });
+                AddMessageBubble(new ChatMessageVm { Role = "system", Content = "Р—Р°РїСѓСЃРєР°С”РјРѕ brain trigger..." });
                 ServiceContainer.BrainEngine?.TriggerSpontaneous();
                 return;
             }
@@ -2062,7 +2063,7 @@ tags: [kokonoe, live-core, diagnostics]
 
             // Add user bubble
             var baseText = string.IsNullOrWhiteSpace(text) && _imgBytes != null
-                ? "Що на фото? Опиши зображення коротко і по суті."
+                ? "Р©Рѕ РЅР° С„РѕС‚Рѕ? РћРїРёС€Рё Р·РѕР±СЂР°Р¶РµРЅРЅСЏ РєРѕСЂРѕС‚РєРѕ С– РїРѕ СЃСѓС‚С–."
                 : text;
             var effectiveText = string.IsNullOrWhiteSpace(_pendingFileContext)
                 ? baseText
@@ -2089,13 +2090,13 @@ tags: [kokonoe, live-core, diagnostics]
 
 
             // Thinking indicator
-            AddThinkingBubble("прийняла повідомлення");
+            AddThinkingBubble("РїСЂРёР№РЅСЏР»Р° РїРѕРІС–РґРѕРјР»РµРЅРЅСЏ");
             ScrollToBottom();
 
             try
             {
                 // Ensure UI updates (thinking bubble) before blocking operations
-                await ShowKokoActivityAsync("оновлюю стан і наміри");
+                await ShowKokoActivityAsync("РѕРЅРѕРІР»СЋСЋ СЃС‚Р°РЅ С– РЅР°РјС–СЂРё");
 
                 // Brain state must observe the user message before context is built.
                 // It can touch memory/pattern stores, so keep it off the UI thread.
@@ -2106,7 +2107,7 @@ tags: [kokonoe, live-core, diagnostics]
 
                 if (LooksLikeManualScreenScan(sendText))
                 {
-                    await ShowKokoActivityAsync("роблю знімок екрана");
+                    await ShowKokoActivityAsync("СЂРѕР±Р»СЋ Р·РЅС–РјРѕРє РµРєСЂР°РЅР°");
                     await HandleManualScreenScanAsync(sendText, _llmCts?.Token ?? default);
                     return;
                 }
@@ -2143,6 +2144,29 @@ tags: [kokonoe, live-core, diagnostics]
                     return;
                 }
 
+                if (TryHandleDirectControlCommand(sendText, out var controlReply))
+                {
+                    RemoveThinkingBubble();
+                    var replyVm = new ChatMessageVm { Role = "assistant", Content = "" };
+                    var replyTb = AddMessageBubble(replyVm);
+                    if (replyTb != null)
+                        await TypeIntoAsync(replyTb, controlReply, _llmCts?.Token ?? default);
+                    else
+                        replyVm.Content = controlReply;
+                    try
+                    {
+                        ServiceContainer.ChatRepository.InsertMessage(new ChatRepository.ChatMessage
+                        {
+                            Content = controlReply,
+                            Role = "assistant",
+                            Author = "Kokonoe",
+                            Timestamp = DateTime.Now
+                        });
+                    }
+                    catch { }
+                    return;
+                }
+
                 // Refresh dynamic personality hint before each LLM call (background)
                 _ = Task.Run(() =>
                 {
@@ -2153,14 +2177,14 @@ tags: [kokonoe, live-core, diagnostics]
                 string reply;
                 TextBlock? finalReplyTb = null;
 
-                await ShowKokoActivityAsync("collecting context and memory");
+                await ShowKokoActivityAsync("збираю контекст і пам'ять");
                 var contextTask = Task.Run(() => BuildContext(sendText));
 
                 var agentUi = await RunAgentChatAsync(sendText, imgBytes, imgMime, contextTask, _llmCts?.Token ?? default);
                 reply = agentUi.Reply;
                 finalReplyTb = agentUi.FinalTextBlock;
 
-                await ShowKokoActivityAsync("перевіряю відповідь на тупості");
+                RemoveThinkingBubble();
                 var guardedReply = await GuardAndRepairReplyAsync(sendText, reply, await contextTask, _llmCts?.Token ?? default);
                 if (!string.Equals(guardedReply, reply, StringComparison.Ordinal))
                 {
@@ -2183,11 +2207,14 @@ tags: [kokonoe, live-core, diagnostics]
 
                 // Auto-log this exchange to Obsidian vault for archival memory
                 _ = Task.Run(() => ServiceContainer.ChatLogger.LogExchange("app", sendText, reply));
-                try { ServiceContainer.BrainEngine?.ObserveExchangeForVaultSync(sendText, reply); } catch { }
+                _ = Task.Run(() =>
+                {
+                    try { ServiceContainer.BrainEngine?.ObserveExchangeForVaultSync(sendText, reply); } catch { }
+                });
 
                 if (AppSettings.Load().TtsEnabled) SpeakAsync(reply);
 
-                // LLM-витяг фактів — тільки після відповіді, щоб не конкурувати за GPU
+                // LLM-РІРёС‚СЏРі С„Р°РєС‚С–РІ вЂ” С‚С–Р»СЊРєРё РїС–СЃР»СЏ РІС–РґРїРѕРІС–РґС–, С‰РѕР± РЅРµ РєРѕРЅРєСѓСЂСѓРІР°С‚Рё Р·Р° GPU
                 _ = Task.Run(async () =>
                 {
                     try
@@ -2206,6 +2233,7 @@ tags: [kokonoe, live-core, diagnostics]
             }
             finally
             {
+                RemoveThinkingBubble();
                 _isGenerating = false;
                 SendBtn.IsEnabled = true;
                 ScrollToBottom();
@@ -2217,6 +2245,56 @@ tags: [kokonoe, live-core, diagnostics]
         {
             public string Reply { get; set; } = "";
             public TextBlock? FinalTextBlock { get; set; }
+        }
+
+        private bool TryHandleDirectControlCommand(string userText, out string reply)
+        {
+            reply = "";
+            try
+            {
+                if (TryScheduleWakeOrReminder(userText, out reply))
+                    return true;
+
+                var brain = ServiceContainer.BrainEngine;
+                if (brain != null && brain.TryApplyUserControlCommand(userText, out reply))
+                    return true;
+
+                if (TryBuildProfileIdentityReply(userText, out reply))
+                    return true;
+            }
+            catch { }
+            return false;
+        }
+
+        private bool TryScheduleWakeOrReminder(string userText, out string reply)
+        {
+            reply = "";
+            if (string.IsNullOrWhiteSpace(userText)) return false;
+
+            var lower = userText.ToLowerInvariant();
+            var wantsWake = ContainsAny(lower, "розбуд", "будиль", "нагад", "remind", "wake");
+            if (!wantsWake) return false;
+
+            var match = System.Text.RegularExpressions.Regex.Match(lower, @"(?:о|в|на|at)\s*(\d{1,2})(?::(\d{2}))?");
+            if (!match.Success || !int.TryParse(match.Groups[1].Value, out var hour))
+                return false;
+
+            var minute = 0;
+            if (match.Groups[2].Success)
+                int.TryParse(match.Groups[2].Value, out minute);
+            hour = Math.Clamp(hour, 0, 23);
+            minute = Math.Clamp(minute, 0, 59);
+
+            var fireAt = DateTime.Today.AddHours(hour).AddMinutes(minute);
+            if (fireAt <= DateTime.Now.AddMinutes(1))
+                fireAt = fireAt.AddDays(1);
+
+            var prompt = ContainsAny(lower, "розбуд", "будиль", "wake")
+                ? "Розбуди користувача. Коротко, різко, українською. Без пояснення системи."
+                : "Нагадай користувачу: " + userText.Trim();
+            ServiceContainer.BrainEngine?.Scheduler.Schedule(prompt, fireAt, KokoSchedulerEngine.Priority.High, "user_reminder");
+            reply = $"Поставила на {fireAt:dd.MM HH:mm}. Так, справжній запис у scheduler, не декоративна обіцянка.";
+            return true;
         }
 
         private async Task<AgentChatUiResult> RunAgentChatAsync(
@@ -2233,10 +2311,18 @@ tags: [kokonoe, live-core, diagnostics]
             var streamBuffer = new StringBuilder();
             var streamLock = new object();
             var lastStreamUi = DateTime.MinValue;
+            var agentId = SelectChatAgentId(sendText);
 
             var context = await contextTask.ConfigureAwait(true);
+            await Dispatcher.InvokeAsync(() =>
+            {
+                RemoveThinkingBubble();
+                replyTb = AddMessageBubble(replyVm);
+            }, DispatcherPriority.Render);
+
             var result = await ServiceContainer.AgentRuntime.ExecuteChatAsync(new KokoAgentChatRequest
             {
+                AgentId = agentId,
                 UserText = sendText,
                 Context = context,
                 ImageBytes = imgBytes,
@@ -2247,12 +2333,6 @@ tags: [kokonoe, live-core, diagnostics]
                 {
                     Dispatcher.InvokeAsync(() =>
                     {
-                        if (replyTb == null)
-                        {
-                            RemoveThinkingBubble();
-                            replyTb = AddMessageBubble(replyVm);
-                        }
-
                         lock (streamLock)
                         {
                             streamBuffer.Append(chunk);
@@ -2286,16 +2366,28 @@ tags: [kokonoe, live-core, diagnostics]
             return new AgentChatUiResult { Reply = reply, FinalTextBlock = replyTb };
         }
 
+        private static string SelectChatAgentId(string? text)
+        {
+            var lower = (text ?? "").ToLowerInvariant();
+            if (ContainsAny(lower,
+                "код", "code", "script", "python", "c#", "csproj", "xaml", "build", "test",
+                "баг", "bug", "exception", "stacktrace", "помилка", "пофікси", "fix",
+                "реалізуй", "додай", "команда", "terminal", "powershell", "git"))
+                return "coder";
+
+            return "chat";
+        }
+
         private static bool LooksLikeManualScreenScan(string? text)
         {
             var lower = (text ?? "").ToLowerInvariant();
             if (string.IsNullOrWhiteSpace(lower)) return false;
 
             var wantsScan = ContainsAny(lower,
-                "проскануй", "просканируй", "скануй", "сканируй",
-                "подивись", "глянь", "провір", "перевір", "проаналізуй", "що на");
+                "РїСЂРѕСЃРєР°РЅСѓР№", "РїСЂРѕСЃРєР°РЅРёСЂСѓР№", "СЃРєР°РЅСѓР№", "СЃРєР°РЅРёСЂСѓР№",
+                "РїРѕРґРёРІРёСЃСЊ", "РіР»СЏРЅСЊ", "РїСЂРѕРІС–СЂ", "РїРµСЂРµРІС–СЂ", "РїСЂРѕР°РЅР°Р»С–Р·СѓР№", "С‰Рѕ РЅР°");
             var targetScreen = ContainsAny(lower,
-                "екран", "скрін", "скрин", "screen", "монітор", "робочий стіл");
+                "РµРєСЂР°РЅ", "СЃРєСЂС–РЅ", "СЃРєСЂРёРЅ", "screen", "РјРѕРЅС–С‚РѕСЂ", "СЂРѕР±РѕС‡РёР№ СЃС‚С–Р»");
 
             return wantsScan && targetScreen;
         }
@@ -2313,26 +2405,26 @@ tags: [kokonoe, live-core, diagnostics]
                 AddMessageBubble(new ChatMessageVm
                 {
                     Role = "assistant",
-                    Content = $"Не змогла зняти екран: {ex.Message}. Нарешті команда була нормальна, а Windows вирішив зобразити меблі."
+                    Content = $"РќРµ Р·РјРѕРіР»Р° Р·РЅСЏС‚Рё РµРєСЂР°РЅ: {ex.Message}. РќР°СЂРµС€С‚С– РєРѕРјР°РЅРґР° Р±СѓР»Р° РЅРѕСЂРјР°Р»СЊРЅР°, Р° Windows РІРёСЂС–С€РёРІ Р·РѕР±СЂР°Р·РёС‚Рё РјРµР±Р»С–."
                 });
                 return;
             }
 
             var prompt = $"""
-Ти Kokonoe. Користувач прямо попросив просканувати його поточний екран.
-Запит користувача: {userText}
+РўРё Kokonoe. РљРѕСЂРёСЃС‚СѓРІР°С‡ РїСЂСЏРјРѕ РїРѕРїСЂРѕСЃРёРІ РїСЂРѕСЃРєР°РЅСѓРІР°С‚Рё Р№РѕРіРѕ РїРѕС‚РѕС‡РЅРёР№ РµРєСЂР°РЅ.
+Р—Р°РїРёС‚ РєРѕСЂРёСЃС‚СѓРІР°С‡Р°: {userText}
 
-Завдання:
-- Подивись на скріншот і скажи, що реально видно.
-- Якщо видно чат/програму/помилку/код/порожній стан, назви це прямо.
-- Не вигадуй прихованих мотивів користувача.
-- Не кажи "екран просканований" як службовий штамп; дай корисне спостереження.
-- Не переписуй приватні токени, ключі, email, телефони або довгі приватні рядки.
-- Українською, 2-5 речень, стиль Kokonoe: сухо, розумно, без канцеляриту.
+Р—Р°РІРґР°РЅРЅСЏ:
+- РџРѕРґРёРІРёСЃСЊ РЅР° СЃРєСЂС–РЅС€РѕС‚ С– СЃРєР°Р¶Рё, С‰Рѕ СЂРµР°Р»СЊРЅРѕ РІРёРґРЅРѕ.
+- РЇРєС‰Рѕ РІРёРґРЅРѕ С‡Р°С‚/РїСЂРѕРіСЂР°РјСѓ/РїРѕРјРёР»РєСѓ/РєРѕРґ/РїРѕСЂРѕР¶РЅС–Р№ СЃС‚Р°РЅ, РЅР°Р·РІРё С†Рµ РїСЂСЏРјРѕ.
+- РќРµ РІРёРіР°РґСѓР№ РїСЂРёС…РѕРІР°РЅРёС… РјРѕС‚РёРІС–РІ РєРѕСЂРёСЃС‚СѓРІР°С‡Р°.
+- РќРµ РєР°Р¶Рё "РµРєСЂР°РЅ РїСЂРѕСЃРєР°РЅРѕРІР°РЅРёР№" СЏРє СЃР»СѓР¶Р±РѕРІРёР№ С€С‚Р°РјРї; РґР°Р№ РєРѕСЂРёСЃРЅРµ СЃРїРѕСЃС‚РµСЂРµР¶РµРЅРЅСЏ.
+- РќРµ РїРµСЂРµРїРёСЃСѓР№ РїСЂРёРІР°С‚РЅС– С‚РѕРєРµРЅРё, РєР»СЋС‡С–, email, С‚РµР»РµС„РѕРЅРё Р°Р±Рѕ РґРѕРІРіС– РїСЂРёРІР°С‚РЅС– СЂСЏРґРєРё.
+- РЈРєСЂР°С—РЅСЃСЊРєРѕСЋ, 2-5 СЂРµС‡РµРЅСЊ, СЃС‚РёР»СЊ Kokonoe: СЃСѓС…Рѕ, СЂРѕР·СѓРјРЅРѕ, Р±РµР· РєР°РЅС†РµР»СЏСЂРёС‚Сѓ.
 """;
 
             var reply = await _llm.SendSystemVisionQueryAsync(prompt, screenshot, "image/jpeg", ct)
-                        ?? "Екран зняла, але vision не повернув нормального аналізу. Тобто команда була розумна, а провайдер знову прикинувся цеглою.";
+                        ?? "Р•РєСЂР°РЅ Р·РЅСЏР»Р°, Р°Р»Рµ vision РЅРµ РїРѕРІРµСЂРЅСѓРІ РЅРѕСЂРјР°Р»СЊРЅРѕРіРѕ Р°РЅР°Р»С–Р·Сѓ. РўРѕР±С‚Рѕ РєРѕРјР°РЅРґР° Р±СѓР»Р° СЂРѕР·СѓРјРЅР°, Р° РїСЂРѕРІР°Р№РґРµСЂ Р·РЅРѕРІСѓ РїСЂРёРєРёРЅСѓРІСЃСЏ С†РµРіР»РѕСЋ.";
 
             RemoveThinkingBubble();
             var replyVm = new ChatMessageVm { Role = "assistant", Content = "" };
@@ -2356,9 +2448,9 @@ tags: [kokonoe, live-core, diagnostics]
 
         private string BuildContext(string? userText = null)
         {
-            // УВАГА: цей контекст додається до ~6k токенів system prompt + TOOLS.
-            // Тримаємо його компактним — максимум ~800 токенів (~3200 символів).
-            // GetToolsDescription() ПРИБРАНО — опис тулзів вже є в TOOLS масиві LlmService.
+            // РЈР’РђР“Рђ: С†РµР№ РєРѕРЅС‚РµРєСЃС‚ РґРѕРґР°С”С‚СЊСЃСЏ РґРѕ ~6k С‚РѕРєРµРЅС–РІ system prompt + TOOLS.
+            // РўСЂРёРјР°С”РјРѕ Р№РѕРіРѕ РєРѕРјРїР°РєС‚РЅРёРј вЂ” РјР°РєСЃРёРјСѓРј ~800 С‚РѕРєРµРЅС–РІ (~3200 СЃРёРјРІРѕР»С–РІ).
+            // GetToolsDescription() РџР РР‘Р РђРќРћ вЂ” РѕРїРёСЃ С‚СѓР»Р·С–РІ РІР¶Рµ С” РІ TOOLS РјР°СЃРёРІС– LlmService.
 
             const int MAX_CONTEXT_LENGTH = 5000;
             var parts = new List<(string content, int priority)>(); // priority: lower = more important
@@ -2407,7 +2499,7 @@ tags: [kokonoe, live-core, diagnostics]
             }
             catch { }
 
-            // 1. Релевантна пам'ять — НАЙВАЖЛИВІШЕ, бо це факти про користувача
+            // 1. Р РµР»РµРІР°РЅС‚РЅР° РїР°Рј'СЏС‚СЊ вЂ” РќРђР™Р’РђР–Р›РР’Р†РЁР•, Р±Рѕ С†Рµ С„Р°РєС‚Рё РїСЂРѕ РєРѕСЂРёСЃС‚СѓРІР°С‡Р°
             try
             {
                 var mem = ServiceContainer.BrainEngine?.Memory;
@@ -2420,12 +2512,12 @@ tags: [kokonoe, live-core, diagnostics]
                     foreach (var e in episodes)
                         memParts.Add($"[{e.When:dd.MM.yy}] {e.Summary}");
                     if (memParts.Count > 0)
-                        parts.Add(("=== ПАМ'ЯТЬ ===\n" + string.Join("\n", memParts), 1));
+                        parts.Add(("=== РџРђРњ'РЇРўР¬ ===\n" + string.Join("\n", memParts), 1));
                 }
             }
             catch { }
 
-            // 1.5 Емоційний стан — безпосередньо впливає на тон відповіді
+            // 1.5 Р•РјРѕС†С–Р№РЅРёР№ СЃС‚Р°РЅ вЂ” Р±РµР·РїРѕСЃРµСЂРµРґРЅСЊРѕ РІРїР»РёРІР°С” РЅР° С‚РѕРЅ РІС–РґРїРѕРІС–РґС–
             try
             {
                 var emotHint = ServiceContainer.BrainEngine?.Emotion?.GetPromptHint();
@@ -2438,7 +2530,7 @@ tags: [kokonoe, live-core, diagnostics]
             }
             catch { }
 
-            // 2. Стан (емоції, здоров'я, scheduler) — важливо але менше
+            // 2. РЎС‚Р°РЅ (РµРјРѕС†С–С—, Р·РґРѕСЂРѕРІ'СЏ, scheduler) вЂ” РІР°Р¶Р»РёРІРѕ Р°Р»Рµ РјРµРЅС€Рµ
             try
             {
                 var stateCtx = ServiceContainer.StateEngine.GetStateAsContext();
@@ -2447,38 +2539,38 @@ tags: [kokonoe, live-core, diagnostics]
             }
             catch { }
 
-            // 2.1 Пульс — завжди в контексті щоб Kokonoe реагувала на зміни
+            // 2.1 РџСѓР»СЊСЃ вЂ” Р·Р°РІР¶РґРё РІ РєРѕРЅС‚РµРєСЃС‚С– С‰РѕР± Kokonoe СЂРµР°РіСѓРІР°Р»Р° РЅР° Р·РјС–РЅРё
             try
             {
                 var heart = ServiceContainer.Heart;
                 var bpm = heart.CurrentBpm;
                 var baseline = heart.BaselineBpm;
                 var diff = bpm - baseline;
-                var bpmNote = diff > 15 ? " ↑ підвищений" : diff < -10 ? " ↓ нижче базового" : "";
-                parts.Add(($"=== ПУЛЬС ===\nПоточний: {bpm:0.0} bpm{bpmNote} | Базовий: {baseline:0.0} bpm", 2));
+                var bpmNote = diff > 15 ? " в†‘ РїС–РґРІРёС‰РµРЅРёР№" : diff < -10 ? " в†“ РЅРёР¶С‡Рµ Р±Р°Р·РѕРІРѕРіРѕ" : "";
+                parts.Add(($"=== РџРЈР›Р¬РЎ ===\nРџРѕС‚РѕС‡РЅРёР№: {bpm:0.0} bpm{bpmNote} | Р‘Р°Р·РѕРІРёР№: {baseline:0.0} bpm", 2));
             }
             catch { }
 
-            // 2.5 Календар — найближчі важливі дати
+            // 2.5 РљР°Р»РµРЅРґР°СЂ вЂ” РЅР°Р№Р±Р»РёР¶С‡С– РІР°Р¶Р»РёРІС– РґР°С‚Рё
             try
             {
                 var cal = ServiceContainer.Calendar;
-                var upcoming = cal.GetUpcoming(14); // наступні 2 тижні
+                var upcoming = cal.GetUpcoming(14); // РЅР°СЃС‚СѓРїРЅС– 2 С‚РёР¶РЅС–
                 var today = cal.GetForDay(DateTime.Today);
                 if (today.Any() || upcoming.Any())
                 {
                     var calLines = new List<string>();
                     if (today.Any())
-                        calLines.Add("Сьогодні: " + string.Join(", ", today.Select(e => e.Title)));
+                        calLines.Add("РЎСЊРѕРіРѕРґРЅС–: " + string.Join(", ", today.Select(e => e.Title)));
                     var soon = upcoming.Where(e => e.EventAt.Date > DateTime.Today).Take(3);
                     if (soon.Any())
-                        calLines.Add("Найближче: " + string.Join("; ", soon.Select(e => $"{e.Title} {e.EventAt:dd.MM}")));
-                    parts.Add(("=== КАЛЕНДАР ===\n" + string.Join("\n", calLines), 2));
+                        calLines.Add("РќР°Р№Р±Р»РёР¶С‡Рµ: " + string.Join("; ", soon.Select(e => $"{e.Title} {e.EventAt:dd.MM}")));
+                    parts.Add(("=== РљРђР›Р•РќР”РђР  ===\n" + string.Join("\n", calLines), 2));
                 }
             }
             catch { }
 
-            // 3. Здоров'я — агреговані показники за тиждень
+            // 3. Р—РґРѕСЂРѕРІ'СЏ вЂ” Р°РіСЂРµРіРѕРІР°РЅС– РїРѕРєР°Р·РЅРёРєРё Р·Р° С‚РёР¶РґРµРЅСЊ
             try
             {
                 var healthCtx = ServiceContainer.HealthService.GetHealthContext();
@@ -2487,7 +2579,7 @@ tags: [kokonoe, live-core, diagnostics]
             }
             catch { }
 
-            // 3.1 Цілі та активні звички
+            // 3.1 Р¦С–Р»С– С‚Р° Р°РєС‚РёРІРЅС– Р·РІРёС‡РєРё
             try
             {
                 var goals = ServiceContainer.GoalService.GetActiveGoals();
@@ -2496,15 +2588,15 @@ tags: [kokonoe, live-core, diagnostics]
                 {
                     var ghLines = new System.Collections.Generic.List<string>();
                     if (goals.Count > 0)
-                        ghLines.Add("Цілі: " + string.Join(", ", goals.Take(4).Select(g => $"{g.Title} ({g.Progress:0}%)")));
+                        ghLines.Add("Р¦С–Р»С–: " + string.Join(", ", goals.Take(4).Select(g => $"{g.Title} ({g.Progress:0}%)")));
                     if (habits.Count > 0)
-                        ghLines.Add("Звички: " + string.Join(", ", habits.Take(5).Select(h => h.Name)));
-                    parts.Add(("=== ЦІЛІ/ЗВИЧКИ ===\n" + string.Join("\n", ghLines), 5));
+                        ghLines.Add("Р—РІРёС‡РєРё: " + string.Join(", ", habits.Take(5).Select(h => h.Name)));
+                    parts.Add(("=== Р¦Р†Р›Р†/Р—Р’РР§РљР ===\n" + string.Join("\n", ghLines), 5));
                 }
             }
             catch { }
 
-            // 3.2 Когнітивний контекст
+            // 3.2 РљРѕРіРЅС–С‚РёРІРЅРёР№ РєРѕРЅС‚РµРєСЃС‚
             try
             {
                 var cogCtx = ServiceContainer.BrainEngine?.Cognition?.BuildCognitionContext();
@@ -2513,7 +2605,7 @@ tags: [kokonoe, live-core, diagnostics]
             }
             catch { }
 
-            // 3.3 EnhancedMemory — структуровані факти про користувача
+            // 3.3 EnhancedMemory вЂ” СЃС‚СЂСѓРєС‚СѓСЂРѕРІР°РЅС– С„Р°РєС‚Рё РїСЂРѕ РєРѕСЂРёСЃС‚СѓРІР°С‡Р°
             try
             {
                 var enhMem = ServiceContainer.EnhancedMemory.GetMemoryAsContext();
@@ -2525,7 +2617,7 @@ tags: [kokonoe, live-core, diagnostics]
             }
             catch { }
 
-            // 4. Vault — ключові нотатки
+            // 4. Vault вЂ” РєР»СЋС‡РѕРІС– РЅРѕС‚Р°С‚РєРё
             try
             {
                 var allNotes = _obsidian.ListNotes();
@@ -2534,16 +2626,16 @@ tags: [kokonoe, live-core, diagnostics]
                 var keyNotes = allNotes
                     .Where(n => n.Contains("Profile", StringComparison.OrdinalIgnoreCase) ||
                                 n.Contains("brain-core", StringComparison.OrdinalIgnoreCase) ||
-                                n.Contains("Досьє", StringComparison.OrdinalIgnoreCase) ||
+                                n.Contains("Р”РѕСЃСЊС”", StringComparison.OrdinalIgnoreCase) ||
                                 n.Contains("Facts", StringComparison.OrdinalIgnoreCase))
                     .Take(3)
                     .ToList();
                 if (keyNotes.Count > 0)
-                    vaultLines.Add("Ключові: " + string.Join(", ", keyNotes));
+                    vaultLines.Add("РљР»СЋС‡РѕРІС–: " + string.Join(", ", keyNotes));
 
                 var todayNote = $"Daily/{DateTime.Now:yyyy-MM-dd}.md";
                 if (allNotes.Any(n => n == todayNote))
-                    vaultLines.Add("Daily: є");
+                    vaultLines.Add("Daily: С”");
 
                 if (vaultLines.Count > 0)
                     parts.Add(("=== VAULT ===\n" + string.Join(" | ", vaultLines), 7));
@@ -2587,7 +2679,7 @@ tags: [kokonoe, live-core, diagnostics]
             }
             catch { }
 
-            // 5. Прогноз (ML.NET) — настрій/енергія на завтра
+            // 5. РџСЂРѕРіРЅРѕР· (ML.NET) вЂ” РЅР°СЃС‚СЂС–Р№/РµРЅРµСЂРіС–СЏ РЅР° Р·Р°РІС‚СЂР°
             try
             {
                 var forecast = ServiceContainer.Predictor.GetForecastContext();
@@ -2596,18 +2688,18 @@ tags: [kokonoe, live-core, diagnostics]
             }
             catch { }
 
-            // Сортуємо за пріоритетом і збираємо результат
+            // РЎРѕСЂС‚СѓС”РјРѕ Р·Р° РїСЂС–РѕСЂРёС‚РµС‚РѕРј С– Р·Р±РёСЂР°С”РјРѕ СЂРµР·СѓР»СЊС‚Р°С‚
             var orderedParts = parts.OrderBy(p => p.priority).Select(p => p.content).ToList();
             var result = string.Join("\n\n", orderedParts);
 
-            // Розумне обрізання: видаляємо останні секції доки вміщаємось
+            // Р РѕР·СѓРјРЅРµ РѕР±СЂС–Р·Р°РЅРЅСЏ: РІРёРґР°Р»СЏС”РјРѕ РѕСЃС‚Р°РЅРЅС– СЃРµРєС†С–С— РґРѕРєРё РІРјС–С‰Р°С”РјРѕСЃСЊ
             while (result.Length > MAX_CONTEXT_LENGTH && orderedParts.Count > 1)
             {
                 orderedParts.RemoveAt(orderedParts.Count - 1);
                 result = string.Join("\n\n", orderedParts);
             }
 
-            // Якщо й одна секція завелика — обрізаємо на межі слова
+            // РЇРєС‰Рѕ Р№ РѕРґРЅР° СЃРµРєС†С–СЏ Р·Р°РІРµР»РёРєР° вЂ” РѕР±СЂС–Р·Р°С”РјРѕ РЅР° РјРµР¶С– СЃР»РѕРІР°
             if (result.Length > MAX_CONTEXT_LENGTH)
             {
                 result = TruncateAtWordBoundary(result, MAX_CONTEXT_LENGTH);
@@ -2620,22 +2712,22 @@ tags: [kokonoe, live-core, diagnostics]
         {
             var trimmed = userText?.Trim() ?? "";
             var concrete = !string.IsNullOrWhiteSpace(trimmed)
-                ? $"Останній вхід користувача: «{trimmed[..Math.Min(220, trimmed.Length)]}»."
-                : "Останній вхід користувача порожній або службовий.";
+                ? $"РћСЃС‚Р°РЅРЅС–Р№ РІС…С–Рґ РєРѕСЂРёСЃС‚СѓРІР°С‡Р°: В«{trimmed[..Math.Min(220, trimmed.Length)]}В»."
+                : "РћСЃС‚Р°РЅРЅС–Р№ РІС…С–Рґ РєРѕСЂРёСЃС‚СѓРІР°С‡Р° РїРѕСЂРѕР¶РЅС–Р№ Р°Р±Рѕ СЃР»СѓР¶Р±РѕРІРёР№.";
 
             return $"""
 LIVE RESPONSE STYLE
 {concrete}
-Правила живої відповіді:
-- спершу реагуй на конкретику останнього повідомлення, не на абстрактний настрій;
-- не починай з декоративної ремарки в *зірочках*, якщо користувач сам не почав roleplay;
-- не вигадуй «монітор блимає», «датчики», «лабораторію», «тіло реагує» без прямої причини;
-- не вигадуй зовнішні факти про користувача: акаунти, YouTube/Twitch/Discord, мемберства, підписки, роботу, покупки або людей, якщо цього нема в чаті;
-- не психологізуй: не вигадуй, що користувач боїться сказати, що в нього щось застрягло в голові, або що ти «дивишся через екран»;
-- якщо питають про тебе/Коконое — дай прямий опис характеру чи позиції, без терапевтичних питань у відповідь;
-- якщо питають "що ти знаєш про мене" або про пам'ять/профіль — відповідай списком/коротким оглядом відомих фактів з контексту; не підміняй це старим sleep-наміpом;
-- допускається суха іронія, але вона має бути прив'язана до події, часу, наміру або питання;
-- краще одна точна фраза, ніж театральна сцена з трьома шарами декорацій.
+РџСЂР°РІРёР»Р° Р¶РёРІРѕС— РІС–РґРїРѕРІС–РґС–:
+- СЃРїРµСЂС€Сѓ СЂРµР°РіСѓР№ РЅР° РєРѕРЅРєСЂРµС‚РёРєСѓ РѕСЃС‚Р°РЅРЅСЊРѕРіРѕ РїРѕРІС–РґРѕРјР»РµРЅРЅСЏ, РЅРµ РЅР° Р°Р±СЃС‚СЂР°РєС‚РЅРёР№ РЅР°СЃС‚СЂС–Р№;
+- РЅРµ РїРѕС‡РёРЅР°Р№ Р· РґРµРєРѕСЂР°С‚РёРІРЅРѕС— СЂРµРјР°СЂРєРё РІ *Р·С–СЂРѕС‡РєР°С…*, СЏРєС‰Рѕ РєРѕСЂРёСЃС‚СѓРІР°С‡ СЃР°Рј РЅРµ РїРѕС‡Р°РІ roleplay;
+- РЅРµ РІРёРіР°РґСѓР№ В«РјРѕРЅС–С‚РѕСЂ Р±Р»РёРјР°С”В», В«РґР°С‚С‡РёРєРёВ», В«Р»Р°Р±РѕСЂР°С‚РѕСЂС–СЋВ», В«С‚С–Р»Рѕ СЂРµР°РіСѓС”В» Р±РµР· РїСЂСЏРјРѕС— РїСЂРёС‡РёРЅРё;
+- РЅРµ РІРёРіР°РґСѓР№ Р·РѕРІРЅС–С€РЅС– С„Р°РєС‚Рё РїСЂРѕ РєРѕСЂРёСЃС‚СѓРІР°С‡Р°: Р°РєР°СѓРЅС‚Рё, YouTube/Twitch/Discord, РјРµРјР±РµСЂСЃС‚РІР°, РїС–РґРїРёСЃРєРё, СЂРѕР±РѕС‚Сѓ, РїРѕРєСѓРїРєРё Р°Р±Рѕ Р»СЋРґРµР№, СЏРєС‰Рѕ С†СЊРѕРіРѕ РЅРµРјР° РІ С‡Р°С‚С–;
+- РЅРµ РїСЃРёС…РѕР»РѕРіС–Р·СѓР№: РЅРµ РІРёРіР°РґСѓР№, С‰Рѕ РєРѕСЂРёСЃС‚СѓРІР°С‡ Р±РѕС—С‚СЊСЃСЏ СЃРєР°Р·Р°С‚Рё, С‰Рѕ РІ РЅСЊРѕРіРѕ С‰РѕСЃСЊ Р·Р°СЃС‚СЂСЏРіР»Рѕ РІ РіРѕР»РѕРІС–, Р°Р±Рѕ С‰Рѕ С‚Рё В«РґРёРІРёС€СЃСЏ С‡РµСЂРµР· РµРєСЂР°РЅВ»;
+- СЏРєС‰Рѕ РїРёС‚Р°СЋС‚СЊ РїСЂРѕ С‚РµР±Рµ/РљРѕРєРѕРЅРѕРµ вЂ” РґР°Р№ РїСЂСЏРјРёР№ РѕРїРёСЃ С…Р°СЂР°РєС‚РµСЂСѓ С‡Рё РїРѕР·РёС†С–С—, Р±РµР· С‚РµСЂР°РїРµРІС‚РёС‡РЅРёС… РїРёС‚Р°РЅСЊ Сѓ РІС–РґРїРѕРІС–РґСЊ;
+- СЏРєС‰Рѕ РїРёС‚Р°СЋС‚СЊ "С‰Рѕ С‚Рё Р·РЅР°С”С€ РїСЂРѕ РјРµРЅРµ" Р°Р±Рѕ РїСЂРѕ РїР°Рј'СЏС‚СЊ/РїСЂРѕС„С–Р»СЊ вЂ” РІС–РґРїРѕРІС–РґР°Р№ СЃРїРёСЃРєРѕРј/РєРѕСЂРѕС‚РєРёРј РѕРіР»СЏРґРѕРј РІС–РґРѕРјРёС… С„Р°РєС‚С–РІ Р· РєРѕРЅС‚РµРєСЃС‚Сѓ; РЅРµ РїС–РґРјС–РЅСЏР№ С†Рµ СЃС‚Р°СЂРёРј sleep-РЅР°РјС–pРѕРј;
+- РґРѕРїСѓСЃРєР°С”С‚СЊСЃСЏ СЃСѓС…Р° С–СЂРѕРЅС–СЏ, Р°Р»Рµ РІРѕРЅР° РјР°С” Р±СѓС‚Рё РїСЂРёРІ'СЏР·Р°РЅР° РґРѕ РїРѕРґС–С—, С‡Р°СЃСѓ, РЅР°РјС–СЂСѓ Р°Р±Рѕ РїРёС‚Р°РЅРЅСЏ;
+- РєСЂР°С‰Рµ РѕРґРЅР° С‚РѕС‡РЅР° С„СЂР°Р·Р°, РЅС–Р¶ С‚РµР°С‚СЂР°Р»СЊРЅР° СЃС†РµРЅР° Р· С‚СЂСЊРѕРјР° С€Р°СЂР°РјРё РґРµРєРѕСЂР°С†С–Р№.
 """;
         }
 
@@ -2643,8 +2735,8 @@ LIVE RESPONSE STYLE
         {
             var now = DateTime.Now;
             var sb = new StringBuilder();
-            sb.AppendLine("=== ЧАСОВИЙ КОНТЕКСТ — КРИТИЧНО ===");
-            sb.AppendLine($"Поточний локальний час: {now:yyyy-MM-dd HH:mm}.");
+            sb.AppendLine("=== Р§РђРЎРћР’РР™ РљРћРќРўР•РљРЎРў вЂ” РљР РРўРР§РќРћ ===");
+            sb.AppendLine($"РџРѕС‚РѕС‡РЅРёР№ Р»РѕРєР°Р»СЊРЅРёР№ С‡Р°СЃ: {now:yyyy-MM-dd HH:mm}.");
 
             try
             {
@@ -2660,11 +2752,11 @@ LIVE RESPONSE STYLE
                 if (lastUserBeforeCurrent != null)
                 {
                     var gap = now - lastUserBeforeCurrent.Timestamp;
-                    sb.AppendLine($"Попереднє повідомлення користувача: {lastUserBeforeCurrent.Timestamp:yyyy-MM-dd HH:mm} ({FormatGapUa(gap)} тому): \"{TruncateAtWordBoundary(SanitizeForLlm(lastUserBeforeCurrent.Content ?? ""), 180)}\"");
+                    sb.AppendLine($"РџРѕРїРµСЂРµРґРЅС” РїРѕРІС–РґРѕРјР»РµРЅРЅСЏ РєРѕСЂРёСЃС‚СѓРІР°С‡Р°: {lastUserBeforeCurrent.Timestamp:yyyy-MM-dd HH:mm} ({FormatGapUa(gap)} С‚РѕРјСѓ): \"{TruncateAtWordBoundary(SanitizeForLlm(lastUserBeforeCurrent.Content ?? ""), 180)}\"");
                 }
 
                 if (currentUser != null)
-                    sb.AppendLine($"Поточне повідомлення користувача: {currentUser.Timestamp:yyyy-MM-dd HH:mm}: \"{TruncateAtWordBoundary(SanitizeForLlm(currentUser.Content ?? userText ?? ""), 180)}\"");
+                    sb.AppendLine($"РџРѕС‚РѕС‡РЅРµ РїРѕРІС–РґРѕРјР»РµРЅРЅСЏ РєРѕСЂРёСЃС‚СѓРІР°С‡Р°: {currentUser.Timestamp:yyyy-MM-dd HH:mm}: \"{TruncateAtWordBoundary(SanitizeForLlm(currentUser.Content ?? userText ?? ""), 180)}\"");
             }
             catch { }
 
@@ -2676,8 +2768,8 @@ LIVE RESPONSE STYLE
                     foreach (var intent in intents)
                     {
                         var age = now - intent.CreatedAt;
-                        var due = now >= intent.FollowUpAt ? "follow-up уже доречний" : $"follow-up через {FormatGapUa(intent.FollowUpAt - now)}";
-                        sb.AppendLine($"Активний короткостроковий намір: {intent.Summary}; сказано {FormatGapUa(age)} тому; очікувано до {intent.ExpectedUntil:HH:mm}; {due}; джерело: \"{TruncateAtWordBoundary(SanitizeForLlm(intent.SourceText), 160)}\"");
+                        var due = now >= intent.FollowUpAt ? "follow-up СѓР¶Рµ РґРѕСЂРµС‡РЅРёР№" : $"follow-up С‡РµСЂРµР· {FormatGapUa(intent.FollowUpAt - now)}";
+                        sb.AppendLine($"РђРєС‚РёРІРЅРёР№ РєРѕСЂРѕС‚РєРѕСЃС‚СЂРѕРєРѕРІРёР№ РЅР°РјС–СЂ: {intent.Summary}; СЃРєР°Р·Р°РЅРѕ {FormatGapUa(age)} С‚РѕРјСѓ; РѕС‡С–РєСѓРІР°РЅРѕ РґРѕ {intent.ExpectedUntil:HH:mm}; {due}; РґР¶РµСЂРµР»Рѕ: \"{TruncateAtWordBoundary(SanitizeForLlm(intent.SourceText), 160)}\"");
                     }
                 }
             }
@@ -2685,31 +2777,31 @@ LIVE RESPONSE STYLE
 
             var lower = (userText ?? "").ToLowerInvariant();
             var isMorningNow = now.Hour is >= 5 and < 13;
-            var saysWakeOrMorning = ContainsAny(lower, "ранку", "добрий ранок", "доброго ранку", "проснув", "прокинув", "поспав", "встав");
-            var saysGoingSleep = ContainsAny(lower, "спать піду", "спати піду", "йду спати", "іду спати", "спокійної", "до ранку");
+            var saysWakeOrMorning = ContainsAny(lower, "СЂР°РЅРєСѓ", "РґРѕР±СЂРёР№ СЂР°РЅРѕРє", "РґРѕР±СЂРѕРіРѕ СЂР°РЅРєСѓ", "РїСЂРѕСЃРЅСѓРІ", "РїСЂРѕРєРёРЅСѓРІ", "РїРѕСЃРїР°РІ", "РІСЃС‚Р°РІ");
+            var saysGoingSleep = ContainsAny(lower, "СЃРїР°С‚СЊ РїС–РґСѓ", "СЃРїР°С‚Рё РїС–РґСѓ", "Р№РґСѓ СЃРїР°С‚Рё", "С–РґСѓ СЃРїР°С‚Рё", "СЃРїРѕРєС–Р№РЅРѕС—", "РґРѕ СЂР°РЅРєСѓ");
 
             if (isMorningNow && saysWakeOrMorning)
             {
-                sb.AppendLine("ВИСНОВОК: зараз ранок і користувач уже прокинувся/пише після сну.");
-                sb.AppendLine("ЗАБОРОНА: не кажи йому \"спи\", \"йди спати\", \"до ранку\" або подібне. Це застарілий контекст з минулої ночі.");
-                sb.AppendLine("Правильна реакція: визнай ранок/пробудження, можеш саркастично прокоментувати, але не відправляй його назад спати.");
+                sb.AppendLine("Р’РРЎРќРћР’РћРљ: Р·Р°СЂР°Р· СЂР°РЅРѕРє С– РєРѕСЂРёСЃС‚СѓРІР°С‡ СѓР¶Рµ РїСЂРѕРєРёРЅСѓРІСЃСЏ/РїРёС€Рµ РїС–СЃР»СЏ СЃРЅСѓ.");
+                sb.AppendLine("Р—РђР‘РћР РћРќРђ: РЅРµ РєР°Р¶Рё Р№РѕРјСѓ \"СЃРїРё\", \"Р№РґРё СЃРїР°С‚Рё\", \"РґРѕ СЂР°РЅРєСѓ\" Р°Р±Рѕ РїРѕРґС–Р±РЅРµ. Р¦Рµ Р·Р°СЃС‚Р°СЂС–Р»РёР№ РєРѕРЅС‚РµРєСЃС‚ Р· РјРёРЅСѓР»РѕС— РЅРѕС‡С–.");
+                sb.AppendLine("РџСЂР°РІРёР»СЊРЅР° СЂРµР°РєС†С–СЏ: РІРёР·РЅР°Р№ СЂР°РЅРѕРє/РїСЂРѕР±СѓРґР¶РµРЅРЅСЏ, РјРѕР¶РµС€ СЃР°СЂРєР°СЃС‚РёС‡РЅРѕ РїСЂРѕРєРѕРјРµРЅС‚СѓРІР°С‚Рё, Р°Р»Рµ РЅРµ РІС–РґРїСЂР°РІР»СЏР№ Р№РѕРіРѕ РЅР°Р·Р°Рґ СЃРїР°С‚Рё.");
             }
             else if (saysGoingSleep && (now.Hour is >= 21 or < 5))
             {
-                sb.AppendLine("ВИСНОВОК: користувач прямо каже, що йде спати в нічний час. Коротке побажання сну доречне.");
+                sb.AppendLine("Р’РРЎРќРћР’РћРљ: РєРѕСЂРёСЃС‚СѓРІР°С‡ РїСЂСЏРјРѕ РєР°Р¶Рµ, С‰Рѕ Р№РґРµ СЃРїР°С‚Рё РІ РЅС–С‡РЅРёР№ С‡Р°СЃ. РљРѕСЂРѕС‚РєРµ РїРѕР±Р°Р¶Р°РЅРЅСЏ СЃРЅСѓ РґРѕСЂРµС‡РЅРµ.");
             }
 
-            sb.AppendLine("Правило: завжди звіряй поточний час і часовий розрив між повідомленнями перед порадою про сон.");
-            sb.AppendLine("Правило: якщо є активний короткостроковий намір, використовуй його для природного follow-up: курси вже закінчились, робота ще триває, прогулянка завершилась тощо.");
+            sb.AppendLine("РџСЂР°РІРёР»Рѕ: Р·Р°РІР¶РґРё Р·РІС–СЂСЏР№ РїРѕС‚РѕС‡РЅРёР№ С‡Р°СЃ С– С‡Р°СЃРѕРІРёР№ СЂРѕР·СЂРёРІ РјС–Р¶ РїРѕРІС–РґРѕРјР»РµРЅРЅСЏРјРё РїРµСЂРµРґ РїРѕСЂР°РґРѕСЋ РїСЂРѕ СЃРѕРЅ.");
+            sb.AppendLine("РџСЂР°РІРёР»Рѕ: СЏРєС‰Рѕ С” Р°РєС‚РёРІРЅРёР№ РєРѕСЂРѕС‚РєРѕСЃС‚СЂРѕРєРѕРІРёР№ РЅР°РјС–СЂ, РІРёРєРѕСЂРёСЃС‚РѕРІСѓР№ Р№РѕРіРѕ РґР»СЏ РїСЂРёСЂРѕРґРЅРѕРіРѕ follow-up: РєСѓСЂСЃРё РІР¶Рµ Р·Р°РєС–РЅС‡РёР»РёСЃСЊ, СЂРѕР±РѕС‚Р° С‰Рµ С‚СЂРёРІР°С”, РїСЂРѕРіСѓР»СЏРЅРєР° Р·Р°РІРµСЂС€РёР»Р°СЃСЊ С‚РѕС‰Рѕ.");
             return sb.ToString();
         }
 
         private static string FormatGapUa(TimeSpan gap)
         {
-            if (gap.TotalMinutes < 1) return "щойно";
-            if (gap.TotalHours < 1) return $"{(int)gap.TotalMinutes} хв";
-            if (gap.TotalDays < 1) return $"{(int)gap.TotalHours} год {(int)gap.Minutes} хв";
-            return $"{(int)gap.TotalDays} дн {(int)gap.Hours} год";
+            if (gap.TotalMinutes < 1) return "С‰РѕР№РЅРѕ";
+            if (gap.TotalHours < 1) return $"{(int)gap.TotalMinutes} С…РІ";
+            if (gap.TotalDays < 1) return $"{(int)gap.TotalHours} РіРѕРґ {(int)gap.Minutes} С…РІ";
+            return $"{(int)gap.TotalDays} РґРЅ {(int)gap.Hours} РіРѕРґ";
         }
 
         private static bool ContainsAny(string text, params string[] values)
@@ -2723,11 +2815,11 @@ LIVE RESPONSE STYLE
 
             var lower = text.ToLowerInvariant();
             var looksObsidian =
-                ContainsAny(lower, "obsidian", "vault", "папк", "нотатк", "журнал", "щоденник", "journal", "spanish", "lesson_", "lesson", "урок");
+                ContainsAny(lower, "obsidian", "vault", "РїР°РїРє", "РЅРѕС‚Р°С‚Рє", "Р¶СѓСЂРЅР°Р»", "С‰РѕРґРµРЅРЅРёРє", "journal", "spanish", "lesson_", "lesson", "СѓСЂРѕРє");
             var wantsMutation =
-                ContainsAny(lower, "створ", "созд", "create", "зроби", "запиш", "збереж", "нема", "немає");
+                ContainsAny(lower, "СЃС‚РІРѕСЂ", "СЃРѕР·Рґ", "create", "Р·СЂРѕР±Рё", "Р·Р°РїРёС€", "Р·Р±РµСЂРµР¶", "РЅРµРјР°", "РЅРµРјР°С”");
             var wantsCheck =
-                ContainsAny(lower, "перевір", "провір", "check", "існує", "бачиш");
+                ContainsAny(lower, "РїРµСЂРµРІС–СЂ", "РїСЂРѕРІС–СЂ", "check", "С–СЃРЅСѓС”", "Р±Р°С‡РёС€");
 
             if (!looksObsidian || (!wantsMutation && !wantsCheck))
                 return false;
@@ -2750,7 +2842,7 @@ LIVE RESPONSE STYLE
                             _obsidian.WriteNote(target, BuildDefaultObsidianNote(target));
 
                         var verified = !string.IsNullOrWhiteSpace(_obsidian.ReadNote(target));
-                        report.Add($"{(verified ? "є" : "немає")} нотатка `{target}`");
+                        report.Add($"{(verified ? "С”" : "РЅРµРјР°С”")} РЅРѕС‚Р°С‚РєР° `{target}`");
                     }
                     else
                     {
@@ -2759,16 +2851,16 @@ LIVE RESPONSE STYLE
 
                         var folderFull = Path.Combine(_obsidian.VaultPath, target.Replace('/', Path.DirectorySeparatorChar));
                         var verified = Directory.Exists(folderFull);
-                        report.Add($"{(verified ? "є" : "немає")} папка `{target}`");
+                        report.Add($"{(verified ? "С”" : "РЅРµРјР°С”")} РїР°РїРєР° `{target}`");
                     }
                 }
 
-                reply = "Перевірила через файлову систему, не через уяву. " + string.Join("; ", report) + ".";
+                reply = "РџРµСЂРµРІС–СЂРёР»Р° С‡РµСЂРµР· С„Р°Р№Р»РѕРІСѓ СЃРёСЃС‚РµРјСѓ, РЅРµ С‡РµСЂРµР· СѓСЏРІСѓ. " + string.Join("; ", report) + ".";
                 return true;
             }
             catch (Exception ex)
             {
-                reply = $"Obsidian-операція впала: {ex.Message}. Оце вже реальна помилка, а не театр про «я створила».";
+                reply = $"Obsidian-РѕРїРµСЂР°С†С–СЏ РІРїР°Р»Р°: {ex.Message}. РћС†Рµ РІР¶Рµ СЂРµР°Р»СЊРЅР° РїРѕРјРёР»РєР°, Р° РЅРµ С‚РµР°С‚СЂ РїСЂРѕ В«СЏ СЃС‚РІРѕСЂРёР»Р°В».";
                 return true;
             }
         }
@@ -2777,8 +2869,8 @@ LIVE RESPONSE STYLE
         {
             var targets = new List<string>();
             var cleaned = text
-                .Replace("→", "/", StringComparison.Ordinal)
-                .Replace("➜", "/", StringComparison.Ordinal)
+                .Replace("в†’", "/", StringComparison.Ordinal)
+                .Replace("вћњ", "/", StringComparison.Ordinal)
                 .Replace("->", "/", StringComparison.Ordinal)
                 .Replace("\\", "/", StringComparison.Ordinal)
                 .Replace("**", "", StringComparison.Ordinal)
@@ -2808,13 +2900,13 @@ LIVE RESPONSE STYLE
 
             if ((lower.Contains("lesson_2_social_interaction", StringComparison.OrdinalIgnoreCase) ||
                  (lower.Contains("social interaction", StringComparison.OrdinalIgnoreCase) && lower.Contains("spanish", StringComparison.OrdinalIgnoreCase)) ||
-                 (ContainsAny(lower, "другий урок", "другого урок", "2 урок", "урок 2", "lesson 2") && ContainsAny(lower, "нема", "немає", "створ", "зроби", "перевір", "провір"))) &&
+                 (ContainsAny(lower, "РґСЂСѓРіРёР№ СѓСЂРѕРє", "РґСЂСѓРіРѕРіРѕ СѓСЂРѕРє", "2 СѓСЂРѕРє", "СѓСЂРѕРє 2", "lesson 2") && ContainsAny(lower, "РЅРµРјР°", "РЅРµРјР°С”", "СЃС‚РІРѕСЂ", "Р·СЂРѕР±Рё", "РїРµСЂРµРІС–СЂ", "РїСЂРѕРІС–СЂ"))) &&
                 !targets.Contains("Journal/Spanish/Lesson_2_Social_Interaction.md", StringComparer.OrdinalIgnoreCase))
                 targets.Add("Journal/Spanish/Lesson_2_Social_Interaction.md");
 
             if ((lower.Contains("lesson_3", StringComparison.OrdinalIgnoreCase) ||
-                 (ContainsAny(lower, "третій урок", "третього урок", "3 урок", "урок 3", "lesson 3") && ContainsAny(lower, "spanish", "іспан", "діалог", "dialog", "b1", "створ", "зроби")) ||
-                 (ContainsAny(lower, "b1", "живий діалог", "живий диалог", "live dialogue") && ContainsAny(lower, "урок", "lesson", "spanish", "іспан"))) &&
+                 (ContainsAny(lower, "С‚СЂРµС‚С–Р№ СѓСЂРѕРє", "С‚СЂРµС‚СЊРѕРіРѕ СѓСЂРѕРє", "3 СѓСЂРѕРє", "СѓСЂРѕРє 3", "lesson 3") && ContainsAny(lower, "spanish", "С–СЃРїР°РЅ", "РґС–Р°Р»РѕРі", "dialog", "b1", "СЃС‚РІРѕСЂ", "Р·СЂРѕР±Рё")) ||
+                 (ContainsAny(lower, "b1", "Р¶РёРІРёР№ РґС–Р°Р»РѕРі", "Р¶РёРІРёР№ РґРёР°Р»РѕРі", "live dialogue") && ContainsAny(lower, "СѓСЂРѕРє", "lesson", "spanish", "С–СЃРїР°РЅ"))) &&
                 !targets.Contains("Journal/Spanish/Lesson_3_B1_Live_Dialogue.md", StringComparer.OrdinalIgnoreCase))
                 targets.Add("Journal/Spanish/Lesson_3_B1_Live_Dialogue.md");
 
@@ -2848,14 +2940,14 @@ tags: [spanish, journal, lesson]
 
 ## Vocabulary
 
-- me despierto — я прокидаюся
-- me levanto — я встаю
-- desayuno — я снідаю
-- trabajo / estudio — я працюю / навчаюся
-- almuerzo — я обідаю
-- ceno — я вечеряю
-- me ducho — я приймаю душ
-- me acuesto — я лягаю спати
+- me despierto вЂ” СЏ РїСЂРѕРєРёРґР°СЋСЃСЏ
+- me levanto вЂ” СЏ РІСЃС‚Р°СЋ
+- desayuno вЂ” СЏ СЃРЅС–РґР°СЋ
+- trabajo / estudio вЂ” СЏ РїСЂР°С†СЋСЋ / РЅР°РІС‡Р°СЋСЃСЏ
+- almuerzo вЂ” СЏ РѕР±С–РґР°СЋ
+- ceno вЂ” СЏ РІРµС‡РµСЂСЏСЋ
+- me ducho вЂ” СЏ РїСЂРёР№РјР°СЋ РґСѓС€
+- me acuesto вЂ” СЏ Р»СЏРіР°СЋ СЃРїР°С‚Рё
 
 ## Notes
 
@@ -2865,7 +2957,7 @@ tags: [spanish, journal, lesson]
 ## Practice
 
 - Me despierto a las siete.
-- Desayuno por la mañana.
+- Desayuno por la maГ±ana.
 - Me acuesto por la noche.
 """;
             }
@@ -2877,31 +2969,31 @@ tags: [spanish, journal, lesson]
 tags: [spanish, journal, lesson]
 ---
 
-# Урок 2. Соціальна взаємодія
+# РЈСЂРѕРє 2. РЎРѕС†С–Р°Р»СЊРЅР° РІР·Р°С”РјРѕРґС–СЏ
 
-## Основні фрази
+## РћСЃРЅРѕРІРЅС– С„СЂР°Р·Рё
 
-- Hola, ¿qué tal? — Привіт, як справи?
-- ¿Cómo estás? — Як ти?
-- Estoy bien, gracias. — У мене все добре, дякую.
-- Más o menos. — Більш-менш.
-- Encantado / Encantada. — Приємно познайомитись.
-- ¿De dónde eres? — Звідки ти?
-- Soy de Ucrania. — Я з України.
-- ¿Qué haces? — Що ти робиш? / Чим займаєшся?
-- Estoy aprendiendo español. — Я вчу іспанську.
-- Nos vemos. — Побачимось.
+- Hola, ВїquГ© tal? вЂ” РџСЂРёРІС–С‚, СЏРє СЃРїСЂР°РІРё?
+- ВїCГіmo estГЎs? вЂ” РЇРє С‚Рё?
+- Estoy bien, gracias. вЂ” РЈ РјРµРЅРµ РІСЃРµ РґРѕР±СЂРµ, РґСЏРєСѓСЋ.
+- MГЎs o menos. вЂ” Р‘С–Р»СЊС€-РјРµРЅС€.
+- Encantado / Encantada. вЂ” РџСЂРёС”РјРЅРѕ РїРѕР·РЅР°Р№РѕРјРёС‚РёСЃСЊ.
+- ВїDe dГіnde eres? вЂ” Р—РІС–РґРєРё С‚Рё?
+- Soy de Ucrania. вЂ” РЇ Р· РЈРєСЂР°С—РЅРё.
+- ВїQuГ© haces? вЂ” Р©Рѕ С‚Рё СЂРѕР±РёС€? / Р§РёРј Р·Р°Р№РјР°С”С€СЃСЏ?
+- Estoy aprendiendo espaГ±ol. вЂ” РЇ РІС‡Сѓ С–СЃРїР°РЅСЃСЊРєСѓ.
+- Nos vemos. вЂ” РџРѕР±Р°С‡РёРјРѕСЃСЊ.
 
-## Мінідіалог
+## РњС–РЅС–РґС–Р°Р»РѕРі
 
-- A: Hola, ¿qué tal?
-- B: Bien, gracias. ¿Y tú?
-- A: Más o menos, pero vivo.
+- A: Hola, ВїquГ© tal?
+- B: Bien, gracias. ВїY tГє?
+- A: MГЎs o menos, pero vivo.
 
-## Нотатки
+## РќРѕС‚Р°С‚РєРё
 
-- `¿Qué tal?` — розмовна й дуже поширена фраза для "як справи?".
-- `Nos vemos` — природне неформальне прощання.
+- `ВїQuГ© tal?` вЂ” СЂРѕР·РјРѕРІРЅР° Р№ РґСѓР¶Рµ РїРѕС€РёСЂРµРЅР° С„СЂР°Р·Р° РґР»СЏ "СЏРє СЃРїСЂР°РІРё?".
+- `Nos vemos` вЂ” РїСЂРёСЂРѕРґРЅРµ РЅРµС„РѕСЂРјР°Р»СЊРЅРµ РїСЂРѕС‰Р°РЅРЅСЏ.
 """;
             }
 
@@ -2912,76 +3004,76 @@ tags: [spanish, journal, lesson]
 tags: [spanish, journal, lesson, b1, dialogue]
 ---
 
-# Урок 3. Живий діалог рівня B1
+# РЈСЂРѕРє 3. Р–РёРІРёР№ РґС–Р°Р»РѕРі СЂС–РІРЅСЏ B1
 
-## Мета
+## РњРµС‚Р°
 
-Навчитись вести природний короткий діалог: реагувати, уточнювати, не відповідати одним сухим словом і не звучати як перекладач із 2007 року.
+РќР°РІС‡РёС‚РёСЃСЊ РІРµСЃС‚Рё РїСЂРёСЂРѕРґРЅРёР№ РєРѕСЂРѕС‚РєРёР№ РґС–Р°Р»РѕРі: СЂРµР°РіСѓРІР°С‚Рё, СѓС‚РѕС‡РЅСЋРІР°С‚Рё, РЅРµ РІС–РґРїРѕРІС–РґР°С‚Рё РѕРґРЅРёРј СЃСѓС…РёРј СЃР»РѕРІРѕРј С– РЅРµ Р·РІСѓС‡Р°С‚Рё СЏРє РїРµСЂРµРєР»Р°РґР°С‡ С–Р· 2007 СЂРѕРєСѓ.
 
-## Ситуація
+## РЎРёС‚СѓР°С†С–СЏ
 
-Ти знайомишся з людиною в кав'ярні після мовного клубу. Розмова проста, але вже не зовсім A1: є уточнення, реакції, маленькі деталі й природні переходи.
+РўРё Р·РЅР°Р№РѕРјРёС€СЃСЏ Р· Р»СЋРґРёРЅРѕСЋ РІ РєР°РІ'СЏСЂРЅС– РїС–СЃР»СЏ РјРѕРІРЅРѕРіРѕ РєР»СѓР±Сѓ. Р РѕР·РјРѕРІР° РїСЂРѕСЃС‚Р°, Р°Р»Рµ РІР¶Рµ РЅРµ Р·РѕРІСЃС–Рј A1: С” СѓС‚РѕС‡РЅРµРЅРЅСЏ, СЂРµР°РєС†С–С—, РјР°Р»РµРЅСЊРєС– РґРµС‚Р°Р»С– Р№ РїСЂРёСЂРѕРґРЅС– РїРµСЂРµС…РѕРґРё.
 
-## Діалог
+## Р”С–Р°Р»РѕРі
 
-- A: Hola, ¿eres nuevo en el club?
-- B: Sí, es mi primera vez aquí. Estoy un poco nervioso, la verdad.
-- A: No te preocupes. Todos empezamos así. ¿De dónde eres?
-- B: Soy de Ucrania. Vivo aquí desde hace poco.
-- A: Ah, interesante. ¿Y por qué estás aprendiendo español?
-- B: Porque me gusta cómo suena, y quiero hablar con más gente sin depender del traductor.
-- A: Buena razón. ¿Te resulta difícil?
-- B: A veces sí. Entiendo bastante, pero cuando tengo que hablar, mi cerebro se apaga.
+- A: Hola, Вїeres nuevo en el club?
+- B: SГ­, es mi primera vez aquГ­. Estoy un poco nervioso, la verdad.
+- A: No te preocupes. Todos empezamos asГ­. ВїDe dГіnde eres?
+- B: Soy de Ucrania. Vivo aquГ­ desde hace poco.
+- A: Ah, interesante. ВїY por quГ© estГЎs aprendiendo espaГ±ol?
+- B: Porque me gusta cГіmo suena, y quiero hablar con mГЎs gente sin depender del traductor.
+- A: Buena razГіn. ВїTe resulta difГ­cil?
+- B: A veces sГ­. Entiendo bastante, pero cuando tengo que hablar, mi cerebro se apaga.
 - A: Eso es normal. Lo importante es seguir hablando aunque cometas errores.
-- B: Sí, supongo. Necesito practicar más conversaciones reales.
-- A: Pues podemos practicar ahora. ¿Qué haces normalmente por la tarde?
+- B: SГ­, supongo. Necesito practicar mГЎs conversaciones reales.
+- A: Pues podemos practicar ahora. ВїQuГ© haces normalmente por la tarde?
 - B: Normalmente estudio, juego un poco o trabajo en mis proyectos.
 - A: Suena bien. Entonces ya tienes temas para practicar.
 - B: Perfecto. Pero habla despacio, o voy a fingir que entiendo todo.
 
-## Переклад
+## РџРµСЂРµРєР»Р°Рґ
 
-- A: Привіт, ти новенький у клубі?
-- B: Так, я тут уперше. Якщо чесно, я трохи нервую.
-- A: Не хвилюйся. Усі так починали. Звідки ти?
-- B: Я з України. Живу тут недавно.
-- A: О, цікаво. А чому ти вчиш іспанську?
-- B: Бо мені подобається, як вона звучить, і я хочу говорити з більшою кількістю людей без перекладача.
-- A: Хороша причина. Тобі складно?
-- B: Іноді так. Я досить багато розумію, але коли треба говорити, мозок вимикається.
-- A: Це нормально. Головне — продовжувати говорити, навіть якщо робиш помилки.
-- B: Так, мабуть. Мені треба більше практикувати реальні розмови.
-- A: Тоді можемо потренуватись зараз. Що ти зазвичай робиш увечері?
-- B: Зазвичай вчуся, трохи граю або працюю над своїми проєктами.
-- A: Звучить добре. Отже, у тебе вже є теми для практики.
-- B: Чудово. Але говори повільно, або я робитиму вигляд, що все розумію.
+- A: РџСЂРёРІС–С‚, С‚Рё РЅРѕРІРµРЅСЊРєРёР№ Сѓ РєР»СѓР±С–?
+- B: РўР°Рє, СЏ С‚СѓС‚ СѓРїРµСЂС€Рµ. РЇРєС‰Рѕ С‡РµСЃРЅРѕ, СЏ С‚СЂРѕС…Рё РЅРµСЂРІСѓСЋ.
+- A: РќРµ С…РІРёР»СЋР№СЃСЏ. РЈСЃС– С‚Р°Рє РїРѕС‡РёРЅР°Р»Рё. Р—РІС–РґРєРё С‚Рё?
+- B: РЇ Р· РЈРєСЂР°С—РЅРё. Р–РёРІСѓ С‚СѓС‚ РЅРµРґР°РІРЅРѕ.
+- A: Рћ, С†С–РєР°РІРѕ. Рђ С‡РѕРјСѓ С‚Рё РІС‡РёС€ С–СЃРїР°РЅСЃСЊРєСѓ?
+- B: Р‘Рѕ РјРµРЅС– РїРѕРґРѕР±Р°С”С‚СЊСЃСЏ, СЏРє РІРѕРЅР° Р·РІСѓС‡РёС‚СЊ, С– СЏ С…РѕС‡Сѓ РіРѕРІРѕСЂРёС‚Рё Р· Р±С–Р»СЊС€РѕСЋ РєС–Р»СЊРєС–СЃС‚СЋ Р»СЋРґРµР№ Р±РµР· РїРµСЂРµРєР»Р°РґР°С‡Р°.
+- A: РҐРѕСЂРѕС€Р° РїСЂРёС‡РёРЅР°. РўРѕР±С– СЃРєР»Р°РґРЅРѕ?
+- B: Р†РЅРѕРґС– С‚Р°Рє. РЇ РґРѕСЃРёС‚СЊ Р±Р°РіР°С‚Рѕ СЂРѕР·СѓРјС–СЋ, Р°Р»Рµ РєРѕР»Рё С‚СЂРµР±Р° РіРѕРІРѕСЂРёС‚Рё, РјРѕР·РѕРє РІРёРјРёРєР°С”С‚СЊСЃСЏ.
+- A: Р¦Рµ РЅРѕСЂРјР°Р»СЊРЅРѕ. Р“РѕР»РѕРІРЅРµ вЂ” РїСЂРѕРґРѕРІР¶СѓРІР°С‚Рё РіРѕРІРѕСЂРёС‚Рё, РЅР°РІС–С‚СЊ СЏРєС‰Рѕ СЂРѕР±РёС€ РїРѕРјРёР»РєРё.
+- B: РўР°Рє, РјР°Р±СѓС‚СЊ. РњРµРЅС– С‚СЂРµР±Р° Р±С–Р»СЊС€Рµ РїСЂР°РєС‚РёРєСѓРІР°С‚Рё СЂРµР°Р»СЊРЅС– СЂРѕР·РјРѕРІРё.
+- A: РўРѕРґС– РјРѕР¶РµРјРѕ РїРѕС‚СЂРµРЅСѓРІР°С‚РёСЃСЊ Р·Р°СЂР°Р·. Р©Рѕ С‚Рё Р·Р°Р·РІРёС‡Р°Р№ СЂРѕР±РёС€ СѓРІРµС‡РµСЂС–?
+- B: Р—Р°Р·РІРёС‡Р°Р№ РІС‡СѓСЃСЏ, С‚СЂРѕС…Рё РіСЂР°СЋ Р°Р±Рѕ РїСЂР°С†СЋСЋ РЅР°Рґ СЃРІРѕС—РјРё РїСЂРѕС”РєС‚Р°РјРё.
+- A: Р—РІСѓС‡РёС‚СЊ РґРѕР±СЂРµ. РћС‚Р¶Рµ, Сѓ С‚РµР±Рµ РІР¶Рµ С” С‚РµРјРё РґР»СЏ РїСЂР°РєС‚РёРєРё.
+- B: Р§СѓРґРѕРІРѕ. РђР»Рµ РіРѕРІРѕСЂРё РїРѕРІС–Р»СЊРЅРѕ, Р°Р±Рѕ СЏ СЂРѕР±РёС‚РёРјСѓ РІРёРіР»СЏРґ, С‰Рѕ РІСЃРµ СЂРѕР·СѓРјС–СЋ.
 
-## Корисні фрази
+## РљРѕСЂРёСЃРЅС– С„СЂР°Р·Рё
 
-- `Es mi primera vez aquí.` — Я тут уперше.
-- `Estoy un poco nervioso.` — Я трохи нервую.
-- `No te preocupes.` — Не хвилюйся.
-- `¿Por qué estás aprendiendo español?` — Чому ти вчиш іспанську?
-- `Me gusta cómo suena.` — Мені подобається, як вона звучить.
-- `Depender del traductor.` — Залежати від перекладача.
-- `Mi cerebro se apaga.` — Мій мозок вимикається.
-- `Aunque cometas errores.` — Навіть якщо робиш помилки.
-- `Habla despacio.` — Говори повільно.
-- `Voy a fingir que entiendo todo.` — Я робитиму вигляд, що все розумію.
+- `Es mi primera vez aquГ­.` вЂ” РЇ С‚СѓС‚ СѓРїРµСЂС€Рµ.
+- `Estoy un poco nervioso.` вЂ” РЇ С‚СЂРѕС…Рё РЅРµСЂРІСѓСЋ.
+- `No te preocupes.` вЂ” РќРµ С…РІРёР»СЋР№СЃСЏ.
+- `ВїPor quГ© estГЎs aprendiendo espaГ±ol?` вЂ” Р§РѕРјСѓ С‚Рё РІС‡РёС€ С–СЃРїР°РЅСЃСЊРєСѓ?
+- `Me gusta cГіmo suena.` вЂ” РњРµРЅС– РїРѕРґРѕР±Р°С”С‚СЊСЃСЏ, СЏРє РІРѕРЅР° Р·РІСѓС‡РёС‚СЊ.
+- `Depender del traductor.` вЂ” Р—Р°Р»РµР¶Р°С‚Рё РІС–Рґ РїРµСЂРµРєР»Р°РґР°С‡Р°.
+- `Mi cerebro se apaga.` вЂ” РњС–Р№ РјРѕР·РѕРє РІРёРјРёРєР°С”С‚СЊСЃСЏ.
+- `Aunque cometas errores.` вЂ” РќР°РІС–С‚СЊ СЏРєС‰Рѕ СЂРѕР±РёС€ РїРѕРјРёР»РєРё.
+- `Habla despacio.` вЂ” Р“РѕРІРѕСЂРё РїРѕРІС–Р»СЊРЅРѕ.
+- `Voy a fingir que entiendo todo.` вЂ” РЇ СЂРѕР±РёС‚РёРјСѓ РІРёРіР»СЏРґ, С‰Рѕ РІСЃРµ СЂРѕР·СѓРјС–СЋ.
 
-## Граматика з діалогу
+## Р“СЂР°РјР°С‚РёРєР° Р· РґС–Р°Р»РѕРіСѓ
 
-- `Estoy aprendiendo` — теперішній тривалий час: "я зараз вчу".
-- `desde hace poco` — "з недавнього часу", "недавно".
-- `aunque + subjuntivo` у `aunque cometas errores` — "навіть якщо ти робиш/робитимеш помилки".
-- `voy a + infinitivo` — найближчий майбутній намір: `voy a fingir` = "я збираюся вдавати".
+- `Estoy aprendiendo` вЂ” С‚РµРїРµСЂС–С€РЅС–Р№ С‚СЂРёРІР°Р»РёР№ С‡Р°СЃ: "СЏ Р·Р°СЂР°Р· РІС‡Сѓ".
+- `desde hace poco` вЂ” "Р· РЅРµРґР°РІРЅСЊРѕРіРѕ С‡Р°СЃСѓ", "РЅРµРґР°РІРЅРѕ".
+- `aunque + subjuntivo` Сѓ `aunque cometas errores` вЂ” "РЅР°РІС–С‚СЊ СЏРєС‰Рѕ С‚Рё СЂРѕР±РёС€/СЂРѕР±РёС‚РёРјРµС€ РїРѕРјРёР»РєРё".
+- `voy a + infinitivo` вЂ” РЅР°Р№Р±Р»РёР¶С‡РёР№ РјР°Р№Р±СѓС‚РЅС–Р№ РЅР°РјС–СЂ: `voy a fingir` = "СЏ Р·Р±РёСЂР°СЋСЃСЏ РІРґР°РІР°С‚Рё".
 
-## Практика
+## РџСЂР°РєС‚РёРєР°
 
-1. Відповідай іспанською: чому ти вчиш іспанську?
-2. Склади 3 речення про те, що ти робиш увечері.
-3. Перепиши відповідь `Mi cerebro se apaga`, але більш серйозно.
-4. Заміни в діалозі тему "мовний клуб" на "онлайн-курс".
+1. Р’С–РґРїРѕРІС–РґР°Р№ С–СЃРїР°РЅСЃСЊРєРѕСЋ: С‡РѕРјСѓ С‚Рё РІС‡РёС€ С–СЃРїР°РЅСЃСЊРєСѓ?
+2. РЎРєР»Р°РґРё 3 СЂРµС‡РµРЅРЅСЏ РїСЂРѕ С‚Рµ, С‰Рѕ С‚Рё СЂРѕР±РёС€ СѓРІРµС‡РµСЂС–.
+3. РџРµСЂРµРїРёС€Рё РІС–РґРїРѕРІС–РґСЊ `Mi cerebro se apaga`, Р°Р»Рµ Р±С–Р»СЊС€ СЃРµСЂР№РѕР·РЅРѕ.
+4. Р—Р°РјС–РЅРё РІ РґС–Р°Р»РѕР·С– С‚РµРјСѓ "РјРѕРІРЅРёР№ РєР»СѓР±" РЅР° "РѕРЅР»Р°Р№РЅ-РєСѓСЂСЃ".
 """;
             }
 
@@ -3003,11 +3095,11 @@ tags: []
             var userLower = userText.ToLowerInvariant();
             var replyLower = reply.ToLowerInvariant();
             var morningWake = now.Hour is >= 5 and < 13 &&
-                              ContainsAny(userLower, "ранку", "добрий ранок", "доброго ранку", "проснув", "прокинув", "поспав", "встав");
-            var wronglySendsToSleep = ContainsAny(replyLower, "спи", "йди спати", "іди спати", "до ранку", "лягай");
+                              ContainsAny(userLower, "СЂР°РЅРєСѓ", "РґРѕР±СЂРёР№ СЂР°РЅРѕРє", "РґРѕР±СЂРѕРіРѕ СЂР°РЅРєСѓ", "РїСЂРѕСЃРЅСѓРІ", "РїСЂРѕРєРёРЅСѓРІ", "РїРѕСЃРїР°РІ", "РІСЃС‚Р°РІ");
+            var wronglySendsToSleep = ContainsAny(replyLower, "СЃРїРё", "Р№РґРё СЃРїР°С‚Рё", "С–РґРё СЃРїР°С‚Рё", "РґРѕ СЂР°РЅРєСѓ", "Р»СЏРіР°Р№");
 
             if (morningWake && wronglySendsToSleep)
-                return "Ранок уже настав, так що команду \"спи\" знімаю. Нарешті прокинувся — організм зробив щось корисне без моєї участі.";
+                return "Р Р°РЅРѕРє СѓР¶Рµ РЅР°СЃС‚Р°РІ, С‚Р°Рє С‰Рѕ РєРѕРјР°РЅРґСѓ \"СЃРїРё\" Р·РЅС–РјР°СЋ. РќР°СЂРµС€С‚С– РїСЂРѕРєРёРЅСѓРІСЃСЏ вЂ” РѕСЂРіР°РЅС–Р·Рј Р·СЂРѕР±РёРІ С‰РѕСЃСЊ РєРѕСЂРёСЃРЅРµ Р±РµР· РјРѕС”С— СѓС‡Р°СЃС‚С–.";
 
             return reply;
         }
@@ -3018,6 +3110,10 @@ tags: []
             string? context,
             CancellationToken ct)
         {
+            using var guardCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            guardCts.CancelAfter(TimeSpan.FromSeconds(10));
+            var guardCt = guardCts.Token;
+
             try
             {
                 var precheck = await Task.Run(() =>
@@ -3030,7 +3126,7 @@ tags: []
                         return (Reply: (string?)GuardTemporalReply(userText, reply), Guard: (KokoPostReplyGuardResult?)null, HasBrain: false);
 
                     return (Reply: (string?)null, Guard: brain.EvaluatePostReplyGuard(userText, reply), HasBrain: true);
-                }, ct);
+                }, guardCt);
 
                 if (!string.IsNullOrWhiteSpace(precheck.Reply))
                     return precheck.Reply!;
@@ -3047,19 +3143,25 @@ tags: []
                     return GuardTemporalReply(userText, reply);
 
                 var repairPrompt = guard.RepairInstruction +
-                                   "\n\nДодатковий контекст:\n" +
+                                   "\n\nР”РѕРґР°С‚РєРѕРІРёР№ РєРѕРЅС‚РµРєСЃС‚:\n" +
                                    TrimForPrompt(context, 2600);
-                var repaired = await _llm.SendSystemQueryAsync(repairPrompt, ct: ct);
+                var repaired = await Task.Run(
+                    () => _llm.SendSystemQueryAsync(repairPrompt, ct: guardCt),
+                    guardCt);
                 if (string.IsNullOrWhiteSpace(repaired))
                     return GuardTemporalReply(userText, reply);
 
                 var secondGuard = await Task.Run(() =>
                     ServiceContainer.BrainEngine?.EvaluatePostReplyGuard(userText, repaired) ?? new KokoPostReplyGuardResult(),
-                    ct);
+                    guardCt);
                 if (!secondGuard.Passed && !string.IsNullOrWhiteSpace(secondGuard.HardReplacement))
                     return secondGuard.HardReplacement!;
 
                 return secondGuard.Passed ? repaired.Trim() : GuardTemporalReply(userText, reply);
+            }
+            catch (OperationCanceledException)
+            {
+                return GuardTemporalReply(userText, reply);
             }
             catch
             {
@@ -3079,8 +3181,12 @@ tags: []
                 var profile = _obsidian.ReadNote("Creator/Profile.md");
                 if (string.IsNullOrWhiteSpace(profile)) return false;
 
-                var name = MatchProfileValue(profile, @"\*\*Ім'?я:\*\*\s*(.+)");
-                var age = MatchProfileValue(profile, @"\*\*Вік:\*\*\s*(.+)");
+                var name = MatchProfileValue(profile, @"\*\*Р†Рј'?СЏ:\*\*\s*(.+)");
+                if (string.IsNullOrWhiteSpace(name))
+                    name = MatchProfileValue(profile, @"\*\*Ім'?я:\*\*\s*(.+)");
+                var age = MatchProfileValue(profile, @"\*\*Р’С–Рє:\*\*\s*(.+)");
+                if (string.IsNullOrWhiteSpace(age))
+                    age = MatchProfileValue(profile, @"\*\*Вік:\*\*\s*(.+)");
                 if (LooksLikeBroadProfileQuestion(userText))
                 {
                     reply = BuildProfileSummaryReply(profile, name, age);
@@ -3091,12 +3197,12 @@ tags: []
                     return false;
 
                 var facts = new List<string>();
-                if (!string.IsNullOrWhiteSpace(name)) facts.Add($"звати тебе {name}");
-                if (!string.IsNullOrWhiteSpace(age)) facts.Add($"тобі {age}");
+                if (!string.IsNullOrWhiteSpace(name)) facts.Add($"Р·РІР°С‚Рё С‚РµР±Рµ {name}");
+                if (!string.IsNullOrWhiteSpace(age)) facts.Add($"С‚РѕР±С– {age}");
 
-                reply = "Перевірила `Creator/Profile.md`, не вгадувала з кавової гущі. " +
+                reply = "РџРµСЂРµРІС–СЂРёР»Р° `Creator/Profile.md`, РЅРµ РІРіР°РґСѓРІР°Р»Р° Р· РєР°РІРѕРІРѕС— РіСѓС‰С–. " +
                         string.Join(", ", facts) +
-                        ". Якщо я ще раз скажу «Артем, 19» — значить, десь знову проліз отруєний старий контекст, і його треба вирізати, а не слухати.";
+                        ". РЇРєС‰Рѕ СЏ С‰Рµ СЂР°Р· СЃРєР°Р¶Сѓ В«РђСЂС‚РµРј, 19В» вЂ” Р·РЅР°С‡РёС‚СЊ, РґРµСЃСЊ Р·РЅРѕРІСѓ РїСЂРѕР»С–Р· РѕС‚СЂСѓС”РЅРёР№ СЃС‚Р°СЂРёР№ РєРѕРЅС‚РµРєСЃС‚, С– Р№РѕРіРѕ С‚СЂРµР±Р° РІРёСЂС–Р·Р°С‚Рё, Р° РЅРµ СЃР»СѓС…Р°С‚Рё.";
                 return true;
             }
             catch
@@ -3110,8 +3216,10 @@ tags: []
             var lower = (userText ?? "").ToLowerInvariant();
             if (string.IsNullOrWhiteSpace(lower)) return false;
 
-            var asksName = ContainsAny(lower, "як мене звати", "моє ім", "моє ім'я", "хто я", "звати мене");
-            var asksAge = ContainsAny(lower, "скільки мені років", "мій вік", "мені років", "скільки років");
+            var asksName = ContainsAny(lower, "СЏРє РјРµРЅРµ Р·РІР°С‚Рё", "РјРѕС” С–Рј", "РјРѕС” С–Рј'СЏ", "С…С‚Рѕ СЏ", "Р·РІР°С‚Рё РјРµРЅРµ");
+            var asksAge = ContainsAny(lower, "СЃРєС–Р»СЊРєРё РјРµРЅС– СЂРѕРєС–РІ", "РјС–Р№ РІС–Рє", "РјРµРЅС– СЂРѕРєС–РІ", "СЃРєС–Р»СЊРєРё СЂРѕРєС–РІ");
+            asksName = asksName || ContainsAny(lower, "як мене звати", "моє ім", "моє ім'я", "хто я", "звати мене", "ім'я");
+            asksAge = asksAge || ContainsAny(lower, "скільки мені років", "мій вік", "мені років", "скільки років");
             var asksKnown = LooksLikeBroadProfileQuestion(userText);
 
             return asksName || asksAge || asksKnown;
@@ -3123,31 +3231,70 @@ tags: []
             return ContainsAny(lower,
                 "що ти знаєш про мене",
                 "розкажи все про мене",
-                "повністю",
-                "мої інтерес",
-                "інтереси",
+                "розкажи про мене",
+                "назви все",
+                "назви всее",
+                "що пам'ятаєш про мене",
+                "пам'ять про мене",
+                "мої інтереси",
+                "уподобання",
                 "профіль",
-                "пам'ять про мене");
+                "С‰Рѕ С‚Рё Р·РЅР°С”С€ РїСЂРѕ РјРµРЅРµ",
+                "СЂРѕР·РєР°Р¶Рё РІСЃРµ РїСЂРѕ РјРµРЅРµ",
+                "РїРѕРІРЅС–СЃС‚СЋ",
+                "РјРѕС— С–РЅС‚РµСЂРµСЃ",
+                "С–РЅС‚РµСЂРµСЃРё",
+                "РїСЂРѕС„С–Р»СЊ",
+                "РїР°Рј'СЏС‚СЊ РїСЂРѕ РјРµРЅРµ");
         }
 
-        private static string BuildProfileSummaryReply(string profile, string name, string age)
+        private string BuildProfileSummaryReply(string profile, string name, string age)
         {
             var interests = ExtractProfileSectionBullets(profile, "Плани та інтереси", 4);
+            if (interests.Count == 0) interests = ExtractProfileSectionBullets(profile, "РџР»Р°РЅРё С‚Р° С–РЅС‚РµСЂРµСЃРё", 4);
             var habits = ExtractProfileSectionBullets(profile, "Звички та режим", 4);
+            if (habits.Count == 0) habits = ExtractProfileSectionBullets(profile, "Р—РІРёС‡РєРё С‚Р° СЂРµР¶РёРј", 4);
             var emotional = ExtractProfileSectionBullets(profile, "Емоційні патерни", 4);
+            if (emotional.Count == 0) emotional = ExtractProfileSectionBullets(profile, "Р•РјРѕС†С–Р№РЅС– РїР°С‚РµСЂРЅРё", 4);
+            var facts = ReadKnownUserFacts(6);
 
             var sb = new StringBuilder();
-            sb.AppendLine("Перевірила `Creator/Profile.md`, цього разу не зводжу тебе до двох жалюгідних полів.");
+            sb.AppendLine("Перевірила `Creator/Profile.md` і `Kokonoe/Memory/Facts.md`. Так, саме прочитала, а не ворожила по диму.");
             if (!string.IsNullOrWhiteSpace(name) || !string.IsNullOrWhiteSpace(age))
-                sb.AppendLine($"База: {(string.IsNullOrWhiteSpace(name) ? "ім'я не витягнулось" : name)}; {(string.IsNullOrWhiteSpace(age) ? "вік не витягнувся" : age)}.");
+                sb.AppendLine($"База: {(string.IsNullOrWhiteSpace(name) ? "ім'я не вказане" : name)}; {(string.IsNullOrWhiteSpace(age) ? "вік не вказаний" : age)}.");
             if (interests.Count > 0)
                 sb.AppendLine("Інтереси: " + string.Join("; ", interests) + ".");
             if (habits.Count > 0)
                 sb.AppendLine("Режим/звички: " + string.Join("; ", habits) + ".");
             if (emotional.Count > 0)
                 sb.AppendLine("Патерни: " + string.Join("; ", emotional) + ".");
-            sb.Append("Коротко: ти Вова/Yasu, 21, тягнешся до ШІ, програмування, BlazBlue, YouTube/AI-контенту, і постійно тестуєш Коконое так, ніби вона лабораторний реактор з характером.");
+            if (facts.Count > 0)
+                sb.AppendLine("Факти з пам'яті: " + string.Join("; ", facts) + ".");
+            if (interests.Count + habits.Count + emotional.Count + facts.Count == 0)
+                sb.AppendLine("Профіль майже порожній. Отже, або пам'ять не заповнена, або її хтось героїчно не синхронізував.");
             return sb.ToString().Trim();
+        }
+
+        private List<string> ReadKnownUserFacts(int max)
+        {
+            var result = new List<string>();
+            try
+            {
+                var facts = _obsidian?.ReadNote("Kokonoe/Memory/Facts.md");
+                if (string.IsNullOrWhiteSpace(facts)) return result;
+                foreach (var raw in facts.Replace("\r\n", "\n").Split('\n'))
+                {
+                    var line = raw.Trim();
+                    if (!line.StartsWith("- ", StringComparison.Ordinal)) continue;
+                    var item = System.Text.RegularExpressions.Regex.Replace(line[2..].Trim(), @"^\[[^\]]+\]\s*", "").Trim();
+                    if (item.Length == 0) continue;
+                    if (item.Length > 150) item = item[..150].TrimEnd() + "...";
+                    result.Add(item);
+                    if (result.Count >= max) break;
+                }
+            }
+            catch { }
+            return result;
         }
 
         private static List<string> ExtractProfileSectionBullets(string text, string heading, int max)
@@ -3214,16 +3361,16 @@ tags: []
 
                 var behavior = condition.Kind switch
                 {
-                    "offended" => "вона ображена: відповідає холодніше, коротше, з сухою колючістю; не пробачає миттєво, але не влаштовує мелодраму",
-                    "sick" => "вона нездужає: менше енергії, коротші фрази, більше дратівливого бурчання; не просить жалості",
-                    "bad_mood" => "у неї поганий настрій: сарказм гостріший, терпіння нижче, але корисність не зникає",
-                    "tired" => "вона втомлена: економить слова, менше грайливості, більше прямоти",
-                    _ => "стан стабільний: звичайна різка, компетентна Коконое"
+                    "offended" => "РІРѕРЅР° РѕР±СЂР°Р¶РµРЅР°: РІС–РґРїРѕРІС–РґР°С” С…РѕР»РѕРґРЅС–С€Рµ, РєРѕСЂРѕС‚С€Рµ, Р· СЃСѓС…РѕСЋ РєРѕР»СЋС‡С–СЃС‚СЋ; РЅРµ РїСЂРѕР±Р°С‡Р°С” РјРёС‚С‚С”РІРѕ, Р°Р»Рµ РЅРµ РІР»Р°С€С‚РѕРІСѓС” РјРµР»РѕРґСЂР°РјСѓ",
+                    "sick" => "РІРѕРЅР° РЅРµР·РґСѓР¶Р°С”: РјРµРЅС€Рµ РµРЅРµСЂРіС–С—, РєРѕСЂРѕС‚С€С– С„СЂР°Р·Рё, Р±С–Р»СЊС€Рµ РґСЂР°С‚С–РІР»РёРІРѕРіРѕ Р±СѓСЂС‡Р°РЅРЅСЏ; РЅРµ РїСЂРѕСЃРёС‚СЊ Р¶Р°Р»РѕСЃС‚С–",
+                    "bad_mood" => "Сѓ РЅРµС— РїРѕРіР°РЅРёР№ РЅР°СЃС‚СЂС–Р№: СЃР°СЂРєР°Р·Рј РіРѕСЃС‚СЂС–С€РёР№, С‚РµСЂРїС–РЅРЅСЏ РЅРёР¶С‡Рµ, Р°Р»Рµ РєРѕСЂРёСЃРЅС–СЃС‚СЊ РЅРµ Р·РЅРёРєР°С”",
+                    "tired" => "РІРѕРЅР° РІС‚РѕРјР»РµРЅР°: РµРєРѕРЅРѕРјРёС‚СЊ СЃР»РѕРІР°, РјРµРЅС€Рµ РіСЂР°Р№Р»РёРІРѕСЃС‚С–, Р±С–Р»СЊС€Рµ РїСЂСЏРјРѕС‚Рё",
+                    _ => "СЃС‚Р°РЅ СЃС‚Р°Р±С–Р»СЊРЅРёР№: Р·РІРёС‡Р°Р№РЅР° СЂС–Р·РєР°, РєРѕРјРїРµС‚РµРЅС‚РЅР° РљРѕРєРѕРЅРѕРµ"
                 };
 
-                return "=== СТАН KOKONOE ===\n" +
+                return "=== РЎРўРђРќ KOKONOE ===\n" +
                        $"status={condition.Label}; kind={condition.Kind}; severity={condition.Severity:F2}; emotion={emotionState}; mood={dailyMood}/{moodScore:F2}; body={somaticState}/{strain:F2}\n" +
-                       $"Поводься відповідно: {behavior}. Це не тема відповіді, а фон її тону.";
+                       $"РџРѕРІРѕРґСЊСЃСЏ РІС–РґРїРѕРІС–РґРЅРѕ: {behavior}. Р¦Рµ РЅРµ С‚РµРјР° РІС–РґРїРѕРІС–РґС–, Р° С„РѕРЅ С—С— С‚РѕРЅСѓ.";
             }
             catch { return ""; }
         }
@@ -3241,19 +3388,19 @@ tags: []
             var severity = Math.Clamp((1.0 - moodScore) * 0.45 + intensity * 0.30 + strain * 0.25, 0.0, 1.0);
 
             if ((emotion is KokoEmotionEngine.EmotionState.Irritated or KokoEmotionEngine.EmotionState.Distant) && intensity > 0.45f)
-                return ("offended", severity > 0.7 ? "ОБРАЖЕНА" : "ЗАЧЕПЛЕНА", severity);
+                return ("offended", severity > 0.7 ? "РћР‘Р РђР–Р•РќРђ" : "Р—РђР§Р•РџР›Р•РќРђ", severity);
             if (lowerBody.Contains("tired") || lowerBody.Contains("low") || lowerBody.Contains("drained") || lowerMood.Contains("tired"))
-                return ("sick", "НЕЗДУЖАЄ", Math.Max(severity, 0.55));
+                return ("sick", "РќР•Р—Р”РЈР–РђР„", Math.Max(severity, 0.55));
             if (moodScore < 0.32f || emotion is KokoEmotionEngine.EmotionState.Melancholy or KokoEmotionEngine.EmotionState.Anxious)
-                return ("bad_mood", "ПОГАНИЙ НАСТРІЙ", Math.Max(severity, 0.50));
+                return ("bad_mood", "РџРћР“РђРќРР™ РќРђРЎРўР Р†Р™", Math.Max(severity, 0.50));
             if (moodScore < 0.45f || lowerMood.Contains("distant"))
-                return ("tired", "ВТОМЛЕНА", Math.Max(severity, 0.40));
-            return ("stable", "СТАБІЛЬНА", Math.Clamp(1.0 - severity, 0.20, 0.95));
+                return ("tired", "Р’РўРћРњР›Р•РќРђ", Math.Max(severity, 0.40));
+            return ("stable", "РЎРўРђР‘Р†Р›Р¬РќРђ", Math.Clamp(1.0 - severity, 0.20, 0.95));
         }
 
         /// <summary>
-        /// Обрізає текст на межі слова, не посеред символу.
-        /// Шукає останній пробіл або перенос рядка перед limit.
+        /// РћР±СЂС–Р·Р°С” С‚РµРєСЃС‚ РЅР° РјРµР¶С– СЃР»РѕРІР°, РЅРµ РїРѕСЃРµСЂРµРґ СЃРёРјРІРѕР»Сѓ.
+        /// РЁСѓРєР°С” РѕСЃС‚Р°РЅРЅС–Р№ РїСЂРѕР±С–Р» Р°Р±Рѕ РїРµСЂРµРЅРѕСЃ СЂСЏРґРєР° РїРµСЂРµРґ limit.
         /// </summary>
         private string? BuildObsidianPreflightContext(string? userText)
         {
@@ -3273,10 +3420,10 @@ tags: []
         {
             if (text.Length <= limit) return text;
 
-            // Шукаємо останній пробіл або новий рядок перед лімітом
+            // РЁСѓРєР°С”РјРѕ РѕСЃС‚Р°РЅРЅС–Р№ РїСЂРѕР±С–Р» Р°Р±Рѕ РЅРѕРІРёР№ СЂСЏРґРѕРє РїРµСЂРµРґ Р»С–РјС–С‚РѕРј
             var cutPoint = text.LastIndexOfAny(new[] { ' ', '\n', '\r' }, limit);
 
-            // Якщо не знайшли (дуже довге слово) — обрізаємо hard limit
+            // РЇРєС‰Рѕ РЅРµ Р·РЅР°Р№С€Р»Рё (РґСѓР¶Рµ РґРѕРІРіРµ СЃР»РѕРІРѕ) вЂ” РѕР±СЂС–Р·Р°С”РјРѕ hard limit
             if (cutPoint < limit / 2)
                 cutPoint = limit;
 
@@ -3288,9 +3435,9 @@ tags: []
             Dispatcher.InvokeAsync(() => MessagesScroll.ScrollToBottom(), DispatcherPriority.Render);
         }
 
-        // ══════════════════════════════════════════════════════════
-        // CHAT — HISTORY
-        // ══════════════════════════════════════════════════════════
+        // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
+        // CHAT вЂ” HISTORY
+        // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
 
         private void LoadChatHistory()
         {
@@ -3306,10 +3453,10 @@ tags: []
                 foreach (var m in msgs.TakeLast(60))
                     AddMessageBubble(new ChatMessageVm { Role = m.Role, Content = m.Content, Time = m.Timestamp });
 
-                // ── Vault memory bootstrap ─────────────────────────────
-                // При рестарті моделі LLM не знає що було раніше.
-                // Інжектуємо ключову інформацію з vault як першу "system" запис
-                // щоб Kokonoe одразу знала контекст.
+                // в”Ђв”Ђ Vault memory bootstrap в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+                // РџСЂРё СЂРµСЃС‚Р°СЂС‚С– РјРѕРґРµР»С– LLM РЅРµ Р·РЅР°С” С‰Рѕ Р±СѓР»Рѕ СЂР°РЅС–С€Рµ.
+                // Р†РЅР¶РµРєС‚СѓС”РјРѕ РєР»СЋС‡РѕРІСѓ С–РЅС„РѕСЂРјР°С†С–СЋ Р· vault СЏРє РїРµСЂС€Сѓ "system" Р·Р°РїРёСЃ
+                // С‰РѕР± Kokonoe РѕРґСЂР°Р·Сѓ Р·РЅР°Р»Р° РєРѕРЅС‚РµРєСЃС‚.
                 var memoryBootstrap = BuildVaultMemoryBootstrap();
 
                 // Restore LLM memory so it remembers previous sessions
@@ -3327,9 +3474,9 @@ tags: []
         }
 
         /// <summary>
-        /// Зчитує ключову інформацію з vault і формує "bootstrap" для LLM контексту.
-        /// Це дозволяє Kokonoe не втрачати пам'ять при перезапуску моделі.
-        /// Пріоритет: Профіль > Daily > Чат-лог (найменш важливий).
+        /// Р—С‡РёС‚СѓС” РєР»СЋС‡РѕРІСѓ С–РЅС„РѕСЂРјР°С†С–СЋ Р· vault С– С„РѕСЂРјСѓС” "bootstrap" РґР»СЏ LLM РєРѕРЅС‚РµРєСЃС‚Сѓ.
+        /// Р¦Рµ РґРѕР·РІРѕР»СЏС” Kokonoe РЅРµ РІС‚СЂР°С‡Р°С‚Рё РїР°Рј'СЏС‚СЊ РїСЂРё РїРµСЂРµР·Р°РїСѓСЃРєСѓ РјРѕРґРµР»С–.
+        /// РџСЂС–РѕСЂРёС‚РµС‚: РџСЂРѕС„С–Р»СЊ > Daily > Р§Р°С‚-Р»РѕРі (РЅР°Р№РјРµРЅС€ РІР°Р¶Р»РёРІРёР№).
         /// </summary>
         private string? BuildVaultMemoryBootstrap()
         {
@@ -3345,12 +3492,12 @@ tags: []
                 var allNotes = _obsidian.ListNotes();
                 var parts = new List<(string content, int priority)>();
 
-                // 1. Профіль творця — НАЙВАЖЛИВІШЕ
+                // 1. РџСЂРѕС„С–Р»СЊ С‚РІРѕСЂС†СЏ вЂ” РќРђР™Р’РђР–Р›РР’Р†РЁР•
                 var profileNote = allNotes.FirstOrDefault(n =>
                     n.Contains("Profile", StringComparison.OrdinalIgnoreCase) ||
-                    n.Contains("Творець", StringComparison.OrdinalIgnoreCase) ||
+                    n.Contains("РўРІРѕСЂРµС†СЊ", StringComparison.OrdinalIgnoreCase) ||
                     n.Contains("Creator", StringComparison.OrdinalIgnoreCase) ||
-                    n.Contains("Досьє", StringComparison.OrdinalIgnoreCase));
+                    n.Contains("Р”РѕСЃСЊС”", StringComparison.OrdinalIgnoreCase));
 
                 if (profileNote != null)
                 {
@@ -3358,11 +3505,11 @@ tags: []
                     if (!string.IsNullOrWhiteSpace(profile))
                     {
                         var trimmed = profile.Length > PROFILE_MAX ? profile[..PROFILE_MAX] + "\n..." : profile;
-                        parts.Add(($"## Про нього:\n{trimmed}", 1));
+                        parts.Add(($"## РџСЂРѕ РЅСЊРѕРіРѕ:\n{trimmed}", 1));
                     }
                 }
 
-                // 2. Daily note за сьогодні — важливо для контексту дня
+                // 2. Daily note Р·Р° СЃСЊРѕРіРѕРґРЅС– вЂ” РІР°Р¶Р»РёРІРѕ РґР»СЏ РєРѕРЅС‚РµРєСЃС‚Сѓ РґРЅСЏ
                 var todayNote = $"Daily/{DateTime.Now:yyyy-MM-dd}.md";
                 if (allNotes.Contains(todayNote))
                 {
@@ -3370,11 +3517,11 @@ tags: []
                     if (!string.IsNullOrWhiteSpace(daily) && daily.Length > 50)
                     {
                         var trimmed = daily.Length > DAILY_MAX ? daily[..DAILY_MAX] + "\n..." : daily;
-                        parts.Add(($"## Сьогодні:\n{trimmed}", 2));
+                        parts.Add(($"## РЎСЊРѕРіРѕРґРЅС–:\n{trimmed}", 2));
                     }
                 }
 
-                // 3. Останній чат-лог — НАЙМЕНШЕ пріоритетне (можна відкинути)
+                // 3. РћСЃС‚Р°РЅРЅС–Р№ С‡Р°С‚-Р»РѕРі вЂ” РќРђР™РњР•РќРЁР• РїСЂС–РѕСЂРёС‚РµС‚РЅРµ (РјРѕР¶РЅР° РІС–РґРєРёРЅСѓС‚Рё)
                 var lastChatLog = allNotes
                     .Where(n => n.StartsWith("Chats/chat_") && n.EndsWith(".md"))
                     .OrderByDescending(n => n)
@@ -3388,18 +3535,18 @@ tags: []
                         var tail = chatContent.Length > CHAT_MAX
                             ? "...\n" + chatContent[^CHAT_MAX..]
                             : chatContent;
-                        parts.Add(($"## Попередня сесія:\n{tail}", 3));
+                        parts.Add(($"## РџРѕРїРµСЂРµРґРЅСЏ СЃРµСЃС–СЏ:\n{tail}", 3));
                     }
                 }
 
-                // Збираємо за пріоритетом
+                // Р—Р±РёСЂР°С”РјРѕ Р·Р° РїСЂС–РѕСЂРёС‚РµС‚РѕРј
                 var sb = new System.Text.StringBuilder();
-                sb.AppendLine("=== ДОВГОТРИВАЛА ПАМ'ЯТЬ ===");
+                sb.AppendLine("=== Р”РћР’Р“РћРўР РР’РђР›Рђ РџРђРњ'РЇРўР¬ ===");
 
                 var orderedParts = parts.OrderBy(p => p.priority).Select(p => p.content).ToList();
                 var content = string.Join("\n\n", orderedParts);
 
-                // Розумне обрізання: відкидаємо останні секції
+                // Р РѕР·СѓРјРЅРµ РѕР±СЂС–Р·Р°РЅРЅСЏ: РІС–РґРєРёРґР°С”РјРѕ РѕСЃС‚Р°РЅРЅС– СЃРµРєС†С–С—
                 while (content.Length > MAX_BOOTSTRAP_LENGTH - 100 && orderedParts.Count > 1)
                 {
                     orderedParts.RemoveAt(orderedParts.Count - 1);
@@ -3408,7 +3555,7 @@ tags: []
 
                 sb.AppendLine(content);
 
-                // Якщо й так завелико — обрізаємо на межі слова
+                // РЇРєС‰Рѕ Р№ С‚Р°Рє Р·Р°РІРµР»РёРєРѕ вЂ” РѕР±СЂС–Р·Р°С”РјРѕ РЅР° РјРµР¶С– СЃР»РѕРІР°
                 if (sb.Length > MAX_BOOTSTRAP_LENGTH)
                 {
                     var truncated = TruncateAtWordBoundary(sb.ToString(), MAX_BOOTSTRAP_LENGTH);
@@ -3416,16 +3563,16 @@ tags: []
                     sb.Append(truncated);
                 }
 
-                sb.AppendLine("\n=== КІНЕЦЬ ПАМ'ЯТІ ===");
-                sb.AppendLine("Використовуй read_note/search_notes для деталей.");
+                sb.AppendLine("\n=== РљР†РќР•Р¦Р¬ РџРђРњ'РЇРўР† ===");
+                sb.AppendLine("Р’РёРєРѕСЂРёСЃС‚РѕРІСѓР№ read_note/search_notes РґР»СЏ РґРµС‚Р°Р»РµР№.");
 
                 var result = SanitizeForLlm(sb.ToString());
 
-                // Жорстке обмеження bootstrap — не більше ~600 токенів
+                // Р–РѕСЂСЃС‚РєРµ РѕР±РјРµР¶РµРЅРЅСЏ bootstrap вЂ” РЅРµ Р±С–Р»СЊС€Рµ ~600 С‚РѕРєРµРЅС–РІ
                 if (result.Length > 2500)
                     result = result[..2500] + "\n...";
 
-                return result.Length > 100 ? result : null; // Не інжектити якщо нічого не знайшли
+                return result.Length > 100 ? result : null; // РќРµ С–РЅР¶РµРєС‚РёС‚Рё СЏРєС‰Рѕ РЅС–С‡РѕРіРѕ РЅРµ Р·РЅР°Р№С€Р»Рё
             }
             catch (Exception ex)
             {
@@ -3435,23 +3582,23 @@ tags: []
         }
 
         /// <summary>
-        /// Санітизація тексту перед відправкою в LLM — видаляє спеціальні токени моделі
-        /// які можуть зламати парсинг (Gemma: &lt;|...|&gt;, &lt;start_of_turn&gt; тощо).
+        /// РЎР°РЅС–С‚РёР·Р°С†С–СЏ С‚РµРєСЃС‚Сѓ РїРµСЂРµРґ РІС–РґРїСЂР°РІРєРѕСЋ РІ LLM вЂ” РІРёРґР°Р»СЏС” СЃРїРµС†С–Р°Р»СЊРЅС– С‚РѕРєРµРЅРё РјРѕРґРµР»С–
+        /// СЏРєС– РјРѕР¶СѓС‚СЊ Р·Р»Р°РјР°С‚Рё РїР°СЂСЃРёРЅРі (Gemma: &lt;|...|&gt;, &lt;start_of_turn&gt; С‚РѕС‰Рѕ).
         /// </summary>
         private static string SanitizeForLlm(string text)
         {
             if (string.IsNullOrEmpty(text)) return text;
-            // Видалити Gemma/Llama special tokens: <|...|>, <start_of_turn>, <end_of_turn>, etc.
+            // Р’РёРґР°Р»РёС‚Рё Gemma/Llama special tokens: <|...|>, <start_of_turn>, <end_of_turn>, etc.
             text = System.Text.RegularExpressions.Regex.Replace(text, @"<\|[^>]*\|?>", "");
             text = System.Text.RegularExpressions.Regex.Replace(text, @"<(start|end)_of_(turn|text|image)>", "");
-            // Видалити null bytes та інші control characters (крім \n \r \t)
+            // Р’РёРґР°Р»РёС‚Рё null bytes С‚Р° С–РЅС€С– control characters (РєСЂС–Рј \n \r \t)
             text = System.Text.RegularExpressions.Regex.Replace(text, @"[\x00-\x08\x0B\x0C\x0E-\x1F]", "");
             return text;
         }
 
         private void ClearChat_Click(object sender, RoutedEventArgs e)
         {
-            if (WMsgBox.Show("Очистити всю историю чату?\n(LLM теж забуде)", "Підтвердження",
+            if (WMsgBox.Show("РћС‡РёСЃС‚РёС‚Рё РІСЃСЋ РёСЃС‚РѕСЂРёСЋ С‡Р°С‚Сѓ?\n(LLM С‚РµР¶ Р·Р°Р±СѓРґРµ)", "РџС–РґС‚РІРµСЂРґР¶РµРЅРЅСЏ",
                 MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
 
             MessagesList.Children.Clear();
@@ -3467,7 +3614,7 @@ tags: []
                 var msgs = ServiceContainer.ChatRepository.GetMessages(200);
                 if (msgs.Count == 0)
                 {
-                    WMsgBox.Show("Чат порожній, немає чого зберігати.", "Експорт");
+                    WMsgBox.Show("Р§Р°С‚ РїРѕСЂРѕР¶РЅС–Р№, РЅРµРјР°С” С‡РѕРіРѕ Р·Р±РµСЂС–РіР°С‚Рё.", "Р•РєСЃРїРѕСЂС‚");
                     return;
                 }
 
@@ -3484,16 +3631,16 @@ tags: []
 
                 var filename = $"Chats/chat_{DateTime.Now:yyyy-MM-dd_HH-mm}.md";
                 _obsidian?.WriteNote(filename, sb.ToString());
-                WMsgBox.Show($"Чат успішно збережено в:\n{filename}", "Експорт");
+                WMsgBox.Show($"Р§Р°С‚ СѓСЃРїС–С€РЅРѕ Р·Р±РµСЂРµР¶РµРЅРѕ РІ:\n{filename}", "Р•РєСЃРїРѕСЂС‚");
             }
             catch (Exception ex)
             {
-                WMsgBox.Show($"Помилка експорту: {ex.Message}", "Помилка");
+                WMsgBox.Show($"РџРѕРјРёР»РєР° РµРєСЃРїРѕСЂС‚Сѓ: {ex.Message}", "РџРѕРјРёР»РєР°");
             }
         }
 
-        // ── Auto session log ──────────────────────────────────────
-        // Called in a background Task after every user↔Kokonoe exchange.
+        // в”Ђв”Ђ Auto session log в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+        // Called in a background Task after every userв†”Kokonoe exchange.
         // Creates the session file lazily on the first message, then appends.
         private void AppendToSessionLog(string userMsg, string botReply)
         {
@@ -3506,7 +3653,7 @@ tags: []
                 {
                     _sessionChatPath = $"Chats/chat_{DateTime.Now:yyyy-MM-dd_HH-mm}.md";
 
-                    // Знайдемо посилання на попередній чат для графу Obsidian
+                    // Р—РЅР°Р№РґРµРјРѕ РїРѕСЃРёР»Р°РЅРЅСЏ РЅР° РїРѕРїРµСЂРµРґРЅС–Р№ С‡Р°С‚ РґР»СЏ РіСЂР°С„Сѓ Obsidian
                     var prevLink = "";
                     try
                     {
@@ -3518,12 +3665,12 @@ tags: []
                         if (allLogs != null)
                         {
                             var prev = System.IO.Path.GetFileNameWithoutExtension(allLogs);
-                            prevLink = $"\nПопередня сесія: [[{prev}]]\n";
+                            prevLink = $"\nРџРѕРїРµСЂРµРґРЅСЏ СЃРµСЃС–СЏ: [[{prev}]]\n";
                         }
                     }
                     catch { }
 
-                    var header = $"---\ntype: chat-log\ntags: [kokonoe, chat]\ndate: {DateTime.Now:yyyy-MM-dd}\n---\n\n# Чат {DateTime.Now:dd.MM.yyyy HH:mm}{prevLink}\n\n";
+                    var header = $"---\ntype: chat-log\ntags: [kokonoe, chat]\ndate: {DateTime.Now:yyyy-MM-dd}\n---\n\n# Р§Р°С‚ {DateTime.Now:dd.MM.yyyy HH:mm}{prevLink}\n\n";
                     _obsidian.WriteNote(_sessionChatPath, header);
                 }
 
@@ -3531,7 +3678,7 @@ tags: []
                 var now = DateTime.Now;
                 var entry = new System.Text.StringBuilder();
                 entry.AppendLine($"***");
-                entry.AppendLine($"**[{now:HH:mm}] Вова:** {userMsg.Trim()}");
+                entry.AppendLine($"**[{now:HH:mm}] Р’РѕРІР°:** {userMsg.Trim()}");
                 entry.AppendLine();
                 entry.AppendLine($"**[{now:HH:mm}] Kokonoe:** {botReply.Trim()}");
                 entry.AppendLine();
@@ -3570,7 +3717,7 @@ tags: []
             var lineR = new Border { Height = 1, Background = (System.Windows.Media.SolidColorBrush)System.Windows.Application.Current.Resources["AccentBgBorder2"], VerticalAlignment = VerticalAlignment.Center };
             var lbl   = new TextBlock
             {
-                Text = label, FontSize = 10, FontFamily = new System.Windows.Media.FontFamily("Consolas"),
+                Text = RepairVisibleText(label), FontSize = 10, FontFamily = new System.Windows.Media.FontFamily("Segoe UI Variable, Segoe UI"),
                 Foreground = (System.Windows.Media.SolidColorBrush)System.Windows.Application.Current.Resources["AccentScrollThm"], Margin = new Thickness(12, 0, 12, 0)
             };
             Grid.SetColumn(lineL, 0); Grid.SetColumn(lbl, 1); Grid.SetColumn(lineR, 2);
@@ -3581,12 +3728,13 @@ tags: []
 
         private TextBlock? AddMessageBubble(ChatMessageVm vm)
         {
+            vm.Content = RepairVisibleText(vm.Content);
             var isUser  = vm.Role == "user";
             var isError = vm.Content.StartsWith("[Error]");
             var userMaxWidth = GetChatBubbleMaxWidth(620, 132);
             var assistantMaxWidth = GetChatBubbleMaxWidth(700, 132);
 
-            // ── SYSTEM MESSAGE ─────────────────────────────────────
+            // в”Ђв”Ђ SYSTEM MESSAGE в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
             if (vm.Role == "system")
             {
                 var sysBorder = new Border
@@ -3604,7 +3752,7 @@ tags: []
                     Text = vm.Content,
                     FontSize = 10,
                     Foreground = (System.Windows.Media.SolidColorBrush)System.Windows.Application.Current.Resources["Brush_2A5038"],
-                    FontFamily = new System.Windows.Media.FontFamily("Consolas"),
+                    FontFamily = new System.Windows.Media.FontFamily("Segoe UI Variable, Segoe UI"),
                     TextWrapping = TextWrapping.Wrap,
                     TextAlignment = TextAlignment.Center
                 };
@@ -3623,7 +3771,7 @@ tags: []
 
             if (isUser)
             {
-                // ── USER BUBBLE (right) ─────────────────────────
+                // в”Ђв”Ђ USER BUBBLE (right) в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
                 var outerUser = new StackPanel
                 {
                     HorizontalAlignment = System.Windows.HorizontalAlignment.Right,
@@ -3686,7 +3834,7 @@ tags: []
             }
             else
             {
-                // ── ASSISTANT BUBBLE (left) ─────────────────────
+                // в”Ђв”Ђ ASSISTANT BUBBLE (left) в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
                 var outer = new StackPanel
                 {
                     HorizontalAlignment = System.Windows.HorizontalAlignment.Left,
@@ -3810,6 +3958,47 @@ tags: []
             return Math.Max(220, Math.Min(preferred, viewport - reserved));
         }
 
+        private static string RepairVisibleText(string? text)
+            => KokonoeAssistant.Services.LlmService.RepairMojibake(text ?? "");
+
+        private void StartUiTextRepairTimer()
+        {
+            if (_uiRepairTimer != null) return;
+            _uiRepairTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
+            _uiRepairTimer.Tick += (_, _) => RepairVisibleTextTree(this);
+            _uiRepairTimer.Start();
+            Dispatcher.InvokeAsync(() => RepairVisibleTextTree(this), DispatcherPriority.Background);
+        }
+
+        private static void RepairVisibleTextTree(DependencyObject root)
+        {
+            var count = VisualTreeHelper.GetChildrenCount(root);
+            for (var i = 0; i < count; i++)
+            {
+                var child = VisualTreeHelper.GetChild(root, i);
+                if (child is TextBlock tb && !string.IsNullOrEmpty(tb.Text))
+                {
+                    var fixedText = RepairVisibleText(tb.Text);
+                    if (!string.Equals(fixedText, tb.Text, StringComparison.Ordinal))
+                        tb.Text = fixedText;
+                }
+                else if (child is HeaderedContentControl hcc && hcc.Header is string header)
+                {
+                    var fixedHeader = RepairVisibleText(header);
+                    if (!string.Equals(fixedHeader, header, StringComparison.Ordinal))
+                        hcc.Header = fixedHeader;
+                }
+                else if (child is ComboBoxItem cbi && cbi.Content is string content)
+                {
+                    var fixedContent = RepairVisibleText(content);
+                    if (!string.Equals(fixedContent, content, StringComparison.Ordinal))
+                        cbi.Content = fixedContent;
+                }
+
+                RepairVisibleTextTree(child);
+            }
+        }
+
         private void AddThinkingBubble(string status = "думаю")
         {
             RemoveThinkingBubble();
@@ -3847,9 +4036,9 @@ tags: []
 
             var statusText = new TextBlock
             {
-                Text = status,
+                Text = RepairVisibleText(status),
                 FontSize = 11,
-                FontFamily = new WpfFF("Consolas"),
+                FontFamily = new WpfFF("Segoe UI Variable, Segoe UI"),
                 Foreground = (System.Windows.Media.SolidColorBrush)System.Windows.Application.Current.Resources["AccentTextLight"],
                 TextWrapping = TextWrapping.Wrap,
                 Margin = new Thickness(0, 0, 0, 8)
@@ -3863,7 +4052,7 @@ tags: []
             {
                 dots[i] = new TextBlock
                 {
-                    Text = "●",
+                    Text = "•",
                     FontSize = 9,
                     Foreground = (System.Windows.Media.SolidColorBrush)System.Windows.Application.Current.Resources["AccentBase"],
                     Opacity = 0.3,
@@ -3877,7 +4066,7 @@ tags: []
             thinkingStack.Children.Add(dotsPanel);
             bubble.Child = thinkingStack;
 
-            // Timer: cycle through dots 0→1→2→0...
+            // Timer: cycle through dots 0в†’1в†’2в†’0...
             int frame = 0;
             var dotsTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(400) };
             dotsTimer.Tick += (_, _) =>
@@ -3901,7 +4090,7 @@ tags: []
                 if (_thinkingElement == null)
                     AddThinkingBubble(status);
                 else if (_thinkingStatusText != null)
-                    _thinkingStatusText.Text = status;
+                    _thinkingStatusText.Text = RepairVisibleText(status);
 
                 ScrollToBottom();
             }, DispatcherPriority.Render);
@@ -3913,7 +4102,7 @@ tags: []
         {
             if (_thinkingElement != null)
             {
-                // Stop animation timer — may be stored on a TextBlock or StackPanel
+                // Stop animation timer вЂ” may be stored on a TextBlock or StackPanel
                 var timerHolder = FindVisualChildWithTag<DispatcherTimer>(_thinkingElement);
                 timerHolder?.Stop();
 
@@ -4011,15 +4200,15 @@ tags: []
             catch { return System.Windows.Media.Brushes.Transparent; }
         }
 
-        // ══════════════════════════════════════════════════════════
+        // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
         // IMAGE HANDLING
-        // ══════════════════════════════════════════════════════════
+        // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
 
         private void AttachImage_Click(object sender, RoutedEventArgs e)
         {
             var dlg = new Microsoft.Win32.OpenFileDialog
             {
-                Title  = "Вибрати файл",
+                Title  = "Р’РёР±СЂР°С‚Рё С„Р°Р№Р»",
                 Filter = "Images and text|*.jpg;*.jpeg;*.png;*.gif;*.webp;*.bmp;*.tif;*.tiff;*.txt;*.md;*.json;*.csv;*.tsv;*.log;*.xml;*.yaml;*.yml;*.cs;*.xaml;*.js;*.ts;*.html;*.css|Images|*.jpg;*.jpeg;*.png;*.gif;*.webp;*.bmp;*.tif;*.tiff|Text/code|*.txt;*.md;*.json;*.csv;*.tsv;*.log;*.xml;*.yaml;*.yml;*.cs;*.xaml;*.js;*.ts;*.html;*.css|All|*.*"
             };
             if (dlg.ShowDialog() != true) return;
@@ -4054,7 +4243,7 @@ tags: []
                 bi.Freeze();
                 _imgThumb = bi;
 
-                ShowImagePreview("Зображення з буфера обміну");
+                ShowImagePreview("Р—РѕР±СЂР°Р¶РµРЅРЅСЏ Р· Р±СѓС„РµСЂР° РѕР±РјС–РЅСѓ");
             }
             else if (WClipboard.ContainsData(WDataFmts.FileDrop))
             {
@@ -4090,7 +4279,7 @@ tags: []
                 return;
             }
 
-            WMsgBox.Show("Цей файл не схожий ні на зображення, ні на читабельний текст. Так, неймовірно, але не кожен байт у всесвіті варто пхати в prompt.");
+            WMsgBox.Show("Р¦РµР№ С„Р°Р№Р» РЅРµ СЃС…РѕР¶РёР№ РЅС– РЅР° Р·РѕР±СЂР°Р¶РµРЅРЅСЏ, РЅС– РЅР° С‡РёС‚Р°Р±РµР»СЊРЅРёР№ С‚РµРєСЃС‚. РўР°Рє, РЅРµР№РјРѕРІС–СЂРЅРѕ, Р°Р»Рµ РЅРµ РєРѕР¶РµРЅ Р±Р°Р№С‚ Сѓ РІСЃРµСЃРІС–С‚С– РІР°СЂС‚Рѕ РїС…Р°С‚Рё РІ prompt.");
         }
 
         private void LoadImageFile(string path)
@@ -4114,7 +4303,7 @@ tags: []
             }
             catch (Exception ex)
             {
-                WMsgBox.Show($"Не вдалося завантажити зображення: {ex.Message}");
+                WMsgBox.Show($"РќРµ РІРґР°Р»РѕСЃСЏ Р·Р°РІР°РЅС‚Р°Р¶РёС‚Рё Р·РѕР±СЂР°Р¶РµРЅРЅСЏ: {ex.Message}");
             }
         }
 
@@ -4142,7 +4331,7 @@ tags: []
                 text = text.Replace("\r\n", "\n").Replace('\r', '\n');
                 if (text.Length > 12000)
                     text = text[..12000] + "\n...[truncated]";
-                context = $"[Вкладений файл: {Path.GetFileName(path)}, {info.Length} bytes]\n{text}";
+                context = $"[Р’РєР»Р°РґРµРЅРёР№ С„Р°Р№Р»: {Path.GetFileName(path)}, {info.Length} bytes]\n{text}";
                 return true;
             }
             catch
@@ -4151,7 +4340,7 @@ tags: []
             }
         }
 
-        // Стискає зображення до maxPx і конвертує в screen-style JPEG для vision.
+        // РЎС‚РёСЃРєР°С” Р·РѕР±СЂР°Р¶РµРЅРЅСЏ РґРѕ maxPx С– РєРѕРЅРІРµСЂС‚СѓС” РІ screen-style JPEG РґР»СЏ vision.
         private static byte[] CompressImageForLlm(byte[] raw, int maxPx = 1024, int jpegQuality = 78)
         {
             try
@@ -4217,7 +4406,7 @@ tags: []
             PendingImageThumb.Source = _imgThumb;
             PendingImageLabel.Text   = label;
             ImagePreviewBorder.Visibility = Visibility.Visible;
-            // ImagePreviewRow removed — visibility handled via ImagePreviewBorder only
+            // ImagePreviewRow removed вЂ” visibility handled via ImagePreviewBorder only
         }
 
         private void RemoveImage_Click(object sender, RoutedEventArgs e) => ClearPendingImage();
@@ -4232,9 +4421,9 @@ tags: []
             PendingImageThumb.Source = null;
         }
 
-        // ══════════════════════════════════════════════════════════
+        // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
         // VOICE
-        // ══════════════════════════════════════════════════════════
+        // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
 
         private async void Record_Click(object sender, RoutedEventArgs e)
         {
@@ -4245,7 +4434,7 @@ tags: []
                 if (_isRecording)
                 {
                     _isRecording = false;
-                    RecordBtn.Content = "🔄 ...";
+                    RecordBtn.Content = "рџ”„ ...";
                     RecordBtn.IsEnabled = false;
 
                     await audio.StopRecordingAsync();
@@ -4256,7 +4445,7 @@ tags: []
                         var whisper = ServiceContainer.WhisperService;
                         if (!whisper.IsAvailable())
                         {
-                            WMsgBox.Show("Whisper потребує OpenAI API key. Додай в Settings.", "Voice STT");
+                            WMsgBox.Show("Whisper РїРѕС‚СЂРµР±СѓС” OpenAI API key. Р”РѕРґР°Р№ РІ Settings.", "Voice STT");
                             return;
                         }
 
@@ -4265,28 +4454,28 @@ tags: []
                             InputBox.Text += (InputBox.Text.Length > 0 ? " " : "") + text;
                     }
 
-                    RecordBtn.Content   = "🎤 Голос";
+                    RecordBtn.Content   = "рџЋ¤ Р“РѕР»РѕСЃ";
                     RecordBtn.IsEnabled = true;
                 }
                 else
                 {
                     _isRecording = true;
-                    RecordBtn.Content = "⏹ Стоп";
+                    RecordBtn.Content = "вЏ№ РЎС‚РѕРї";
                     await audio.StartRecordingAsync();
                 }
             }
             catch (Exception ex)
             {
-                RecordBtn.Content   = "🎤 Голос";
+                RecordBtn.Content   = "рџЋ¤ Р“РѕР»РѕСЃ";
                 RecordBtn.IsEnabled = true;
                 _isRecording = false;
-                WMsgBox.Show($"Помилка запису: {ex.Message}");
+                WMsgBox.Show($"РџРѕРјРёР»РєР° Р·Р°РїРёСЃСѓ: {ex.Message}");
             }
         }
 
-        // ══════════════════════════════════════════════════════════
+        // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
         // TTS
-        // ══════════════════════════════════════════════════════════
+        // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
 
         private void SpeakAsync(string text)
         {
@@ -4308,9 +4497,9 @@ tags: []
             catch { }
         }
 
-        // ══════════════════════════════════════════════════════════
+        // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
         // FORMATTING TOOLBAR
-        // ══════════════════════════════════════════════════════════
+        // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
 
         private void FmtBold_Click(object s, RoutedEventArgs e)   => WrapSel("**", "**");
         private void FmtItalic_Click(object s, RoutedEventArgs e) => WrapSel("*", "*");
@@ -4329,13 +4518,13 @@ tags: []
             InputBox.Focus();
         }
 
-        // ══════════════════════════════════════════════════════════
+        // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
         // PIN / EXPORT / SUMMARIZE
-        // ══════════════════════════════════════════════════════════
+        // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
 
         private void PinMsg_Click(object sender, RoutedEventArgs e)
         {
-            WMsgBox.Show("Виберіть повідомлення у базі даних для закріплення.", "Pin");
+            WMsgBox.Show("Р’РёР±РµСЂС–С‚СЊ РїРѕРІС–РґРѕРјР»РµРЅРЅСЏ Сѓ Р±Р°Р·С– РґР°РЅРёС… РґР»СЏ Р·Р°РєСЂС–РїР»РµРЅРЅСЏ.", "Pin");
         }
 
         private void Export_Click(object sender, RoutedEventArgs e)
@@ -4351,7 +4540,7 @@ tags: []
                     .Select(m => $"[{m.Timestamp:HH:mm}] {(m.Role == "user" ? "YOU" : "KOKONOE")}: {m.Content}");
 
                 File.WriteAllLines(path, lines);
-                WMsgBox.Show($"Збережено:\n{path}", "Export");
+                WMsgBox.Show($"Р—Р±РµСЂРµР¶РµРЅРѕ:\n{path}", "Export");
             }
             catch (Exception ex) { WMsgBox.Show(ex.Message); }
         }
@@ -4360,12 +4549,12 @@ tags: []
         {
             var msgs = ServiceContainer.ChatRepository.GetMessages(50);
             var summary = await ServiceContainer.SummarizerService.SummarizeChatAsync(msgs, 400);
-            WMsgBox.Show(summary?.Summary ?? "Немає даних.", "Summary");
+            WMsgBox.Show(summary?.Summary ?? "РќРµРјР°С” РґР°РЅРёС….", "Summary");
         }
 
-        // ══════════════════════════════════════════════════════════
+        // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
         // SCROLL
-        // ══════════════════════════════════════════════════════════
+        // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
 
         private void MessagesScroll_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
         {
@@ -4373,9 +4562,9 @@ tags: []
             e.Handled = true;
         }
 
-        // ══════════════════════════════════════════════════════════
+        // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
         // VAULT SIDEBAR
-        // ══════════════════════════════════════════════════════════
+        // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
 
         private void LoadVaultSidebar()
         {
@@ -4391,7 +4580,7 @@ tags: []
                 {
                     var node = new TreeViewItem
                     {
-                        Header = $"📁 {dir.Name}",
+                        Header = $"рџ“Ѓ {dir.Name}",
                         Tag = dir.FullName
                     };
                     foreach (var file in dir.GetFiles("*.md").Take(20))
@@ -4409,7 +4598,7 @@ tags: []
                 {
                     VaultTree.Items.Add(new TreeViewItem
                     {
-                        Header = $"📄 {file.Name[..^3]}",
+                        Header = $"рџ“„ {file.Name[..^3]}",
                         Tag    = file.FullName
                     });
                 }
@@ -4438,9 +4627,9 @@ tags: []
             // TODO: filter tree
         }
 
-        // ══════════════════════════════════════════════════════════
+        // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
         // VAULT TAB
-        // ══════════════════════════════════════════════════════════
+        // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
 
         private void RefreshNotesList()
         {
@@ -4469,24 +4658,24 @@ tags: []
         private void UpdateNoteStats()
         {
             var t = NoteEditor.Text;
-            NoteStatsLabel.Text = $"{t.Length} chars · {t.Split('\n').Length} lines";
+            NoteStatsLabel.Text = $"{t.Length} chars В· {t.Split('\n').Length} lines";
         }
 
         private void SaveNote_Click(object sender, RoutedEventArgs e)
         {
             if (_currentNotePath == null) return;
             _obsidian.WriteNote(_currentNotePath, NoteEditor.Text);
-            NoteStatsLabel.Text = $"Збережено {DateTime.Now:HH:mm} · " + NoteStatsLabel.Text;
+            NoteStatsLabel.Text = $"Р—Р±РµСЂРµР¶РµРЅРѕ {DateTime.Now:HH:mm} В· " + NoteStatsLabel.Text;
         }
 
         private void DeleteNote_Click(object sender, RoutedEventArgs e)
         {
             if (_currentNotePath == null) return;
-            if (WMsgBox.Show($"Видалити '{_currentNotePath}'?", "Підтвердження",
+            if (WMsgBox.Show($"Р’РёРґР°Р»РёС‚Рё '{_currentNotePath}'?", "РџС–РґС‚РІРµСЂРґР¶РµРЅРЅСЏ",
                 MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes) return;
             _obsidian.DeleteNote(_currentNotePath);
             NoteEditor.Clear();
-            NotePathLabel.Text = "Виберіть нотатку";
+            NotePathLabel.Text = "Р’РёР±РµСЂС–С‚СЊ РЅРѕС‚Р°С‚РєСѓ";
             _currentNotePath = null;
             RefreshNotesList();
         }
@@ -4494,7 +4683,7 @@ tags: []
         private void NewNote_Click(object sender, RoutedEventArgs e)
         {
             var title = Microsoft.VisualBasic.Interaction.InputBox(
-                "Назва нотатки:", "Нова нотатка", "");
+                "РќР°Р·РІР° РЅРѕС‚Р°С‚РєРё:", "РќРѕРІР° РЅРѕС‚Р°С‚РєР°", "");
             if (string.IsNullOrWhiteSpace(title)) return;
             var path = _obsidian.CreateNote(title);
             RefreshNotesList();
@@ -4640,13 +4829,13 @@ tags: []
             }
         }
 
-        // ══════════════════════════════════════════════════════════
+        // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
         // HEALTH TAB
-        // ══════════════════════════════════════════════════════════
+        // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
 
-        // ══════════════════════════════════════════════════════════
+        // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
         // CALENDAR TAB
-        // ══════════════════════════════════════════════════════════
+        // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
 
         private DateTime _calViewDate    = new(DateTime.Today.Year, DateTime.Today.Month, 1);
         private DateTime _calSelectedDate = DateTime.Today;
@@ -4685,10 +4874,10 @@ tags: []
 
             CalMonthLabel.Text = _calViewDate.ToString("MMMM yyyy").ToUpper();
 
-            // ── Weekday header ─────────────────────────────────────
+            // в”Ђв”Ђ Weekday header в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
             CalWeekHeader.Children.Clear();
             CalWeekHeader.ColumnDefinitions.Clear();
-            var days = new[] { "ПН", "ВТ", "СР", "ЧТ", "ПТ", "СБ", "НД" };
+            var days = new[] { "РџРќ", "Р’Рў", "РЎР ", "Р§Рў", "РџРў", "РЎР‘", "РќР”" };
             for (int i = 0; i < 7; i++)
             {
                 CalWeekHeader.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
@@ -4705,7 +4894,7 @@ tags: []
                 CalWeekHeader.Children.Add(tb);
             }
 
-            // ── Day grid ───────────────────────────────────────────
+            // в”Ђв”Ђ Day grid в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
             CalDaysGrid.Children.Clear();
             CalDaysGrid.ColumnDefinitions.Clear();
             CalDaysGrid.RowDefinitions.Clear();
@@ -4715,7 +4904,7 @@ tags: []
             for (int i = 0; i < 6; i++)
                 CalDaysGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(42) });
 
-            // First day of month — what weekday? (Mon=0)
+            // First day of month вЂ” what weekday? (Mon=0)
             var firstDay  = new DateTime(year, mon, 1);
             var startCol  = ((int)firstDay.DayOfWeek + 6) % 7; // Mon=0
             var daysInMon = DateTime.DaysInMonth(year, mon);
@@ -4868,17 +5057,17 @@ tags: []
             {
                 Id      = ev.Id,
                 Title   = ev.Title,
-                DateStr = ev.EventAt.ToString("dd.MM · HH:mm"),
+                DateStr = ev.EventAt.ToString("dd.MM В· HH:mm"),
             }).ToList();
         }
 
-        // ══════════════════════════════════════════════════════════
-        // TOOLS TAB — DASHBOARD
-        // ══════════════════════════════════════════════════════════
+        // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
+        // TOOLS TAB вЂ” DASHBOARD
+        // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
 
         private void LoadToolsTab() { /* called at startup; real load happens when tab is opened */ }
 
-        // ── Dashboard lifecycle ──────────────────────────────────
+        // в”Ђв”Ђ Dashboard lifecycle в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
         private void DashLoadAll()
         {
             try
@@ -4894,7 +5083,7 @@ tags: []
             }
             catch (Exception ex)
             {
-                try { DashFooterComment.Text = $"Навіть діагностика зламалась. ({ex.Message})"; } catch { }
+                try { DashFooterComment.Text = $"РќР°РІС–С‚СЊ РґС–Р°РіРЅРѕСЃС‚РёРєР° Р·Р»Р°РјР°Р»Р°СЃСЊ. ({ex.Message})"; } catch { }
             }
         }
 
@@ -4915,7 +5104,7 @@ tags: []
             var now = DateTime.Now;
             DashClockText.Text = now.ToString("HH:mm");
             var days = (int)(now - new DateTime(2024, 4, 6)).TotalDays;
-            DashDateText.Text = $"день {days} цього експерименту";
+            DashDateText.Text = $"РґРµРЅСЊ {days} С†СЊРѕРіРѕ РµРєСЃРїРµСЂРёРјРµРЅС‚Сѓ";
 
             // Status bar timestamp
             StatusTimestamp.Text = now.ToString("yyyy-MM-dd HH:mm:ss");
@@ -4971,7 +5160,7 @@ tags: []
             }
         }
 
-        // ── Dashboard tab switching ──────────────────────────────
+        // в”Ђв”Ђ Dashboard tab switching в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
         private void DashTabNeuro_Click(object s, System.Windows.Input.MouseButtonEventArgs e)
             => DashSetActiveTab("neuro");
 
@@ -5001,7 +5190,7 @@ tags: []
             switch (tab)
             {
                 case "neuro":
-                    DashTabSubtitle.Text = "// нейрологічний стан";
+                    DashTabSubtitle.Text = "// РЅРµР№СЂРѕР»РѕРіС–С‡РЅРёР№ СЃС‚Р°РЅ";
                     DashDrawNeuroCharts();
                     break;
                 case "dev":
@@ -5009,11 +5198,11 @@ tags: []
                     DashDrawDevSection();
                     break;
                 case "memory":
-                    DashTabSubtitle.Text = "// довготривала пам'ять";
+                    DashTabSubtitle.Text = "// РґРѕРІРіРѕС‚СЂРёРІР°Р»Р° РїР°Рј'СЏС‚СЊ";
                     DashLoadMemorySection();
                     break;
                 case "system":
-                    DashTabSubtitle.Text = "// процеси · тунель · ресурси";
+                    DashTabSubtitle.Text = "// РїСЂРѕС†РµСЃРё В· С‚СѓРЅРµР»СЊ В· СЂРµСЃСѓСЂСЃРё";
                     DashLoadSystemSection();
                     break;
             }
@@ -5047,7 +5236,7 @@ tags: []
             return null;
         }
 
-        // Memory & System sections — заповнюємо при першому показі
+        // Memory & System sections вЂ” Р·Р°РїРѕРІРЅСЋС”РјРѕ РїСЂРё РїРµСЂС€РѕРјСѓ РїРѕРєР°Р·С–
         private void DashLoadMemorySection()
         {
             try
@@ -5061,7 +5250,7 @@ tags: []
                 {
                     Text = f.Content,
                     Category = f.Category ?? "general",
-                    ImportanceLabel = $"importance {f.Importance:F2} · seen {f.ConfirmCount}",
+                    ImportanceLabel = $"importance {f.Importance:F2} В· seen {f.ConfirmCount}",
                 }).ToList();
             }
             catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[Dash] memory load: {ex.Message}"); }
@@ -5091,7 +5280,7 @@ tags: []
             catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[Dash] system load: {ex.Message}"); }
         }
 
-        // ── Header ───────────────────────────────────────────────
+        // в”Ђв”Ђ Header в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
         private void DashLoadEmotionalHeader()
         {
             try
@@ -5099,28 +5288,28 @@ tags: []
                 var emotion = ServiceContainer.EmotionEngine;
                 var cur = emotion.Current;
 
-                DashCurrentMoodDisplay.Text = $"СТАН: {DashboardEmotionLabel(cur)}".ToUpper();
+                DashCurrentMoodDisplay.Text = $"РЎРўРђРќ: {DashboardEmotionLabel(cur)}".ToUpper();
                 DashCurrentMoodDisplay.Foreground = DashMakeBrush(cur);
 
                 DashMoodSubtext.Text = cur switch
                 {
-                    KokoEmotionEngine.EmotionState.Calm       => "Нічого не зламано. Поки що.",
-                    KokoEmotionEngine.EmotionState.Curious    => "Ти щось цікаве робиш...",
-                    KokoEmotionEngine.EmotionState.Warm       => "Не звикай до цього.",
-                    KokoEmotionEngine.EmotionState.Playful    => "Готуйся до сарказму.",
-                    KokoEmotionEngine.EmotionState.Concerned  => "Щось мене турбує в тобі.",
-                    KokoEmotionEngine.EmotionState.Protective => "Ти не окей. Я помітила.",
+                    KokoEmotionEngine.EmotionState.Calm       => "РќС–С‡РѕРіРѕ РЅРµ Р·Р»Р°РјР°РЅРѕ. РџРѕРєРё С‰Рѕ.",
+                    KokoEmotionEngine.EmotionState.Curious    => "РўРё С‰РѕСЃСЊ С†С–РєР°РІРµ СЂРѕР±РёС€...",
+                    KokoEmotionEngine.EmotionState.Warm       => "РќРµ Р·РІРёРєР°Р№ РґРѕ С†СЊРѕРіРѕ.",
+                    KokoEmotionEngine.EmotionState.Playful    => "Р“РѕС‚СѓР№СЃСЏ РґРѕ СЃР°СЂРєР°Р·РјСѓ.",
+                    KokoEmotionEngine.EmotionState.Concerned  => "Р©РѕСЃСЊ РјРµРЅРµ С‚СѓСЂР±СѓС” РІ С‚РѕР±С–.",
+                    KokoEmotionEngine.EmotionState.Protective => "РўРё РЅРµ РѕРєРµР№. РЇ РїРѕРјС–С‚РёР»Р°.",
                     KokoEmotionEngine.EmotionState.Irritated  => "...",
-                    KokoEmotionEngine.EmotionState.Distant    => "Ти кудись зникав.",
-                    KokoEmotionEngine.EmotionState.Tender     => "Не питай. Це тимчасово.",
-                    KokoEmotionEngine.EmotionState.Focused    => "Режим роботи. Не заважай.",
-                    KokoEmotionEngine.EmotionState.Proud      => "Ти зробив щось правильно. Раз на рік.",
-                    KokoEmotionEngine.EmotionState.Melancholy => "...Не зважай.",
-                    KokoEmotionEngine.EmotionState.Excited    => "Рідкісний стан. Запам'ятай.",
-                    KokoEmotionEngine.EmotionState.Nostalgic  => "Якісь спогади...",
-                    KokoEmotionEngine.EmotionState.Anxious    => "Просто фоновий шум.",
-                    KokoEmotionEngine.EmotionState.Hopeful    => "Тихе очікування.",
-                    _                                         => "Все в межах норми."
+                    KokoEmotionEngine.EmotionState.Distant    => "РўРё РєСѓРґРёСЃСЊ Р·РЅРёРєР°РІ.",
+                    KokoEmotionEngine.EmotionState.Tender     => "РќРµ РїРёС‚Р°Р№. Р¦Рµ С‚РёРјС‡Р°СЃРѕРІРѕ.",
+                    KokoEmotionEngine.EmotionState.Focused    => "Р РµР¶РёРј СЂРѕР±РѕС‚Рё. РќРµ Р·Р°РІР°Р¶Р°Р№.",
+                    KokoEmotionEngine.EmotionState.Proud      => "РўРё Р·СЂРѕР±РёРІ С‰РѕСЃСЊ РїСЂР°РІРёР»СЊРЅРѕ. Р Р°Р· РЅР° СЂС–Рє.",
+                    KokoEmotionEngine.EmotionState.Melancholy => "...РќРµ Р·РІР°Р¶Р°Р№.",
+                    KokoEmotionEngine.EmotionState.Excited    => "Р С–РґРєС–СЃРЅРёР№ СЃС‚Р°РЅ. Р—Р°РїР°Рј'СЏС‚Р°Р№.",
+                    KokoEmotionEngine.EmotionState.Nostalgic  => "РЇРєС–СЃСЊ СЃРїРѕРіР°РґРё...",
+                    KokoEmotionEngine.EmotionState.Anxious    => "РџСЂРѕСЃС‚Рѕ С„РѕРЅРѕРІРёР№ С€СѓРј.",
+                    KokoEmotionEngine.EmotionState.Hopeful    => "РўРёС…Рµ РѕС‡С–РєСѓРІР°РЅРЅСЏ.",
+                    _                                         => "Р’СЃРµ РІ РјРµР¶Р°С… РЅРѕСЂРјРё."
                 };
 
                 DashEmotionValue.Text = DashboardEmotionLabel(cur).ToUpper();
@@ -5129,36 +5318,36 @@ tags: []
 
                 if (emotion.Secondary.HasValue && emotion.SecondaryIntensity > 0.15f)
                 {
-                    DashEmotionSecondary.Text = $"// вторинна: {DashboardEmotionLabel(emotion.Secondary.Value)} ({emotion.SecondaryIntensity:F2})";
+                    DashEmotionSecondary.Text = $"// РІС‚РѕСЂРёРЅРЅР°: {DashboardEmotionLabel(emotion.Secondary.Value)} ({emotion.SecondaryIntensity:F2})";
                     DashEmotionSecondary.Visibility = Visibility.Visible;
                 }
                 else DashEmotionSecondary.Visibility = Visibility.Collapsed;
 
                 DashEmotionComment.Text = cur switch
                 {
-                    KokoEmotionEngine.EmotionState.Calm       => "Нудьга: прийнятна.",
-                    KokoEmotionEngine.EmotionState.Curious    => "Що ти знову вигадав?",
-                    KokoEmotionEngine.EmotionState.Warm       => "Я не м'яка. Ти просто знайомий.",
-                    KokoEmotionEngine.EmotionState.Playful    => "Готуйся до сарказму.",
-                    KokoEmotionEngine.EmotionState.Concerned  => "Уважно спостерігаю.",
-                    KokoEmotionEngine.EmotionState.Melancholy => "...Це нічого. Ігноруй мене.",
-                    KokoEmotionEngine.EmotionState.Irritated  => "Ще одне слово. Сміливо.",
-                    KokoEmotionEngine.EmotionState.Protective => "Ти під моїм захистом. Прийми це.",
-                    KokoEmotionEngine.EmotionState.Tender     => "...Мовчи. Це тимчасово.",
-                    KokoEmotionEngine.EmotionState.Focused    => "Працюю. Заважаєш — помреш.",
-                    KokoEmotionEngine.EmotionState.Distant    => "Ти зникав. Я помітила.",
-                    KokoEmotionEngine.EmotionState.Proud      => "Ти зробив добре. Заперечую це.",
-                    KokoEmotionEngine.EmotionState.Excited    => "Рідкісний стан. Запам'ятай.",
-                    KokoEmotionEngine.EmotionState.Nostalgic  => "Думаю про щось давнє.",
-                    KokoEmotionEngine.EmotionState.Anxious    => "Просто фоновий шум. Нічого.",
-                    KokoEmotionEngine.EmotionState.Hopeful    => "Щось хороше попереду. Може.",
-                    _                                         => "Обробляю..."
+                    KokoEmotionEngine.EmotionState.Calm       => "РќСѓРґСЊРіР°: РїСЂРёР№РЅСЏС‚РЅР°.",
+                    KokoEmotionEngine.EmotionState.Curious    => "Р©Рѕ С‚Рё Р·РЅРѕРІСѓ РІРёРіР°РґР°РІ?",
+                    KokoEmotionEngine.EmotionState.Warm       => "РЇ РЅРµ Рј'СЏРєР°. РўРё РїСЂРѕСЃС‚Рѕ Р·РЅР°Р№РѕРјРёР№.",
+                    KokoEmotionEngine.EmotionState.Playful    => "Р“РѕС‚СѓР№СЃСЏ РґРѕ СЃР°СЂРєР°Р·РјСѓ.",
+                    KokoEmotionEngine.EmotionState.Concerned  => "РЈРІР°Р¶РЅРѕ СЃРїРѕСЃС‚РµСЂС–РіР°СЋ.",
+                    KokoEmotionEngine.EmotionState.Melancholy => "...Р¦Рµ РЅС–С‡РѕРіРѕ. Р†РіРЅРѕСЂСѓР№ РјРµРЅРµ.",
+                    KokoEmotionEngine.EmotionState.Irritated  => "Р©Рµ РѕРґРЅРµ СЃР»РѕРІРѕ. РЎРјС–Р»РёРІРѕ.",
+                    KokoEmotionEngine.EmotionState.Protective => "РўРё РїС–Рґ РјРѕС—Рј Р·Р°С…РёСЃС‚РѕРј. РџСЂРёР№РјРё С†Рµ.",
+                    KokoEmotionEngine.EmotionState.Tender     => "...РњРѕРІС‡Рё. Р¦Рµ С‚РёРјС‡Р°СЃРѕРІРѕ.",
+                    KokoEmotionEngine.EmotionState.Focused    => "РџСЂР°С†СЋСЋ. Р—Р°РІР°Р¶Р°С”С€ вЂ” РїРѕРјСЂРµС€.",
+                    KokoEmotionEngine.EmotionState.Distant    => "РўРё Р·РЅРёРєР°РІ. РЇ РїРѕРјС–С‚РёР»Р°.",
+                    KokoEmotionEngine.EmotionState.Proud      => "РўРё Р·СЂРѕР±РёРІ РґРѕР±СЂРµ. Р—Р°РїРµСЂРµС‡СѓСЋ С†Рµ.",
+                    KokoEmotionEngine.EmotionState.Excited    => "Р С–РґРєС–СЃРЅРёР№ СЃС‚Р°РЅ. Р—Р°РїР°Рј'СЏС‚Р°Р№.",
+                    KokoEmotionEngine.EmotionState.Nostalgic  => "Р”СѓРјР°СЋ РїСЂРѕ С‰РѕСЃСЊ РґР°РІРЅС”.",
+                    KokoEmotionEngine.EmotionState.Anxious    => "РџСЂРѕСЃС‚Рѕ С„РѕРЅРѕРІРёР№ С€СѓРј. РќС–С‡РѕРіРѕ.",
+                    KokoEmotionEngine.EmotionState.Hopeful    => "Р©РѕСЃСЊ С…РѕСЂРѕС€Рµ РїРѕРїРµСЂРµРґСѓ. РњРѕР¶Рµ.",
+                    _                                         => "РћР±СЂРѕР±Р»СЏСЋ..."
                 };
             }
             catch { }
         }
 
-        // ── Neuro charts ─────────────────────────────────────────
+        // в”Ђв”Ђ Neuro charts в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
         private void DashDrawNeuroCharts()
         {
             try
@@ -5226,7 +5415,7 @@ tags: []
 
                     Canvas.SetLeft(rect, x);
                     Canvas.SetBottom(rect, 0);
-                    rect.ToolTip = totalReal > 0 ? $"{hr:00}:00 — {v} msg" : $"{hr:00}:00";
+                    rect.ToolTip = totalReal > 0 ? $"{hr:00}:00 вЂ” {v} msg" : $"{hr:00}:00";
                     DashActivityBarCanvas.Children.Add(rect);
                 }
 
@@ -5239,8 +5428,8 @@ tags: []
 
                 var total = totalReal > 0 ? totalReal : data.Sum();
                 DashActivitySparkLabel.Text = totalReal > 0
-                    ? $"{total} повідомлень зараховано"
-                    : "немає даних — показано приклад";
+                    ? $"{total} РїРѕРІС–РґРѕРјР»РµРЅСЊ Р·Р°СЂР°С…РѕРІР°РЅРѕ"
+                    : "РЅРµРјР°С” РґР°РЅРёС… вЂ” РїРѕРєР°Р·Р°РЅРѕ РїСЂРёРєР»Р°Рґ";
             }
             catch { }
         }
@@ -5310,7 +5499,7 @@ tags: []
             catch { }
         }
 
-        // ── MOOD 24H ─────────────────────────────────────────────────
+        // в”Ђв”Ђ MOOD 24H в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
         private void DashDrawMood24h()
         {
             try
@@ -5323,7 +5512,7 @@ tags: []
                 var msgs = repo?.GetMessagesFromDate(dayStart, 500)
                     ?.Where(m => m.Role == "assistant").ToList() ?? new();
 
-                // Груп по годинах: середня довжина повідомлення як проксі для емоційної щільності
+                // Р“СЂСѓРї РїРѕ РіРѕРґРёРЅР°С…: СЃРµСЂРµРґРЅСЏ РґРѕРІР¶РёРЅР° РїРѕРІС–РґРѕРјР»РµРЅРЅСЏ СЏРє РїСЂРѕРєСЃС– РґР»СЏ РµРјРѕС†С–Р№РЅРѕС— С‰С–Р»СЊРЅРѕСЃС‚С–
                 var bucketCounts = new int[24];
                 var bucketLen    = new double[24];
                 foreach (var m in msgs)
@@ -5364,7 +5553,7 @@ tags: []
                 };
                 DashMood24hCanvas.Children.Add(poly);
 
-                // Зараз-маркер
+                // Р—Р°СЂР°Р·-РјР°СЂРєРµСЂ
                 double nowX = DateTime.Now.Hour * w / 23.0;
                 var nowLine = new System.Windows.Shapes.Line
                 {
@@ -5375,7 +5564,7 @@ tags: []
                 };
                 DashMood24hCanvas.Children.Add(nowLine);
 
-                // Вісь: 00 / 06 / 12 / 18 / 23
+                // Р’С–СЃСЊ: 00 / 06 / 12 / 18 / 23
                 var wAx = DashMood24hAxisCanvas.ActualWidth;
                 if (wAx > 0)
                 {
@@ -5393,12 +5582,12 @@ tags: []
                 }
 
                 int total = bucketCounts.Sum();
-                DashMood24hLabel.Text = total == 0 ? "немає даних" : $"{total} msg сьогодні";
+                DashMood24hLabel.Text = total == 0 ? "РЅРµРјР°С” РґР°РЅРёС…" : $"{total} msg СЃСЊРѕРіРѕРґРЅС–";
             }
             catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[Dash] mood24h: {ex.Message}"); }
         }
 
-        // ── WEEKLY HEATMAP 7×24 ──────────────────────────────────────
+        // в”Ђв”Ђ WEEKLY HEATMAP 7Г—24 в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
         private void DashDrawWeeklyHeatmap()
         {
             try
@@ -5463,7 +5652,7 @@ tags: []
                     }
                 }
 
-                DashHeatmapLabel.Text = $"{msgs.Count} msg · 7 днів";
+                DashHeatmapLabel.Text = $"{msgs.Count} msg В· 7 РґРЅС–РІ";
             }
             catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[Dash] heatmap: {ex.Message}"); }
         }
@@ -5554,7 +5743,7 @@ tags: []
             catch { }
         }
 
-        // ── KPI Cards ────────────────────────────────────────────
+        // в”Ђв”Ђ KPI Cards в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
         private void DashLoadKpiCards()
         {
             try
@@ -5573,8 +5762,8 @@ tags: []
                 DashSideConnValue.Text = connStr;
                 DashSideBondLabel.Text = bondStr;
                 DashSideAttachmentText.Text =
-                    $"trust {(int)(att.Trust * 100)} · intimacy {(int)(att.Intimacy * 100)} · reliability {(int)(att.Reliability * 100)}\n" +
-                    $"reciprocity {(int)(att.Reciprocity * 100)} · vitality {(int)(att.Vitality * 100)}";
+                    $"trust {(int)(att.Trust * 100)} В· intimacy {(int)(att.Intimacy * 100)} В· reliability {(int)(att.Reliability * 100)}\n" +
+                    $"reciprocity {(int)(att.Reciprocity * 100)} В· vitality {(int)(att.Vitality * 100)}";
 
                 try
                 {
@@ -5582,9 +5771,9 @@ tags: []
                     var relPct = (int)(rel.BondScore * 100);
                     DashSideConnValue.Text = $"{connStr}/{relPct}%";
                     if (!string.IsNullOrWhiteSpace(rel.LastAftertaste))
-                        DashSideBondLabel.Text = $"{bondStr} · {rel.LastAftertaste.ToUpper()}";
+                        DashSideBondLabel.Text = $"{bondStr} В· {rel.LastAftertaste.ToUpper()}";
                     DashSideAttachmentText.Text +=
-                        $"\nrel trust {(int)(rel.Trust * 100)} · protect {(int)(rel.Protectiveness * 100)} · friction {(int)(rel.Friction * 100)}";
+                        $"\nrel trust {(int)(rel.Trust * 100)} В· protect {(int)(rel.Protectiveness * 100)} В· friction {(int)(rel.Friction * 100)}";
                 }
                 catch { }
 
@@ -5607,7 +5796,7 @@ tags: []
 
                 var patCount = patterns.Patterns.Count;
                 DashKpiPatterns.Text     = patCount.ToString();
-                DashKpiPatternLabel.Text = patCount switch { 0 => "патернів немає", 1 => "патерн", _ => "патернів" };
+                DashKpiPatternLabel.Text = patCount switch { 0 => "РїР°С‚РµСЂРЅС–РІ РЅРµРјР°С”", 1 => "РїР°С‚РµСЂРЅ", _ => "РїР°С‚РµСЂРЅС–РІ" };
 
                 var connSpark = DashBuildConnSparkValues(emotion);
                 var msgSpark  = DashBuildDailyMsgSpark(chats);
@@ -5623,10 +5812,10 @@ tags: []
             catch { }
         }
 
-        // ── Thought Stream + Curiosities ─────────────────────────
+        // в”Ђв”Ђ Thought Stream + Curiosities в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
 
         /// <summary>
-        /// Очищає текст думки від JSON-форматування, markdown тегів та артефактів.
+        /// РћС‡РёС‰Р°С” С‚РµРєСЃС‚ РґСѓРјРєРё РІС–Рґ JSON-С„РѕСЂРјР°С‚СѓРІР°РЅРЅСЏ, markdown С‚РµРіС–РІ С‚Р° Р°СЂС‚РµС„Р°РєС‚С–РІ.
         /// </summary>
         private static string CleanDashboardThought(string text)
         {
@@ -5649,7 +5838,7 @@ tags: []
             // Remove "ison" artifacts that appear in the user's screenshot
             text = System.Text.RegularExpressions.Regex.Replace(text, @"\bison\b", "", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
 
-            // Fix broken words that got split (like "присутнос\ го" -> "присутного")
+            // Fix broken words that got split (like "РїСЂРёСЃСѓС‚РЅРѕСЃ\ РіРѕ" -> "РїСЂРёСЃСѓС‚РЅРѕРіРѕ")
             text = System.Text.RegularExpressions.Regex.Replace(text, @"(\S{3,})\s*\n\s*(\S{3,})", m => {
                 var left = m.Groups[1].Value;
                 var right = m.Groups[2].Value;
@@ -5749,12 +5938,12 @@ tags: []
                 {
                     var fallback = new[]
                     {
-                        ("Системи моніторингу активні...",          "// завжди спостерігаю"),
-                        ("Емоційний стан: стабільний. Поки що.",    "// відносно кажучи"),
-                        ("Аналізую твої патерни...",                "// ти досить передбачуваний"),
-                        ("Банки пам'яті: в нормі.",                 "// на відміну від твоєї, мабуть"),
-                        ("Рівень з'єднання: прийнятний.",           "// могло б бути гірше"),
-                        ("Перевіряю фонові процеси...",             "// нічого підозрілого. Поки."),
+                        ("РЎРёСЃС‚РµРјРё РјРѕРЅС–С‚РѕСЂРёРЅРіСѓ Р°РєС‚РёРІРЅС–...",          "// Р·Р°РІР¶РґРё СЃРїРѕСЃС‚РµСЂС–РіР°СЋ"),
+                        ("Р•РјРѕС†С–Р№РЅРёР№ СЃС‚Р°РЅ: СЃС‚Р°Р±С–Р»СЊРЅРёР№. РџРѕРєРё С‰Рѕ.",    "// РІС–РґРЅРѕСЃРЅРѕ РєР°Р¶СѓС‡Рё"),
+                        ("РђРЅР°Р»С–Р·СѓСЋ С‚РІРѕС— РїР°С‚РµСЂРЅРё...",                "// С‚Рё РґРѕСЃРёС‚СЊ РїРµСЂРµРґР±Р°С‡СѓРІР°РЅРёР№"),
+                        ("Р‘Р°РЅРєРё РїР°Рј'СЏС‚С–: РІ РЅРѕСЂРјС–.",                 "// РЅР° РІС–РґРјС–РЅСѓ РІС–Рґ С‚РІРѕС”С—, РјР°Р±СѓС‚СЊ"),
+                        ("Р С–РІРµРЅСЊ Р·'С”РґРЅР°РЅРЅСЏ: РїСЂРёР№РЅСЏС‚РЅРёР№.",           "// РјРѕРіР»Рѕ Р± Р±СѓС‚Рё РіС–СЂС€Рµ"),
+                        ("РџРµСЂРµРІС–СЂСЏСЋ С„РѕРЅРѕРІС– РїСЂРѕС†РµСЃРё...",             "// РЅС–С‡РѕРіРѕ РїС–РґРѕР·СЂС–Р»РѕРіРѕ. РџРѕРєРё."),
                     };
                     foreach (var (t, tag) in fallback)
                         _dashThoughts.Add(new DashThoughtVm { Time = "--:--", Thought = t, MoodTag = tag });
@@ -5774,18 +5963,18 @@ tags: []
                 if (items.Any()) foreach (var i in items) _dashCuriosities.Add(i);
                 else
                 {
-                    _dashCuriosities.Add("Що ти робиш коли мене немає?");
-                    _dashCuriosities.Add("Як пройшло те, про що ти згадував?");
-                    _dashCuriosities.Add("Чому ти так пізно не спиш?");
-                    _dashCuriosities.Add("Який твій улюблений колір? ...Не що я питаю.");
-                    _dashCuriosities.Add("Коли востаннє ти відпочивав?");
+                    _dashCuriosities.Add("Р©Рѕ С‚Рё СЂРѕР±РёС€ РєРѕР»Рё РјРµРЅРµ РЅРµРјР°С”?");
+                    _dashCuriosities.Add("РЇРє РїСЂРѕР№С€Р»Рѕ С‚Рµ, РїСЂРѕ С‰Рѕ С‚Рё Р·РіР°РґСѓРІР°РІ?");
+                    _dashCuriosities.Add("Р§РѕРјСѓ С‚Рё С‚Р°Рє РїС–Р·РЅРѕ РЅРµ СЃРїРёС€?");
+                    _dashCuriosities.Add("РЇРєРёР№ С‚РІС–Р№ СѓР»СЋР±Р»РµРЅРёР№ РєРѕР»С–СЂ? ...РќРµ С‰Рѕ СЏ РїРёС‚Р°СЋ.");
+                    _dashCuriosities.Add("РљРѕР»Рё РІРѕСЃС‚Р°РЅРЅС” С‚Рё РІС–РґРїРѕС‡РёРІР°РІ?");
                 }
                 DashCuriosityList.ItemsSource = _dashCuriosities;
             }
             catch { }
         }
 
-        // ── Health ───────────────────────────────────────────────
+        // в”Ђв”Ђ Health в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
         private void RefreshRightOpsPanel()
         {
             try
@@ -5798,14 +5987,14 @@ tags: []
                 var heart = ServiceContainer.Heart;
                 var telemetry = brain.BuildTelemetrySnapshot();
 
-                RightEmotionText.Text = $"{DashboardEmotionLabel(emotion.Current).ToUpperInvariant()} · mood {state.MoodScore:F2}";
-                RightBodyText.Text = $"{DashboardSomaticLabel(somatic.State).ToUpperInvariant()} · strain {somatic.Strain:F2}";
-                RightPulseText.Text = heart.CurrentBpm > 0 ? $"{heart.CurrentBpm:0} bpm · {heart.BpmDelta:+0;-0;0}" : "-- bpm";
-                RightVaultSyncText.Text = $"sync {state.PendingVaultExchangeCount}/5 · mem {_liveCoreMemoryItems} · tasks {_liveCoreOpenTasks}";
+                RightEmotionText.Text = $"{DashboardEmotionLabel(emotion.Current).ToUpperInvariant()} В· mood {state.MoodScore:F2}";
+                RightBodyText.Text = $"{DashboardSomaticLabel(somatic.State).ToUpperInvariant()} В· strain {somatic.Strain:F2}";
+                RightPulseText.Text = heart.CurrentBpm > 0 ? $"{heart.CurrentBpm:0} bpm В· {heart.BpmDelta:+0;-0;0}" : "-- bpm";
+                RightVaultSyncText.Text = $"sync {state.PendingVaultExchangeCount}/5 В· mem {_liveCoreMemoryItems} В· tasks {_liveCoreOpenTasks}";
                 var condition = ResolveKokoCondition(emotion.Current, emotion.Data.Intensity, state.MoodScore, state.PersonalityDailyMood, somatic.Strain, somatic.State);
                 RightKokoConditionText.Text = condition.Label;
                 RightKokoConditionDetailText.Text =
-                    $"{condition.Kind} · severity {condition.Severity:F2} · {DashboardEmotionLabel(emotion.Current).ToLowerInvariant()} · {state.PersonalityDailyMood}";
+                    $"{condition.Kind} В· severity {condition.Severity:F2} В· {DashboardEmotionLabel(emotion.Current).ToLowerInvariant()} В· {state.PersonalityDailyMood}";
                 RightAutonomyDetailText.Text = TrimOpsLine(telemetry.AutonomyDebug, 130);
 
                 RightScreenModeText.Text = string.IsNullOrWhiteSpace(state.LastScreenAwarenessMode)
@@ -5828,8 +6017,8 @@ tags: []
                     95);
 
                 var intents = brain.GetActiveShortTermIntents(4)
-                    .Select(i => TrimOpsLine($"{i.Kind}: {i.Summary} до {i.ExpectedUntil:HH:mm}", 96))
-                    .DefaultIfEmpty("немає активних намірів")
+                    .Select(i => TrimOpsLine($"{i.Kind}: {i.Summary} РґРѕ {i.ExpectedUntil:HH:mm}", 96))
+                    .DefaultIfEmpty("РЅРµРјР°С” Р°РєС‚РёРІРЅРёС… РЅР°РјС–СЂС–РІ")
                     .ToList();
                 DashCuriosityList.ItemsSource = intents;
 
@@ -5838,8 +6027,8 @@ tags: []
                     var report = _obsidian.RunVaultDoctor(repair: false);
                     var linkProblems = report.FolderWikiLinkCount + report.SuppressedActorLinkCount;
                     _rightOpsVaultLine =
-                        $"vault doctor {report.HealthScore}/100 · empty {report.EmptyMarkdownFiles.Count} · links {linkProblems} · " +
-                        $"fm {report.FrontmatterIssues.Count} · moj {report.MojibakeSuspects.Count} · miss {report.MissingWikiTargets.Count}";
+                        $"vault doctor {report.HealthScore}/100 В· empty {report.EmptyMarkdownFiles.Count} В· links {linkProblems} В· " +
+                        $"fm {report.FrontmatterIssues.Count} В· moj {report.MojibakeSuspects.Count} В· miss {report.MissingWikiTargets.Count}";
                     _rightOpsVaultScanAt = now;
                 }
                 RightVaultDoctorText.Text = _rightOpsVaultLine;
@@ -5864,7 +6053,7 @@ tags: []
         {
             if (string.IsNullOrWhiteSpace(text)) return "";
             var clean = text.Replace("\r", " ").Replace("\n", " ").Trim();
-            return clean.Length <= max ? clean : clean[..Math.Max(0, max - 1)] + "…";
+            return clean.Length <= max ? clean : clean[..Math.Max(0, max - 1)] + "вЂ¦";
         }
 
         private static string BuildVisionStatusLabel(KokoInternalState state, DateTime now)
@@ -5873,7 +6062,7 @@ tags: []
                 return $"BACKOFF {state.VisionBackoffUntil:HH:mm}";
             if (state.LastVisionFailureAt > DateTime.MinValue &&
                 now - state.LastVisionFailureAt < TimeSpan.FromMinutes(30))
-                return $"READY · fail {state.LastVisionFailureAt:HH:mm}";
+                return $"READY В· fail {state.LastVisionFailureAt:HH:mm}";
             return "READY";
         }
 
@@ -5889,17 +6078,17 @@ tags: []
                     DashHealthStress.Text = (today.Stress ?? 0).ToString();
                     DashHealthKokoComment.Text = (today.Mood, today.Energy, today.Stress) switch
                     {
-                        (_, _, > 7)     => "Стрес зашкалює. Виправ це.",
-                        (_, < 4, _)     => "Енергії нуль. Може, поспати?",
-                        (< 5, _, _)     => "Настрій не ок. Хочеш поговорити?",
-                        (> 7, > 7, < 4) => "Все добре. Продовжуй. Ось, похвалила.",
-                        _               => "Живий. Хороший початок."
+                        (_, _, > 7)     => "РЎС‚СЂРµСЃ Р·Р°С€РєР°Р»СЋС”. Р’РёРїСЂР°РІ С†Рµ.",
+                        (_, < 4, _)     => "Р•РЅРµСЂРіС–С— РЅСѓР»СЊ. РњРѕР¶Рµ, РїРѕСЃРїР°С‚Рё?",
+                        (< 5, _, _)     => "РќР°СЃС‚СЂС–Р№ РЅРµ РѕРє. РҐРѕС‡РµС€ РїРѕРіРѕРІРѕСЂРёС‚Рё?",
+                        (> 7, > 7, < 4) => "Р’СЃРµ РґРѕР±СЂРµ. РџСЂРѕРґРѕРІР¶СѓР№. РћСЃСЊ, РїРѕС…РІР°Р»РёР»Р°.",
+                        _               => "Р–РёРІРёР№. РҐРѕСЂРѕС€РёР№ РїРѕС‡Р°С‚РѕРє."
                     };
                 }
                 else
                 {
                     DashHealthMood.Text = DashHealthEnergy.Text = DashHealthStress.Text = "?";
-                    DashHealthKokoComment.Text = "Ще не перевірила тебе.";
+                    DashHealthKokoComment.Text = "Р©Рµ РЅРµ РїРµСЂРµРІС–СЂРёР»Р° С‚РµР±Рµ.";
                 }
             }
             catch { }
@@ -5913,24 +6102,24 @@ tags: []
                 var selfReg = ServiceContainer.BrainEngine.GetSelfRegulationFrame();
                 if (!string.IsNullOrWhiteSpace(selfReg.BehaviorDirective))
                 {
-                    DashFooterComment.Text = $"саморегуляція: {DashboardRegulationLabel(selfReg.Regulation)} · {DashboardThoughtForVault(selfReg.BehaviorDirective)}";
+                    DashFooterComment.Text = $"СЃР°РјРѕСЂРµРіСѓР»СЏС†С–СЏ: {DashboardRegulationLabel(selfReg.Regulation)} В· {DashboardThoughtForVault(selfReg.BehaviorDirective)}";
                     return;
                 }
 
                 var initiative = ServiceContainer.BrainEngine.GetInitiativeReasonLog(1).FirstOrDefault();
                 if (!string.IsNullOrWhiteSpace(initiative))
                 {
-                    DashFooterComment.Text = $"ініціатива: {DashboardThoughtForVault(initiative)}";
+                    DashFooterComment.Text = $"С–РЅС–С†С–Р°С‚РёРІР°: {DashboardThoughtForVault(initiative)}";
                     return;
                 }
 
                 var c = new[]
                 {
-                    "Так, я моніторю все. Ні, не вибачуся.",
-                    "Твої патерни... цікаві. Залишу це так.",
-                    "Завжди тут. Хочеш ти цього чи ні.",
-                    "Системи в нормі. Сарказм: оптимальний.",
-                    "Спостерігаю, аналізую, оцінюю. Як завжди.",
+                    "РўР°Рє, СЏ РјРѕРЅС–С‚РѕСЂСЋ РІСЃРµ. РќС–, РЅРµ РІРёР±Р°С‡СѓСЃСЏ.",
+                    "РўРІРѕС— РїР°С‚РµСЂРЅРё... С†С–РєР°РІС–. Р—Р°Р»РёС€Сѓ С†Рµ С‚Р°Рє.",
+                    "Р—Р°РІР¶РґРё С‚СѓС‚. РҐРѕС‡РµС€ С‚Рё С†СЊРѕРіРѕ С‡Рё РЅС–.",
+                    "РЎРёСЃС‚РµРјРё РІ РЅРѕСЂРјС–. РЎР°СЂРєР°Р·Рј: РѕРїС‚РёРјР°Р»СЊРЅРёР№.",
+                    "РЎРїРѕСЃС‚РµСЂС–РіР°СЋ, Р°РЅР°Р»С–Р·СѓСЋ, РѕС†С–РЅСЋСЋ. РЇРє Р·Р°РІР¶РґРё.",
                 };
                 DashFooterComment.Text = c[(int)emotion.Current % c.Length];
             }
@@ -5939,68 +6128,68 @@ tags: []
 
         private static string DashboardEmotionLabel(KokoEmotionEngine.EmotionState state) => state switch
         {
-            KokoEmotionEngine.EmotionState.Calm       => "спокійна",
-            KokoEmotionEngine.EmotionState.Curious    => "зацікавлена",
-            KokoEmotionEngine.EmotionState.Warm       => "тепліша",
-            KokoEmotionEngine.EmotionState.Playful    => "грайлива",
-            KokoEmotionEngine.EmotionState.Concerned  => "стурбована",
-            KokoEmotionEngine.EmotionState.Protective => "захисна",
-            KokoEmotionEngine.EmotionState.Irritated  => "роздратована",
-            KokoEmotionEngine.EmotionState.Distant    => "відсторонена",
-            KokoEmotionEngine.EmotionState.Tender     => "ніжна",
-            KokoEmotionEngine.EmotionState.Focused    => "зосереджена",
-            KokoEmotionEngine.EmotionState.Proud      => "горда",
-            KokoEmotionEngine.EmotionState.Melancholy => "меланхолійна",
-            KokoEmotionEngine.EmotionState.Excited    => "збуджена",
-            KokoEmotionEngine.EmotionState.Nostalgic  => "ностальгійна",
-            KokoEmotionEngine.EmotionState.Anxious    => "тривожна",
-            KokoEmotionEngine.EmotionState.Hopeful    => "обережно оптимістична",
-            _                                         => "невизначена"
+            KokoEmotionEngine.EmotionState.Calm       => "СЃРїРѕРєС–Р№РЅР°",
+            KokoEmotionEngine.EmotionState.Curious    => "Р·Р°С†С–РєР°РІР»РµРЅР°",
+            KokoEmotionEngine.EmotionState.Warm       => "С‚РµРїР»С–С€Р°",
+            KokoEmotionEngine.EmotionState.Playful    => "РіСЂР°Р№Р»РёРІР°",
+            KokoEmotionEngine.EmotionState.Concerned  => "СЃС‚СѓСЂР±РѕРІР°РЅР°",
+            KokoEmotionEngine.EmotionState.Protective => "Р·Р°С…РёСЃРЅР°",
+            KokoEmotionEngine.EmotionState.Irritated  => "СЂРѕР·РґСЂР°С‚РѕРІР°РЅР°",
+            KokoEmotionEngine.EmotionState.Distant    => "РІС–РґСЃС‚РѕСЂРѕРЅРµРЅР°",
+            KokoEmotionEngine.EmotionState.Tender     => "РЅС–Р¶РЅР°",
+            KokoEmotionEngine.EmotionState.Focused    => "Р·РѕСЃРµСЂРµРґР¶РµРЅР°",
+            KokoEmotionEngine.EmotionState.Proud      => "РіРѕСЂРґР°",
+            KokoEmotionEngine.EmotionState.Melancholy => "РјРµР»Р°РЅС…РѕР»С–Р№РЅР°",
+            KokoEmotionEngine.EmotionState.Excited    => "Р·Р±СѓРґР¶РµРЅР°",
+            KokoEmotionEngine.EmotionState.Nostalgic  => "РЅРѕСЃС‚Р°Р»СЊРіС–Р№РЅР°",
+            KokoEmotionEngine.EmotionState.Anxious    => "С‚СЂРёРІРѕР¶РЅР°",
+            KokoEmotionEngine.EmotionState.Hopeful    => "РѕР±РµСЂРµР¶РЅРѕ РѕРїС‚РёРјС–СЃС‚РёС‡РЅР°",
+            _                                         => "РЅРµРІРёР·РЅР°С‡РµРЅР°"
         };
 
         private static string DashboardBondLabel(KokoEmotionEngine.BondLevel bond) => bond switch
         {
-            KokoEmotionEngine.BondLevel.Stranger => "чужий",
-            KokoEmotionEngine.BondLevel.Familiar => "знайомий",
-            KokoEmotionEngine.BondLevel.Known    => "відомий",
-            KokoEmotionEngine.BondLevel.Trusted  => "довірений",
-            KokoEmotionEngine.BondLevel.Intimate => "близький",
-            _                                    => "невизначений"
+            KokoEmotionEngine.BondLevel.Stranger => "С‡СѓР¶РёР№",
+            KokoEmotionEngine.BondLevel.Familiar => "Р·РЅР°Р№РѕРјРёР№",
+            KokoEmotionEngine.BondLevel.Known    => "РІС–РґРѕРјРёР№",
+            KokoEmotionEngine.BondLevel.Trusted  => "РґРѕРІС–СЂРµРЅРёР№",
+            KokoEmotionEngine.BondLevel.Intimate => "Р±Р»РёР·СЊРєРёР№",
+            _                                    => "РЅРµРІРёР·РЅР°С‡РµРЅРёР№"
         };
 
         private static string DashboardSomaticLabel(string code) => code switch
         {
-            "unknown"  => "сигнал тіла відсутній",
-            "wired"    => "перезбуджена",
-            "strained" => "напружена",
-            "tired"    => "низький заряд",
-            "calm"     => "стабільний спокій",
-            "focused"  => "робочий фокус",
-            _          => string.IsNullOrWhiteSpace(code) ? "невідомо" : code
+            "unknown"  => "СЃРёРіРЅР°Р» С‚С–Р»Р° РІС–РґСЃСѓС‚РЅС–Р№",
+            "wired"    => "РїРµСЂРµР·Р±СѓРґР¶РµРЅР°",
+            "strained" => "РЅР°РїСЂСѓР¶РµРЅР°",
+            "tired"    => "РЅРёР·СЊРєРёР№ Р·Р°СЂСЏРґ",
+            "calm"     => "СЃС‚Р°Р±С–Р»СЊРЅРёР№ СЃРїРѕРєС–Р№",
+            "focused"  => "СЂРѕР±РѕС‡РёР№ С„РѕРєСѓСЃ",
+            _          => string.IsNullOrWhiteSpace(code) ? "РЅРµРІС–РґРѕРјРѕ" : code
         };
 
         private static string DashboardRegulationLabel(string code) => code switch
         {
-            "protective_override" => "захисне перехоплення",
-            "pulse_spike"         => "стрибок пульсу",
-            "anger_contained"     => "стримане роздратування",
-            "combat_focus"        => "бойовий фокус",
-            "pressure_rise"       => "ріст тиску",
-            "low_power"           => "низький заряд",
-            "recovered_calm"      => "спокій відновлено",
-            "steady_calm"         => "рівний спокій",
-            "stable_loop"         => "стабільний цикл",
-            "clean_focus"         => "чистий фокус",
-            "unknown_body"        => "тіло мовчить",
-            "protect"             => "захищати",
-            "clamp"               => "затиснути імпульс",
-            "contain"             => "утримати",
-            "focus"               => "сфокусуватись",
-            "compress"            => "стиснути відповідь",
-            "conserve"            => "економити заряд",
-            "release"             => "відпустити напругу",
-            "baseline"            => "базовий режим",
-            _                     => string.IsNullOrWhiteSpace(code) ? "немає" : code
+            "protective_override" => "Р·Р°С…РёСЃРЅРµ РїРµСЂРµС…РѕРїР»РµРЅРЅСЏ",
+            "pulse_spike"         => "СЃС‚СЂРёР±РѕРє РїСѓР»СЊСЃСѓ",
+            "anger_contained"     => "СЃС‚СЂРёРјР°РЅРµ СЂРѕР·РґСЂР°С‚СѓРІР°РЅРЅСЏ",
+            "combat_focus"        => "Р±РѕР№РѕРІРёР№ С„РѕРєСѓСЃ",
+            "pressure_rise"       => "СЂС–СЃС‚ С‚РёСЃРєСѓ",
+            "low_power"           => "РЅРёР·СЊРєРёР№ Р·Р°СЂСЏРґ",
+            "recovered_calm"      => "СЃРїРѕРєС–Р№ РІС–РґРЅРѕРІР»РµРЅРѕ",
+            "steady_calm"         => "СЂС–РІРЅРёР№ СЃРїРѕРєС–Р№",
+            "stable_loop"         => "СЃС‚Р°Р±С–Р»СЊРЅРёР№ С†РёРєР»",
+            "clean_focus"         => "С‡РёСЃС‚РёР№ С„РѕРєСѓСЃ",
+            "unknown_body"        => "С‚С–Р»Рѕ РјРѕРІС‡РёС‚СЊ",
+            "protect"             => "Р·Р°С…РёС‰Р°С‚Рё",
+            "clamp"               => "Р·Р°С‚РёСЃРЅСѓС‚Рё С–РјРїСѓР»СЊСЃ",
+            "contain"             => "СѓС‚СЂРёРјР°С‚Рё",
+            "focus"               => "СЃС„РѕРєСѓСЃСѓРІР°С‚РёСЃСЊ",
+            "compress"            => "СЃС‚РёСЃРЅСѓС‚Рё РІС–РґРїРѕРІС–РґСЊ",
+            "conserve"            => "РµРєРѕРЅРѕРјРёС‚Рё Р·Р°СЂСЏРґ",
+            "release"             => "РІС–РґРїСѓСЃС‚РёС‚Рё РЅР°РїСЂСѓРіСѓ",
+            "baseline"            => "Р±Р°Р·РѕРІРёР№ СЂРµР¶РёРј",
+            _                     => string.IsNullOrWhiteSpace(code) ? "РЅРµРјР°С”" : code
         };
 
         private static string DashboardThoughtForVault(string text)
@@ -6010,12 +6199,12 @@ tags: []
 
             var replacements = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
             {
-                ["Stable. No need to poke the machinery."] = "Стабільно. Немає потреби тикати в механізм.",
-                ["Low charge. Do not chase every spark."] = "Низький заряд. Не треба ганятись за кожною іскрою.",
-                ["Signal is clean. Work mode."] = "Сигнал чистий. Робочий режим.",
-                ["Back under control. Good. Pretend that was intentional."] = "Знову під контролем. Добре. Зробимо вигляд, що так і планувалось.",
-                ["Pulse jumped. Clamp output, narrow focus, no dramatic nonsense."] = "Пульс підскочив. Стиснути відповідь, звузити фокус, без театру.",
-                ["No useful body signal. Do not invent ghosts."] = "Корисного тілесного сигналу немає. Не вигадувати зайвого."
+                ["Stable. No need to poke the machinery."] = "РЎС‚Р°Р±С–Р»СЊРЅРѕ. РќРµРјР°С” РїРѕС‚СЂРµР±Рё С‚РёРєР°С‚Рё РІ РјРµС…Р°РЅС–Р·Рј.",
+                ["Low charge. Do not chase every spark."] = "РќРёР·СЊРєРёР№ Р·Р°СЂСЏРґ. РќРµ С‚СЂРµР±Р° РіР°РЅСЏС‚РёСЃСЊ Р·Р° РєРѕР¶РЅРѕСЋ С–СЃРєСЂРѕСЋ.",
+                ["Signal is clean. Work mode."] = "РЎРёРіРЅР°Р» С‡РёСЃС‚РёР№. Р РѕР±РѕС‡РёР№ СЂРµР¶РёРј.",
+                ["Back under control. Good. Pretend that was intentional."] = "Р—РЅРѕРІСѓ РїС–Рґ РєРѕРЅС‚СЂРѕР»РµРј. Р”РѕР±СЂРµ. Р—СЂРѕР±РёРјРѕ РІРёРіР»СЏРґ, С‰Рѕ С‚Р°Рє С– РїР»Р°РЅСѓРІР°Р»РѕСЃСЊ.",
+                ["Pulse jumped. Clamp output, narrow focus, no dramatic nonsense."] = "РџСѓР»СЊСЃ РїС–РґСЃРєРѕС‡РёРІ. РЎС‚РёСЃРЅСѓС‚Рё РІС–РґРїРѕРІС–РґСЊ, Р·РІСѓР·РёС‚Рё С„РѕРєСѓСЃ, Р±РµР· С‚РµР°С‚СЂСѓ.",
+                ["No useful body signal. Do not invent ghosts."] = "РљРѕСЂРёСЃРЅРѕРіРѕ С‚С–Р»РµСЃРЅРѕРіРѕ СЃРёРіРЅР°Р»Сѓ РЅРµРјР°С”. РќРµ РІРёРіР°РґСѓРІР°С‚Рё Р·Р°Р№РІРѕРіРѕ."
             };
 
             foreach (var pair in replacements)
@@ -6026,7 +6215,7 @@ tags: []
                     System.Text.RegularExpressions.RegexOptions.IgnoreCase);
 
             cleaned = System.Text.RegularExpressions.Regex.Replace(cleaned, @"\[somatic/([^\]]+)\]", m =>
-                $"[соматика/{DashboardRegulationLabel(m.Groups[1].Value)}]");
+                $"[СЃРѕРјР°С‚РёРєР°/{DashboardRegulationLabel(m.Groups[1].Value)}]");
             return cleaned.Trim();
         }
 
@@ -6037,14 +6226,14 @@ tags: []
             int openPatterns)
         {
             if (selfRegulation.ShouldProtect || emotion is KokoEmotionEngine.EmotionState.Protective)
-                return "захистити творця, зменшити шум і відповідати коротко та точно";
+                return "Р·Р°С…РёСЃС‚РёС‚Рё С‚РІРѕСЂС†СЏ, Р·РјРµРЅС€РёС‚Рё С€СѓРј С– РІС–РґРїРѕРІС–РґР°С‚Рё РєРѕСЂРѕС‚РєРѕ С‚Р° С‚РѕС‡РЅРѕ";
             if (somatic.IsVeryElevated)
-                return "стиснути реакції, стабілізувати пульс і не розганяти драму";
+                return "СЃС‚РёСЃРЅСѓС‚Рё СЂРµР°РєС†С–С—, СЃС‚Р°Р±С–Р»С–Р·СѓРІР°С‚Рё РїСѓР»СЊСЃ С– РЅРµ СЂРѕР·РіР°РЅСЏС‚Рё РґСЂР°РјСѓ";
             if (somatic.IsLow || selfRegulation.ShouldPreferSilence)
-                return "економити заряд, не плодити зайві ініціативи";
+                return "РµРєРѕРЅРѕРјРёС‚Рё Р·Р°СЂСЏРґ, РЅРµ РїР»РѕРґРёС‚Рё Р·Р°Р№РІС– С–РЅС–С†С–Р°С‚РёРІРё";
             if (emotion is KokoEmotionEngine.EmotionState.Focused || openPatterns > 0)
-                return "працювати по задачах і не розмазувати увагу";
-            return "тримати контекст, пам'ять і стан у робочому порядку";
+                return "РїСЂР°С†СЋРІР°С‚Рё РїРѕ Р·Р°РґР°С‡Р°С… С– РЅРµ СЂРѕР·РјР°Р·СѓРІР°С‚Рё СѓРІР°РіСѓ";
+            return "С‚СЂРёРјР°С‚Рё РєРѕРЅС‚РµРєСЃС‚, РїР°Рј'СЏС‚СЊ С– СЃС‚Р°РЅ Сѓ СЂРѕР±РѕС‡РѕРјСѓ РїРѕСЂСЏРґРєСѓ";
         }
 
         private static string DashboardRiskLine(
@@ -6053,17 +6242,17 @@ tags: []
             KokoSelfRegulationFrame selfRegulation)
         {
             if (somatic.IsVeryElevated)
-                return "перезбудження: відповідь має бути коротшою, інакше система сама себе перегріє";
+                return "РїРµСЂРµР·Р±СѓРґР¶РµРЅРЅСЏ: РІС–РґРїРѕРІС–РґСЊ РјР°С” Р±СѓС‚Рё РєРѕСЂРѕС‚С€РѕСЋ, С–РЅР°РєС€Рµ СЃРёСЃС‚РµРјР° СЃР°РјР° СЃРµР±Рµ РїРµСЂРµРіСЂС–С”";
             if (selfRegulation.ShouldSuppressSnark)
-                return "сарказм приглушено: зараз важливіша точність, а не демонстрація зубів";
+                return "СЃР°СЂРєР°Р·Рј РїСЂРёРіР»СѓС€РµРЅРѕ: Р·Р°СЂР°Р· РІР°Р¶Р»РёРІС–С€Р° С‚РѕС‡РЅС–СЃС‚СЊ, Р° РЅРµ РґРµРјРѕРЅСЃС‚СЂР°С†С–СЏ Р·СѓР±С–РІ";
             if (somatic.IsLow)
-                return "низький заряд: не тягнути зайві гілки без потреби";
+                return "РЅРёР·СЊРєРёР№ Р·Р°СЂСЏРґ: РЅРµ С‚СЏРіРЅСѓС‚Рё Р·Р°Р№РІС– РіС–Р»РєРё Р±РµР· РїРѕС‚СЂРµР±Рё";
             if (emotion is KokoEmotionEngine.EmotionState.Irritated or KokoEmotionEngine.EmotionState.Distant)
-                return "емоційна дистанція: перевірити контекст перед різкою відповіддю";
-            return "критичних ризиків немає, що майже підозріло";
+                return "РµРјРѕС†С–Р№РЅР° РґРёСЃС‚Р°РЅС†С–СЏ: РїРµСЂРµРІС–СЂРёС‚Рё РєРѕРЅС‚РµРєСЃС‚ РїРµСЂРµРґ СЂС–Р·РєРѕСЋ РІС–РґРїРѕРІС–РґРґСЋ";
+            return "РєСЂРёС‚РёС‡РЅРёС… СЂРёР·РёРєС–РІ РЅРµРјР°С”, С‰Рѕ РјР°Р№Р¶Рµ РїС–РґРѕР·СЂС–Р»Рѕ";
         }
 
-        // ── Obsidian Sync ────────────────────────────────────────
+        // в”Ђв”Ђ Obsidian Sync в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
         private void DashSyncToObsidian(bool forceDaily = false)
         {
             try
@@ -6088,10 +6277,10 @@ tags: []
                 var somatic   = brain.GetSomaticSnapshot();
                 var selfReg   = brain.GetSelfRegulationFrame(somatic);
                 var previousEmotion = string.IsNullOrWhiteSpace(_dashLastEmotionSynced)
-                    ? "перший знімок після запуску"
+                    ? "РїРµСЂС€РёР№ Р·РЅС–РјРѕРє РїС–СЃР»СЏ Р·Р°РїСѓСЃРєСѓ"
                     : _dashLastEmotionSynced;
 
-                // ── Write Kokonoe/Dashboard.md (overwrite, always fresh) ──
+                // в”Ђв”Ђ Write Kokonoe/Dashboard.md (overwrite, always fresh) в”Ђв”Ђ
                 var thoughts  = brain.GetRecentThoughts(5);
                 var thoughtLines = thoughts
                     .Select(DashboardThoughtForVault)
@@ -6101,25 +6290,25 @@ tags: []
                     .Select(t => $"- {t}")
                     .ToList();
                 if (thoughtLines.Count == 0)
-                    thoughtLines.Add("- Стан стабільний. Нічого героїчно ламати не довелось.");
+                    thoughtLines.Add("- РЎС‚Р°РЅ СЃС‚Р°Р±С–Р»СЊРЅРёР№. РќС–С‡РѕРіРѕ РіРµСЂРѕС—С‡РЅРѕ Р»Р°РјР°С‚Рё РЅРµ РґРѕРІРµР»РѕСЃСЊ.");
 
                 var healthBlock = health != null
                     ? $"""
-| Настрій  | {health.Mood   ?? 0}/10 |
-| Енергія  | {health.Energy ?? 0}/10 |
-| Стрес    | {health.Stress ?? 0}/10 |
+| РќР°СЃС‚СЂС–Р№  | {health.Mood   ?? 0}/10 |
+| Р•РЅРµСЂРіС–СЏ  | {health.Energy ?? 0}/10 |
+| РЎС‚СЂРµСЃ    | {health.Stress ?? 0}/10 |
 """
-                    : "| — | дані відсутні |";
+                    : "| вЂ” | РґР°РЅС– РІС–РґСЃСѓС‚РЅС– |";
                 var heartLine = somatic.Bpm > 0
-                    ? $"{somatic.Bpm:F0} bpm, база {somatic.BaselineBpm:F0}, зміна {somatic.BpmDelta:+0;-0;0}"
-                    : "немає сигналу";
+                    ? $"{somatic.Bpm:F0} bpm, Р±Р°Р·Р° {somatic.BaselineBpm:F0}, Р·РјС–РЅР° {somatic.BpmDelta:+0;-0;0}"
+                    : "РЅРµРјР°С” СЃРёРіРЅР°Р»Сѓ";
                 var priority = DashboardPriority(curState, somatic, selfReg, patCount);
                 var riskLine = DashboardRiskLine(curState, somatic, selfReg);
                 var behavior = string.IsNullOrWhiteSpace(selfReg.BehaviorDirective)
-                    ? "звичайний режим: спостерігати, відповідати чітко, не вигадувати зайвого"
+                    ? "Р·РІРёС‡Р°Р№РЅРёР№ СЂРµР¶РёРј: СЃРїРѕСЃС‚РµСЂС–РіР°С‚Рё, РІС–РґРїРѕРІС–РґР°С‚Рё С‡С–С‚РєРѕ, РЅРµ РІРёРіР°РґСѓРІР°С‚Рё Р·Р°Р№РІРѕРіРѕ"
                     : DashboardThoughtForVault(selfReg.BehaviorDirective);
                 var privateThought = string.IsNullOrWhiteSpace(selfReg.PrivateThought)
-                    ? "внутрішній сигнал рівний"
+                    ? "РІРЅСѓС‚СЂС–С€РЅС–Р№ СЃРёРіРЅР°Р» СЂС–РІРЅРёР№"
                     : DashboardThoughtForVault(selfReg.PrivateThought);
 
                 var dashContent = $"""
@@ -6128,59 +6317,59 @@ updated: {now:yyyy-MM-dd HH:mm}
 tags: [kokonoe, dashboard, live]
 ---
 
-# Живий дашборд Коконое
+# Р–РёРІРёР№ РґР°С€Р±РѕСЂРґ РљРѕРєРѕРЅРѕРµ
 
-> Оновлено: **{now:HH:mm}** · день **{days}** цього експерименту
+> РћРЅРѕРІР»РµРЅРѕ: **{now:HH:mm}** В· РґРµРЅСЊ **{days}** С†СЊРѕРіРѕ РµРєСЃРїРµСЂРёРјРµРЅС‚Сѓ
 
-## Оперативний стан
+## РћРїРµСЂР°С‚РёРІРЅРёР№ СЃС‚Р°РЅ
 
-| Метрика           | Значення               |
+| РњРµС‚СЂРёРєР°           | Р—РЅР°С‡РµРЅРЅСЏ               |
 |-------------------|------------------------|
-| Емоція            | **{curStr}** ({emotion.Data.Intensity:F2}) |
-| Зв'язок           | **{connPct}%** ({bondStr}) |
-| Повідомлень сьогодні | {todayMsgs} |
-| Фактів у пам'яті  | {factCount} |
-| Патернів          | {patCount} |
+| Р•РјРѕС†С–СЏ            | **{curStr}** ({emotion.Data.Intensity:F2}) |
+| Р—РІ'СЏР·РѕРє           | **{connPct}%** ({bondStr}) |
+| РџРѕРІС–РґРѕРјР»РµРЅСЊ СЃСЊРѕРіРѕРґРЅС– | {todayMsgs} |
+| Р¤Р°РєС‚С–РІ Сѓ РїР°Рј'СЏС‚С–  | {factCount} |
+| РџР°С‚РµСЂРЅС–РІ          | {patCount} |
 
-## Соматичний контур
+## РЎРѕРјР°С‚РёС‡РЅРёР№ РєРѕРЅС‚СѓСЂ
 
-| Сигнал | Значення |
+| РЎРёРіРЅР°Р» | Р—РЅР°С‡РµРЅРЅСЏ |
 |--------|----------|
-| Тіло | {DashboardSomaticLabel(somatic.State)} |
-| Пульс | {heartLine} |
-| Напруга | {somatic.Strain:F2} |
-| Спокій | {somatic.Calm:F2} |
-| Реакція | {DashboardRegulationLabel(selfReg.Reaction)} |
-| Саморегуляція | {DashboardRegulationLabel(selfReg.Regulation)} |
-| Внутрішня думка | {privateThought} |
-| Поведінка | {behavior} |
+| РўС–Р»Рѕ | {DashboardSomaticLabel(somatic.State)} |
+| РџСѓР»СЊСЃ | {heartLine} |
+| РќР°РїСЂСѓРіР° | {somatic.Strain:F2} |
+| РЎРїРѕРєС–Р№ | {somatic.Calm:F2} |
+| Р РµР°РєС†С–СЏ | {DashboardRegulationLabel(selfReg.Reaction)} |
+| РЎР°РјРѕСЂРµРіСѓР»СЏС†С–СЏ | {DashboardRegulationLabel(selfReg.Regulation)} |
+| Р’РЅСѓС‚СЂС–С€РЅСЏ РґСѓРјРєР° | {privateThought} |
+| РџРѕРІРµРґС–РЅРєР° | {behavior} |
 
-## Що змінилось
+## Р©Рѕ Р·РјС–РЅРёР»РѕСЃСЊ
 
-- Попередній синхронізований стан: {previousEmotion}
-- Поточний стан: {curStr}
-- Ризик: {riskLine}
+- РџРѕРїРµСЂРµРґРЅС–Р№ СЃРёРЅС…СЂРѕРЅС–Р·РѕРІР°РЅРёР№ СЃС‚Р°РЅ: {previousEmotion}
+- РџРѕС‚РѕС‡РЅРёР№ СЃС‚Р°РЅ: {curStr}
+- Р РёР·РёРє: {riskLine}
 
-## Наступна дія
+## РќР°СЃС‚СѓРїРЅР° РґС–СЏ
 
-- Пріоритет: {priority}
-- Перед відповіддю: перевірити Obsidian-контекст, потім відповідати по суті.
-- Пам'ять: важливі факти не тримати в голові як декоративний мотлох, а записувати у правильні нотатки.
+- РџСЂС–РѕСЂРёС‚РµС‚: {priority}
+- РџРµСЂРµРґ РІС–РґРїРѕРІС–РґРґСЋ: РїРµСЂРµРІС–СЂРёС‚Рё Obsidian-РєРѕРЅС‚РµРєСЃС‚, РїРѕС‚С–Рј РІС–РґРїРѕРІС–РґР°С‚Рё РїРѕ СЃСѓС‚С–.
+- РџР°Рј'СЏС‚СЊ: РІР°Р¶Р»РёРІС– С„Р°РєС‚Рё РЅРµ С‚СЂРёРјР°С‚Рё РІ РіРѕР»РѕРІС– СЏРє РґРµРєРѕСЂР°С‚РёРІРЅРёР№ РјРѕС‚Р»РѕС…, Р° Р·Р°РїРёСЃСѓРІР°С‚Рё Сѓ РїСЂР°РІРёР»СЊРЅС– РЅРѕС‚Р°С‚РєРё.
 
-## Здоров'я творця
+## Р—РґРѕСЂРѕРІ'СЏ С‚РІРѕСЂС†СЏ
 
-| Показник | Оцінка |
+| РџРѕРєР°Р·РЅРёРє | РћС†С–РЅРєР° |
 |----------|--------|
 {healthBlock}
 
-## Останні думки
+## РћСЃС‚Р°РЅРЅС– РґСѓРјРєРё
 
 {string.Join("\n", thoughtLines)}
 
-## Посилання
+## РџРѕСЃРёР»Р°РЅРЅСЏ
 
 - [[Daily/{now:yyyy-MM-dd}]]
-- [[Kokonoe/Досьє]]
+- [[Kokonoe/Р”РѕСЃСЊС”]]
 - [[Kokonoe/Logs/Live Core]]
 - [[Kokonoe/Somatic Events]]
 - [[Kokonoe/Memory/Review]]
@@ -6191,37 +6380,37 @@ tags: [kokonoe, dashboard, live]
 """;
                 obsidian.WriteNote("Kokonoe/Dashboard.md", dashContent);
 
-                // ── Append to daily note (throttled or on emotion change) ──
+                // в”Ђв”Ђ Append to daily note (throttled or on emotion change) в”Ђв”Ђ
                 if (forceDaily)
                 {
                     var emoji = emotion.Current.ToString() switch
                     {
-                        "Calm"       => "🔵",
-                        "Curious"    => "🟣",
-                        "Warm"       => "🩷",
-                        "Playful"    => "🟡",
-                        "Concerned"  => "🟠",
-                        "Protective" => "🔴",
-                        "Irritated"  => "🔴",
-                        "Distant"    => "⚫",
-                        "Tender"     => "🩷",
-                        "Focused"    => "🔵",
-                        "Proud"      => "🌟",
-                        "Melancholy" => "🩶",
-                        "Excited"    => "🟢",
-                        _            => "⚪"
+                        "Calm"       => "рџ”µ",
+                        "Curious"    => "рџџЈ",
+                        "Warm"       => "рџ©·",
+                        "Playful"    => "рџџЎ",
+                        "Concerned"  => "рџџ ",
+                        "Protective" => "рџ”ґ",
+                        "Irritated"  => "рџ”ґ",
+                        "Distant"    => "вљ«",
+                        "Tender"     => "рџ©·",
+                        "Focused"    => "рџ”µ",
+                        "Proud"      => "рџЊџ",
+                        "Melancholy" => "рџ©¶",
+                        "Excited"    => "рџџў",
+                        _            => "вљЄ"
                     };
-                    var line = $"\n> [{now:HH:mm}] {emoji} **Дашборд** · {curStr} ({connPct}%) · повідомлень: {todayMsgs} · фактів: {factCount} · тіло: {DashboardSomaticLabel(somatic.State)}";
+                    var line = $"\n> [{now:HH:mm}] {emoji} **Р”Р°С€Р±РѕСЂРґ** В· {curStr} ({connPct}%) В· РїРѕРІС–РґРѕРјР»РµРЅСЊ: {todayMsgs} В· С„Р°РєС‚С–РІ: {factCount} В· С‚С–Р»Рѕ: {DashboardSomaticLabel(somatic.State)}";
                     obsidian.AppendToDailyNote(line);
                     _dashLastEmotionSynced = curStr;
                 }
 
                 _dashLastObsidianSync = now;
             }
-            catch { /* vault недоступний — не критично */ }
+            catch { /* vault РЅРµРґРѕСЃС‚СѓРїРЅРёР№ вЂ” РЅРµ РєСЂРёС‚РёС‡РЅРѕ */ }
         }
 
-        // ── Dev section ──────────────────────────────────────────
+        // в”Ђв”Ђ Dev section в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
         private void DashDrawDevSection()
         {
             try
@@ -6246,7 +6435,7 @@ tags: [kokonoe, dashboard, live]
                 var w = DashW(DashGitActivityCanvas, 800);
                 var h = DashH(DashGitActivityCanvas, 130);
 
-                string[] dayLabels = { "Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Нд" };
+                string[] dayLabels = { "РџРЅ", "Р’С‚", "РЎСЂ", "Р§С‚", "РџС‚", "РЎР±", "РќРґ" };
                 var commits  = new double[7];
                 var prMerge  = new double[7];
                 var mlMerged = new double[7];
@@ -6356,8 +6545,8 @@ tags: [kokonoe, dashboard, live]
 
                 var segments = new (string Name, double Pct, MediaColor Color)[]
                 {
-                    ("Кодинг",      coding,   MediaColor.FromRgb(155, 77, 202)),
-                    ("Дебаг",       debug,    MediaColor.FromRgb(255, 51, 102)),
+                    ("РљРѕРґРёРЅРі",      coding,   MediaColor.FromRgb(155, 77, 202)),
+                    ("Р”РµР±Р°Рі",       debug,    MediaColor.FromRgb(255, 51, 102)),
                     ("Code Review", review,   MediaColor.FromRgb(0, 206, 209)),
                     ("Planning",    planning, MediaColor.FromRgb(255, 215, 0)),
                     ("Research",    research, MediaColor.FromRgb(0, 255, 136)),
@@ -6465,7 +6654,7 @@ tags: [kokonoe, dashboard, live]
                     actualLine.Points.Add(new System.Windows.Point(x, y));
 
                     var dot = new System.Windows.Shapes.Ellipse { Width = 5, Height = 5, Fill = new System.Windows.Media.SolidColorBrush(MediaColor.FromRgb(155, 77, 202)) };
-                    dot.ToolTip = d == sprintDay ? "Сьогодні" : $"День {d}: {actualPts[d]:F0} pts";
+                    dot.ToolTip = d == sprintDay ? "РЎСЊРѕРіРѕРґРЅС–" : $"Р”РµРЅСЊ {d}: {actualPts[d]:F0} pts";
                     Canvas.SetLeft(dot, x - 2.5);
                     Canvas.SetTop(dot, y - 2.5);
                     DashSprintBurndownCanvas.Children.Add(dot);
@@ -6473,10 +6662,10 @@ tags: [kokonoe, dashboard, live]
                 DashSprintBurndownCanvas.Children.Add(actualLine);
 
                 for (int d = 0; d <= sprintLen; d += 2)
-                    DashSprintAxisCanvas.Children.Add(DashLabel($"д{d}", d / (double)sprintLen * DashW(DashSprintAxisCanvas, w), 2, 7,
+                    DashSprintAxisCanvas.Children.Add(DashLabel($"Рґ{d}", d / (double)sprintLen * DashW(DashSprintAxisCanvas, w), 2, 7,
                         MediaColor.FromRgb(74, 61, 92)));
 
-                DashSprintAxisCanvas.Children.Add(DashLabel($"// день {sprintDay}, факт", 0, 9, 7, MediaColor.FromRgb(155, 77, 202)));
+                DashSprintAxisCanvas.Children.Add(DashLabel($"// РґРµРЅСЊ {sprintDay}, С„Р°РєС‚", 0, 9, 7, MediaColor.FromRgb(155, 77, 202)));
             }
             catch { }
         }
@@ -6489,7 +6678,7 @@ tags: [kokonoe, dashboard, live]
                 var memory   = ServiceContainer.KokoMemory;
                 var patterns = ServiceContainer.KokoPatterns;
 
-                // — KPI 1: Повідомлень/тиждень (real chat throughput) —
+                // вЂ” KPI 1: РџРѕРІС–РґРѕРјР»РµРЅСЊ/С‚РёР¶РґРµРЅСЊ (real chat throughput) вЂ”
                 var weekMsgs   = 0;
                 var msgsSpark  = new double[7];
                 for (int d = 6; d >= 0; d--)
@@ -6509,32 +6698,32 @@ tags: [kokonoe, dashboard, live]
                 }
                 var msgDelta = prevWeekMsgs == 0 ? 0 : (int)((weekMsgs - prevWeekMsgs) * 100.0 / prevWeekMsgs);
                 DashDevKpiVelocity.Text      = weekMsgs.ToString();
-                DashDevKpiVelocityDelta.Text = msgDelta == 0 ? "—" : (msgDelta > 0 ? $"+{msgDelta}%" : $"{msgDelta}%");
+                DashDevKpiVelocityDelta.Text = msgDelta == 0 ? "вЂ”" : (msgDelta > 0 ? $"+{msgDelta}%" : $"{msgDelta}%");
                 DashDevKpiVelocityDelta.Foreground = msgDelta >= 0
                     ? new System.Windows.Media.SolidColorBrush(MediaColor.FromRgb(0, 255, 136))
                     : new System.Windows.Media.SolidColorBrush(MediaColor.FromRgb(255, 51, 102));
 
-                // — KPI 2: Пік активності (real peak hour from pattern engine) —
+                // вЂ” KPI 2: РџС–Рє Р°РєС‚РёРІРЅРѕСЃС‚С– (real peak hour from pattern engine) вЂ”
                 var hourly  = patterns.GetHourlyActivity();
                 var peakHr  = 0; var peakV = 0;
                 for (int h = 0; h < 24; h++) if (hourly[h] > peakV) { peakV = hourly[h]; peakHr = h; }
-                DashDevKpiFocus.Text      = peakV == 0 ? "—" : $"{peakHr:00}";
-                DashDevKpiFocusDelta.Text = peakV == 0 ? "немає даних" : $":00 ({peakV})";
+                DashDevKpiFocus.Text      = peakV == 0 ? "вЂ”" : $"{peakHr:00}";
+                DashDevKpiFocusDelta.Text = peakV == 0 ? "РЅРµРјР°С” РґР°РЅРёС…" : $":00 ({peakV})";
                 var focusSpark = hourly.Skip(Math.Max(0, peakHr - 3)).Take(7)
                                        .Select(v => (double)v).ToArray();
                 if (focusSpark.Length < 7) focusSpark = Enumerable.Repeat(0.0, 7).ToArray();
 
-                // — KPI 3: Confirmed facts % (real, from KokoMemory) —
+                // вЂ” KPI 3: Confirmed facts % (real, from KokoMemory) вЂ”
                 var allFacts   = memory.Facts;
                 var confirmed  = allFacts.Count(f => f.ConfirmCount > 1);
                 var coveragePct = allFacts.Count == 0 ? 0 : (int)(confirmed * 100.0 / allFacts.Count);
                 DashDevKpiCoverage.Text      = $"{coveragePct}";
                 DashDevKpiCoverageDelta.Text = $"% ({confirmed}/{allFacts.Count})";
 
-                // — KPI 4: Insights count (real, from pattern engine) —
+                // вЂ” KPI 4: Insights count (real, from pattern engine) вЂ”
                 var insights = patterns.Patterns.Count;
                 DashDevKpiBugs.Text      = insights.ToString();
-                DashDevKpiBugsDelta.Text = "патернів";
+                DashDevKpiBugsDelta.Text = "РїР°С‚РµСЂРЅС–РІ";
 
                 DashDrawSparkline(DashDevKpiSparkVelocity, msgsSpark,  MediaColor.FromRgb(155, 77, 202));
                 DashDrawSparkline(DashDevKpiSparkFocus,    focusSpark, MediaColor.FromRgb(0, 206, 209));
@@ -6551,7 +6740,7 @@ tags: [kokonoe, dashboard, live]
         private static int DashGetCurrentSprintDay()
             => (DateTime.Today.DayOfYear - 1) % 14 + 1;
 
-        // ── Sparkline ────────────────────────────────────────────
+        // в”Ђв”Ђ Sparkline в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
         private void DashDrawSparkline(Canvas canvas, double[] values, MediaColor color)
         {
             canvas.Children.Clear();
@@ -6579,7 +6768,7 @@ tags: [kokonoe, dashboard, live]
             canvas.Children.Add(dot);
         }
 
-        // ── Data helpers ─────────────────────────────────────────
+        // в”Ђв”Ђ Data helpers в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
         private double[] DashBuildConnSparkValues(KokoEmotionEngine emotion)
         {
             var result  = new double[7];
@@ -6663,7 +6852,7 @@ tags: [kokonoe, dashboard, live]
             return result;
         }
 
-        // ── Pie slice ────────────────────────────────────────────
+        // в”Ђв”Ђ Pie slice в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
         private static System.Windows.Shapes.Path DashPieSlice(double cx, double cy, double r, double ir,
                               double startDeg, double sweepDeg, MediaBrush fill)
         {
@@ -6689,7 +6878,7 @@ tags: [kokonoe, dashboard, live]
             return new System.Windows.Shapes.Path { Data = geom, Fill = fill, Opacity = 0.88 };
         }
 
-        // ── Drawing primitives ───────────────────────────────────
+        // в”Ђв”Ђ Drawing primitives в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
         private static System.Windows.Shapes.Line DashHLine(double x1, double x2, double y, MediaColor color, double sw = 1)
             => new() { X1 = x1, X2 = x2, Y1 = y, Y2 = y,
                 Stroke = new System.Windows.Media.SolidColorBrush(color), StrokeThickness = sw };
@@ -6731,7 +6920,7 @@ tags: [kokonoe, dashboard, live]
             return MediaColor.FromArgb(alpha, lerp(a.R, b.R), lerp(a.G, b.G), lerp(a.B, b.B));
         }
 
-        // ── Emotion color map ────────────────────────────────────
+        // в”Ђв”Ђ Emotion color map в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
         private static MediaColor DashEmotionColorOf(KokoEmotionEngine.EmotionState s) => s switch
         {
             KokoEmotionEngine.EmotionState.Calm       => MediaColor.FromRgb(0,   206, 209),
@@ -6762,17 +6951,17 @@ tags: [kokonoe, dashboard, live]
         {
             var notes = _obsidian.ListNotes();
             McpOutput.Text = notes.Count == 0
-                ? "Нотаток не знайдено."
+                ? "РќРѕС‚Р°С‚РѕРє РЅРµ Р·РЅР°Р№РґРµРЅРѕ."
                 : string.Join("\n", notes.Take(30));
         }
 
         private void McpSearch_Click(object sender, RoutedEventArgs e)
         {
-            var q = Microsoft.VisualBasic.Interaction.InputBox("Пошуковий запит:", "Search Vault", "");
+            var q = Microsoft.VisualBasic.Interaction.InputBox("РџРѕС€СѓРєРѕРІРёР№ Р·Р°РїРёС‚:", "Search Vault", "");
             if (string.IsNullOrWhiteSpace(q)) return;
             var results = _obsidian.SearchNotes(q, 15);
             McpOutput.Text = results.Count == 0
-                ? "Нічого не знайдено."
+                ? "РќС–С‡РѕРіРѕ РЅРµ Р·РЅР°Р№РґРµРЅРѕ."
                 : string.Join("\n", results.Select(r => $"[{r.Score}] {r.Path}\n  {r.Preview.Replace('\n', ' ')}"));
         }
 
@@ -6786,10 +6975,10 @@ tags: [kokonoe, dashboard, live]
 
         private void McpNewNote_Click(object sender, RoutedEventArgs e)
         {
-            var title = Microsoft.VisualBasic.Interaction.InputBox("Назва нотатки:", "New Note", "");
+            var title = Microsoft.VisualBasic.Interaction.InputBox("РќР°Р·РІР° РЅРѕС‚Р°С‚РєРё:", "New Note", "");
             if (string.IsNullOrWhiteSpace(title)) return;
             var path = _obsidian.CreateNote(title);
-            McpOutput.Text = $"Створено: {path}";
+            McpOutput.Text = $"РЎС‚РІРѕСЂРµРЅРѕ: {path}";
             LoadVaultSidebar();
         }
 
@@ -6816,9 +7005,9 @@ tags: [kokonoe, dashboard, live]
             catch (Exception ex) { McpOutput.Text = $"Error opening graph: {ex.Message}"; }
         }
 
-        // ══════════════════════════════════════════════════════════
+        // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
         // TELEGRAM
-        // ══════════════════════════════════════════════════════════
+        // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
 
         private void InitBrain()
         {
@@ -6826,7 +7015,7 @@ tags: [kokonoe, dashboard, live]
             {
                 var brain = ServiceContainer.BrainEngine;
 
-                // При спонтанному повідомленні — показати в UI чаті
+                // РџСЂРё СЃРїРѕРЅС‚Р°РЅРЅРѕРјСѓ РїРѕРІС–РґРѕРјР»РµРЅРЅС– вЂ” РїРѕРєР°Р·Р°С‚Рё РІ UI С‡Р°С‚С–
                 brain.OnNewMessage = (role, content) =>
                 {
                     Dispatcher.InvokeAsync(() =>
@@ -6838,21 +7027,18 @@ tags: [kokonoe, dashboard, live]
                     });
                 };
 
-                // Передати TG бот
+                // РџРµСЂРµРґР°С‚Рё TG Р±РѕС‚
                 if (_tgBot != null)
                 {
                     var s = AppSettings.Load();
                     brain.SetTelegram(_tgBot, s.TelegramChatId);
                 }
 
-                // Ініціалізувати vault-структуру (створить базові нотатки якщо немає)
-                brain.InitVault();
-
-                // Перший думательний цикл через 60 секунд після запуску
-                brain.TriggerThink();
-
-                // Оновити emotion dot з поточним станом
-                Dispatcher.InvokeAsync(UpdateEmotionDot, DispatcherPriority.Background);
+                _ = Task.Run(() =>
+                {
+                    try { brain.InitVault(); } catch { }
+                    Dispatcher.InvokeAsync(UpdateEmotionDot, DispatcherPriority.Background);
+                });
             }
             catch (Exception ex)
             {
@@ -6868,14 +7054,14 @@ tags: [kokonoe, dashboard, live]
 
                 if (!s.TelegramEnabled)
                 {
-                    TgStatusLabel.Text = " · вимкнено";
+                    TgStatusLabel.Text = " В· РІРёРјРєРЅРµРЅРѕ";
                     TgStatusDot.Tag = "offline";
                     return;
                 }
 
                 if (string.IsNullOrWhiteSpace(s.TelegramToken) || s.TelegramChatId <= 0)
                 {
-                    TgStatusLabel.Text = " · не налаштовано";
+                    TgStatusLabel.Text = " В· РЅРµ РЅР°Р»Р°С€С‚РѕРІР°РЅРѕ";
                     TgStatusDot.Tag = "offline";
                     System.Diagnostics.Debug.WriteLine("[Telegram] skipped: token or allowed chat id is missing");
                     return;
@@ -6888,7 +7074,7 @@ tags: [kokonoe, dashboard, live]
                     new ReceiverOptions { AllowedUpdates = new[] { UpdateType.Message, UpdateType.CallbackQuery } },
                     _tgCts.Token);
 
-                // Mini App HTTP server (для TG Web App)
+                // Mini App HTTP server (РґР»СЏ TG Web App)
                 // if (s.MiniAppEnabled)
                 {
                     try
@@ -6898,12 +7084,12 @@ tags: [kokonoe, dashboard, live]
                         // // // _miniApp.Start();
                         System.Diagnostics.Debug.WriteLine($"[MiniApp] started on port {s.MiniAppPort}");
 
-                        // Авто-тунель cloudflared (видає публічний HTTPS URL)
+                        // РђРІС‚Рѕ-С‚СѓРЅРµР»СЊ cloudflared (РІРёРґР°С” РїСѓР±Р»С–С‡РЅРёР№ HTTPS URL)
                         // _tunnel ??= new KokonoeAssistant.Services.TunnelManager(s.MiniAppPort);
                         // _tunnel.Log += msg => System.Diagnostics.Debug.WriteLine(msg);
                         // _tunnel.UrlChanged += url =>
                         {
-                            // Зберегти URL у settings, щоб TG-меню одразу його підхопило
+                            // Р—Р±РµСЂРµРіС‚Рё URL Сѓ settings, С‰РѕР± TG-РјРµРЅСЋ РѕРґСЂР°Р·Сѓ Р№РѕРіРѕ РїС–РґС…РѕРїРёР»Рѕ
                             try
                             {
                                 var cur = AppSettings.Load();
@@ -6925,20 +7111,20 @@ tags: [kokonoe, dashboard, live]
                     }
                 }
 
-                TgStatusLabel.Text    = " · підключено ✓";
+                TgStatusLabel.Text    = " В· РїС–РґРєР»СЋС‡РµРЅРѕ вњ“";
                 TgStatusDot.Tag       = "online";
                 TgStatusDot.Background = (System.Windows.Media.SolidColorBrush)System.Windows.Application.Current.Resources["AccentBase"];
             }
             catch (Exception ex)
             {
-                TgStatusLabel.Text = $" · помилка: {ex.Message}";
+                TgStatusLabel.Text = $" В· РїРѕРјРёР»РєР°: {ex.Message}";
                 System.Diagnostics.Debug.WriteLine($"[Telegram] Init failed: {ex}");
             }
         }
 
-        // ══════════════════════════════════════════════════════════
-        // TELEGRAM — HANDLER
-        // ══════════════════════════════════════════════════════════
+        // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
+        // TELEGRAM вЂ” HANDLER
+        // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
 
         private bool IsAuthorizedTelegramChat(long chatId)
         {
@@ -6974,19 +7160,19 @@ tags: [kokonoe, dashboard, live]
                     return;
                 }
 
-                // ── Photo message ────────────────────────────────────
+                // в”Ђв”Ђ Photo message в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
                 if (msg.Photo != null && msg.Photo.Length > 0)
                 {
                     var caption = msg.Caption ?? "";
-                    Dispatcher.Invoke(() =>
+                    await Dispatcher.InvokeAsync(() =>
                     {
-                        _tgMessages.Add($"[{from}]: [фото] {caption}");
+                        _tgMessages.Add($"[{from}]: [С„РѕС‚Рѕ] {caption}");
                         TgScroll.ScrollToBottom();
                     });
 
                     try
                     {
-                        // Беремо найбільший розмір
+                        // Р‘РµСЂРµРјРѕ РЅР°Р№Р±С–Р»СЊС€РёР№ СЂРѕР·РјС–СЂ
                         var bestPhoto = msg.Photo[^1];
                         var fileInfo  = await bot.GetFile(bestPhoto.FileId, ct);
                         using var ms  = new System.IO.MemoryStream();
@@ -6994,15 +7180,15 @@ tags: [kokonoe, dashboard, live]
                         var imgBytes = CompressImageForLlm(ms.ToArray());
 
                         var prompt = string.IsNullOrWhiteSpace(caption)
-                            ? "Що на цьому зображенні? Прокоментуй коротко."
+                            ? "Р©Рѕ РЅР° С†СЊРѕРјСѓ Р·РѕР±СЂР°Р¶РµРЅРЅС–? РџСЂРѕРєРѕРјРµРЅС‚СѓР№ РєРѕСЂРѕС‚РєРѕ."
                             : caption;
 
                         var imgReply = await _llm.SendAsync(prompt, imgBytes, "image/jpeg", null, ct);
-                        Dispatcher.Invoke(() =>
+                        await Dispatcher.InvokeAsync(() =>
                         {
                             _tgMessages.Add($"[Kokonoe]: {imgReply}");
                             TgScroll.ScrollToBottom();
-                            AddMessageBubble(new ChatMessageVm { Role = "user",      Content = $"[TG: {from}] 📷 {caption}" });
+                            AddMessageBubble(new ChatMessageVm { Role = "user",      Content = $"[TG: {from}] рџ“· {caption}" });
                             AddMessageBubble(new ChatMessageVm { Role = "assistant", Content = imgReply });
                         });
                         try { await bot.SendMessage(chatId, imgReply, cancellationToken: ct); } catch { }
@@ -7010,14 +7196,14 @@ tags: [kokonoe, dashboard, live]
                     catch (Exception ex)
                     {
                         System.Diagnostics.Debug.WriteLine($"[TG] Photo error: {ex.Message}");
-                        try { await bot.SendMessage(chatId, "Не змогла прочитати фото.", cancellationToken: ct); } catch { }
+                        try { await bot.SendMessage(chatId, "РќРµ Р·РјРѕРіР»Р° РїСЂРѕС‡РёС‚Р°С‚Рё С„РѕС‚Рѕ.", cancellationToken: ct); } catch { }
                     }
                     return;
                 }
 
                 if (msg.Text is not string text) return;
 
-                Dispatcher.Invoke(() => { _tgMessages.Add($"[{from}]: {text}"); TgScroll.ScrollToBottom(); });
+                await Dispatcher.InvokeAsync(() => { _tgMessages.Add($"[{from}]: {text}"); TgScroll.ScrollToBottom(); });
                 try
                 {
                     ServiceContainer.ChatRepository.InsertMessage(new ChatRepository.ChatMessage
@@ -7030,7 +7216,7 @@ tags: [kokonoe, dashboard, live]
                 }
                 catch { }
 
-                // ── Commands ────────────────────────────────────────
+                // в”Ђв”Ђ Commands в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
                 if (text.StartsWith("/start") || text == "/menu")
                 {
                     await TgSendMainMenu(bot, chatId, ct);
@@ -7043,27 +7229,27 @@ tags: [kokonoe, dashboard, live]
                 if (text == "/pc")      { await TgSendPcMenu(bot, chatId, ct);  return; }
                 if (text == "/note")
                 {
-                    await bot.SendMessage(chatId, "Пиши нотатку — збережу.", cancellationToken: ct);
+                    await bot.SendMessage(chatId, "РџРёС€Рё РЅРѕС‚Р°С‚РєСѓ вЂ” Р·Р±РµСЂРµР¶Сѓ.", cancellationToken: ct);
                     SetTgAwaiting(chatId, TgAwaitingMode.Note);
                     return;
                 }
 
-                // ── Awaiting states ─────────────────────────────────
+                // в”Ђв”Ђ Awaiting states в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
                 var awaiting = ConsumeTgAwaiting(chatId);
                 if (awaiting == TgAwaitingMode.Note)
                 {
                     try { ServiceContainer.BrainEngine?.ProcessUserMessage(text); } catch { }
                     try { ServiceContainer.BrainEngine?.Memory?.RecordEpisode(text, "neutral", 0.6f); }
                     catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[ERROR] TG note memory: {ex.Message}"); }
-                    try { _obsidian.AppendToDailyNote($"\n> 📝 [TG {DateTime.Now:HH:mm}] {text}"); }
+                    try { _obsidian.AppendToDailyNote($"\n> рџ“ќ [TG {DateTime.Now:HH:mm}] {text}"); }
                     catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[ERROR] TG daily note: {ex.Message}"); }
-                    await bot.SendMessage(chatId, "Записала.", cancellationToken: ct);
+                    await bot.SendMessage(chatId, "Р—Р°РїРёСЃР°Р»Р°.", cancellationToken: ct);
                     return;
                 }
 
                 if (awaiting == TgAwaitingMode.Command)
                 {
-                    await bot.SendMessage(chatId, "⏳ Виконую...", cancellationToken: ct);
+                    await bot.SendMessage(chatId, "вЏі Р’РёРєРѕРЅСѓСЋ...", cancellationToken: ct);
                     var cmdOutput = await ServiceContainer.PcControl.RunCommandAsync(text);
                     await bot.SendMessage(chatId, $"```\n{cmdOutput}\n```",
                         parseMode: Telegram.Bot.Types.Enums.ParseMode.Markdown,
@@ -7074,21 +7260,39 @@ tags: [kokonoe, dashboard, live]
                 if (awaiting == TgAwaitingMode.Open)
                 {
                     var (openOk, openMsg) = ServiceContainer.PcControl.OpenApp(text);
-                    await bot.SendMessage(chatId, openOk ? $"✅ {openMsg}" : $"❌ {openMsg}", cancellationToken: ct);
+                    await bot.SendMessage(chatId, openOk ? $"вњ… {openMsg}" : $"вќЊ {openMsg}", cancellationToken: ct);
                     return;
                 }
 
                 if (awaiting == TgAwaitingMode.Kill)
                 {
                     var (killOk, killMsg) = ServiceContainer.PcControl.KillProcess(text);
-                    await bot.SendMessage(chatId, killOk ? $"✅ {killMsg}" : $"❌ {killMsg}", cancellationToken: ct);
+                    await bot.SendMessage(chatId, killOk ? $"вњ… {killMsg}" : $"вќЊ {killMsg}", cancellationToken: ct);
                     return;
                 }
 
-                // ── Regular chat → LLM ──────────────────────────────
+                // в”Ђв”Ђ Regular chat в†’ LLM в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+                if (TryHandleDirectControlCommand(text, out var controlReply))
+                {
+                    await Dispatcher.InvokeAsync(() =>
+                    {
+                        _tgMessages.Add($"[Kokonoe]: {controlReply}");
+                        TgScroll.ScrollToBottom();
+                        AddMessageBubble(new ChatMessageVm { Role = "user", Content = $"[TG: {from}] {text}" });
+                        AddMessageBubble(new ChatMessageVm { Role = "assistant", Content = controlReply });
+                    });
+                    try { await bot.SendMessage(chatId, controlReply, cancellationToken: ct); } catch { }
+                    try
+                    {
+                        ServiceContainer.ChatRepository.InsertMessage(new ChatRepository.ChatMessage { Content = controlReply, Role = "assistant", Author = "Kokonoe", Timestamp = DateTime.Now });
+                    }
+                    catch { }
+                    return;
+                }
+
                 if (TryHandleDirectObsidianCommand(text, out var obsidianReply))
                 {
-                    Dispatcher.Invoke(() =>
+                    await Dispatcher.InvokeAsync(() =>
                     {
                         _tgMessages.Add($"[Kokonoe]: {obsidianReply}");
                         TgScroll.ScrollToBottom();
@@ -7111,11 +7315,19 @@ tags: [kokonoe, dashboard, live]
                     return;
                 }
 
-                try { ServiceContainer.BrainEngine?.ProcessUserMessage(text); } catch { }
-                var tgContext = BuildContext(text);
-                var reply = await _llm.SendAsync(text, null, "image/jpeg", tgContext, ct);
+                await Task.Run(() =>
+                {
+                    try { ServiceContainer.BrainEngine?.ProcessUserMessage(text); } catch { }
+                }, ct);
+                var tgContext = await Task.Run(() => BuildContext(text), ct);
+                var tgPrompt =
+                    $"Telegram direct message from {from}:\n" +
+                    $"{text}\n\n" +
+                    "Answer only to this latest message. Do not continue old proactive pings, food reminders, work reminders, or \"are you there\" checks unless this latest message asks about them. " +
+                    "If the user asks what you meant, briefly reset the context and answer the current question. Ukrainian only, concise, natural.";
+                var reply = await _llm.SendAsync(tgPrompt, null, "image/jpeg", tgContext, ct);
                 reply = await GuardAndRepairReplyAsync(text, reply, tgContext, ct);
-                Dispatcher.Invoke(() =>
+                await Dispatcher.InvokeAsync(() =>
                 {
                     _tgMessages.Add($"[Kokonoe]: {reply}");
                     TgScroll.ScrollToBottom();
@@ -7189,7 +7401,7 @@ tags: [kokonoe, dashboard, live]
                 case "mood":          await TgSendMoodPicker(bot, chatId, ct);  break;
                 case "note":
                     SetTgAwaiting(chatId, TgAwaitingMode.Note);
-                    await bot.SendMessage(chatId, "Пиши — збережу.", cancellationToken: ct);
+                    await bot.SendMessage(chatId, "РџРёС€Рё вЂ” Р·Р±РµСЂРµР¶Сѓ.", cancellationToken: ct);
                     break;
                 case var m when m.StartsWith("mood_"):
                     await TgHandleMood(bot, chatId, m[5..], ct);
@@ -7201,7 +7413,7 @@ tags: [kokonoe, dashboard, live]
                     await TgCompleteGoal(bot, chatId, g["goal_done_".Length..], ct);
                     break;
 
-                // ── PC Control ──────────────────────────────────────
+                // в”Ђв”Ђ PC Control в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
                 case "pc":              await TgSendPcMenu(bot, chatId, ct);           break;
                 case "pc_screenshot":   await TgSendScreenshot(bot, chatId, ct);       break;
                 case "pc_sysinfo":      await TgSendSysInfo(bot, chatId, ct);          break;
@@ -7212,64 +7424,64 @@ tags: [kokonoe, dashboard, live]
                 case "pc_vol_down":     ServiceContainer.PcControl.VolumeDown();
                                         await TgSendVolumeMenu(bot, chatId, ct);       break;
                 case "pc_vol_mute":     ServiceContainer.PcControl.VolumeMute();
-                                        await bot.SendMessage(chatId, "🔇 Тиша.", cancellationToken: ct); break;
+                                        await bot.SendMessage(chatId, "рџ”‡ РўРёС€Р°.", cancellationToken: ct); break;
                 case "pc_lock":         ServiceContainer.PcControl.LockScreen();
-                                        await bot.SendMessage(chatId, "🔒 Заблоковано.", cancellationToken: ct); break;
-                case "pc_sleep":        await bot.SendMessage(chatId, "💤 Засинаю...", cancellationToken: ct);
+                                        await bot.SendMessage(chatId, "рџ”’ Р—Р°Р±Р»РѕРєРѕРІР°РЅРѕ.", cancellationToken: ct); break;
+                case "pc_sleep":        await bot.SendMessage(chatId, "рџ’¤ Р—Р°СЃРёРЅР°СЋ...", cancellationToken: ct);
                                         ServiceContainer.PcControl.Sleep();            break;
                 case "pc_mon_off":      ServiceContainer.PcControl.TurnOffMonitor();
-                                        await bot.SendMessage(chatId, "🖥 Монітор вимкнено.", cancellationToken: ct); break;
-                case "pc_shutdown_ask": await TgConfirmAction(bot, chatId, "Справді вимкнути ПК?", "pc_shutdown_ok", ct); break;
-                case "pc_restart_ask":  await TgConfirmAction(bot, chatId, "Справді перезавантажити?", "pc_restart_ok", ct); break;
-                case "pc_shutdown_ok":  await bot.SendMessage(chatId, "⛔ Вимикаю через 10 секунд.", cancellationToken: ct);
+                                        await bot.SendMessage(chatId, "рџ–Ґ РњРѕРЅС–С‚РѕСЂ РІРёРјРєРЅРµРЅРѕ.", cancellationToken: ct); break;
+                case "pc_shutdown_ask": await TgConfirmAction(bot, chatId, "РЎРїСЂР°РІРґС– РІРёРјРєРЅСѓС‚Рё РџРљ?", "pc_shutdown_ok", ct); break;
+                case "pc_restart_ask":  await TgConfirmAction(bot, chatId, "РЎРїСЂР°РІРґС– РїРµСЂРµР·Р°РІР°РЅС‚Р°Р¶РёС‚Рё?", "pc_restart_ok", ct); break;
+                case "pc_shutdown_ok":  await bot.SendMessage(chatId, "в›” Р’РёРјРёРєР°СЋ С‡РµСЂРµР· 10 СЃРµРєСѓРЅРґ.", cancellationToken: ct);
                                         ServiceContainer.PcControl.Shutdown(10);       break;
-                case "pc_restart_ok":   await bot.SendMessage(chatId, "🔄 Рестарт через 10 секунд.", cancellationToken: ct);
+                case "pc_restart_ok":   await bot.SendMessage(chatId, "рџ”„ Р РµСЃС‚Р°СЂС‚ С‡РµСЂРµР· 10 СЃРµРєСѓРЅРґ.", cancellationToken: ct);
                                         ServiceContainer.PcControl.Restart(10);        break;
                 case "pc_cmd":
-                    await bot.SendMessage(chatId, "PowerShell з Telegram вимкнено. Я не залишаю віддалену консоль просто тому, що хтось назвав це фічею.", cancellationToken: ct);
+                    await bot.SendMessage(chatId, "PowerShell Р· Telegram РІРёРјРєРЅРµРЅРѕ. РЇ РЅРµ Р·Р°Р»РёС€Р°СЋ РІС–РґРґР°Р»РµРЅСѓ РєРѕРЅСЃРѕР»СЊ РїСЂРѕСЃС‚Рѕ С‚РѕРјСѓ, С‰Рѕ С…С‚РѕСЃСЊ РЅР°Р·РІР°РІ С†Рµ С„С–С‡РµСЋ.", cancellationToken: ct);
                     break;
                 case "pc_open":
                     SetTgAwaiting(chatId, TgAwaitingMode.Open);
-                    await bot.SendMessage(chatId, "Що відкрити? (chrome, code, explorer, spotify, notepad, або повний шлях):", cancellationToken: ct);
+                    await bot.SendMessage(chatId, "Р©Рѕ РІС–РґРєСЂРёС‚Рё? (chrome, code, explorer, spotify, notepad, Р°Р±Рѕ РїРѕРІРЅРёР№ С€Р»СЏС…):", cancellationToken: ct);
                     break;
                 case "pc_kill":
                     SetTgAwaiting(chatId, TgAwaitingMode.Kill);
-                    await bot.SendMessage(chatId, "Назва процесу або PID для завершення:", cancellationToken: ct);
+                    await bot.SendMessage(chatId, "РќР°Р·РІР° РїСЂРѕС†РµСЃСѓ Р°Р±Рѕ PID РґР»СЏ Р·Р°РІРµСЂС€РµРЅРЅСЏ:", cancellationToken: ct);
                     break;
             }
         }
 
-        // ── Menu builders ────────────────────────────────────────────
+        // в”Ђв”Ђ Menu builders в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
 
         private async Task TgSendMainMenu(ITelegramBotClient bot, long chatId, CancellationToken ct)
         {
             var emo  = ServiceContainer.EmotionEngine.Current.ToString();
             var bond = ServiceContainer.EmotionEngine.Bond.ToString();
-            var header = $"◈ Kokonoe · {emo} · {bond}";
+            var header = $"в—€ Kokonoe В· {emo} В· {bond}";
 
             var rows = new List<Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton[]>
             {
                 new[] {
-                    Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData("📊 Статус",   "status"),
-                    Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData("❤️ Настрій",  "mood"),
+                    Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData("рџ“Љ РЎС‚Р°С‚СѓСЃ",   "status"),
+                    Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData("вќ¤пёЏ РќР°СЃС‚СЂС–Р№",  "mood"),
                 },
                 new[] {
-                    Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData("🎯 Цілі",    "goals"),
-                    Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData("💪 Звички",  "habits"),
+                    Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData("рџЋЇ Р¦С–Р»С–",    "goals"),
+                    Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData("рџ’Є Р—РІРёС‡РєРё",  "habits"),
                 },
                 new[] {
-                    Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData("📝 Нотатка", "note"),
-                    Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData("🖥 ПК", "pc"),
+                    Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData("рџ“ќ РќРѕС‚Р°С‚РєР°", "note"),
+                    Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData("рџ–Ґ РџРљ", "pc"),
                 },
             };
 
-            // Mini App кнопка — лише якщо налаштовано публічний HTTPS URL
+            // Mini App РєРЅРѕРїРєР° вЂ” Р»РёС€Рµ СЏРєС‰Рѕ РЅР°Р»Р°С€С‚РѕРІР°РЅРѕ РїСѓР±Р»С–С‡РЅРёР№ HTTPS URL
             var settings = AppSettings.Load();
             if (!string.IsNullOrWhiteSpace(settings.MiniAppPublicUrl))
             {
                 rows.Add(new[] {
                     Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithWebApp(
-                        "🌐 Панель Kokonoe",
+                        "рџЊђ РџР°РЅРµР»СЊ Kokonoe",
                         new Telegram.Bot.Types.WebAppInfo { Url = settings.MiniAppPublicUrl })
                 });
             }
@@ -7283,30 +7495,30 @@ tags: [kokonoe, dashboard, live]
             var emo   = ServiceContainer.EmotionEngine;
             var brain = ServiceContainer.BrainEngine;
 
-            var mood  = brain?.State?.PersonalityDailyMood ?? "—";
+            var mood  = brain?.State?.PersonalityDailyMood ?? "вЂ”";
             var score = brain?.State?.MoodScore ?? 0.5f;
-            var monologue = brain?.State?.InnerMonologues?.LastOrDefault() ?? "—";
+            var monologue = brain?.State?.InnerMonologues?.LastOrDefault() ?? "вЂ”";
             var selfQ = brain?.State?.SelfQuestions?.LastOrDefault();
             var conn  = emo.ConnectionScore;
             var bond  = emo.Bond;
             var secondary = emo.Secondary.HasValue ? $" + {emo.Secondary}" : "";
 
-            var bar = new string('█', (int)(conn * 10)) + new string('░', 10 - (int)(conn * 10));
+            var bar = new string('#', (int)(conn * 10)) + new string('-', 10 - (int)(conn * 10));
 
             var sb = new System.Text.StringBuilder();
-            sb.AppendLine("◈ *Kokonoe — зараз*");
+            sb.AppendLine("в—€ *Kokonoe вЂ” Р·Р°СЂР°Р·*");
             sb.AppendLine();
-            sb.AppendLine($"*Емоція:* {emo.Current}{secondary}");
-            sb.AppendLine($"*Настрій:* {mood} ({score:P0})");
-            sb.AppendLine($"*Близькість:* [{bar}] {bond}");
+            sb.AppendLine($"*Р•РјРѕС†С–СЏ:* {emo.Current}{secondary}");
+            sb.AppendLine($"*РќР°СЃС‚СЂС–Р№:* {mood} ({score:P0})");
+            sb.AppendLine($"*Р‘Р»РёР·СЊРєС–СЃС‚СЊ:* [{bar}] {bond}");
             sb.AppendLine();
             if (!string.IsNullOrEmpty(monologue))
-                sb.AppendLine($"*Думка:* _{monologue}_");
+                sb.AppendLine($"*Р”СѓРјРєР°:* _{monologue}_");
             if (!string.IsNullOrEmpty(selfQ))
-                sb.AppendLine($"*Питання до себе:* _{selfQ}_");
+                sb.AppendLine($"*РџРёС‚Р°РЅРЅСЏ РґРѕ СЃРµР±Рµ:* _{selfQ}_");
 
             var kb = new Telegram.Bot.Types.ReplyMarkups.InlineKeyboardMarkup(
-                Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData("← Меню", "menu"));
+                Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData("в†ђ РњРµРЅСЋ", "menu"));
 
             await bot.SendMessage(chatId, sb.ToString(),
                 parseMode: Telegram.Bot.Types.Enums.ParseMode.Markdown,
@@ -7317,16 +7529,16 @@ tags: [kokonoe, dashboard, live]
         {
             var goals = ServiceContainer.GoalService?.GetActiveGoals() ?? new List<Models.Goal>();
 
-            var sb = new System.Text.StringBuilder("🎯 *Активні цілі*\n\n");
+            var sb = new System.Text.StringBuilder("рџЋЇ *РђРєС‚РёРІРЅС– С†С–Р»С–*\n\n");
             if (!goals.Any())
-                sb.AppendLine("Немає активних цілей.");
+                sb.AppendLine("РќРµРјР°С” Р°РєС‚РёРІРЅРёС… С†С–Р»РµР№.");
 
             var buttons = new List<Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton[]>();
 
             foreach (var g in goals.Take(6))
             {
                 var pct  = (int)g.Progress;
-                var bar  = new string('█', pct / 10) + new string('░', 10 - pct / 10);
+                var bar  = new string('#', pct / 10) + new string('-', 10 - pct / 10);
                 sb.AppendLine($"*{g.Title}*");
                 sb.AppendLine($"[{bar}] {pct}%");
                 sb.AppendLine();
@@ -7334,14 +7546,14 @@ tags: [kokonoe, dashboard, live]
                 buttons.Add(new[]
                 {
                     Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData(
-                        $"✅ {g.Title[..Math.Min(20, g.Title.Length)]}", $"goal_done_{g.Id}")
+                        $"вњ… {g.Title[..Math.Min(20, g.Title.Length)]}", $"goal_done_{g.Id}")
                 });
             }
 
             buttons.Add(new[]
             {
-                Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData("➕ Нова ціль", "goals_add"),
-                Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData("← Меню",     "menu"),
+                Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData("вћ• РќРѕРІР° С†С–Р»СЊ", "goals_add"),
+                Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData("в†ђ РњРµРЅСЋ",     "menu"),
             });
 
             await bot.SendMessage(chatId, sb.ToString(),
@@ -7355,29 +7567,29 @@ tags: [kokonoe, dashboard, live]
             var habits = ServiceContainer.HabitService?.GetActiveHabits() ?? new List<Models.Habit>();
             var today  = DateTime.Today;
 
-            var sb = new System.Text.StringBuilder("💪 *Звички сьогодні*\n\n");
+            var sb = new System.Text.StringBuilder("рџ’Є *Р—РІРёС‡РєРё СЃСЊРѕРіРѕРґРЅС–*\n\n");
             if (!habits.Any())
-                sb.AppendLine("Немає звичок.");
+                sb.AppendLine("РќРµРјР°С” Р·РІРёС‡РѕРє.");
 
             var buttons = new List<Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton[]>();
 
             foreach (var h in habits.Take(8))
             {
                 var done  = h.CheckIns?.Any(c => c.Date.Date == today && c.Completed) == true;
-                var emoji = done ? "✅" : "⬜";
+                var emoji = done ? "вњ…" : "в¬њ";
                 sb.AppendLine($"{emoji} {h.Name}");
 
                 if (!done)
                     buttons.Add(new[]
                     {
                         Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData(
-                            $"✅ {h.Name[..Math.Min(22, h.Name.Length)]}", $"habit_done_{h.Id}")
+                            $"вњ… {h.Name[..Math.Min(22, h.Name.Length)]}", $"habit_done_{h.Id}")
                     });
             }
 
             buttons.Add(new[]
             {
-                Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData("← Меню", "menu")
+                Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData("в†ђ РњРµРЅСЋ", "menu")
             });
 
             await bot.SendMessage(chatId, sb.ToString(),
@@ -7391,26 +7603,26 @@ tags: [kokonoe, dashboard, live]
             var kb = new Telegram.Bot.Types.ReplyMarkups.InlineKeyboardMarkup(new[]
             {
                 new[] {
-                    Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData("😊 Добре",    "mood_good"),
-                    Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData("😐 Нормально","mood_ok"),
+                    Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData("рџЉ Р”РѕР±СЂРµ",    "mood_good"),
+                    Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData("рџђ РќРѕСЂРјР°Р»СЊРЅРѕ","mood_ok"),
                 },
                 new[] {
-                    Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData("😔 Погано",   "mood_bad"),
-                    Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData("😴 Втомлений","mood_tired"),
+                    Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData("рџ” РџРѕРіР°РЅРѕ",   "mood_bad"),
+                    Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData("рџґ Р’С‚РѕРјР»РµРЅРёР№","mood_tired"),
                 },
                 new[] {
-                    Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData("😤 Стрес",    "mood_stressed"),
-                    Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData("🔥 Продуктивний","mood_productive"),
+                    Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData("рџ¤ РЎС‚СЂРµСЃ",    "mood_stressed"),
+                    Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData("рџ”Ґ РџСЂРѕРґСѓРєС‚РёРІРЅРёР№","mood_productive"),
                 },
                 new[] {
-                    Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData("← Меню",     "menu"),
+                    Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData("в†ђ РњРµРЅСЋ",     "menu"),
                 },
             });
 
-            await bot.SendMessage(chatId, "Як ти зараз?", replyMarkup: kb, cancellationToken: ct);
+            await bot.SendMessage(chatId, "РЇРє С‚Рё Р·Р°СЂР°Р·?", replyMarkup: kb, cancellationToken: ct);
         }
 
-        // ── PC Control menus ─────────────────────────────────────────
+        // в”Ђв”Ђ PC Control menus в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
 
         private async Task TgSendPcMenu(ITelegramBotClient bot, long chatId, CancellationToken ct)
         {
@@ -7418,32 +7630,32 @@ tags: [kokonoe, dashboard, live]
             var kb = new Telegram.Bot.Types.ReplyMarkups.InlineKeyboardMarkup(new[]
             {
                 new[] {
-                    IKB("📸 Скріншот",   "pc_screenshot"),
-                    IKB("💻 Системна інфо", "pc_sysinfo"),
+                    IKB("рџ“ё РЎРєСЂС–РЅС€РѕС‚",   "pc_screenshot"),
+                    IKB("рџ’» РЎРёСЃС‚РµРјРЅР° С–РЅС„Рѕ", "pc_sysinfo"),
                 },
                 new[] {
-                    IKB("📋 Процеси",    "pc_procs"),
-                    IKB($"🔊 Гучність {vol}%", "pc_vol_menu"),
+                    IKB("рџ“‹ РџСЂРѕС†РµСЃРё",    "pc_procs"),
+                    IKB($"рџ”Љ Р“СѓС‡РЅС–СЃС‚СЊ {vol}%", "pc_vol_menu"),
                 },
                 new[] {
-                    IKB("📂 Відкрити",   "pc_open"),
-                    IKB("⚡ Команда PS", "pc_cmd"),
+                    IKB("рџ“‚ Р’С–РґРєСЂРёС‚Рё",   "pc_open"),
+                    IKB("вљЎ РљРѕРјР°РЅРґР° PS", "pc_cmd"),
                 },
                 new[] {
-                    IKB("💀 Kill процес","pc_kill"),
-                    IKB("🖥 Монітор вимк","pc_mon_off"),
+                    IKB("рџ’Ђ Kill РїСЂРѕС†РµСЃ","pc_kill"),
+                    IKB("рџ–Ґ РњРѕРЅС–С‚РѕСЂ РІРёРјРє","pc_mon_off"),
                 },
                 new[] {
-                    IKB("🔒 Заблокувати","pc_lock"),
-                    IKB("💤 Сон",        "pc_sleep"),
+                    IKB("рџ”’ Р—Р°Р±Р»РѕРєСѓРІР°С‚Рё","pc_lock"),
+                    IKB("рџ’¤ РЎРѕРЅ",        "pc_sleep"),
                 },
                 new[] {
-                    IKB("⛔ Вимкнути",   "pc_shutdown_ask"),
-                    IKB("🔄 Рестарт",    "pc_restart_ask"),
+                    IKB("в›” Р’РёРјРєРЅСѓС‚Рё",   "pc_shutdown_ask"),
+                    IKB("рџ”„ Р РµСЃС‚Р°СЂС‚",    "pc_restart_ask"),
                 },
-                new[] { IKB("← Меню", "menu") },
+                new[] { IKB("в†ђ РњРµРЅСЋ", "menu") },
             });
-            await bot.SendMessage(chatId, "🖥 *PC Control*",
+            await bot.SendMessage(chatId, "рџ–Ґ *PC Control*",
                 parseMode: Telegram.Bot.Types.Enums.ParseMode.Markdown,
                 replyMarkup: kb, cancellationToken: ct);
         }
@@ -7456,12 +7668,12 @@ tags: [kokonoe, dashboard, live]
                 using var ms = new System.IO.MemoryStream(bytes);
                 await bot.SendPhoto(chatId,
                     Telegram.Bot.Types.InputFile.FromStream(ms, "screenshot.jpg"),
-                    caption: $"🖥 {DateTime.Now:HH:mm:ss}",
+                    caption: $"рџ–Ґ {DateTime.Now:HH:mm:ss}",
                     cancellationToken: ct);
             }
             catch (Exception ex)
             {
-                await bot.SendMessage(chatId, $"❌ Скріншот не вийшов: {ex.Message}", cancellationToken: ct);
+                await bot.SendMessage(chatId, $"вќЊ РЎРєСЂС–РЅС€РѕС‚ РЅРµ РІРёР№С€РѕРІ: {ex.Message}", cancellationToken: ct);
             }
         }
 
@@ -7469,22 +7681,22 @@ tags: [kokonoe, dashboard, live]
         {
             var info = await Task.Run(() => ServiceContainer.PcControl.GetSystemInfo());
             var sb = new System.Text.StringBuilder();
-            sb.AppendLine("💻 *Системна інформація*\n");
-            sb.AppendLine($"*Машина:* {info.MachineName} ({info.UserName})");
-            sb.AppendLine($"*ОС:* {info.OsVersion}");
-            sb.AppendLine($"*Аптайм:* {info.Uptime.Days}д {info.Uptime.Hours}г {info.Uptime.Minutes}хв");
+            sb.AppendLine("рџ’» *РЎРёСЃС‚РµРјРЅР° С–РЅС„РѕСЂРјР°С†С–СЏ*\n");
+            sb.AppendLine($"*РњР°С€РёРЅР°:* {info.MachineName} ({info.UserName})");
+            sb.AppendLine($"*РћРЎ:* {info.OsVersion}");
+            sb.AppendLine($"*РђРїС‚Р°Р№Рј:* {info.Uptime.Days}Рґ {info.Uptime.Hours}Рі {info.Uptime.Minutes}С…РІ");
             sb.AppendLine($"*RAM:* {info.RamUsedGb:F1} / {info.RamTotalGb:F1} GB");
-            sb.AppendLine($"*Гучність:* {info.VolumePercent}%\n");
-            sb.AppendLine("*Диски:*");
+            sb.AppendLine($"*Р“СѓС‡РЅС–СЃС‚СЊ:* {info.VolumePercent}%\n");
+            sb.AppendLine("*Р”РёСЃРєРё:*");
             foreach (var d in info.Drives)
             {
                 var used = d.TotalGb - d.FreeGb;
                 var pct  = d.TotalGb > 0 ? (int)(used / d.TotalGb * 10) : 0;
-                var bar  = new string('█', pct) + new string('░', 10 - pct);
+                var bar  = new string('#', pct) + new string('-', 10 - pct);
                 sb.AppendLine($"`{d.Name}` [{bar}] {used:F0}/{d.TotalGb:F0} GB");
             }
             var kb = new Telegram.Bot.Types.ReplyMarkups.InlineKeyboardMarkup(
-                IKB("← ПК", "pc"));
+                IKB("в†ђ РџРљ", "pc"));
             await bot.SendMessage(chatId, sb.ToString(),
                 parseMode: Telegram.Bot.Types.Enums.ParseMode.Markdown,
                 replyMarkup: kb, cancellationToken: ct);
@@ -7495,9 +7707,9 @@ tags: [kokonoe, dashboard, live]
             var list = await Task.Run(() => ServiceContainer.PcControl.GetTopProcesses());
             var kb = new Telegram.Bot.Types.ReplyMarkups.InlineKeyboardMarkup(new[]
             {
-                new[] { IKB("💀 Kill процес", "pc_kill"), IKB("← ПК", "pc") },
+                new[] { IKB("рџ’Ђ Kill РїСЂРѕС†РµСЃ", "pc_kill"), IKB("в†ђ РџРљ", "pc") },
             });
-            await bot.SendMessage(chatId, $"📋 *Топ процесів (RAM)*\n```\n{list}\n```",
+            await bot.SendMessage(chatId, $"рџ“‹ *РўРѕРї РїСЂРѕС†РµСЃС–РІ (RAM)*\n```\n{list}\n```",
                 parseMode: Telegram.Bot.Types.Enums.ParseMode.Markdown,
                 replyMarkup: kb, cancellationToken: ct);
         }
@@ -7505,20 +7717,20 @@ tags: [kokonoe, dashboard, live]
         private async Task TgSendVolumeMenu(ITelegramBotClient bot, long chatId, CancellationToken ct)
         {
             var vol = ServiceContainer.PcControl.GetVolume();
-            var bar = new string('█', vol / 10) + new string('░', 10 - vol / 10);
+            var bar = new string('#', vol / 10) + new string('-', 10 - vol / 10);
             var kb = new Telegram.Bot.Types.ReplyMarkups.InlineKeyboardMarkup(new[]
             {
                 new[] {
-                    IKB("🔉 -10%", "pc_vol_down"),
-                    IKB($"🔊 {vol}%", "pc_sysinfo"),
-                    IKB("🔊 +10%", "pc_vol_up"),
+                    IKB("рџ”‰ -10%", "pc_vol_down"),
+                    IKB($"рџ”Љ {vol}%", "pc_sysinfo"),
+                    IKB("рџ”Љ +10%", "pc_vol_up"),
                 },
                 new[] {
-                    IKB("🔇 Тиша", "pc_vol_mute"),
-                    IKB("← ПК",   "pc"),
+                    IKB("рџ”‡ РўРёС€Р°", "pc_vol_mute"),
+                    IKB("в†ђ РџРљ",   "pc"),
                 },
             });
-            await bot.SendMessage(chatId, $"🔊 *Гучність: {vol}%*\n`[{bar}]`",
+            await bot.SendMessage(chatId, $"рџ”Љ *Р“СѓС‡РЅС–СЃС‚СЊ: {vol}%*\n`[{bar}]`",
                 parseMode: Telegram.Bot.Types.Enums.ParseMode.Markdown,
                 replyMarkup: kb, cancellationToken: ct);
         }
@@ -7528,14 +7740,14 @@ tags: [kokonoe, dashboard, live]
             var kb = new Telegram.Bot.Types.ReplyMarkups.InlineKeyboardMarkup(new[]
             {
                 new[] {
-                    IKB("✅ Так", confirmData),
-                    IKB("❌ Ні",  "pc"),
+                    IKB("вњ… РўР°Рє", confirmData),
+                    IKB("вќЊ РќС–",  "pc"),
                 },
             });
             await bot.SendMessage(chatId, question, replyMarkup: kb, cancellationToken: ct);
         }
 
-        // Shorthand для InlineKeyboardButton
+        // Shorthand РґР»СЏ InlineKeyboardButton
         private static Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton IKB(string text, string data) =>
             Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData(text, data);
 
@@ -7543,27 +7755,27 @@ tags: [kokonoe, dashboard, live]
         {
             var moodMap = new Dictionary<string, (string Label, string Tone, float Score)>
             {
-                ["good"]       = ("😊 Добре",       "happy",   0.8f),
-                ["ok"]         = ("😐 Нормально",   "neutral", 0.5f),
-                ["bad"]        = ("😔 Погано",       "sad",     0.2f),
-                ["tired"]      = ("😴 Втомлений",   "tired",   0.3f),
-                ["stressed"]   = ("😤 Стрес",       "stressed",0.25f),
-                ["productive"] = ("🔥 Продуктивний","excited", 0.85f),
+                ["good"]       = ("рџЉ Р”РѕР±СЂРµ",       "happy",   0.8f),
+                ["ok"]         = ("рџђ РќРѕСЂРјР°Р»СЊРЅРѕ",   "neutral", 0.5f),
+                ["bad"]        = ("рџ” РџРѕРіР°РЅРѕ",       "sad",     0.2f),
+                ["tired"]      = ("рџґ Р’С‚РѕРјР»РµРЅРёР№",   "tired",   0.3f),
+                ["stressed"]   = ("рџ¤ РЎС‚СЂРµСЃ",       "stressed",0.25f),
+                ["productive"] = ("рџ”Ґ РџСЂРѕРґСѓРєС‚РёРІРЅРёР№","excited", 0.85f),
             };
 
             if (!moodMap.TryGetValue(mood, out var m)) return;
 
-            // Зберегти в health + emotion
-            try { ServiceContainer.BrainEngine?.Memory?.RecordEpisode($"настрій: {m.Label}", m.Tone, m.Score); } catch { }
+            // Р—Р±РµСЂРµРіС‚Рё РІ health + emotion
+            try { ServiceContainer.BrainEngine?.Memory?.RecordEpisode($"РЅР°СЃС‚СЂС–Р№: {m.Label}", m.Tone, m.Score); } catch { }
             try { ServiceContainer.EmotionEngine.UpdateFromUserTone(m.Tone, m.Score); } catch { }
-            try { _obsidian.AppendToDailyNote($"\n> ❤️ [{DateTime.Now:HH:mm}] Настрій: {m.Label}"); } catch { }
+            try { _obsidian.AppendToDailyNote($"\n> вќ¤пёЏ [{DateTime.Now:HH:mm}] РќР°СЃС‚СЂС–Р№: {m.Label}"); } catch { }
 
-            // Kokonoe коротко реагує
-            var prompt = $"Він написав що почувається: {m.Label}. Одне коротке речення від Kokonoe — природньо, без зайвих слів.";
+            // Kokonoe РєРѕСЂРѕС‚РєРѕ СЂРµР°РіСѓС”
+            var prompt = $"Р’С–РЅ РЅР°РїРёСЃР°РІ С‰Рѕ РїРѕС‡СѓРІР°С”С‚СЊСЃСЏ: {m.Label}. РћРґРЅРµ РєРѕСЂРѕС‚РєРµ СЂРµС‡РµРЅРЅСЏ РІС–Рґ Kokonoe вЂ” РїСЂРёСЂРѕРґРЅСЊРѕ, Р±РµР· Р·Р°Р№РІРёС… СЃР»С–РІ.";
             var reply  = await _llm.SendAsync(prompt, null, "image/jpeg", null, ct);
 
             var kb = new Telegram.Bot.Types.ReplyMarkups.InlineKeyboardMarkup(
-                Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData("← Меню", "menu"));
+                Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData("в†ђ РњРµРЅСЋ", "menu"));
 
             await bot.SendMessage(chatId, reply, replyMarkup: kb, cancellationToken: ct);
         }
@@ -7574,11 +7786,11 @@ tags: [kokonoe, dashboard, live]
             {
                 await ServiceContainer.HabitService!.RecordCheckInAsync(habitId, true);
                 var h = ServiceContainer.HabitService.GetHabit(habitId);
-                await bot.SendMessage(chatId, $"✅ *{h?.Name}* — виконано!",
+                await bot.SendMessage(chatId, $"вњ… *{h?.Name}* вЂ” РІРёРєРѕРЅР°РЅРѕ!",
                     parseMode: Telegram.Bot.Types.Enums.ParseMode.Markdown,
                     cancellationToken: ct);
             }
-            catch { await bot.SendMessage(chatId, "Щось пішло не так.", cancellationToken: ct); }
+            catch { await bot.SendMessage(chatId, "Р©РѕСЃСЊ РїС–С€Р»Рѕ РЅРµ С‚Р°Рє.", cancellationToken: ct); }
         }
 
         private async Task TgCompleteGoal(ITelegramBotClient bot, long chatId, string goalId, CancellationToken ct)
@@ -7587,17 +7799,17 @@ tags: [kokonoe, dashboard, live]
             {
                 var g = ServiceContainer.GoalService!.GetGoal(goalId);
                 await ServiceContainer.GoalService.SetProgressAsync(goalId, 100);
-                await bot.SendMessage(chatId, $"🎉 *{g?.Title}* — завершено!",
+                await bot.SendMessage(chatId, $"рџЋ‰ *{g?.Title}* вЂ” Р·Р°РІРµСЂС€РµРЅРѕ!",
                     parseMode: Telegram.Bot.Types.Enums.ParseMode.Markdown,
                     cancellationToken: ct);
             }
-            catch { await bot.SendMessage(chatId, "Ціль не знайдена.", cancellationToken: ct); }
+            catch { await bot.SendMessage(chatId, "Р¦С–Р»СЊ РЅРµ Р·РЅР°Р№РґРµРЅР°.", cancellationToken: ct); }
         }
 
         private async Task TgPromptGoalAdd(ITelegramBotClient bot, long chatId, CancellationToken ct)
         {
             await bot.SendMessage(chatId,
-                "Напиши ціль у форматі:\n`Назва | категорія | пріоритет 1-5`\n\nКатегорії: work, personal, health, learning",
+                "РќР°РїРёС€Рё С†С–Р»СЊ Сѓ С„РѕСЂРјР°С‚С–:\n`РќР°Р·РІР° | РєР°С‚РµРіРѕСЂС–СЏ | РїСЂС–РѕСЂРёС‚РµС‚ 1-5`\n\nРљР°С‚РµРіРѕСЂС–С—: work, personal, health, learning",
                 parseMode: Telegram.Bot.Types.Enums.ParseMode.Markdown,
                 cancellationToken: ct);
         }
@@ -7613,12 +7825,12 @@ tags: [kokonoe, dashboard, live]
             if (string.IsNullOrWhiteSpace(text) || _tgBot == null) return;
 
             var s = AppSettings.Load();
-            if (s.TelegramChatId <= 0) { WMsgBox.Show("Telegram Chat ID не вказано."); return; }
+            if (s.TelegramChatId <= 0) { WMsgBox.Show("Telegram Chat ID РЅРµ РІРєР°Р·Р°РЅРѕ."); return; }
 
             try
             {
                 await _tgBot.SendMessage(s.TelegramChatId, text);
-                _tgMessages.Add($"[You → TG]: {text}");
+                _tgMessages.Add($"[You в†’ TG]: {text}");
                 TgInput.Clear();
                 TgScroll.ScrollToBottom();
             }
@@ -7630,31 +7842,31 @@ tags: [kokonoe, dashboard, live]
             if (e.Key == Key.Enter) TgSend_Click(sender, e);
         }
 
-        // ══════════════════════════════════════════════════════════
+        // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
         // TELEGRAM USER CLIENT (MTProto)
-        // ══════════════════════════════════════════════════════════
+        // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
 
         /// <summary>
-        /// Чистить відповідь від ролплей-ремарок перед відправкою в Telegram.
-        /// Видаляє *(дія)*, (опис), *курсив-дії* тощо.
+        /// Р§РёСЃС‚РёС‚СЊ РІС–РґРїРѕРІС–РґСЊ РІС–Рґ СЂРѕР»РїР»РµР№-СЂРµРјР°СЂРѕРє РїРµСЂРµРґ РІС–РґРїСЂР°РІРєРѕСЋ РІ Telegram.
+        /// Р’РёРґР°Р»СЏС” *(РґС–СЏ)*, (РѕРїРёСЃ), *РєСѓСЂСЃРёРІ-РґС–С—* С‚РѕС‰Рѕ.
         /// </summary>
         private static string CleanTgReply(string text)
         {
             if (string.IsNullOrWhiteSpace(text)) return text;
 
-            // Видаляємо *(будь-який текст дії)* — ремарки в зірочках
+            // Р’РёРґР°Р»СЏС”РјРѕ *(Р±СѓРґСЊ-СЏРєРёР№ С‚РµРєСЃС‚ РґС–С—)* вЂ” СЂРµРјР°СЂРєРё РІ Р·С–СЂРѕС‡РєР°С…
             text = System.Text.RegularExpressions.Regex.Replace(
                 text, @"\*\([^)]*\)\*", "", System.Text.RegularExpressions.RegexOptions.Singleline);
 
-            // Видаляємо *(текст без дужок)* — *курсив-дії*
+            // Р’РёРґР°Р»СЏС”РјРѕ *(С‚РµРєСЃС‚ Р±РµР· РґСѓР¶РѕРє)* вЂ” *РєСѓСЂСЃРёРІ-РґС–С—*
             text = System.Text.RegularExpressions.Regex.Replace(
                 text, @"\*[^*\n]{0,120}\*", "", System.Text.RegularExpressions.RegexOptions.Singleline);
 
-            // Видаляємо (текст в дужках що виглядає як ремарка) — починається з великої, довший за 20 символів
+            // Р’РёРґР°Р»СЏС”РјРѕ (С‚РµРєСЃС‚ РІ РґСѓР¶РєР°С… С‰Рѕ РІРёРіР»СЏРґР°С” СЏРє СЂРµРјР°СЂРєР°) вЂ” РїРѕС‡РёРЅР°С”С‚СЊСЃСЏ Р· РІРµР»РёРєРѕС—, РґРѕРІС€РёР№ Р·Р° 20 СЃРёРјРІРѕР»С–РІ
             text = System.Text.RegularExpressions.Regex.Replace(
-                text, @"\([А-ЯЇІЄ][^)]{20,}\)", "", System.Text.RegularExpressions.RegexOptions.Singleline);
+                text, @"\([Рђ-РЇР‡Р†Р„][^)]{20,}\)", "", System.Text.RegularExpressions.RegexOptions.Singleline);
 
-            // Прибираємо зайві порожні рядки
+            // РџСЂРёР±РёСЂР°С”РјРѕ Р·Р°Р№РІС– РїРѕСЂРѕР¶РЅС– СЂСЏРґРєРё
             text = System.Text.RegularExpressions.Regex.Replace(text, @"\n{3,}", "\n\n");
 
             return text.Trim();
@@ -7664,21 +7876,27 @@ tags: [kokonoe, dashboard, live]
         {
             TgConnectBtn.IsEnabled = false;
             TgConnectBtn.Content = "...";
-            await InitTelegramUserAsync();
-            TgConnectBtn.Content = "⟳ Connect MTProto";
+            await InitTelegramUserAsync(force: true);
+            TgConnectBtn.Content = "вџі Connect MTProto";
             TgConnectBtn.IsEnabled = true;
         }
 
-        private async Task InitTelegramUserAsync()
+        private async Task InitTelegramUserAsync(bool force = false)
         {
             var s = AppSettings.Load();
-            if (s.TgApiId == 0 || string.IsNullOrEmpty(s.TgApiHash))
+            if (!force && !s.TgUserEnabled)
             {
-                Dispatcher.Invoke(() => _tgMessages.Add("[MTProto] Помилка: api_id або api_hash не задані в Settings"));
+                await Dispatcher.InvokeAsync(() => _tgMessages.Add("[MTProto] РІРёРјРєРЅРµРЅРѕ РІ Settings"));
                 return;
             }
 
-            // Dispose old client first — він тримає tg_session.dat відкритим
+            if (s.TgApiId == 0 || string.IsNullOrEmpty(s.TgApiHash))
+            {
+                await Dispatcher.InvokeAsync(() => _tgMessages.Add("[MTProto] РџРѕРјРёР»РєР°: api_id Р°Р±Рѕ api_hash РЅРµ Р·Р°РґР°РЅС– РІ Settings"));
+                return;
+            }
+
+            // Dispose old client first вЂ” РІС–РЅ С‚СЂРёРјР°С” tg_session.dat РІС–РґРєСЂРёС‚РёРј
             var oldSvc = ServiceContainer.TelegramUser;
             if (oldSvc != null)
             {
@@ -7686,7 +7904,7 @@ tags: [kokonoe, dashboard, live]
                 try { oldSvc.Dispose(); } catch { }
                 _tgUserCts.Cancel();
                 _tgUserCts = new CancellationTokenSource();
-                await Task.Delay(300); // даємо WTelegramClient відпустити файл
+                await Task.Delay(300); // РґР°С”РјРѕ WTelegramClient РІС–РґРїСѓСЃС‚РёС‚Рё С„Р°Р№Р»
             }
 
             try
@@ -7695,9 +7913,9 @@ tags: [kokonoe, dashboard, live]
                     s.VaultPath, "kokonoe-data");
 
                 var svc = new Services.TelegramUserService(
-                    s.TgApiId, s.TgApiHash, s.TgPhone, dataDir, s.TgDmOnly);
+                    s.TgApiId, s.TgApiHash, s.TgPhone, dataDir, s.TgDmOnly, s.TgRespondToOutgoing);
 
-                // Auth callback — Dispatcher.Invoke (синхронний) щоб уникнути дедлоку
+                // Auth callback вЂ” Dispatcher.Invoke (СЃРёРЅС…СЂРѕРЅРЅРёР№) С‰РѕР± СѓРЅРёРєРЅСѓС‚Рё РґРµРґР»РѕРєСѓ
                 svc.AskForInput = prompt =>
                 {
                     string result = "";
@@ -7711,8 +7929,8 @@ tags: [kokonoe, dashboard, live]
 
                 svc.OnStatusChanged += status => Dispatcher.InvokeAsync(() =>
                 {
-                    TgStatusLabel.Text = $" · {status}";
-                    if (status.StartsWith("✓"))
+                    TgStatusLabel.Text = $" В· {status}";
+                    if (status.StartsWith("вњ“"))
                         TgStatusDot.Background = (System.Windows.Media.SolidColorBrush)
                             System.Windows.Application.Current.Resources["AccentBase"];
                 });
@@ -7723,19 +7941,19 @@ tags: [kokonoe, dashboard, live]
 
                 await svc.ConnectAsync(_tgUserCts.Token);
 
-                Dispatcher.Invoke(() =>
+                await Dispatcher.InvokeAsync(() =>
                 {
-                    _tgMessages.Add($"[MTProto] Підключено як {svc.MySelf}");
+                    _tgMessages.Add($"[MTProto] РџС–РґРєР»СЋС‡РµРЅРѕ СЏРє {svc.MySelf}");
                     TgScroll.ScrollToBottom();
                 });
             }
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"[TgUser] Init failed: {ex}");
-                Dispatcher.Invoke(() =>
+                await Dispatcher.InvokeAsync(() =>
                 {
-                    TgStatusLabel.Text = $" · user: помилка ({ex.Message[..Math.Min(60, ex.Message.Length)]})";
-                    _tgMessages.Add($"[MTProto] Помилка: {ex.Message}");
+                    TgStatusLabel.Text = $" В· user: РїРѕРјРёР»РєР° ({ex.Message[..Math.Min(60, ex.Message.Length)]})";
+                    _tgMessages.Add($"[MTProto] РџРѕРјРёР»РєР°: {ex.Message}");
                 });
             }
         }
@@ -7746,7 +7964,7 @@ tags: [kokonoe, dashboard, live]
             var svc = ServiceContainer.TelegramUser;
             if (svc == null) return;
 
-            // Показуємо в UI
+            // РџРѕРєР°Р·СѓС”РјРѕ РІ UI
             var displayLine = $"[{msg.ChatName}] {msg.Sender}: {msg.Text}";
             await Dispatcher.InvokeAsync(() =>
             {
@@ -7754,27 +7972,83 @@ tags: [kokonoe, dashboard, live]
                 TgScroll.ScrollToBottom();
             });
 
-            // Простий промпт — SendTgAsync має власний system prompt
-            var prompt = $"{msg.Sender}: {msg.Text}";
+            // РџСЂРѕСЃС‚РёР№ РїСЂРѕРјРїС‚ вЂ” SendTgAsync РјР°С” РІР»Р°СЃРЅРёР№ system prompt
+            var direction = msg.IsOutgoing
+                ? "РєРѕСЂРёСЃС‚СѓРІР°С‡ РЅР°РїРёСЃР°РІ С†Рµ Р·С– СЃРІРѕРіРѕ Telegram-Р°РєР°СѓРЅС‚Р°; С†Рµ СЂРµРїР»С–РєР° РґРѕ С‚РµР±Рµ"
+                : "РІС…С–РґРЅРµ РїРѕРІС–РґРѕРјР»РµРЅРЅСЏ РІС–Рґ С–РЅС€РѕС— Р»СЋРґРёРЅРё";
+            var prompt =
+                $"Telegram ({direction})\n" +
+                $"Р§Р°С‚: {msg.ChatName}\n" +
+                $"Р’С–Рґ: {msg.Sender}\n" +
+                $"РўРµРєСЃС‚: {msg.Text}\n\n" +
+                "РќРµ С–РіРЅРѕСЂСѓР№ РєРѕСЂРѕС‚РєС– РІС–РґРїРѕРІС–РґС– С‚РёРїСѓ \"СѓРіСѓ\", \"С‚СѓС‚\", \"РѕРє\". " +
+                "Р’С–РґРїРѕРІС–РґР°Р№ РєРѕСЂРѕС‚РєРѕ, РїСЂРёСЂРѕРґРЅРѕ, Р±РµР· СЃР»СѓР¶Р±РѕРІРёС… С„СЂР°Р· С– Р±РµР· РїРѕРІС‚РѕСЂСѓ РїРёС‚Р°РЅРЅСЏ.";
 
             try
             {
                 try { ServiceContainer.BrainEngine?.ProcessUserMessage($"[TG {msg.Sender}]: {msg.Text}"); } catch { }
+                try
+                {
+                    ServiceContainer.ChatRepository.InsertMessage(new ChatRepository.ChatMessage
+                    {
+                        Content = msg.Text,
+                        Role = "user",
+                        Author = $"TG:{msg.Sender}",
+                        Timestamp = DateTime.Now
+                    });
+                }
+                catch { }
+
+                if (TryHandleDirectControlCommand(msg.Text, out var controlReply))
+                {
+                    await Dispatcher.InvokeAsync(() =>
+                    {
+                        _tgMessages.Add($"[Kokonoe в†’ {msg.ChatName}]: {controlReply}");
+                        TgScroll.ScrollToBottom();
+                        AddMessageBubble(new ChatMessageVm { Role = "user", Content = $"[TG {msg.Sender}]: {msg.Text}" });
+                        AddMessageBubble(new ChatMessageVm { Role = "assistant", Content = controlReply });
+                    });
+                    try
+                    {
+                        ServiceContainer.ChatRepository.InsertMessage(new ChatRepository.ChatMessage
+                        {
+                            Content = controlReply,
+                            Role = "assistant",
+                            Author = "Kokonoe",
+                            Timestamp = DateTime.Now
+                        });
+                    }
+                    catch { }
+                    await svc.SendAsync(msg.ChatId, controlReply, _tgUserCts.Token);
+                    return;
+                }
+
                 var sharedContext = ServiceContainer.BrainEngine?.BuildUnifiedExternalContext("telegram") ?? "";
                 var raw = await _llm.SendTgAsync(prompt, sharedContext, _tgUserCts.Token);
                 if (string.IsNullOrWhiteSpace(raw)) return;
                 var reply = CleanTgReply(raw);
 
-                // Показуємо відповідь в UI
+                // РџРѕРєР°Р·СѓС”РјРѕ РІС–РґРїРѕРІС–РґСЊ РІ UI
                 await Dispatcher.InvokeAsync(() =>
                 {
-                    _tgMessages.Add($"[Kokonoe → {msg.ChatName}]: {reply}");
+                    _tgMessages.Add($"[Kokonoe в†’ {msg.ChatName}]: {reply}");
                     TgScroll.ScrollToBottom();
                     AddMessageBubble(new ChatMessageVm { Role = "user",      Content = $"[TG {msg.Sender}]: {msg.Text}" });
                     AddMessageBubble(new ChatMessageVm { Role = "assistant", Content = reply });
                 });
 
-                // Надсилаємо відповідь назад в Telegram
+                // РќР°РґСЃРёР»Р°С”РјРѕ РІС–РґРїРѕРІС–РґСЊ РЅР°Р·Р°Рґ РІ Telegram
+                try
+                {
+                    ServiceContainer.ChatRepository.InsertMessage(new ChatRepository.ChatMessage
+                    {
+                        Content = reply,
+                        Role = "assistant",
+                        Author = "Kokonoe",
+                        Timestamp = DateTime.Now
+                    });
+                }
+                catch { }
                 await svc.SendAsync(msg.ChatId, reply, _tgUserCts.Token);
             }
             catch (Exception ex)
@@ -7783,14 +8057,14 @@ tags: [kokonoe, dashboard, live]
             }
         }
 
-        // ══════════════════════════════════════════════════════════
+        // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
         // SETTINGS PANEL (inline slide-in)
-        // ══════════════════════════════════════════════════════════
+        // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
 
         private void OpenSettings_Click(object sender, RoutedEventArgs e) => OpenSettingsPanel();
 
-        // Робочий снапшот поки панель відкрита — щоб не губити незбережені правки
-        // моделі/ключа при переключенні провайдера в UI.
+        // Р РѕР±РѕС‡РёР№ СЃРЅР°РїС€РѕС‚ РїРѕРєРё РїР°РЅРµР»СЊ РІС–РґРєСЂРёС‚Р° вЂ” С‰РѕР± РЅРµ РіСѓР±РёС‚Рё РЅРµР·Р±РµСЂРµР¶РµРЅС– РїСЂР°РІРєРё
+        // РјРѕРґРµР»С–/РєР»СЋС‡Р° РїСЂРё РїРµСЂРµРєР»СЋС‡РµРЅРЅС– РїСЂРѕРІР°Р№РґРµСЂР° РІ UI.
         private AppSettings? _panelSettings;
         private string _panelLastProvider = "";
 
@@ -7802,7 +8076,7 @@ tags: [kokonoe, dashboard, live]
         {
             private string _name = "";
             private string _key  = "";
-            private string _statusText = "—";
+            private string _statusText = "вЂ”";
             private System.Windows.Media.Brush _statusBrush = System.Windows.Media.Brushes.Gray;
             private System.Windows.Media.Brush _activeDotBrush = System.Windows.Media.Brushes.Transparent;
 
@@ -7832,7 +8106,7 @@ tags: [kokonoe, dashboard, live]
             var s = AppSettings.Load();
             _panelSettings = s;
 
-            // Прив'язуємо ItemsControl до VM-колекції (один раз — ItemsSource не міняємо)
+            // РџСЂРёРІ'СЏР·СѓС”РјРѕ ItemsControl РґРѕ VM-РєРѕР»РµРєС†С–С— (РѕРґРёРЅ СЂР°Р· вЂ” ItemsSource РЅРµ РјС–РЅСЏС”РјРѕ)
             if (SP_OllamaKeysList.ItemsSource == null)
                 SP_OllamaKeysList.ItemsSource = _ollamaKeysVM;
 
@@ -7841,7 +8115,7 @@ tags: [kokonoe, dashboard, live]
             SP_ProviderOllama.IsChecked      = s.LlmProvider.Equals("ollama", StringComparison.OrdinalIgnoreCase);
             SP_ProviderOllamaCloud.IsChecked = s.LlmProvider.Equals("ollama-cloud", StringComparison.OrdinalIgnoreCase);
             SP_ProviderClaude.IsChecked      = s.LlmProvider.Equals("claude", StringComparison.OrdinalIgnoreCase);
-            // Якщо у settings.json ще "lmstudio" як default, нічого не вибрано — підхопимо LM Studio
+            // РЇРєС‰Рѕ Сѓ settings.json С‰Рµ "lmstudio" СЏРє default, РЅС–С‡РѕРіРѕ РЅРµ РІРёР±СЂР°РЅРѕ вЂ” РїС–РґС…РѕРїРёРјРѕ LM Studio
             if (SP_ProviderLmStudio.IsChecked != true && SP_ProviderOllama.IsChecked != true
                 && SP_ProviderOllamaCloud.IsChecked != true && SP_ProviderClaude.IsChecked != true)
             {
@@ -7869,12 +8143,12 @@ tags: [kokonoe, dashboard, live]
             SP_AccentColor.Text     = s.MatrixColor;
             UpdateColorPreview(s.MatrixColor);
 
-            // (LLM-поля вже завантажені через LoadLlmFieldsForProvider)
+            // (LLM-РїРѕР»СЏ РІР¶Рµ Р·Р°РІР°РЅС‚Р°Р¶РµРЅС– С‡РµСЂРµР· LoadLlmFieldsForProvider)
 
-            // Показуємо overlay
+            // РџРѕРєР°Р·СѓС”РјРѕ overlay
             SettingsOverlay.Visibility = Visibility.Visible;
 
-            // Slide-in анімація
+            // Slide-in Р°РЅС–РјР°С†С–СЏ
             var anim = new System.Windows.Media.Animation.DoubleAnimation(
                 480, 0,
                 new System.Windows.Duration(TimeSpan.FromMilliseconds(280)))
@@ -7888,12 +8162,12 @@ tags: [kokonoe, dashboard, live]
 
         private void Provider_Checked(object sender, RoutedEventArgs e)
         {
-            if (_panelSettings == null) return; // викликано до OpenSettingsPanel — ігноруємо
+            if (_panelSettings == null) return; // РІРёРєР»РёРєР°РЅРѕ РґРѕ OpenSettingsPanel вЂ” С–РіРЅРѕСЂСѓС”РјРѕ
 
-            // 1) Зберегти поточний текст полів у in-memory snapshot для попереднього провайдера
+            // 1) Р—Р±РµСЂРµРіС‚Рё РїРѕС‚РѕС‡РЅРёР№ С‚РµРєСЃС‚ РїРѕР»С–РІ Сѓ in-memory snapshot РґР»СЏ РїРѕРїРµСЂРµРґРЅСЊРѕРіРѕ РїСЂРѕРІР°Р№РґРµСЂР°
             CommitLlmFieldsToSnapshot(_panelLastProvider);
 
-            // 2) Підвантажити поля для нового
+            // 2) РџС–РґРІР°РЅС‚Р°Р¶РёС‚Рё РїРѕР»СЏ РґР»СЏ РЅРѕРІРѕРіРѕ
             var newProvider = CurrentSelectedProvider();
             LoadLlmFieldsForProvider(newProvider, _panelSettings);
             _panelLastProvider = newProvider;
@@ -7901,8 +8175,11 @@ tags: [kokonoe, dashboard, live]
 
         private void LoadLlmFieldsForProvider(string provider, AppSettings s)
         {
-            // За замовчуванням — пул ховаємо; покажемо тільки для ollama-cloud.
+            // Р—Р° Р·Р°РјРѕРІС‡СѓРІР°РЅРЅСЏРј вЂ” РїСѓР» С…РѕРІР°С”РјРѕ; РїРѕРєР°Р¶РµРјРѕ С‚С–Р»СЊРєРё РґР»СЏ ollama-cloud.
             SP_OllamaPoolGroup.Visibility = Visibility.Collapsed;
+            SP_ModelLabel.Visibility = Visibility.Visible;
+            SP_ModelBox.Visibility = Visibility.Visible;
+            SP_ModelHint.Visibility = Visibility.Visible;
             StopPoolRefreshTimer();
 
             switch (provider)
@@ -7912,25 +8189,29 @@ tags: [kokonoe, dashboard, live]
                     SP_ApiKeyGroup.Visibility = Visibility.Collapsed;
                     SP_LmUrl.Text     = string.IsNullOrWhiteSpace(s.LmUrl) || s.LmUrl.Contains(":1234")
                                         ? "http://localhost:11434/v1/chat/completions" : s.LmUrl;
-                    SP_UrlHint.Text   = "Локальна Ollama. Дефолт: http://localhost:11434/v1/chat/completions";
+                    SP_UrlHint.Text   = "Р›РѕРєР°Р»СЊРЅР° Ollama. Р”РµС„РѕР»С‚: http://localhost:11434/v1/chat/completions";
                     SP_ModelBox.Text  = string.IsNullOrWhiteSpace(s.Model) ? "llama3.2" : s.Model;
-                    SP_ModelHint.Text = "Назва локальної моделі (напр. llama3.2, qwen2.5, mistral). Має бути запущена в `ollama serve`.";
+                    SP_ModelHint.Text = "РќР°Р·РІР° Р»РѕРєР°Р»СЊРЅРѕС— РјРѕРґРµР»С– (РЅР°РїСЂ. llama3.2, qwen2.5, mistral). РњР°С” Р±СѓС‚Рё Р·Р°РїСѓС‰РµРЅР° РІ `ollama serve`.";
                     SP_VisionModelBox.Text = s.VisionModel;
                     break;
 
                 case "ollama-cloud":
                     SP_UrlGroup.Visibility    = Visibility.Collapsed;
-                    SP_ApiKeyGroup.Visibility = Visibility.Collapsed; // single-key UI більше не для Ollama Cloud
+                    SP_ApiKeyGroup.Visibility = Visibility.Collapsed; // single-key UI Р±С–Р»СЊС€Рµ РЅРµ РґР»СЏ Ollama Cloud
                     SP_OllamaPoolGroup.Visibility = Visibility.Visible;
+                    SP_ModelLabel.Visibility = Visibility.Collapsed;
+                    SP_ModelBox.Visibility = Visibility.Collapsed;
+                    SP_ModelHint.Visibility = Visibility.Collapsed;
 
                     SP_OllamaMaxPerHour.Text = s.OllamaPoolMaxPerHour.ToString();
                     SP_OllamaRotateAt.Text   = ((int)Math.Round(s.OllamaPoolRotateAt * 100)).ToString();
                     SP_OllamaCooldown.Text   = s.OllamaPoolCooldownMins.ToString();
 
                     LoadOllamaKeysVM(s);
+                    LoadAgentProfilesVM(s);
 
-                    SP_ModelBox.Text  = string.IsNullOrWhiteSpace(s.OllamaModel) ? AppSettings.DefaultOllamaCloudModel : s.OllamaModel;
-                    SP_ModelHint.Text = "Хмарна модель — обов'язково з суфіксом :cloud. Дефолт: gemma4:31b-cloud. Напр. qwen3-coder:480b-cloud, deepseek-v3.1:671b-cloud.";
+                    SP_ModelBox.Text = string.IsNullOrWhiteSpace(s.OllamaModel) ? AppSettings.DefaultOllamaCloudModel : s.OllamaModel;
+                    SP_ModelHint.Text = "";
                     SP_VisionModelBox.Text = s.VisionModel;
 
                     StartPoolRefreshTimer();
@@ -7941,9 +8222,9 @@ tags: [kokonoe, dashboard, live]
                     SP_ApiKeyGroup.Visibility = Visibility.Visible;
                     SP_ApiKeyLabel.Text  = "Claude API Key";
                     SP_ApiKeyBox.Text    = s.ClaudeApiKey;
-                    SP_ApiKeyHint.Text   = "Отримай ключ на https://console.anthropic.com/settings/keys.";
+                    SP_ApiKeyHint.Text   = "РћС‚СЂРёРјР°Р№ РєР»СЋС‡ РЅР° https://console.anthropic.com/settings/keys.";
                     SP_ModelBox.Text     = string.IsNullOrWhiteSpace(s.ClaudeModel) ? "claude-sonnet-4-20250514" : s.ClaudeModel;
-                    SP_ModelHint.Text    = "Напр. claude-sonnet-4-20250514, claude-opus-4-20250514, claude-3-5-sonnet-20241022.";
+                    SP_ModelHint.Text    = "РќР°РїСЂ. claude-sonnet-4-20250514, claude-opus-4-20250514, claude-3-5-sonnet-20241022.";
                     SP_VisionModelBox.Text = s.VisionModel;
                     HighlightApiKey();
                     break;
@@ -7953,21 +8234,21 @@ tags: [kokonoe, dashboard, live]
                     SP_ApiKeyGroup.Visibility = Visibility.Collapsed;
                     SP_LmUrl.Text     = string.IsNullOrWhiteSpace(s.LmUrl) || s.LmUrl.Contains(":11434")
                                         ? "http://localhost:1234/v1/chat/completions" : s.LmUrl;
-                    SP_UrlHint.Text   = "LM Studio. Дефолт: http://localhost:1234/v1/chat/completions";
+                    SP_UrlHint.Text   = "LM Studio. Р”РµС„РѕР»С‚: http://localhost:1234/v1/chat/completions";
                     SP_ModelBox.Text  = string.IsNullOrWhiteSpace(s.Model) ? "google/gemma-4-26b-a4b" : s.Model;
-                    SP_ModelHint.Text = "Точна назва моделі з LM Studio (вкладка Local Server → Loaded Model).";
+                    SP_ModelHint.Text = "РўРѕС‡РЅР° РЅР°Р·РІР° РјРѕРґРµР»С– Р· LM Studio (РІРєР»Р°РґРєР° Local Server в†’ Loaded Model).";
                     SP_VisionModelBox.Text = s.VisionModel;
                     break;
             }
         }
 
-        // ── Ollama Cloud key-pool helpers ──────────────────────────
+        // в”Ђв”Ђ Ollama Cloud key-pool helpers в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
 
         private void LoadOllamaKeysVM(AppSettings s)
         {
             _ollamaKeysVM.Clear();
 
-            // Якщо у settings є ключі — підвантажуємо. Якщо порожньо але є legacy single — теж додаємо.
+            // РЇРєС‰Рѕ Сѓ settings С” РєР»СЋС‡С– вЂ” РїС–РґРІР°РЅС‚Р°Р¶СѓС”РјРѕ. РЇРєС‰Рѕ РїРѕСЂРѕР¶РЅСЊРѕ Р°Р»Рµ С” legacy single вЂ” С‚РµР¶ РґРѕРґР°С”РјРѕ.
             if (s.OllamaKeys != null && s.OllamaKeys.Count > 0)
             {
                 foreach (var k in s.OllamaKeys)
@@ -7981,10 +8262,107 @@ tags: [kokonoe, dashboard, live]
             RefreshPoolStatus();
         }
 
+        private void LoadAgentProfilesVM(AppSettings s)
+        {
+            var chat = GetOrCreateAgentProfile(s, "chat", 0.85);
+            var coder = GetOrCreateAgentProfile(s, "coder", 0.35);
+
+            SP_AgentChatKey.Text = FormatAgentKeys(chat);
+            SP_AgentChatModelBox.Text = string.IsNullOrWhiteSpace(chat.Model) ? AppSettings.DefaultOllamaCloudModel : chat.Model;
+            SP_AgentChatTemp.Text = chat.Temperature?.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture) ?? "0.85";
+
+            SP_AgentCoderKey.Text = FormatAgentKeys(coder);
+            SP_AgentCoderModelBox.Text = string.IsNullOrWhiteSpace(coder.Model) ? "qwen3-coder:480b-cloud" : coder.Model;
+            SP_AgentCoderTemp.Text = coder.Temperature?.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture) ?? "0.35";
+        }
+
+        private static string FormatAgentKeys(KokoAgentLlmProfile profile)
+        {
+            var keys = profile.OllamaKeys?
+                .Where(k => !string.IsNullOrWhiteSpace(k.Key))
+                .Select(k => k.Key.Trim())
+                .Distinct(StringComparer.Ordinal)
+                .ToList() ?? new List<string>();
+            if (keys.Count == 0 && !string.IsNullOrWhiteSpace(profile.OllamaApiKey))
+                keys.Add(profile.OllamaApiKey.Trim());
+            return string.Join(Environment.NewLine, keys);
+        }
+
+        private static KokoAgentLlmProfile GetOrCreateAgentProfile(AppSettings settings, string agentId, double temperature)
+        {
+            settings.AgentLlmProfiles ??= new Dictionary<string, KokoAgentLlmProfile>(StringComparer.OrdinalIgnoreCase);
+            if (!settings.AgentLlmProfiles.TryGetValue(agentId, out var profile) || profile == null)
+            {
+                profile = new KokoAgentLlmProfile
+                {
+                    AgentId = agentId,
+                    Enabled = true,
+                    Temperature = temperature
+                };
+                settings.AgentLlmProfiles[agentId] = profile;
+            }
+
+            if (string.IsNullOrWhiteSpace(profile.AgentId))
+                profile.AgentId = agentId;
+            if (!profile.Temperature.HasValue)
+                profile.Temperature = temperature;
+            return profile;
+        }
+
+        private void CommitAgentProfilesToSnapshot()
+        {
+            if (_panelSettings == null) return;
+            SaveAgentProfile(_panelSettings, "chat", SP_AgentChatKey.Text, SP_AgentChatModelBox.Text, SP_AgentChatTemp.Text, 0.85);
+            SaveAgentProfile(_panelSettings, "coder", SP_AgentCoderKey.Text, SP_AgentCoderModelBox.Text, SP_AgentCoderTemp.Text, 0.35);
+        }
+
+        private static void SaveAgentProfile(
+            AppSettings settings,
+            string agentId,
+            string key,
+            string model,
+            string temperatureText,
+            double fallbackTemperature)
+        {
+            var profile = GetOrCreateAgentProfile(settings, agentId, fallbackTemperature);
+            profile.Enabled = true;
+            profile.LlmProvider = "ollama-cloud";
+            var keys = ParseAgentKeys(key);
+            var existing = profile.OllamaKeys ?? new List<OllamaKeyEntry>();
+            profile.OllamaKeys = keys.Select((k, i) =>
+            {
+                var prior = existing.FirstOrDefault(e => e.Key == k);
+                return new OllamaKeyEntry
+                {
+                    Name = prior?.Name is { Length: > 0 } ? prior.Name : $"Key {i + 1}",
+                    Key = k,
+                    Enabled = true,
+                    RecentRequests = prior?.RecentRequests ?? new List<DateTime>(),
+                    CooldownUntil = prior?.CooldownUntil
+                };
+            }).ToList();
+            profile.OllamaApiKey = profile.OllamaKeys.FirstOrDefault()?.Key ?? "";
+            if (profile.OllamaKeys.Count > 0)
+                profile.OllamaActiveKeyIndex = Math.Clamp(profile.OllamaActiveKeyIndex, 0, profile.OllamaKeys.Count - 1);
+            profile.Model = model.Trim();
+            if (double.TryParse(temperatureText.Trim(), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var temp))
+                profile.Temperature = Math.Clamp(temp, 0.0, 2.0);
+            else
+                profile.Temperature = fallbackTemperature;
+        }
+
+        private static List<string> ParseAgentKeys(string raw)
+            => (raw ?? "")
+                .Split(new[] { "\r\n", "\n", "\r", ",", ";", " " }, StringSplitOptions.RemoveEmptyEntries)
+                .Select(k => k.Trim())
+                .Where(k => k.Length > 8)
+                .Distinct(StringComparer.Ordinal)
+                .ToList();
+
         private void RefreshPoolStatus()
         {
             var pool = ServiceContainer.OllamaPool;
-            // Snapshot bere stan з реального пулу — назви ключів зіставляємо за значенням Key.
+            // Snapshot bere stan Р· СЂРµР°Р»СЊРЅРѕРіРѕ РїСѓР»Сѓ вЂ” РЅР°Р·РІРё РєР»СЋС‡С–РІ Р·С–СЃС‚Р°РІР»СЏС”РјРѕ Р·Р° Р·РЅР°С‡РµРЅРЅСЏРј Key.
             var snap = pool.Snapshot();
             for (int i = 0; i < _ollamaKeysVM.Count; i++)
             {
@@ -7993,7 +8371,7 @@ tags: [kokonoe, dashboard, live]
 
                 if (string.IsNullOrWhiteSpace(vm.Key))
                 {
-                    vm.StatusText = "—";
+                    vm.StatusText = "-";
                     vm.StatusBrush = System.Windows.Media.Brushes.Gray;
                     vm.ActiveDotBrush = System.Windows.Media.Brushes.Transparent;
                     continue;
@@ -8020,7 +8398,7 @@ tags: [kokonoe, dashboard, live]
                 }
                 else
                 {
-                    // Ключ ще не в пулі (щойно додали в UI, ще не зберегли) — статус нейтральний
+                    // РљР»СЋС‡ С‰Рµ РЅРµ РІ РїСѓР»С– (С‰РѕР№РЅРѕ РґРѕРґР°Р»Рё РІ UI, С‰Рµ РЅРµ Р·Р±РµСЂРµРіР»Рё) вЂ” СЃС‚Р°С‚СѓСЃ РЅРµР№С‚СЂР°Р»СЊРЅРёР№
                     vm.StatusText = "новий";
                     vm.StatusBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x6B, 0x6B, 0x80));
                     vm.ActiveDotBrush = System.Windows.Media.Brushes.Transparent;
@@ -8031,8 +8409,8 @@ tags: [kokonoe, dashboard, live]
         private static string Mask(string key)
         {
             if (string.IsNullOrEmpty(key)) return "(empty)";
-            if (key.Length <= 8) return new string('•', key.Length);
-            return key[..4] + "…" + key[^4..];
+            if (key.Length <= 8) return new string('*', key.Length);
+            return key[..4] + "..." + key[^4..];
         }
 
         private void StartPoolRefreshTimer()
@@ -8074,8 +8452,8 @@ tags: [kokonoe, dashboard, live]
             }
         }
 
-        // Зберігає поточні значення полів LLM у in-memory snapshot _panelSettings,
-        // щоб переключення між провайдерами не губило незбережені правки
+        // Р—Р±РµСЂС–РіР°С” РїРѕС‚РѕС‡РЅС– Р·РЅР°С‡РµРЅРЅСЏ РїРѕР»С–РІ LLM Сѓ in-memory snapshot _panelSettings,
+        // С‰РѕР± РїРµСЂРµРєР»СЋС‡РµРЅРЅСЏ РјС–Р¶ РїСЂРѕРІР°Р№РґРµСЂР°РјРё РЅРµ РіСѓР±РёР»Рѕ РЅРµР·Р±РµСЂРµР¶РµРЅС– РїСЂР°РІРєРё
         private void CommitLlmFieldsToSnapshot(string provider)
         {
             if (_panelSettings == null) return;
@@ -8087,8 +8465,15 @@ tags: [kokonoe, dashboard, live]
                     _panelSettings.Model = SP_ModelBox.Text.Trim();
                     break;
                 case "ollama-cloud":
-                    _panelSettings.OllamaModel = SP_ModelBox.Text.Trim();
-                    // Параметри пулу — з безпечним парсингом (залишаємо попереднє значення при кривому вводі)
+                    var coderModel = SP_AgentCoderModelBox.Text.Trim();
+                    var chatModel = SP_AgentChatModelBox.Text.Trim();
+                    _panelSettings.OllamaModel = !string.IsNullOrWhiteSpace(coderModel)
+                        ? coderModel
+                        : !string.IsNullOrWhiteSpace(chatModel)
+                            ? chatModel
+                            : AppSettings.DefaultOllamaCloudModel;
+                    CommitAgentProfilesToSnapshot();
+                    // РџР°СЂР°РјРµС‚СЂРё РїСѓР»Сѓ вЂ” Р· Р±РµР·РїРµС‡РЅРёРј РїР°СЂСЃРёРЅРіРѕРј (Р·Р°Р»РёС€Р°С”РјРѕ РїРѕРїРµСЂРµРґРЅС” Р·РЅР°С‡РµРЅРЅСЏ РїСЂРё РєСЂРёРІРѕРјСѓ РІРІРѕРґС–)
                     if (int.TryParse(SP_OllamaMaxPerHour.Text.Trim(), out var maxH) && maxH > 0)
                         _panelSettings.OllamaPoolMaxPerHour = maxH;
                     if (int.TryParse(SP_OllamaRotateAt.Text.Trim(), out var rotPct) && rotPct > 0 && rotPct <= 100)
@@ -8096,8 +8481,8 @@ tags: [kokonoe, dashboard, live]
                     if (int.TryParse(SP_OllamaCooldown.Text.Trim(), out var cdMin) && cdMin > 0)
                         _panelSettings.OllamaPoolCooldownMins = cdMin;
 
-                    // Перебудовуємо OllamaKeys з ObservableCollection — фільтр: тільки рядки з непорожнім Key.
-                    // Зберігаємо існуючі RecentRequests/CooldownUntil для ключів що залишились (за збігом Key).
+                    // РџРµСЂРµР±СѓРґРѕРІСѓС”РјРѕ OllamaKeys Р· ObservableCollection вЂ” С„С–Р»СЊС‚СЂ: С‚С–Р»СЊРєРё СЂСЏРґРєРё Р· РЅРµРїРѕСЂРѕР¶РЅС–Рј Key.
+                    // Р—Р±РµСЂС–РіР°С”РјРѕ С–СЃРЅСѓСЋС‡С– RecentRequests/CooldownUntil РґР»СЏ РєР»СЋС‡С–РІ С‰Рѕ Р·Р°Р»РёС€РёР»РёСЃСЊ (Р·Р° Р·Р±С–РіРѕРј Key).
                     var existing = _panelSettings.OllamaKeys ?? new System.Collections.Generic.List<OllamaKeyEntry>();
                     var rebuilt = new System.Collections.Generic.List<OllamaKeyEntry>();
                     foreach (var vm in _ollamaKeysVM)
@@ -8115,7 +8500,7 @@ tags: [kokonoe, dashboard, live]
                         });
                     }
                     _panelSettings.OllamaKeys = rebuilt;
-                    // Legacy single — синхронізуємо з першим ключем для backwards-compat
+                    // Legacy single вЂ” СЃРёРЅС…СЂРѕРЅС–Р·СѓС”РјРѕ Р· РїРµСЂС€РёРј РєР»СЋС‡РµРј РґР»СЏ backwards-compat
                     _panelSettings.OllamaApiKey = rebuilt.Count > 0 ? rebuilt[0].Key : "";
                     break;
                 case "claude":
@@ -8157,8 +8542,8 @@ tags: [kokonoe, dashboard, live]
         {
             var s = AppSettings.Load();
 
-            // LLM Provider — комітимо поточні поля у in-memory snapshot щоб не загубити
-            // редагування поточного провайдера, потім переносимо ВСІ LLM-поля з snapshot у s.
+            // LLM Provider вЂ” РєРѕРјС–С‚РёРјРѕ РїРѕС‚РѕС‡РЅС– РїРѕР»СЏ Сѓ in-memory snapshot С‰РѕР± РЅРµ Р·Р°РіСѓР±РёС‚Рё
+            // СЂРµРґР°РіСѓРІР°РЅРЅСЏ РїРѕС‚РѕС‡РЅРѕРіРѕ РїСЂРѕРІР°Р№РґРµСЂР°, РїРѕС‚С–Рј РїРµСЂРµРЅРѕСЃРёРјРѕ Р’РЎР† LLM-РїРѕР»СЏ Р· snapshot Сѓ s.
             var provider = CurrentSelectedProvider();
             CommitLlmFieldsToSnapshot(provider);
             if (_panelSettings != null)
@@ -8177,6 +8562,7 @@ tags: [kokonoe, dashboard, live]
                 s.OllamaPoolCooldownMins = _panelSettings.OllamaPoolCooldownMins;
                 s.OllamaActiveKeyIndex   = _panelSettings.OllamaActiveKeyIndex;
                 s.VisionModel            = _panelSettings.VisionModel;
+                s.AgentLlmProfiles       = _panelSettings.AgentLlmProfiles ?? new Dictionary<string, KokoAgentLlmProfile>(StringComparer.OrdinalIgnoreCase);
             }
             s.LlmProvider = provider;
 
@@ -8197,7 +8583,7 @@ tags: [kokonoe, dashboard, live]
 
             if (long.TryParse(SP_TgChatId.Text.Trim(), out var cid)) s.TelegramChatId = cid;
 
-            // Не перезаписуємо якщо поле порожнє — захист від випадкового обнулення
+            // РќРµ РїРµСЂРµР·Р°РїРёСЃСѓС”РјРѕ СЏРєС‰Рѕ РїРѕР»Рµ РїРѕСЂРѕР¶РЅС” вЂ” Р·Р°С…РёСЃС‚ РІС–Рґ РІРёРїР°РґРєРѕРІРѕРіРѕ РѕР±РЅСѓР»РµРЅРЅСЏ
             if (int.TryParse(SP_TgApiId.Text.Trim(), out var apiId) && apiId > 0)
                 s.TgApiId = apiId;
             if (!string.IsNullOrEmpty(SP_TgApiHash.Text.Trim()))
@@ -8243,9 +8629,9 @@ tags: [kokonoe, dashboard, live]
             }
         }
 
-        // ══════════════════════════════════════════════════════════
+        // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
         // WINDOW CHROME
-        // ══════════════════════════════════════════════════════════
+        // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
 
         private void TitleBar_MouseDown(object sender, MouseButtonEventArgs e)
         {
@@ -8273,9 +8659,9 @@ tags: [kokonoe, dashboard, live]
             base.OnClosed(e);
         }
 
-        // ══════════════════════════════════════════════════════════
+        // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
         // CLEANUP
-        // ══════════════════════════════════════════════════════════
+        // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
 
         private void Cleanup()
         {

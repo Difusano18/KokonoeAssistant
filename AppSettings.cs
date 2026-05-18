@@ -24,6 +24,8 @@ namespace KokonoeAssistant
         public string Url { get; set; } = "";
         public string Model { get; set; } = "";
         public string OllamaApiKey { get; set; } = "";
+        public List<OllamaKeyEntry> OllamaKeys { get; set; } = new();
+        public int OllamaActiveKeyIndex { get; set; } = 0;
         public double? Temperature { get; set; }
     }
 
@@ -89,6 +91,7 @@ namespace KokonoeAssistant
         public bool   TgUserEnabled   { get; set; } = false;
         // Коконое відповідає тільки на DM (false = і групи теж)
         public bool   TgDmOnly        { get; set; } = false;
+        public bool   TgRespondToOutgoing { get; set; } = true;
 
         // Spontaneous messages
         public bool SpontaneousEnabled      { get; set; } = true;
@@ -175,7 +178,46 @@ namespace KokonoeAssistant
                 changed = true;
             }
 
+            settings.AgentLlmProfiles ??= new Dictionary<string, KokoAgentLlmProfile>(StringComparer.OrdinalIgnoreCase);
+            changed |= EnsureAgentProfile(settings.AgentLlmProfiles, "chat", 0.85);
+            changed |= EnsureAgentProfile(settings.AgentLlmProfiles, "coder", 0.35);
+
             return changed;
+        }
+
+        private static bool EnsureAgentProfile(Dictionary<string, KokoAgentLlmProfile> profiles, string agentId, double temperature)
+        {
+            if (profiles.TryGetValue(agentId, out var profile) && profile != null)
+            {
+                var changed = false;
+                if (string.IsNullOrWhiteSpace(profile.AgentId))
+                {
+                    profile.AgentId = agentId;
+                    changed = true;
+                }
+
+                profile.OllamaKeys ??= new List<OllamaKeyEntry>();
+                if (profile.OllamaKeys.Count == 0 && !string.IsNullOrWhiteSpace(profile.OllamaApiKey))
+                {
+                    profile.OllamaKeys.Add(new OllamaKeyEntry
+                    {
+                        Name = "Key 1",
+                        Key = profile.OllamaApiKey.Trim(),
+                        Enabled = true
+                    });
+                    changed = true;
+                }
+
+                return changed;
+            }
+
+            profiles[agentId] = new KokoAgentLlmProfile
+            {
+                AgentId = agentId,
+                Enabled = true,
+                Temperature = temperature
+            };
+            return true;
         }
 
         public void Save()
