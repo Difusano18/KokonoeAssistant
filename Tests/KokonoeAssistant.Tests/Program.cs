@@ -57,10 +57,12 @@ internal static class Program
             Run("Post reply guard blocks blind agreement", PostReplyGuardBlocksBlindAgreement);
             Run("Response planner classifies critical assistant architecture", ResponsePlannerClassifiesCriticalAssistantArchitecture);
             Run("Response planner requires vault read for memory questions", ResponsePlannerRequiresVaultReadForMemoryQuestions);
+            Run("Response planner routes Obsidian scan profile questions", ResponsePlannerRoutesObsidianScanProfileQuestions);
             Run("Memory policy stores stable preference", MemoryPolicyStoresStablePreference);
             Run("Memory policy keeps temporary state out of beliefs", MemoryPolicyKeepsTemporaryStateOutOfBeliefs);
             Run("Continuity reinforces repeated belief", ContinuityReinforcesRepeatedBelief);
             Run("Post reply guard repairs sleep leak on profile question", PostReplyGuardRepairsSleepLeakOnProfileQuestion);
+            Run("Post reply guard rejects profile quote fallback", PostReplyGuardRejectsProfileQuoteFallback);
             Run("Proactive guard suppresses repeated generic silence", ProactiveGuardSuppressesRepeatedGenericSilence);
             Run("Proactive context anchors silence to last topic", ProactiveContextAnchorsSilenceToLastTopic);
             Run("Proactive context stays silent after goodbye sleep", ProactiveContextStaysSilentAfterGoodbyeSleep);
@@ -1308,6 +1310,33 @@ internal static class Program
         AssertTrue(frame.Steps.Any(s => s.Contains("memory")), "planner should include memory read step");
     }
 
+    private static void ResponsePlannerRoutesObsidianScanProfileQuestions()
+    {
+        using var ctx = TestContext.Create();
+        var cognition = new KokoCognitionEngine(ctx.TestDir);
+        var state = new KokoInternalState();
+
+        var first = new KokoResponsePlannerEngine().Build(
+            "\u043e\u043a\u0435\u0439 \u043f\u0440\u043e\u0441\u043a\u0430\u043d\u0443\u0439 \u043e\u0431\u0441\u0438\u0434\u0456\u0430\u043d .. \u0449\u043e \u0437\u043d\u0430\u0454\u0448 \u043f\u0440\u043e \u043c\u0435\u043d\u0435 ?",
+            state,
+            cognition,
+            new DateTime(2026, 5, 19, 8, 36, 0));
+        var second = new KokoResponsePlannerEngine().Build(
+            "\u0440\u043e\u0437\u043a\u0430\u0437\u0443\u0439 \u0432\u0441\u0435 \u0449\u043e \u0437\u043d\u0430\u0454\u0448 \u043f\u0440\u043e \u043c\u0435\u043d\u0435",
+            state,
+            cognition,
+            new DateTime(2026, 5, 19, 8, 42, 0));
+
+        AssertEqual("memory", first.Intent, "Obsidian profile scan should be memory intent");
+        AssertEqual("vault_memory", first.Capability, "Obsidian profile scan should route to vault memory");
+        AssertTrue(first.RequiresVaultRead, "Obsidian profile scan should require vault read");
+        AssertEqual("read_before_answer", first.MemoryPolicy, "Obsidian profile scan should read before answer");
+
+        AssertEqual("memory", second.Intent, "broad known-about-me question should be memory intent");
+        AssertEqual("vault_memory", second.Capability, "broad known-about-me question should route to vault memory");
+        AssertTrue(second.RequiresToolUse, "broad known-about-me question should require tool use");
+    }
+
     private static void MemoryPolicyStoresStablePreference()
     {
         var decision = new KokoMemoryWritePolicyEngine().Evaluate(
@@ -1393,6 +1422,31 @@ internal static class Program
         AssertTrue(result.ShouldRepair, "profile question should be repaired, not replaced with stale sleep hardcoded text");
         AssertTrue(string.IsNullOrWhiteSpace(result.HardReplacement), "sleep leak on unrelated topic should not use stale sleep hard replacement");
         AssertTrue(result.RepairInstruction.Contains("пам'ять") || result.RepairInstruction.Contains("профіль"), "repair should steer toward memory/profile answer");
+    }
+
+    private static void PostReplyGuardRejectsProfileQuoteFallback()
+    {
+        var now = new DateTime(2026, 5, 19, 8, 42, 0);
+        var state = new KokoInternalState();
+        var userText = "\u0440\u043e\u0437\u043a\u0430\u0437\u0443\u0439 \u0432\u0441\u0435 \u0449\u043e \u0437\u043d\u0430\u0454\u0448 \u043f\u0440\u043e \u043c\u0435\u043d\u0435";
+        var messages = new[]
+        {
+            new ChatRepository.ChatMessage { Role = "user", Content = userText, Timestamp = now }
+        };
+        var timeline = new KokoConversationTimelineEngine().Build(messages, state, now, userText);
+
+        var result = new KokoPostReplyGuard().Evaluate(
+            userText,
+            "\u041f\u043e \u0442\u0432\u043e\u0457\u0439 \u0440\u0435\u043f\u043b\u0456\u0446\u0456: \"\u0440\u043e\u0437\u043a\u0430\u0437\u0443\u0439 \u0432\u0441\u0435 \u0449\u043e \u0437\u043d\u0430\u0454\u0448 \u043f\u0440\u043e \u043c\u0435\u043d\u0435\". \u0422\u0430\u043a, \u0437\u0432\u0443\u0447\u0438\u0442\u044c \u044f\u043a \u043d\u0435\u0432\u043f\u0435\u0432\u043d\u0435\u043d\u0435 \"\u043c\u043e\u0436\u043b\u0438\u0432\u043e\". \u0421\u043a\u0430\u0436\u0438 \u043f\u0440\u044f\u043c\u043e, \u0449\u043e \u0441\u0430\u043c\u0435 \u043c\u0430\u0454\u0448 \u043d\u0430 \u0443\u0432\u0430\u0437\u0456, \u0431\u043e \u0432\u0438\u0442\u044f\u0433\u0443\u0432\u0430\u0442\u0438 \u0441\u0435\u043d\u0441 \u0456\u0437 \u0442\u0440\u044c\u043e\u0445 \u043a\u0440\u0430\u043f\u043e\u043a - \u0437\u0430\u043d\u044f\u0442\u0442\u044f \u0434\u043b\u044f \u043c\u0430\u0437\u043e\u0445\u0456\u0441\u0442\u0456\u0432.",
+            state,
+            messages,
+            timeline,
+            now);
+
+        AssertTrue(!result.Passed, "guard should reject profile quote fallback");
+        AssertTrue(result.ShouldRepair, "profile quote fallback should be repaired with vault/profile context");
+        AssertTrue(string.IsNullOrWhiteSpace(result.HardReplacement), "profile quote fallback should not be surfaced as a hard replacement");
+        AssertTrue(result.Violations.Any(v => v.Contains("user-quote clarification")), "violation should name the quote fallback failure");
     }
 
     private static void ProactiveGuardSuppressesRepeatedGenericSilence()

@@ -78,9 +78,7 @@ namespace KokonoeAssistant.Services
             else if (!userTalksAboutSleepNow && broadSleepCommand)
                 violations.Add("сонний контекст протік у відповідь на іншу тему");
 
-            var asksProfileOrMemory = ContainsAny(userLower,
-                "\u043f\u0440\u043e \u043c\u0435\u043d\u0435", "\u043f\u0430\u043c'\u044f\u0442", "\u0437\u043d\u0430\u0454\u0448", "\u043f\u0440\u043e\u0444\u0456\u043b",
-                "про мене", "пам", "зна", "проф");
+            var asksProfileOrMemory = IsMemoryOrProfileQuestion(userLower);
             var staleBodyAdvice = ContainsAny(replyLower,
                 "\u0441\u043f\u0438", "\u0457\u0441\u0442\u0438", "\u0432\u0442\u043e\u043c\u0438\u0432", "\u0433\u043e\u043b\u043e\u0434",
                 "сп", "їс", "втом", "голод");
@@ -134,6 +132,8 @@ namespace KokonoeAssistant.Services
                 violations.Add("коротке привітання помилково перетворено на тему для добивання");
             if (staleMetaFallback)
                 violations.Add("відповідь продовжує службовий fallback замість останнього повідомлення користувача");
+            if (asksProfileOrMemory && LooksLikeUserEchoClarificationFallback(replyLower))
+                violations.Add("memory/profile query fell into user-quote clarification fallback instead of vault/profile read");
             if (LooksLikeStaleProactivePing(userLower, replyLower))
                 violations.Add("stale proactive ping leaked into a direct reply");
             if (!IsRepeatableActionCommand(userText) && RepeatsRecentAssistant(reply, messages))
@@ -160,7 +160,7 @@ namespace KokonoeAssistant.Services
             hardReplacement ??= violations.Any(v => v.Contains("психологічний мета-театр", StringComparison.OrdinalIgnoreCase))
                 ? BuildPlainPersonaReplacement(userText)
                 : null;
-            hardReplacement ??= violations.Any(v => v.Contains("вигадує зовнішній факт", StringComparison.OrdinalIgnoreCase))
+            hardReplacement ??= !asksProfileOrMemory && violations.Any(v => v.Contains("вигадує зовнішній факт", StringComparison.OrdinalIgnoreCase))
                 ? BuildFabricationReplacement(userText)
                 : null;
             hardReplacement ??= shortAffection
@@ -367,13 +367,36 @@ Timeline:
                     yield return term;
         }
 
+        private static bool IsMemoryOrProfileQuestion(string userLower)
+        {
+            var broadMemory = ContainsAny(userLower,
+                "\u043f\u0440\u043e \u043c\u0435\u043d\u0435", "\u043f\u0430\u043c'\u044f\u0442", "\u043f\u0430\u043c\u2019\u044f\u0442", "\u043f\u0430\u043c\u02bc\u044f\u0442", "\u0437\u043d\u0430\u0454\u0448", "\u0437\u043d\u0430\u0435\u0448", "\u043f\u0440\u043e\u0444\u0456\u043b", "\u0434\u043e\u0441\u044c\u0454",
+                "vault", "obsidian", "\u043e\u0431\u0441\u0438\u0434\u0456\u0430\u043d", "\u043e\u0431\u0441\u0438\u0434\u0438\u0430\u043d", "\u043d\u043e\u0442\u0430\u0442", "\u0437\u0430\u043c\u0456\u0442");
+            if (!broadMemory) return false;
+
+            return ContainsAny(userLower,
+                "\u0449\u043e \u0437\u043d\u0430\u0454\u0448", "\u0449\u043e \u0437\u043d\u0430\u0435\u0448", "\u0440\u043e\u0437\u043a\u0430\u0436\u0438 \u0432\u0441\u0435", "\u0440\u043e\u0437\u043a\u0430\u0437\u0443\u0439 \u0432\u0441\u0435", "\u0440\u043e\u0437\u043a\u0430\u0436\u0438 \u043f\u0440\u043e \u043c\u0435\u043d\u0435",
+                "\u0449\u043e \u043f\u0430\u043c", "\u043f\u0440\u043e\u0441\u043a\u0430\u043d\u0443\u0439", "\u043f\u0435\u0440\u0435\u0432\u0456\u0440", "\u043f\u0440\u043e\u0447\u0438\u0442\u0430\u0439", "\u0437\u043d\u0430\u0439\u0434\u0438", "\u043f\u0440\u043e\u0444\u0456\u043b", "\u0434\u043e\u0441\u044c\u0454",
+                "vault", "obsidian", "\u043e\u0431\u0441\u0438\u0434\u0456\u0430\u043d", "\u043e\u0431\u0441\u0438\u0434\u0438\u0430\u043d");
+        }
+
+        private static bool LooksLikeUserEchoClarificationFallback(string replyLower)
+            => ContainsAny(replyLower,
+                "\u043f\u043e \u0442\u0432\u043e\u0457\u0439 \u0440\u0435\u043f\u043b\u0456\u0446\u0456",
+                "\u043f\u043e \u0442\u0432\u043e\u0457\u0439 \u0444\u0440\u0430\u0437\u0456",
+                "\u043f\u043e \u0442\u0432\u043e\u0454\u043c\u0443 \u0437\u0430\u043f\u0438\u0442\u0443",
+                "\u0437\u0432\u0443\u0447\u0438\u0442\u044c \u044f\u043a \u043d\u0435\u0432\u043f\u0435\u0432\u043d\u0435\u043d\u0435",
+                "\u0432\u0438\u0442\u044f\u0433\u0443\u0432\u0430\u0442\u0438 \u0441\u0435\u043d\u0441 \u0456\u0437 \u0442\u0440\u044c\u043e\u0445 \u043a\u0440\u0430\u043f\u043e\u043a",
+                "\u0432\u0438\u0442\u044f\u0433\u0443\u0432\u0430\u0442\u0438 \u0441\u0435\u043d\u0441 \u0437 \u0442\u0440\u044c\u043e\u0445 \u043a\u0440\u0430\u043f\u043e\u043a",
+                "\u0441\u043a\u0430\u0436\u0438 \u043f\u0440\u044f\u043c\u043e, \u0449\u043e \u0441\u0430\u043c\u0435 \u043c\u0430\u0454\u0448 \u043d\u0430 \u0443\u0432\u0430\u0437\u0456");
+
         private static string BuildFabricationReplacement(string userText)
         {
             var compact = CompactUserEcho(userText);
             if (string.IsNullOrWhiteSpace(compact))
                 return "Не бачу конкретики. Сформулюй нормально, що саме треба, і я відповім по суті.";
 
-            return $"По твоїй репліці: \"{compact}\". Так, звучить як невпевнене \"можливо\". Скажи прямо, що саме маєш на увазі, бо витягувати сенс із трьох крапок - заняття для мазохістів.";
+            return "\u041d\u0435 \u0431\u0443\u0434\u0443 \u0432\u0438\u0433\u0430\u0434\u0443\u0432\u0430\u0442\u0438 \u0437\u043e\u0432\u043d\u0456\u0448\u043d\u0456 \u0444\u0430\u043a\u0442\u0438 \u0431\u0435\u0437 \u043e\u043f\u043e\u0440\u0438 \u0432 \u043a\u043e\u043d\u0442\u0435\u043a\u0441\u0442\u0456. \u0414\u0430\u0439 \u043a\u043e\u043d\u043a\u0440\u0435\u0442\u043d\u0438\u0439 \u043e\u0431'\u0454\u043a\u0442 \u043f\u0435\u0440\u0435\u0432\u0456\u0440\u043a\u0438 \u0430\u0431\u043e \u0434\u043e\u0437\u0432\u0456\u043b \u043d\u0430 vault-read, \u0456 \u0432\u0456\u0434\u043f\u043e\u0432\u0456\u0434\u044c \u043f\u0456\u0434\u0435 \u043f\u043e \u0444\u0430\u043a\u0442\u0430\u0445, \u0430 \u043d\u0435 \u043f\u043e \u0434\u0438\u043c\u0443.";
         }
 
         private static bool IsShortAffection(string userLower)
