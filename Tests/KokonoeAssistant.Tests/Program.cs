@@ -101,6 +101,8 @@ internal static class Program
             Run("Proactive context requires natural trigger for silence ping", ProactiveContextRequiresNaturalTriggerForSilencePing);
             Run("Obsidian preflight context loads vault before reply", ObsidianPreflightContextLoadsVaultBeforeReply);
             Run("Agent task service plans and persists", AgentTaskServicePlansAndPersists);
+            Run("Reminder parser handles relative and vague time", ReminderParserHandlesRelativeAndVagueTime);
+            Run("Reminder parser handles wake and absolute time", ReminderParserHandlesWakeAndAbsoluteTime);
 
             Console.WriteLine($"PASS {_passed} tests");
             return 0;
@@ -110,6 +112,36 @@ internal static class Program
             Console.Error.WriteLine(ex.Message);
             return 1;
         }
+    }
+
+    private static void ReminderParserHandlesRelativeAndVagueTime()
+    {
+        var now = new DateTime(2026, 5, 19, 20, 40, 0);
+
+        AssertTrue(ReminderCommandParser.TryParse("нагадай мені через 10 хвилин перевірити білд", now, out var exact),
+            "relative reminder should parse");
+        AssertEqual(now.AddMinutes(10), exact.FireAt, "relative minutes should schedule exact offset");
+        AssertTrue(!exact.IsWake, "relative reminder should not be wake");
+        AssertTrue(exact.Prompt.Contains("перевірити білд"), "prompt should preserve reminder content");
+
+        AssertTrue(ReminderCommandParser.TryParse("напиши мені якось потім про воду", now, out var vague),
+            "vague later reminder should parse");
+        AssertEqual(now.AddMinutes(30), vague.FireAt, "vague later should default to 30 minutes");
+        AssertTrue(vague.UsedAssumedLater, "vague later should mark assumption");
+    }
+
+    private static void ReminderParserHandlesWakeAndAbsoluteTime()
+    {
+        var now = new DateTime(2026, 5, 19, 20, 40, 0);
+
+        AssertTrue(ReminderCommandParser.TryParse("розбуди мене о 07:30", now, out var wake),
+            "wake command should parse");
+        AssertTrue(wake.IsWake, "wake command should be marked");
+        AssertEqual(new DateTime(2026, 5, 20, 7, 30, 0), wake.FireAt, "past absolute time should roll to tomorrow");
+
+        AssertTrue(ReminderCommandParser.TryParse("нагадай об 21:05 глянути Vault", now, out var reminder),
+            "absolute reminder should parse");
+        AssertEqual(new DateTime(2026, 5, 19, 21, 5, 0), reminder.FireAt, "future absolute time should stay today");
     }
 
     private static void SomaticWiredFromPulseSpike()

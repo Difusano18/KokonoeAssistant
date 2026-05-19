@@ -218,8 +218,8 @@ namespace KokonoeAssistant.Services
                 UpdatedAt = DateTime.Now,
                 Phase = phase,
                 Tool = tool,
-                Focus = Trim(focus, 420),
-                Thought = Trim(thought, 220)
+                Focus = Trim(LlmService.RepairMojibake(focus), 420),
+                Thought = Trim(LlmService.RepairMojibake(thought), 220)
             };
 
             lock (_lock)

@@ -157,8 +157,12 @@ RESPONSE PLAN REPAIR:
                 "\u043e\u0446\u0456\u043d", "\u043a\u0440\u0438\u0442\u0438", "\u044f\u043a \u0434\u0443\u043c\u0430\u0454\u0448", "\u0447\u0438 \u043d\u043e\u0440\u043c", "\u0456\u0434\u0435\u044f")) return "evaluate";
             if (ContainsAny(lower,
                 "\u0430\u0440\u0445\u0456\u0442\u0435\u043a\u0442\u0443\u0440", "\u0441\u0438\u0441\u0442\u0435\u043c", "\u043f\u043e\u0432\u0435\u0434\u0456\u043d\u043a", "\u043e\u0441\u043e\u0431\u0438\u0441\u0442", "\u0430\u0441\u0438\u0441\u0442\u0435\u043d\u0442")) return "architecture";
-            if (ContainsAny(lower, "РѕС†С–РЅ", "РєСЂРёС‚Рё", "СЏРє РґСѓРјР°С”С€", "С‡Рё РЅРѕСЂРј", "С–РґРµСЏ")) return "evaluate";
-            if (ContainsAny(lower, "Р°СЂС…С–С‚РµРєС‚СѓСЂ", "СЃРёСЃС‚РµРјР°", "РїРѕРІРµРґС–РЅРє", "РѕСЃРѕР±РёСЃС‚", "Р°СЃРёСЃС‚РµРЅС‚")) return "architecture";
+            if (ContainsAny(lower, "РѕС†С–РЅ", "РєСЂРёС‚Рё", "СЏРє РґСѓРјР°С”С€", "С‡Рё РЅРѕСЂРј", "С–РґРµСЏ",
+                    "критич", "оцін", "як думаєш", "чи норм", "ідея", "рішення", "виріши", "самостій"))
+                return "evaluate";
+            if (ContainsAny(lower, "Р°СЂС…С–С‚РµРєС‚СѓСЂ", "СЃРёСЃС‚РµРјР°", "РїРѕРІРµРґС–РЅРє", "РѕСЃРѕР±РёСЃС‚", "Р°СЃРёСЃС‚РµРЅС‚",
+                    "архітектур", "систем", "поведінк", "особист", "асистент", "агент"))
+                return "architecture";
             if (ContainsAny(lower, "РїР»Р°РЅ", "СЃС‚СЂР°С‚РµРі", "roadmap")) return "design";
             if (ContainsAny(lower, "РїРѕСЏСЃРЅРё", "С‰Рѕ С†Рµ", "СЏРє РїСЂР°С†СЋ")) return "explain";
             return "chat";
@@ -182,7 +186,8 @@ RESPONSE PLAN REPAIR:
         private static bool NeedsToolUse(string lower, string capability, bool needsVaultRead)
             => needsVaultRead ||
                capability is "codebase" or "vault_memory" or "telegram" or "screen_awareness" or "calendar" ||
-               ContainsAny(lower, "Р·Р°РїСѓСЃС‚Рё", "РїРµСЂРµРІС–СЂ", "РїСЂРѕС‡РёС‚Р°Р№ С„Р°Р№Р»", "РІС–РґРєСЂРёР№", "Р·РЅР°Р№РґРё");
+               ContainsAny(lower, "Р·Р°РїСѓСЃС‚Рё", "РїРµСЂРµРІС–СЂ", "РїСЂРѕС‡РёС‚Р°Р№ С„Р°Р№Р»", "РІС–РґРєСЂРёР№", "Р·РЅР°Р№РґРё",
+                   "запусти", "перевір", "прочитай файл", "відкрий", "знайди", "виправ", "пофікси", "додай");
 
         private static string BuildMemoryPolicy(string lower, string intent)
         {
@@ -242,7 +247,9 @@ RESPONSE PLAN REPAIR:
                 "no generic assistant phrases",
                 "no blind agreement",
                 "no therapy monologue",
-                "do not invent facts about the user"
+                "do not invent facts about the user",
+                "make a concrete decision when context is sufficient",
+                "if context is partial, state the assumption and proceed with the safest useful option"
             };
             if (frame.Risk == "high") constraints.Add("ask confirmation before destructive or broad changes");
             if (frame.MemoryPolicy == "store_stable_fact") constraints.Add("store only stable facts; temporary state goes to Daily/Logs");

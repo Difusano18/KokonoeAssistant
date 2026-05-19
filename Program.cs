@@ -10,6 +10,8 @@ namespace KokonoeAssistant
         {
             try
             {
+                TrySetConsoleUtf8();
+                
                 BootstrapLog("starting");
                 var app = new App();
                 app.InitializeComponent();
@@ -32,6 +34,21 @@ namespace KokonoeAssistant
                 File.AppendAllText(path, $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] {message}{Environment.NewLine}");
             }
             catch { }
+        }
+
+        private static void TrySetConsoleUtf8()
+        {
+            try
+            {
+                Console.OutputEncoding = System.Text.Encoding.UTF8;
+            }
+            catch (IOException)
+            {
+                // WPF can start without an attached console; UI startup must not die over console encoding.
+            }
+            catch (UnauthorizedAccessException)
+            {
+            }
         }
     }
 }

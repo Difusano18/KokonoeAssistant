@@ -104,6 +104,8 @@ namespace KokonoeAssistant
         private DispatcherTimer? _uiRepairTimer;
         private DateTime _liveCoreLastVaultScan = DateTime.MinValue;
         private DateTime _lastObsidianPreflightAt = DateTime.MinValue;
+        private bool _liveCoreVaultScanInFlight;
+        private bool _rightOpsVaultScanInFlight;
         private int _liveCoreMemoryItems;
         private int _liveCoreReviewActions;
         private int _liveCoreOpenTasks;
@@ -386,20 +388,7 @@ namespace KokonoeAssistant
                 LiveCorePresenceText.Text = TrimLiveCoreLine($"{telemetry.Presence} | {telemetry.TimelineState} | state {telemetry.StateFreshness}", 76);
                 LiveCoreRhythmText.Text = TrimLiveCoreLine($"{telemetry.Rhythm} | LLM {telemetry.LlmStatus} | guard {telemetry.PostReplyGuard}", 64);
 
-                if (forceVaultScan || DateTime.Now - _liveCoreLastVaultScan > TimeSpan.FromSeconds(30))
-                {
-                    try
-                    {
-                        var quality = _obsidian.AnalyzeMemoryQuality();
-                        var queue = _obsidian.BuildTaskQueue();
-                        var review = _obsidian.BuildMemoryReview(quality, queue);
-                        _liveCoreMemoryItems = quality.NormalizedItems.Count;
-                        _liveCoreOpenTasks = queue.OpenTasks.Count;
-                        _liveCoreReviewActions = review.Actions.Count;
-                        _liveCoreLastVaultScan = DateTime.Now;
-                    }
-                    catch { }
-                }
+                QueueLiveCoreVaultScan(forceVaultScan);
 
                 LiveCoreMemoryText.Text = $"СЃРёРЅС…СЂРѕРЅС–Р·Р°С†С–СЏ {state.PendingVaultExchangeCount}/5 | РїР°Рј'СЏС‚СЊ {_liveCoreMemoryItems}";
                 LiveCoreVaultText.Text = $"РѕРіР»СЏРґ {_liveCoreReviewActions} | Р·Р°РґР°С‡С– {_liveCoreOpenTasks}";
@@ -415,6 +404,7 @@ namespace KokonoeAssistant
                     $"vision {BuildVisionStatusLabel(state, DateTime.Now).ToLowerInvariant()}";
                 if (RightPanel.Visibility == Visibility.Visible)
                     RefreshRightOpsPanel();
+                RepairVisibleTextTree(this);
             }
             catch (Exception ex)
             {
@@ -429,6 +419,7 @@ namespace KokonoeAssistant
                     LiveCoreRhythmText.Text = "";
                     LiveCoreMemoryText.Text = "РїР°Рј'СЏС‚СЊ РЅРµРґРѕСЃС‚СѓРїРЅР°";
                     LiveCoreVaultText.Text = ex.Message;
+                    RepairVisibleTextTree(this);
                 }
                 catch { }
             }
@@ -437,6 +428,35 @@ namespace KokonoeAssistant
         private void LiveCoreRefresh_Click(object sender, RoutedEventArgs e)
         {
             UpdateLiveCorePanel(forceVaultScan: true);
+        }
+
+        private void QueueLiveCoreVaultScan(bool force)
+        {
+            var now = DateTime.Now;
+            if (!force && now - _liveCoreLastVaultScan <= TimeSpan.FromSeconds(30))
+                return;
+            if (_liveCoreVaultScanInFlight)
+                return;
+
+            _liveCoreVaultScanInFlight = true;
+            _ = Task.Run(() =>
+            {
+                try
+                {
+                    var quality = _obsidian.AnalyzeMemoryQuality();
+                    var queue = _obsidian.BuildTaskQueue();
+                    var review = _obsidian.BuildMemoryReview(quality, queue);
+                    _liveCoreMemoryItems = quality.NormalizedItems.Count;
+                    _liveCoreOpenTasks = queue.OpenTasks.Count;
+                    _liveCoreReviewActions = review.Actions.Count;
+                    _liveCoreLastVaultScan = DateTime.Now;
+                }
+                catch { }
+                finally
+                {
+                    _liveCoreVaultScanInFlight = false;
+                }
+            });
         }
 
         private void LiveCoreSnapshot_Click(object sender, RoutedEventArgs e)
@@ -2269,6 +2289,21 @@ tags: [kokonoe, live-core, diagnostics]
         private bool TryScheduleWakeOrReminder(string userText, out string reply)
         {
             reply = "";
+            if (ReminderCommandParser.TryParse(userText, DateTime.Now, out var reminder))
+            {
+                ServiceContainer.BrainEngine?.Scheduler.Schedule(
+                    reminder.Prompt,
+                    reminder.FireAt,
+                    KokoSchedulerEngine.Priority.High,
+                    "user_reminder");
+
+                var assumption = reminder.UsedAssumedLater
+                    ? " «Пізніше» взяла як +30 хв, бо телепатія досі не в релізі."
+                    : "";
+                reply = $"Поставила на {reminder.FireAt:dd.MM HH:mm}.{assumption} Так, справжній запис у scheduler, не декоративна обіцянка.";
+                return true;
+            }
+
             if (string.IsNullOrWhiteSpace(userText)) return false;
 
             var lower = userText.ToLowerInvariant();
@@ -3964,7 +3999,7 @@ tags: []
         private void StartUiTextRepairTimer()
         {
             if (_uiRepairTimer != null) return;
-            _uiRepairTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
+            _uiRepairTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(350) };
             _uiRepairTimer.Tick += (_, _) => RepairVisibleTextTree(this);
             _uiRepairTimer.Start();
             Dispatcher.InvokeAsync(() => RepairVisibleTextTree(this), DispatcherPriority.Background);
@@ -3972,30 +4007,36 @@ tags: []
 
         private static void RepairVisibleTextTree(DependencyObject root)
         {
+            RepairVisibleTextNode(root);
             var count = VisualTreeHelper.GetChildrenCount(root);
             for (var i = 0; i < count; i++)
             {
                 var child = VisualTreeHelper.GetChild(root, i);
-                if (child is TextBlock tb && !string.IsNullOrEmpty(tb.Text))
-                {
-                    var fixedText = RepairVisibleText(tb.Text);
-                    if (!string.Equals(fixedText, tb.Text, StringComparison.Ordinal))
-                        tb.Text = fixedText;
-                }
-                else if (child is HeaderedContentControl hcc && hcc.Header is string header)
-                {
-                    var fixedHeader = RepairVisibleText(header);
-                    if (!string.Equals(fixedHeader, header, StringComparison.Ordinal))
-                        hcc.Header = fixedHeader;
-                }
-                else if (child is ComboBoxItem cbi && cbi.Content is string content)
-                {
-                    var fixedContent = RepairVisibleText(content);
-                    if (!string.Equals(fixedContent, content, StringComparison.Ordinal))
-                        cbi.Content = fixedContent;
-                }
-
                 RepairVisibleTextTree(child);
+            }
+        }
+
+        private static void RepairVisibleTextNode(DependencyObject node)
+        {
+            if (node is TextBlock tb && !string.IsNullOrEmpty(tb.Text))
+            {
+                var fixedText = RepairVisibleText(tb.Text);
+                if (!string.Equals(fixedText, tb.Text, StringComparison.Ordinal))
+                    tb.Text = fixedText;
+            }
+
+            if (node is HeaderedContentControl hcc && hcc.Header is string header)
+            {
+                var fixedHeader = RepairVisibleText(header);
+                if (!string.Equals(fixedHeader, header, StringComparison.Ordinal))
+                    hcc.Header = fixedHeader;
+            }
+
+            if (node is ContentControl cc && cc.Content is string content)
+            {
+                var fixedContent = RepairVisibleText(content);
+                if (!string.Equals(fixedContent, content, StringComparison.Ordinal))
+                    cc.Content = fixedContent;
             }
         }
 
@@ -6022,16 +6063,9 @@ tags: []
                     .ToList();
                 DashCuriosityList.ItemsSource = intents;
 
-                if (now - _rightOpsVaultScanAt > TimeSpan.FromSeconds(60))
-                {
-                    var report = _obsidian.RunVaultDoctor(repair: false);
-                    var linkProblems = report.FolderWikiLinkCount + report.SuppressedActorLinkCount;
-                    _rightOpsVaultLine =
-                        $"vault doctor {report.HealthScore}/100 В· empty {report.EmptyMarkdownFiles.Count} В· links {linkProblems} В· " +
-                        $"fm {report.FrontmatterIssues.Count} В· moj {report.MojibakeSuspects.Count} В· miss {report.MissingWikiTargets.Count}";
-                    _rightOpsVaultScanAt = now;
-                }
+                QueueRightOpsVaultScan(now);
                 RightVaultDoctorText.Text = _rightOpsVaultLine;
+                RepairVisibleTextTree(this);
             }
             catch
             {
@@ -6044,6 +6078,7 @@ tags: []
                     RightStateRefreshText.Text = "state unavailable";
                     RightProactiveText.Text = "no signal";
                     RightVaultDoctorText.Text = _rightOpsVaultLine;
+                    RepairVisibleTextTree(this);
                 }
                 catch { }
             }
@@ -6055,6 +6090,33 @@ tags: []
             var clean = text.Replace("\r", " ").Replace("\n", " ").Trim();
             return clean.Length <= max ? clean : clean[..Math.Max(0, max - 1)] + "вЂ¦";
         }
+        private void QueueRightOpsVaultScan(DateTime now)
+        {
+            if (now - _rightOpsVaultScanAt <= TimeSpan.FromSeconds(60))
+                return;
+            if (_rightOpsVaultScanInFlight)
+                return;
+
+            _rightOpsVaultScanInFlight = true;
+            _ = Task.Run(() =>
+            {
+                try
+                {
+                    var report = _obsidian.RunVaultDoctor(repair: false);
+                    var linkProblems = report.FolderWikiLinkCount + report.SuppressedActorLinkCount;
+                    _rightOpsVaultLine =
+                        $"vault doctor {report.HealthScore}/100 | empty {report.EmptyMarkdownFiles.Count} | links {linkProblems} | " +
+                        $"fm {report.FrontmatterIssues.Count} | moj {report.MojibakeSuspects.Count} | miss {report.MissingWikiTargets.Count}";
+                    _rightOpsVaultScanAt = DateTime.Now;
+                }
+                catch { }
+                finally
+                {
+                    _rightOpsVaultScanInFlight = false;
+                }
+            });
+        }
+
 
         private static string BuildVisionStatusLabel(KokoInternalState state, DateTime now)
         {

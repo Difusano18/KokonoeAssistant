@@ -148,6 +148,7 @@ namespace KokonoeAssistant
                         _llm.Health     = HealthService;
                         _llm.State      = StateEngine;
                         _llm.OllamaPool = OllamaPool;
+                        _llm.AgentTasks = AgentTasks;
                         // Ensure BrainEngine is initialized to wire up Emotion, Memory, Patterns
                         // This ensures all LlmService dependencies are properly set
                         var brain = BrainEngine;

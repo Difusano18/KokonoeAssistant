@@ -1,0 +1,102 @@
+using System;
+using System.Text.RegularExpressions;
+
+namespace KokonoeAssistant.Services
+{
+    public sealed class ReminderCommand
+    {
+        public DateTime FireAt { get; set; }
+        public string Prompt { get; set; } = "";
+        public bool IsWake { get; set; }
+        public bool UsedAssumedLater { get; set; }
+    }
+
+    public static class ReminderCommandParser
+    {
+        public static bool TryParse(string userText, DateTime now, out ReminderCommand command)
+        {
+            command = new ReminderCommand();
+            if (string.IsNullOrWhiteSpace(userText)) return false;
+
+            var lower = userText.ToLowerInvariant();
+            var wantsWake = ContainsAny(lower, "розбуд", "будиль", "wake", "Р·Р±СѓРґ", "Р±СѓРґРёР»");
+            var wantsReminder = ContainsAny(lower, "нагад", "нагадай", "нагадати", "remind", "напиши", "пінгани", "пінг",
+                "РЅР°РіР°Рґ", "РЅР°РїРёС€Рё");
+            if (!wantsWake && !wantsReminder) return false;
+
+            if (!TryParseFireAt(lower, now, out var fireAt, out var assumedLater))
+                return false;
+
+            command = new ReminderCommand
+            {
+                FireAt = fireAt,
+                IsWake = wantsWake,
+                UsedAssumedLater = assumedLater,
+                Prompt = wantsWake
+                    ? "Розбуди користувача. Коротко, різко, українською. Без пояснення системи."
+                    : "Нагадай користувачу: " + userText.Trim()
+            };
+            return true;
+        }
+
+        private static bool TryParseFireAt(string lower, DateTime now, out DateTime fireAt, out bool assumedLater)
+        {
+            assumedLater = false;
+            fireAt = default;
+
+            var relative = Regex.Match(lower, @"(?:через|за)\s*(\d{1,3})\s*(хв|хвилин|хвилини|мин|m|min|год|годин|години|h)\b");
+            if (relative.Success && int.TryParse(relative.Groups[1].Value, out var amount))
+            {
+                var unit = relative.Groups[2].Value;
+                fireAt = unit.StartsWith("год", StringComparison.Ordinal) || unit == "h"
+                    ? now.AddHours(Math.Clamp(amount, 1, 72))
+                    : now.AddMinutes(Math.Clamp(amount, 1, 24 * 60));
+                return true;
+            }
+
+            if (Regex.IsMatch(lower, @"(?:через|за)\s+(?:пів|півгодини|пів\s+години)"))
+            {
+                fireAt = now.AddMinutes(30);
+                return true;
+            }
+
+            if (Regex.IsMatch(lower, @"(?:через|за)\s+годин[ауи]?|(?:через|за)\s+1\s*год"))
+            {
+                fireAt = now.AddHours(1);
+                return true;
+            }
+
+            var absolute = Regex.Match(lower, @"(?:о|об|в|у|на|at)\s*(\d{1,2})(?::(\d{2}))?");
+            if (absolute.Success && int.TryParse(absolute.Groups[1].Value, out var hour))
+            {
+                var minute = 0;
+                if (absolute.Groups[2].Success)
+                    int.TryParse(absolute.Groups[2].Value, out minute);
+                hour = Math.Clamp(hour, 0, 23);
+                minute = Math.Clamp(minute, 0, 59);
+
+                fireAt = now.Date.AddHours(hour).AddMinutes(minute);
+                if (fireAt <= now.AddMinutes(1))
+                    fireAt = fireAt.AddDays(1);
+                return true;
+            }
+
+            if (ContainsAny(lower, "пізніше", "попізніше", "потім", "якось потім", "колись потім", "later"))
+            {
+                fireAt = now.AddMinutes(30);
+                assumedLater = true;
+                return true;
+            }
+
+            return false;
+        }
+
+        private static bool ContainsAny(string text, params string[] values)
+        {
+            foreach (var value in values)
+                if (text.Contains(value, StringComparison.OrdinalIgnoreCase))
+                    return true;
+            return false;
+        }
+    }
+}
