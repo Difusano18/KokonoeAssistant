@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -52,13 +52,13 @@ namespace KokonoeAssistant.Services
                 Trigger = "presence_idle",
                 StyleHint = "observation",
                 ToneHint = "dry, attentive, not generic",
-                SummaryUk = "РќРµРјР°С” СЃРІС–Р¶РѕРіРѕ СЃРёРіРЅР°Р»Сѓ, СЏРєРёР№ РІР°СЂС‚РёР№ РІС‚СЂСѓС‡Р°РЅРЅСЏ.",
+                SummaryUk = "Немає свіжого сигналу, який вартий втручання.",
                 Priority = 0
             };
 
             if (lastUser == null)
             {
-                frame.SummaryUk = "Р†СЃС‚РѕСЂС–СЏ РїРѕСЂРѕР¶РЅСЏ; РЅРµ РІРёРіР°РґСѓР№ Р±Р»РёР·СЊРєС–СЃС‚СЊ Р· РїРѕРІС–С‚СЂСЏ.";
+                frame.SummaryUk = "Історія порожня; не вигадуй близькість з повітря.";
                 frame.ExtraContext = BuildPromptBlock(frame, state, now, null);
                 return frame;
             }
@@ -132,8 +132,8 @@ namespace KokonoeAssistant.Services
             frame.NextUsefulAt = followDue ? now : intent.FollowUpAt;
 
             var timeText = until.TotalMinutes >= 0
-                ? $"РѕС‡С–РєСѓРІР°РЅРµ РІС–РєРЅРѕ С‰Рµ С‚СЂРёРІР°С” РїСЂРёР±Р»РёР·РЅРѕ {FormatDuration(until)}"
-                : $"РѕС‡С–РєСѓРІР°РЅРµ РІС–РєРЅРѕ РјРёРЅСѓР»Рѕ {FormatDuration(-until)} С‚РѕРјСѓ";
+                ? $"очікуване вікно ще триває приблизно {FormatDuration(until)}"
+                : $"очікуване вікно минуло {FormatDuration(-until)} тому";
 
             frame.ToneHint = intent.Kind switch
             {
@@ -147,7 +147,7 @@ namespace KokonoeAssistant.Services
                 _ => "specific follow-up, not generic checking"
             };
 
-            frame.SummaryUk = $"РђРєС‚РёРІРЅРёР№ РЅР°РјС–СЂ: {intent.Summary}; {timeText}.";
+            frame.SummaryUk = $"Активний намір: {intent.Summary}; {timeText}.";
         }
 
         private static void ApplyResolvedIntent(KokoPresenceFrame frame, ShortTermIntent intent, DateTime now)
@@ -160,7 +160,7 @@ namespace KokonoeAssistant.Services
                 : "he returned after an earlier plan; acknowledge elapsed time";
             frame.Priority = 50;
             frame.ShouldInterrupt = false;
-            frame.SummaryUk = $"РќР°РјС–СЂ СѓР¶Рµ Р·Р°РєСЂРёС‚РёР№: {intent.Summary}. Р’С–РЅ РїРѕРІРµСЂРЅСѓРІСЃСЏ/РѕРЅРѕРІРёРІ СЃС‚Р°РЅ {FormatDuration(now - intent.ResolvedAt!.Value)} С‚РѕРјСѓ.";
+            frame.SummaryUk = $"Намір уже закритий: {intent.Summary}. Він повернувся/оновив стан {FormatDuration(now - intent.ResolvedAt!.Value)} тому.";
         }
 
         private static void ApplySilenceContinuity(KokoPresenceFrame frame, KokoInternalState state, DateTime now, int autonomyLevel)
@@ -169,7 +169,7 @@ namespace KokonoeAssistant.Services
             if (silence < 25)
             {
                 frame.SituationKind = "recent_contact";
-                frame.SummaryUk = $"Р’С–РЅ РїРёСЃР°РІ {FormatDuration(TimeSpan.FromMinutes(silence))} С‚РѕРјСѓ; РЅРµ С‚СЂРµР±Р° РІРґР°РІР°С‚Рё РґСЂР°РјСѓ.";
+                frame.SummaryUk = $"Він писав {FormatDuration(TimeSpan.FromMinutes(silence))} тому; не треба вдавати драму.";
                 frame.Priority = 10;
                 return;
             }
@@ -183,7 +183,7 @@ namespace KokonoeAssistant.Services
                 frame.Priority = 72;
                 frame.ShouldInterrupt = autonomyLevel >= 3 && now - state.LastPresenceInterruptAt > TimeSpan.FromHours(8);
                 frame.NextUsefulAt = now;
-                frame.SummaryUk = $"Р”РѕРІРіР° С‚РёС€Р°: {FormatDuration(TimeSpan.FromMinutes(silence))}. Р¦Рµ РІР¶Рµ РЅРµ Р·РІРёС‡Р°Р№РЅР° РїР°СѓР·Р°.";
+                frame.SummaryUk = $"Довга тиша: {FormatDuration(TimeSpan.FromMinutes(silence))}. Це вже не звичайна пауза.";
                 return;
             }
 
@@ -196,7 +196,7 @@ namespace KokonoeAssistant.Services
                 frame.Priority = 62;
                 frame.ShouldInterrupt = autonomyLevel >= 3 && now - state.LastPresenceInterruptAt > TimeSpan.FromHours(3);
                 frame.NextUsefulAt = now;
-                frame.SummaryUk = $"РЎРµСЂРµРґРЅСЏ С‚РёС€Р°: {FormatDuration(TimeSpan.FromMinutes(silence))}. РњРѕР¶РЅР° РїС–РґРєРѕР»РѕС‚Рё, СЏРєС‰Рѕ РЅРµРјР°С” РІР°Р¶Р»РёРІС–С€РѕРіРѕ.";
+                frame.SummaryUk = $"Середня тиша: {FormatDuration(TimeSpan.FromMinutes(silence))}. Можна підколоти, якщо немає важливішого.";
                 return;
             }
 
@@ -206,7 +206,7 @@ namespace KokonoeAssistant.Services
             frame.ToneHint = "light presence; do not overreact";
             frame.Priority = 32;
             frame.ShouldInterrupt = false;
-            frame.SummaryUk = $"РљРѕСЂРѕС‚РєР° С‚РёС€Р°: {FormatDuration(TimeSpan.FromMinutes(silence))}. РџСЂРѕСЃС‚Рѕ РІСЂР°С…СѓРІР°С‚Рё РІ С‚РѕРЅС–.";
+            frame.SummaryUk = $"Коротка тиша: {FormatDuration(TimeSpan.FromMinutes(silence))}. Просто врахувати в тоні.";
         }
 
         private static string BuildPromptBlock(KokoPresenceFrame frame, KokoInternalState state, DateTime now, ShortTermIntent? intent)
@@ -214,25 +214,25 @@ namespace KokonoeAssistant.Services
             var sb = new StringBuilder();
             sb.AppendLine("PRESENCE / CONTINUITY");
             sb.AppendLine($"Р—Р°СЂР°Р·: {now:dd.MM.yyyy HH:mm}.");
-            sb.AppendLine($"РЎРёС‚СѓР°С†С–СЏ: {frame.SituationKind}.");
-            sb.AppendLine($"Р’РёСЃРЅРѕРІРѕРє: {frame.SummaryUk}");
+            sb.AppendLine($"Ситуація: {frame.SituationKind}.");
+            sb.AppendLine($"Висновок: {frame.SummaryUk}");
             if (!string.IsNullOrWhiteSpace(frame.LastUserText))
-                sb.AppendLine($"РћСЃС‚Р°РЅРЅСЏ СЂРµРїР»С–РєР° РєРѕСЂРёСЃС‚СѓРІР°С‡Р°: В«{Trim(frame.LastUserText, 180)}В».");
+                sb.AppendLine($"Остання репліка користувача: «{Trim(frame.LastUserText, 180)}».");
             if (frame.SilenceMinutes > 0)
-                sb.AppendLine($"РњРёРЅСѓР»Рѕ РІС–Рґ РѕСЃС‚Р°РЅРЅСЊРѕС— СЂРµРїР»С–РєРё: {FormatDuration(TimeSpan.FromMinutes(frame.SilenceMinutes))}.");
+                sb.AppendLine($"Минуло від останньої репліки: {FormatDuration(TimeSpan.FromMinutes(frame.SilenceMinutes))}.");
             if (intent != null)
             {
-                sb.AppendLine($"РќР°РјС–СЂ: {intent.Summary}.");
-                sb.AppendLine($"РЎС‚РІРѕСЂРµРЅРѕ: {intent.CreatedAt:dd.MM HH:mm}; follow-up: {intent.FollowUpAt:dd.MM HH:mm}; РѕС‡С–РєСѓРІР°РЅРѕ РґРѕ: {intent.ExpectedUntil:dd.MM HH:mm}.");
+                sb.AppendLine($"Намір: {intent.Summary}.");
+                sb.AppendLine($"Створено: {intent.CreatedAt:dd.MM HH:mm}; follow-up: {intent.FollowUpAt:dd.MM HH:mm}; очікувано до: {intent.ExpectedUntil:dd.MM HH:mm}.");
                 if (intent.ResolvedAt.HasValue)
-                    sb.AppendLine($"РќР°РјС–СЂ Р·Р°РєСЂРёС‚Рѕ: {intent.ResolvedAt.Value:dd.MM HH:mm}; РїСЂРёС‡РёРЅР°: {Trim(intent.ResolutionText, 160)}.");
+                    sb.AppendLine($"Намір закрито: {intent.ResolvedAt.Value:dd.MM HH:mm}; причина: {Trim(intent.ResolutionText, 160)}.");
             }
-            sb.AppendLine($"РўРѕРЅ presence: {frame.ToneHint}.");
+            sb.AppendLine($"Тон presence: {frame.ToneHint}.");
             sb.AppendLine("Rule: if he already woke up or returned, do not tell him to repeat an action that is already in the past.");
-            sb.AppendLine("РџСЂР°РІРёР»Рѕ: РїРµСЂРµРґ РІС–РґРїРѕРІС–РґРґСЋ РїРµСЂРµРІС–СЂ С‡Р°СЃ. РЇРєС‰Рѕ РІС–РЅ СѓР¶Рµ РїСЂРѕРєРёРЅСѓРІСЃСЏ/РїРѕРІРµСЂРЅСѓРІСЃСЏ, РЅРµ РєР°Р¶Рё Р№РѕРјСѓ СЂРѕР±РёС‚Рё С‚Рµ, С‰Рѕ РІР¶Рµ РІ РјРёРЅСѓР»РѕРјСѓ.");
-            sb.AppendLine("РџСЂР°РІРёР»Рѕ: follow-up РјР°С” Р±СѓС‚Рё РєРѕРЅРєСЂРµС‚РЅРёРј РґРѕ РїРѕРїРµСЂРµРґРЅСЊРѕС— РїРѕРґС–С—, РЅРµ С€Р°Р±Р»РѕРЅРЅРёРј В«СЏРє СЃРїСЂР°РІРёВ».");
+            sb.AppendLine("Правило: перед відповіддю перевір час. Якщо він уже прокинувся/повернувся, не кажи йому робити те, що вже в минулому.");
+            sb.AppendLine("Правило: follow-up має бути конкретним до попередньої події, не шаблонним «як справи».");
             if (state.PresenceTrace.Count > 0)
-                sb.AppendLine("РћСЃС‚Р°РЅРЅС– presence-СЃР»С–РґРё: " + string.Join(" | ", state.PresenceTrace.TakeLast(3)));
+                sb.AppendLine("Останні presence-сліди: " + string.Join(" | ", state.PresenceTrace.TakeLast(3)));
             return sb.ToString();
         }
 
@@ -241,34 +241,34 @@ namespace KokonoeAssistant.Services
             var situation = InferSituation(lower);
             return situation switch
             {
-                "leaving" => $"{now:HH:mm}: РІС–РЅ РїРѕРІС–РґРѕРјРёРІ, С‰Рѕ РєСѓРґРёСЃСЊ С–РґРµ Р°Р±Рѕ Р±СѓРґРµ Р·Р°Р№РЅСЏС‚РёР№.",
-                "returned" => $"{now:HH:mm}: РІС–РЅ РїРѕРІРµСЂРЅСѓРІСЃСЏ/РїСЂРѕРєРёРЅСѓРІСЃСЏ/Р·Р°РєСЂРёРІ РїРѕРїРµСЂРµРґРЅСЋ РґС–СЋ.",
-                "sleep" => $"{now:HH:mm}: РІС–РЅ РіРѕРІРѕСЂРёС‚СЊ РїСЂРѕ СЃРѕРЅ; РЅР°СЃС‚СѓРїРЅС– РІС–РґРїРѕРІС–РґС– РјР°СЋС‚СЊ РІСЂР°С…РѕРІСѓРІР°С‚Рё С‡Р°СЃ.",
-                "project" => $"{now:HH:mm}: РІС–РЅ С„РѕРєСѓСЃСѓС”С‚СЊСЃСЏ РЅР° РїСЂРѕС”РєС‚С– KokonoeAssistant.",
-                _ => $"{now:HH:mm}: СЃРІС–Р¶Рµ РїРѕРІС–РґРѕРјР»РµРЅРЅСЏ Р±РµР· РѕРєСЂРµРјРѕС— РїРѕРґС–С—: {Trim(content, 80)}"
+                "leaving" => $"{now:HH:mm}: він повідомив, що кудись іде або буде зайнятий.",
+                "returned" => $"{now:HH:mm}: він повернувся/прокинувся/закрив попередню дію.",
+                "sleep" => $"{now:HH:mm}: він говорить про сон; наступні відповіді мають враховувати час.",
+                "project" => $"{now:HH:mm}: він фокусується на проєкті KokonoeAssistant.",
+                _ => $"{now:HH:mm}: свіже повідомлення без окремої події: {Trim(content, 80)}"
             };
         }
 
         private static string InferSituation(string lower)
         {
-            if (ContainsAny(lower, "РїСЂРѕРєРёРЅ", "РїСЂРѕСЃРЅСѓРІ", "РїРѕСЃРїР°РІ", "РїРѕРІРµСЂРЅСѓРІ", "РІРµСЂРЅСѓРІ", "СЏ С‚СѓС‚", "Р·Р°РєС–РЅС‡РёРІ", "Р·Р°РєС–РЅС‡РёР»РёСЃСЊ"))
+            if (ContainsAny(lower, "прокин", "проснув", "поспав", "повернув", "вернув", "я тут", "закінчив", "закінчились"))
                 return "returned";
-            if (ContainsAny(lower, "СЃРїР°С‚СЊ", "СЃРїР°С‚Рё", "СЃРѕРЅ", "Р»СЏРіР°СЋ"))
+            if (ContainsAny(lower, "спать", "спати", "сон", "лягаю"))
                 return "sleep";
-            if (ContainsAny(lower, "РїС–РґСѓ", "Р№РґСѓ", "С–РґСѓ", "РїС–С€РѕРІ", "РІС–РґС–Р№РґСѓ", "Р°С„Рє", "Р±СѓРґСѓ Р·Р°Р№РЅСЏС‚РёР№"))
+            if (ContainsAny(lower, "піду", "йду", "іду", "пішов", "відійду", "афк", "буду зайнятий"))
                 return "leaving";
-            if (ContainsAny(lower, "РїСЂРѕРµРєС‚", "РєРѕРґ", "С‚РµСЃС‚Рё", "РєРѕРјС–С‚", "РіС–С‚", "github", "obsidian"))
+            if (ContainsAny(lower, "проект", "код", "тести", "коміт", "гіт", "github", "obsidian"))
                 return "project";
             return "message";
         }
 
         private static string InferTone(string lower)
         {
-            if (ContainsAny(lower, "РІС‚РѕРј", "РїРѕРіР°РЅРѕ", "СЃС‚СЂРµСЃ", "С‚СЂРёРІРѕР¶", "Р±РѕР»РёС‚СЊ"))
+            if (ContainsAny(lower, "втом", "погано", "стрес", "тривож", "болить"))
                 return "careful";
-            if (ContainsAny(lower, "Р·Р»РёР№", "Р±С–СЃРёС‚СЊ", "РґСЂР°С‚СѓС”", "РЅРµРЅР°РІРёРґ"))
+            if (ContainsAny(lower, "злий", "бісить", "дратує", "ненавид"))
                 return "sharp";
-            if (ContainsAny(lower, "С…Рј", "С‰Рѕ РґР°Р»С–", "РґСѓРјР°С”С€"))
+            if (ContainsAny(lower, "хм", "що далі", "думаєш"))
                 return "planning";
             return "default";
         }
@@ -286,10 +286,10 @@ namespace KokonoeAssistant.Services
         private static string FormatDuration(TimeSpan span)
         {
             span = span.Duration();
-            if (span.TotalMinutes < 1) return "РјРµРЅС€Рµ С…РІРёР»РёРЅРё";
-            if (span.TotalHours < 1) return $"{Math.Max(1, (int)Math.Round(span.TotalMinutes))} С…РІ";
-            if (span.TotalDays < 1) return $"{(int)span.TotalHours} РіРѕРґ {span.Minutes} С…РІ";
-            return $"{(int)span.TotalDays} РґРЅ {span.Hours} РіРѕРґ";
+            if (span.TotalMinutes < 1) return "менше хвилини";
+            if (span.TotalHours < 1) return $"{Math.Max(1, (int)Math.Round(span.TotalMinutes))} хв";
+            if (span.TotalDays < 1) return $"{(int)span.TotalHours} год {span.Minutes} хв";
+            return $"{(int)span.TotalDays} дн {span.Hours} год";
         }
 
         private static string Trim(string text, int max)

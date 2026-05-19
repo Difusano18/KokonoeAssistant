@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -48,7 +48,7 @@ namespace KokonoeAssistant.Services
                 .ToList();
 
             if (candidates.Count == 0)
-                return Wait("no_candidate", "РЅРµРјР°С” РґРѕСЃС‚Р°С‚РЅСЊРѕС— РїСЂРёС‡РёРЅРё РІС‚СЂСѓС‡Р°С‚РёСЃСЏ");
+                return Wait("no_candidate", "немає достатньої причини втручатися");
 
             var strongest = candidates[0];
             var silenceGate = BuildSilenceGate(presence, internalDay, strongest, rhythm, autonomyLevel);
@@ -152,7 +152,7 @@ namespace KokonoeAssistant.Services
                     "relationship_protective_check",
                     "warm",
                     $"protectiveness={relationship.Protectiveness:F2}, silence={presence.SilenceMinutes:F0}m",
-                    "РЎС‚РѕСЃСѓРЅРѕРє Сѓ Р·Р°С…РёСЃРЅРѕРјСѓ СЂРµР¶РёРјС–, Р° С‚РёС€Р° РІР¶Рµ Р·РЅР°С‡СѓС‰Р°. РќР°РїРёС€Рё РєРѕСЂРѕС‚РєРѕ, Р±РµР· С€Р°Р±Р»РѕРЅРЅРѕРіРѕ В«СЏРє СЃРїСЂР°РІРёВ».",
+                    "Стосунок у захисному режимі, а тиша вже значуща. Напиши коротко, без шаблонного «як справи».",
                     ClampPriority(74 + internalDay.InitiativeBias / 2 + RhythmBias(rhythm)),
                     false,
                     false);
@@ -168,7 +168,7 @@ namespace KokonoeAssistant.Services
                     "autonomy_somatic_pressure",
                     "jab",
                     $"somatic wired, strain={somatic.Strain:F2}",
-                    "Р¦РёС„СЂРѕРІРµ С‚С–Р»Рѕ РЅР°РїСЂСѓР¶РµРЅРµ. РЇРєС‰Рѕ РїРёС€РµС€, С†Рµ РјР°С” Р±СѓС‚Рё РєРѕСЂРѕС‚РєРёР№ РєРѕРЅС‚СЂРѕР»СЊРѕРІР°РЅРёР№ СѓРєРѕР» Р°Р±Рѕ С‚РѕС‡РЅРµ РїРёС‚Р°РЅРЅСЏ.",
+                    "Цифрове тіло напружене. Якщо пишеш, це має бути короткий контрольований укол або точне питання.",
                     ClampPriority(68 + internalDay.InitiativeBias / 2 + RhythmBias(rhythm)),
                     false,
                     false);
@@ -178,21 +178,21 @@ namespace KokonoeAssistant.Services
         private static string? BuildSilenceGate(KokoPresenceFrame presence, KokoInternalDayFrame internalDay, Candidate strongest, KokoPatternEngine.RhythmProfile rhythm, int autonomyLevel)
         {
             if (autonomyLevel <= 0)
-                return "Р°РІС‚РѕРЅРѕРјРЅС–СЃС‚СЊ РІРёРјРєРЅРµРЅР°";
+                return "автономність вимкнена";
 
             if (presence.SituationKind == "active_absence" && strongest.Source != "presence")
-                return $"С” Р°РєС‚РёРІРЅРёР№ РЅР°РјС–СЂ РєРѕСЂРёСЃС‚СѓРІР°С‡Р° (active intent); С‡РµРєР°С‚Рё РґРѕ {presence.NextUsefulAt:HH:mm}, РЅРµ РІРёРіР°РґСѓРІР°С‚Рё generic ping";
+                return $"є активний намір користувача (active intent); чекати до {presence.NextUsefulAt:HH:mm}, не вигадувати generic ping";
 
             if (internalDay.ShouldPreferSilence && strongest.Priority < 86)
-                return $"РІРЅСѓС‚СЂС–С€РЅС–Р№ РґРµРЅСЊ РїСЂРѕСЃРёС‚СЊ РјРѕРІС‡Р°С‚Рё; РЅР°Р№СЃРёР»СЊРЅС–С€РёР№ РєР°РЅРґРёРґР°С‚ {strongest.Trigger} РјР°С” Р»РёС€Рµ p{strongest.Priority}";
+                return $"внутрішній день просить мовчати; найсильніший кандидат {strongest.Trigger} має лише p{strongest.Priority}";
 
             if (rhythm.CurrentSlotSamples >= 3 &&
                 rhythm.CurrentSlotActivityRate <= 0.20f &&
                 strongest.Priority < 90)
-                return $"СЂРёС‚Рј РїРѕРєР°Р·СѓС” С‚РёРїРѕРІРёР№ С‚РёС…РёР№ СЃР»РѕС‚; p{strongest.Priority} РЅРµРґРѕСЃС‚Р°С‚РЅСЊРѕ";
+                return $"ритм показує типовий тихий слот; p{strongest.Priority} недостатньо";
 
             if (autonomyLevel == 1 && strongest.Priority < 90)
-                return $"РЅРёР·СЊРєР° Р°РІС‚РѕРЅРѕРјРЅС–СЃС‚СЊ; p{strongest.Priority} РЅРµРґРѕСЃС‚Р°С‚РЅСЊРѕ";
+                return $"низька автономність; p{strongest.Priority} недостатньо";
 
             return null;
         }
@@ -221,16 +221,16 @@ namespace KokonoeAssistant.Services
                 sb.AppendLine(candidate.ExtraContext.Trim());
             sb.AppendLine();
             sb.AppendLine("AUTONOMY DECISION");
-            sb.AppendLine($"Р”Р¶РµСЂРµР»Рѕ: {candidate.Source}.");
-            sb.AppendLine($"РўСЂРёРіРµСЂ: {candidate.Trigger}.");
-            sb.AppendLine($"РџСЂРёС‡РёРЅР°: {candidate.Reason}.");
-            sb.AppendLine($"РџСЂС–РѕСЂРёС‚РµС‚: {candidate.Priority}.");
+            sb.AppendLine($"Джерело: {candidate.Source}.");
+            sb.AppendLine($"Тригер: {candidate.Trigger}.");
+            sb.AppendLine($"Причина: {candidate.Reason}.");
+            sb.AppendLine($"Пріоритет: {candidate.Priority}.");
             sb.AppendLine($"Presence: {presence.SummaryUk}");
-            sb.AppendLine($"Р’РЅСѓС‚СЂС–С€РЅС–Р№ РґРµРЅСЊ: {internalDay.SummaryUk}");
-            sb.AppendLine($"РЎС‚РѕСЃСѓРЅРѕРє: trust={relationship.Trust:F2}, protectiveness={relationship.Protectiveness:F2}, friction={relationship.Friction:F2}.");
-            sb.AppendLine($"РЎРѕРјР°С‚РёРєР°: {somatic.State}, strain={somatic.Strain:F2}, calm={somatic.Calm:F2}.");
-            sb.AppendLine($"Р РёС‚Рј: {rhythm.Summary}");
-            sb.AppendLine("РџСЂР°РІРёР»Рѕ: РІС–РґРїРѕРІС–РґСЊ РјР°С” Р·РІСѓС‡Р°С‚Рё СЏРє РїСЂРёСЂРѕРґРЅРёР№ РЅР°СЃР»С–РґРѕРє С†С–С”С— РїСЂРёС‡РёРЅРё, РЅРµ СЏРє СЃР»СѓР¶Р±РѕРІРёР№ Р·РІС–С‚.");
+            sb.AppendLine($"Внутрішній день: {internalDay.SummaryUk}");
+            sb.AppendLine($"Стосунок: trust={relationship.Trust:F2}, protectiveness={relationship.Protectiveness:F2}, friction={relationship.Friction:F2}.");
+            sb.AppendLine($"Соматика: {somatic.State}, strain={somatic.Strain:F2}, calm={somatic.Calm:F2}.");
+            sb.AppendLine($"Ритм: {rhythm.Summary}");
+            sb.AppendLine("Правило: відповідь має звучати як природний наслідок цієї причини, не як службовий звіт.");
             return sb.ToString();
         }
 

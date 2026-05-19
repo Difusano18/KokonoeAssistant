@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -73,7 +73,7 @@ namespace KokonoeAssistant.Services
             var desktopActive = signals.LastDesktopActivityAt > DateTime.MinValue &&
                                 now - signals.LastDesktopActivityAt < TimeSpan.FromMinutes(20);
             var activeNonAwayScreen = desktopActive || ContainsAny(mode, "coding", "obsidian", "telegram", "browser", "game", "desktop") ||
-                                      ContainsAny(summary, "РєРѕРґ", "obsidian", "telegram", "Р±СЂР°СѓР·РµСЂ", "РіСЂР°", "РІС–РєРЅРѕ", "СЂРµРґР°РєС‚РѕСЂ");
+                                      ContainsAny(summary, "код", "obsidian", "telegram", "браузер", "гра", "вікно", "редактор");
 
             if (!activeNonAwayScreen && channel != "telegram" && channel != "desktop")
                 return 0;
@@ -186,15 +186,15 @@ namespace KokonoeAssistant.Services
         {
             if (string.IsNullOrWhiteSpace(lower)) return false;
 
-            var stillAway = ContainsAny(lower, "С‰Рµ", "РґРѕСЃС–", "РїРѕРєРё", "Р±СѓРґСѓ", "Р№РґСѓ", "С–РґСѓ", "РїС–РґСѓ", "РїС–С€РѕРІ", "Р·Р°СЂР°Р·");
+            var stillAway = ContainsAny(lower, "ще", "досі", "поки", "буду", "йду", "іду", "піду", "пішов", "зараз");
             return kind switch
             {
-                "course" => stillAway && ContainsAny(lower, "РєСѓСЂСЃ", "Р·Р°РЅСЏС‚", "СѓСЂРѕРє", "РїР°СЂР°", "РЅР°РІС‡Р°РЅ"),
-                "work" => stillAway && ContainsAny(lower, "СЂРѕР±РѕС‚", "РїСЂР°С†", "РєРѕРґ", "РїСЂРѕС”РєС‚", "РїСЂРѕРµРєС‚"),
-                "errand" => stillAway && ContainsAny(lower, "РјР°РіР°Р·", "РєСѓРї", "РїСЂРѕРґСѓРєС‚", "СЃРїСЂР°РІ"),
-                "walk" => stillAway && ContainsAny(lower, "РіСѓР»СЏ", "РїСЂРѕРіСѓР»СЏ", "РІСѓР»РёС†"),
-                "return_home" => stillAway && ContainsAny(lower, "РґРѕРґРѕРјСѓ", "РґРѕРј", "РґРѕСЂРѕР·", "С—РґСѓ", "Р№РґСѓ", "С–РґСѓ"),
-                "busy" => stillAway && ContainsAny(lower, "Р·Р°Р№РЅСЏС‚", "РїРѕС‚С–Рј", "РЅРµ РјРѕР¶Сѓ"),
+                "course" => stillAway && ContainsAny(lower, "курс", "занят", "урок", "пара", "навчан"),
+                "work" => stillAway && ContainsAny(lower, "робот", "прац", "код", "проєкт", "проект"),
+                "errand" => stillAway && ContainsAny(lower, "магаз", "куп", "продукт", "справ"),
+                "walk" => stillAway && ContainsAny(lower, "гуля", "прогуля", "вулиц"),
+                "return_home" => stillAway && ContainsAny(lower, "додому", "дом", "дороз", "їду", "йду", "іду"),
+                "busy" => stillAway && ContainsAny(lower, "зайнят", "потім", "не можу"),
                 _ => false
             };
         }
@@ -204,20 +204,20 @@ namespace KokonoeAssistant.Services
                 "\u043f\u0440\u043e\u043a\u0438\u043d", "\u043f\u0440\u043e\u0441\u043d\u0443\u0432", "\u043f\u043e\u0441\u043f\u0430\u0432", "\u0432\u0441\u0442\u0430\u0432", "\u044f \u0442\u0443\u0442", "\u0440\u0430\u043d\u043a\u0443",
                 "\u0432\u0435\u0440\u043d\u0443\u0432", "\u043f\u043e\u0432\u0435\u0440\u043d\u0443\u0432", "\u043f\u0440\u0438\u0439\u0448\u043e\u0432", "\u043f\u0440\u0438\u0439\u0448\u043b\u0430", "\u0432\u0436\u0435 \u0432\u0434\u043e\u043c\u0430",
                 "\u0437\u0430\u043a\u0456\u043d\u0447\u0438\u0432", "\u0437\u0430\u043a\u0456\u043d\u0447\u0438\u043b\u0438\u0441\u044c", "\u0437\u0430\u043a\u0456\u043d\u0447\u0438\u043b\u043e\u0441\u044f", "\u043f\u0440\u0438\u0457\u0445\u0430\u0432", "\u0434\u043e\u0457\u0445\u0430\u0432",
-                "РїСЂРѕРєРёРЅ", "РїСЂРѕСЃРЅСѓРІ", "РїРѕСЃРїР°РІ", "РІСЃС‚Р°РІ", "СЏ С‚СѓС‚","СЂР°РЅРєСѓ",
-                "РІРµСЂРЅСѓРІ", "РїРѕРІРµСЂРЅСѓРІ", "РїСЂРёР№С€РѕРІ", "РїСЂРёР№С€Р»Р°", "РІР¶Рµ РІРґРѕРјР°",
-                "Р·Р°РєС–РЅС‡РёРІ", "Р·Р°РєС–РЅС‡РёР»РёСЃСЊ", "Р·Р°РєС–РЅС‡РёР»РѕСЃСЏ", "РїСЂРёС—С…Р°РІ", "РґРѕС—С…Р°РІ");
+                "прокин", "проснув", "поспав", "встав", "я тут","ранку",
+                "вернув", "повернув", "прийшов", "прийшла", "вже вдома",
+                "закінчив", "закінчились", "закінчилося", "приїхав", "доїхав");
 
         private static string BuildSummary(KokoStateFreshnessResult result, ChatRepository.ChatMessage? lastUser, DateTime now)
         {
             if (!result.Changed)
-                return $"СЃС‚Р°РЅ СЃРІС–Р¶РёР№; Р°РєС‚РёРІРЅРёС… РЅР°РјС–СЂС–РІ {result.ActiveIntentCount}; РїРµСЂРµРІС–СЂРµРЅРѕ {now:dd.MM HH:mm}";
+                return $"стан свіжий; активних намірів {result.ActiveIntentCount}; перевірено {now:dd.MM HH:mm}";
 
             var parts = new List<string>();
-            if (result.ResolvedIntentCount > 0) parts.Add($"Р·Р°РєСЂРёС‚Рѕ СЃРёРіРЅР°Р»РѕРј РєРѕСЂРёСЃС‚СѓРІР°С‡Р° {result.ResolvedIntentCount}");
-            if (result.ExpiredIntentCount > 0) parts.Add($"РїСЂРѕСЃС‚СЂРѕС‡РµРЅРѕ {result.ExpiredIntentCount}");
-            if (result.RemovedIntentCount > 0) parts.Add($"РїСЂРёР±СЂР°РЅРѕ СЃС‚Р°СЂРёС… {result.RemovedIntentCount}");
-            if (lastUser != null) parts.Add($"РѕСЃС‚Р°РЅРЅСЏ СЂРµРїР»С–РєР° {Math.Max(0, (int)(now - lastUser.Timestamp).TotalMinutes)} С…РІ С‚РѕРјСѓ");
+            if (result.ResolvedIntentCount > 0) parts.Add($"закрито сигналом користувача {result.ResolvedIntentCount}");
+            if (result.ExpiredIntentCount > 0) parts.Add($"прострочено {result.ExpiredIntentCount}");
+            if (result.RemovedIntentCount > 0) parts.Add($"прибрано старих {result.RemovedIntentCount}");
+            if (lastUser != null) parts.Add($"остання репліка {Math.Max(0, (int)(now - lastUser.Timestamp).TotalMinutes)} хв тому");
             return string.Join("; ", parts);
         }
 

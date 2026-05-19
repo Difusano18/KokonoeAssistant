@@ -21,7 +21,7 @@ namespace KokonoeAssistant.Services
             var lower = userText.ToLowerInvariant();
             var wantsWake = ContainsAny(lower, "розбуд", "будиль", "wake", "Р·Р±СѓРґ", "Р±СѓРґРёР»");
             var wantsReminder = ContainsAny(lower, "нагад", "нагадай", "нагадати", "remind", "напиши", "пінгани", "пінг",
-                "РЅР°РіР°Рґ", "РЅР°РїРёС€Рё");
+                "нагад", "напиши");
             if (!wantsWake && !wantsReminder) return false;
 
             if (!TryParseFireAt(lower, now, out var fireAt, out var assumedLater))

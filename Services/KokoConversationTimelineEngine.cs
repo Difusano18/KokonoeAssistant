@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -52,8 +52,8 @@ namespace KokonoeAssistant.Services
                     When = intent.CreatedAt,
                     Role = "intent",
                     Kind = intent.ResolvedAt.HasValue ? "intent_resolved" : "intent_active",
-                    Summary = $"{intent.Kind}: {intent.Summary}; РґРѕ {intent.ExpectedUntil:dd.MM HH:mm}" +
-                              (intent.ResolvedAt.HasValue ? $"; Р·Р°РєСЂРёС‚Рѕ {intent.ResolvedAt.Value:dd.MM HH:mm}" : ""),
+                    Summary = $"{intent.Kind}: {intent.Summary}; до {intent.ExpectedUntil:dd.MM HH:mm}" +
+                              (intent.ResolvedAt.HasValue ? $"; закрито {intent.ResolvedAt.Value:dd.MM HH:mm}" : ""),
                     MinutesAgo = Math.Max(0, (now - intent.CreatedAt).TotalMinutes)
                 });
             }
@@ -86,8 +86,8 @@ namespace KokonoeAssistant.Services
                     "\u0432\u0435\u0440\u043d\u0443\u0432", "\u043f\u043e\u0432\u0435\u0440\u043d\u0443\u0432"))
                 return "користувач повернувся; закритий намір; не повторювати стару інструкцію";
 
-            if (ContainsAny(lower, "РїСЂРѕРєРёРЅ", "РїСЂРѕСЃРЅСѓРІ", "РїРѕСЃРїР°РІ", "РІСЃС‚Р°РІ", "СЏ С‚СѓС‚", "РІРµСЂРЅСѓРІ", "РїРѕРІРµСЂРЅСѓРІ"))
-                return "РєРѕСЂРёСЃС‚СѓРІР°С‡ РїРѕРІРµСЂРЅСѓРІСЃСЏ; РЅРµ РїРѕРІС‚РѕСЂСЋРІР°С‚Рё СЃС‚Р°СЂСѓ С–РЅСЃС‚СЂСѓРєС†С–СЋ";
+            if (ContainsAny(lower, "прокин", "проснув", "поспав", "встав", "я тут", "вернув", "повернув"))
+                return "користувач повернувся; не повторювати стару інструкцію";
 
             var currentHasOwnTopic = !string.IsNullOrWhiteSpace(lower) && !LooksLikeTemporalFollowup(lower);
 
@@ -98,8 +98,8 @@ namespace KokonoeAssistant.Services
             if (active != null)
             {
                 if (now > active.ExpectedUntil)
-                    return $"РїСЂРѕСЃС‚СЂРѕС‡РµРЅРёР№ РЅР°РјС–СЂ: {active.Kind}; РїРѕС‚СЂС–Р±РµРЅ РєРѕРЅРєСЂРµС‚РЅРёР№ follow-up";
-                return $"Р°РєС‚РёРІРЅРёР№ РЅР°РјС–СЂ: {active.Kind}; РЅРµ С–РіРЅРѕСЂСѓРІР°С‚Рё Р№РѕРіРѕ";
+                    return $"прострочений намір: {active.Kind}; потрібен конкретний follow-up";
+                return $"активний намір: {active.Kind}; не ігнорувати його";
             }
 
             var recentResolved = state.ShortTermIntents
@@ -107,13 +107,13 @@ namespace KokonoeAssistant.Services
                 .OrderByDescending(i => i.ResolvedAt)
                 .FirstOrDefault();
             if (recentResolved != null && !currentHasOwnTopic)
-                return $"С‰РѕР№РЅРѕ Р·Р°РєСЂРёС‚РёР№ РЅР°РјС–СЂ: {recentResolved.Kind}; РґС–СЏ РІР¶Рµ РІ РјРёРЅСѓР»РѕРјСѓ";
+                return $"щойно закритий намір: {recentResolved.Kind}; дія вже в минулому";
 
             var lastUser = events.LastOrDefault(e => e.Role == "user");
             if (lastUser != null && lastUser.MinutesAgo >= 60)
-                return $"Р±СѓР»Р° РїР°СѓР·Р° {FormatDuration(TimeSpan.FromMinutes(lastUser.MinutesAgo))}; РІСЂР°С…СѓРІР°С‚Рё С‡Р°СЃ";
+                return $"була пауза {FormatDuration(TimeSpan.FromMinutes(lastUser.MinutesAgo))}; врахувати час";
 
-            return "РїРѕС‚РѕС‡РЅРёР№ РґС–Р°Р»РѕРі Р±РµР· РєСЂРёС‚РёС‡РЅРѕРіРѕ С‡Р°СЃРѕРІРѕРіРѕ СЂРѕР·СЂРёРІСѓ";
+            return "поточний діалог без критичного часового розриву";
         }
 
         private static string BuildSummary(IReadOnlyList<KokoTimelineEvent> events, string currentState, DateTime now)
@@ -122,7 +122,7 @@ namespace KokonoeAssistant.Services
             if (lastUser == null)
                 return currentState;
 
-            return $"РћСЃС‚Р°РЅРЅСЏ СЂРµРїР»С–РєР° РєРѕСЂРёСЃС‚СѓРІР°С‡Р° {FormatDuration(now - lastUser.When)} С‚РѕРјСѓ; СЃС‚Р°РЅ: {currentState}.";
+            return $"Остання репліка користувача {FormatDuration(now - lastUser.When)} тому; стан: {currentState}.";
         }
 
         private static string BuildPromptBlock(KokoConversationTimelineFrame frame, DateTime now)
@@ -130,26 +130,26 @@ namespace KokonoeAssistant.Services
             var sb = new StringBuilder();
             sb.AppendLine("CONVERSATION TIMELINE");
             sb.AppendLine($"Р—Р°СЂР°Р·: {now:dd.MM.yyyy HH:mm}.");
-            sb.AppendLine($"РЎС‚Р°РЅ: {frame.CurrentState}");
-            sb.AppendLine($"Р’РёСЃРЅРѕРІРѕРє: {frame.SummaryUk}");
+            sb.AppendLine($"Стан: {frame.CurrentState}");
+            sb.AppendLine($"Висновок: {frame.SummaryUk}");
             if (frame.Events.Length > 0)
             {
-                sb.AppendLine("РћСЃС‚Р°РЅРЅС– РїРѕРґС–С—:");
+                sb.AppendLine("Останні події:");
                 foreach (var e in frame.Events.TakeLast(10))
-                    sb.AppendLine($"- {e.When:dd.MM HH:mm} [{e.Role}/{e.Kind}] {Trim(e.Summary, 120)} ({FormatDuration(TimeSpan.FromMinutes(e.MinutesAgo))} С‚РѕРјСѓ)");
+                    sb.AppendLine($"- {e.When:dd.MM HH:mm} [{e.Role}/{e.Kind}] {Trim(e.Summary, 120)} ({FormatDuration(TimeSpan.FromMinutes(e.MinutesAgo))} тому)");
             }
-            sb.AppendLine("РџСЂР°РІРёР»Рѕ: РІС–РґРїРѕРІС–РґСЊ РјР°С” РІС–РґРїРѕРІС–РґР°С‚Рё РЅР°Р№РЅРѕРІС–С€РѕРјСѓ СЃС‚Р°РЅСѓ timeline, РЅРµ СЃС‚Р°СЂС–Р№ СЂРµРїР»С–С†С–.");
+            sb.AppendLine("Правило: відповідь має відповідати найновішому стану timeline, не старій репліці.");
             return sb.ToString();
         }
 
         private static string ClassifyMessage(string? text)
         {
             var lower = (text ?? "").ToLowerInvariant();
-            if (ContainsAny(lower, "СЃРїР°С‚Рё", "СЃРїР°С‚СЊ", "СЃРѕРЅ", "Р»СЏРіР°СЋ")) return "sleep";
-            if (ContainsAny(lower, "РїСЂРѕРєРёРЅ", "РїСЂРѕСЃРЅСѓРІ", "РїРѕСЃРїР°РІ", "РІСЃС‚Р°РІ")) return "returned";
-            if (ContainsAny(lower, "РєСѓСЂСЃ", "Р·Р°РЅСЏС‚", "РїР°СЂР°")) return "course";
-            if (ContainsAny(lower, "РїС–РґСѓ", "Р№РґСѓ", "С–РґСѓ", "РІС–РґС–Р№РґСѓ", "Р±СѓРґСѓ Р·Р°Р№РЅСЏС‚РёР№")) return "leaving";
-            if (ContainsAny(lower, "РїСЂРѕРµРєС‚", "РєРѕРґ", "С‚РµСЃС‚", "РєРѕРјС–С‚", "github", "obsidian")) return "project";
+            if (ContainsAny(lower, "спати", "спать", "сон", "лягаю")) return "sleep";
+            if (ContainsAny(lower, "прокин", "проснув", "поспав", "встав")) return "returned";
+            if (ContainsAny(lower, "курс", "занят", "пара")) return "course";
+            if (ContainsAny(lower, "піду", "йду", "іду", "відійду", "буду зайнятий")) return "leaving";
+            if (ContainsAny(lower, "проект", "код", "тест", "коміт", "github", "obsidian")) return "project";
             return "message";
         }
 
@@ -158,8 +158,8 @@ namespace KokonoeAssistant.Services
 
         private static bool LooksLikeTemporalFollowup(string lower)
             => ContainsAny(lower,
-                "СЃРїР°РІ", "СЃРїР°С‚Рё", "СЃРїР°С‚СЊ", "СЃРѕРЅ", "РїРѕСЃРїР°РІ", "РїСЂРѕРєРёРЅ", "РїСЂРѕСЃРЅСѓРІ", "РІСЃС‚Р°РІ",
-                "РїРѕРІРµСЂРЅСѓРІ", "РІРµСЂРЅСѓРІ", "СЏ С‚СѓС‚", "РґРµ Р±СѓРІ", "СЃРєС–Р»СЊРєРё", "РєРѕР»Рё");
+                "спав", "спати", "спать", "сон", "поспав", "прокин", "проснув", "встав",
+                "повернув", "вернув", "я тут", "де був", "скільки", "коли");
 
         private static string Trim(string? text, int max)
         {
@@ -171,10 +171,10 @@ namespace KokonoeAssistant.Services
         private static string FormatDuration(TimeSpan span)
         {
             span = span.Duration();
-            if (span.TotalMinutes < 1) return "РјРµРЅС€Рµ С…РІРёР»РёРЅРё";
-            if (span.TotalHours < 1) return $"{Math.Max(1, (int)Math.Round(span.TotalMinutes))} С…РІ";
-            if (span.TotalDays < 1) return $"{(int)span.TotalHours} РіРѕРґ {span.Minutes} С…РІ";
-            return $"{(int)span.TotalDays} РґРЅ {span.Hours} РіРѕРґ";
+            if (span.TotalMinutes < 1) return "менше хвилини";
+            if (span.TotalHours < 1) return $"{Math.Max(1, (int)Math.Round(span.TotalMinutes))} хв";
+            if (span.TotalDays < 1) return $"{(int)span.TotalHours} год {span.Minutes} хв";
+            return $"{(int)span.TotalDays} дн {span.Hours} год";
         }
     }
 }
