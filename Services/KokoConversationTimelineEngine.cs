@@ -129,7 +129,7 @@ namespace KokonoeAssistant.Services
         {
             var sb = new StringBuilder();
             sb.AppendLine("CONVERSATION TIMELINE");
-            sb.AppendLine($"Р—Р°СЂР°Р·: {now:dd.MM.yyyy HH:mm}.");
+            sb.AppendLine($"Зараз: {now:dd.MM.yyyy HH:mm}.");
             sb.AppendLine($"Стан: {frame.CurrentState}");
             sb.AppendLine($"Висновок: {frame.SummaryUk}");
             if (frame.Events.Length > 0)

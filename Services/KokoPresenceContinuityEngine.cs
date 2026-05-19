@@ -213,7 +213,7 @@ namespace KokonoeAssistant.Services
         {
             var sb = new StringBuilder();
             sb.AppendLine("PRESENCE / CONTINUITY");
-            sb.AppendLine($"Р—Р°СЂР°Р·: {now:dd.MM.yyyy HH:mm}.");
+            sb.AppendLine($"Зараз: {now:dd.MM.yyyy HH:mm}.");
             sb.AppendLine($"Ситуація: {frame.SituationKind}.");
             sb.AppendLine($"Висновок: {frame.SummaryUk}");
             if (!string.IsNullOrWhiteSpace(frame.LastUserText))

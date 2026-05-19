@@ -829,7 +829,7 @@ tags: [kokonoe, live-core, diagnostics]
         private System.Windows.Threading.DispatcherTimer? _matrixTimer;
         private readonly Random _matrixRng = new();
         private readonly List<MatrixColumn> _matrixCols = new();
-        private const string MatrixChars = "г‚ўг‚¤г‚¦г‚Ёг‚Єг‚«г‚­г‚Їг‚±г‚іг‚µг‚·г‚№г‚»г‚Ѕг‚їгѓЃгѓ„гѓ†гѓ€гѓЉгѓ‹гѓЊгѓЌгѓЋ0123456789ABCDEFв€‘в€†в€‡в€«в‰€в‰ в€ћ";
+        private const string MatrixChars = "アイウエオカキクケコサシスセソタチツテトナニヌネノ0123456789ABCDEF∑∆∇∫≈≠∞";
 
         private class MatrixColumn
         {
@@ -1816,6 +1816,22 @@ tags: [kokonoe, live-core, diagnostics]
                 {
                     Dispatcher.InvokeAsync(() => UpdateAgentActivityPanel(activity), DispatcherPriority.Background);
                 };
+                ServiceContainer.AgentTasks.TaskCompleted += (task, notice) =>
+                {
+                    Dispatcher.InvokeAsync(() =>
+                    {
+                        AgentTaskStatusText.Text = notice.Notice;
+                        AppendAgentActivity(new KokoAgentActivitySnapshot
+                        {
+                            UpdatedAt = DateTime.Now,
+                            Phase = "report",
+                            Tool = "CompletionPolicy",
+                            Focus = task.Objective,
+                            Thought = notice.Notice,
+                            TaskId = task.Id
+                        });
+                    }, DispatcherPriority.Background);
+                };
             }
 
             if (!_agentRuntimeEventsHooked)
@@ -2063,7 +2079,7 @@ tags: [kokonoe, live-core, diagnostics]
                     if (_tgBot == null) { AddMessageBubble(new ChatMessageVm { Role = "system", Content = "вљ пёЏ _tgBot = null" }); return; }
                     var s2 = AppSettings.Load();
                     await _tgBot.SendMessage(s2.TelegramChatId, "🔧 TG тест від Kokonoe");
-                    AddMessageBubble(new ChatMessageVm { Role = "system", Content = "вњ… TG РїСЂР°С†СЋС”" });
+                    AddMessageBubble(new ChatMessageVm { Role = "system", Content = "✅ TG працює" });
                 }
                 catch (Exception ex) { AddMessageBubble(new ChatMessageVm { Role = "system", Content = $"вќЊ TG error: {ex.Message}" }); }
                 return;
@@ -2904,7 +2920,7 @@ LIVE RESPONSE STYLE
         {
             var targets = new List<string>();
             var cleaned = text
-                .Replace("в†’", "/", StringComparison.Ordinal)
+                .Replace("→", "/", StringComparison.Ordinal)
                 .Replace("вћњ", "/", StringComparison.Ordinal)
                 .Replace("->", "/", StringComparison.Ordinal)
                 .Replace("\\", "/", StringComparison.Ordinal)
@@ -3705,7 +3721,7 @@ tags: []
                     }
                     catch { }
 
-                    var header = $"---\ntype: chat-log\ntags: [kokonoe, chat]\ndate: {DateTime.Now:yyyy-MM-dd}\n---\n\n# Р§Р°С‚ {DateTime.Now:dd.MM.yyyy HH:mm}{prevLink}\n\n";
+                    var header = $"---\ntype: chat-log\ntags: [kokonoe, chat]\ndate: {DateTime.Now:yyyy-MM-dd}\n---\n\n# Чат {DateTime.Now:dd.MM.yyyy HH:mm}{prevLink}\n\n";
                     _obsidian.WriteNote(_sessionChatPath, header);
                 }
 
@@ -7575,7 +7591,7 @@ tags: [kokonoe, dashboard, live]
             sb.AppendLine($"*Близькість:* [{bar}] {bond}");
             sb.AppendLine();
             if (!string.IsNullOrEmpty(monologue))
-                sb.AppendLine($"*Р”СѓРјРєР°:* _{monologue}_");
+                sb.AppendLine($"*Думка:* _{monologue}_");
             if (!string.IsNullOrEmpty(selfQ))
                 sb.AppendLine($"*Питання до себе:* _{selfQ}_");
 
@@ -7802,7 +7818,7 @@ tags: [kokonoe, dashboard, live]
             var kb = new Telegram.Bot.Types.ReplyMarkups.InlineKeyboardMarkup(new[]
             {
                 new[] {
-                    IKB("вњ… РўР°Рє", confirmData),
+                    IKB("✅ Так", confirmData),
                     IKB("❌ Ні",  "pc"),
                 },
             });
@@ -7892,7 +7908,7 @@ tags: [kokonoe, dashboard, live]
             try
             {
                 await _tgBot.SendMessage(s.TelegramChatId, text);
-                _tgMessages.Add($"[You в†’ TG]: {text}");
+                _tgMessages.Add($"[You → TG]: {text}");
                 TgInput.Clear();
                 TgScroll.ScrollToBottom();
             }
@@ -8040,7 +8056,7 @@ tags: [kokonoe, dashboard, live]
                 : "вхідне повідомлення від іншої людини";
             var prompt =
                 $"Telegram ({direction})\n" +
-                $"Р§Р°С‚: {msg.ChatName}\n" +
+                $"Чат: {msg.ChatName}\n" +
                 $"Від: {msg.Sender}\n" +
                 $"Текст: {msg.Text}\n\n" +
                 "Не ігноруй короткі відповіді типу \"угу\", \"тут\", \"ок\". " +
@@ -8065,7 +8081,7 @@ tags: [kokonoe, dashboard, live]
                 {
                     await Dispatcher.InvokeAsync(() =>
                     {
-                        _tgMessages.Add($"[Kokonoe в†’ {msg.ChatName}]: {controlReply}");
+                        _tgMessages.Add($"[Kokonoe → {msg.ChatName}]: {controlReply}");
                         TgScroll.ScrollToBottom();
                         AddMessageBubble(new ChatMessageVm { Role = "user", Content = $"[TG {msg.Sender}]: {msg.Text}" });
                         AddMessageBubble(new ChatMessageVm { Role = "assistant", Content = controlReply });
@@ -8093,7 +8109,7 @@ tags: [kokonoe, dashboard, live]
                 // Показуємо відповідь в UI
                 await Dispatcher.InvokeAsync(() =>
                 {
-                    _tgMessages.Add($"[Kokonoe в†’ {msg.ChatName}]: {reply}");
+                    _tgMessages.Add($"[Kokonoe → {msg.ChatName}]: {reply}");
                     TgScroll.ScrollToBottom();
                     AddMessageBubble(new ChatMessageVm { Role = "user",      Content = $"[TG {msg.Sender}]: {msg.Text}" });
                     AddMessageBubble(new ChatMessageVm { Role = "assistant", Content = reply });

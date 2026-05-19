@@ -101,6 +101,8 @@ internal static class Program
             Run("Proactive context requires natural trigger for silence ping", ProactiveContextRequiresNaturalTriggerForSilencePing);
             Run("Obsidian preflight context loads vault before reply", ObsidianPreflightContextLoadsVaultBeforeReply);
             Run("Agent task service plans and persists", AgentTaskServicePlansAndPersists);
+            Run("Agent task service imports Obsidian backlog", AgentTaskServiceImportsObsidianBacklog);
+            Run("Agent completion policy asks next question", AgentCompletionPolicyAsksNextQuestion);
             Run("Reminder parser handles relative and vague time", ReminderParserHandlesRelativeAndVagueTime);
             Run("Reminder parser handles wake and absolute time", ReminderParserHandlesWakeAndAbsoluteTime);
 
@@ -759,7 +761,7 @@ internal static class Program
 
             AssertTrue(profile.CurrentSlotSamples >= 6, "rhythm profile should use current slot samples");
             AssertTrue(profile.CurrentSlotActivityRate <= 0.25f, "quiet slot should have low activity rate");
-            AssertTrue(profile.Recommendation.Contains("С‚РёС…РёР№") || profile.Recommendation.Contains("тихий"), "quiet slot should recommend not interrupting");
+            AssertTrue(profile.Recommendation.Contains("тихий") || profile.Recommendation.Contains("тихий"), "quiet slot should recommend not interrupting");
         }
         finally
         {
@@ -820,7 +822,7 @@ internal static class Program
             now);
 
         AssertEqual("high", frame.RiskLevel, "wake-up after sleep should be high temporal risk");
-        AssertTrue(frame.PromptBlock.Contains("Р—Р°Р±РѕСЂРѕРЅРµРЅРѕ РєР°Р·Р°С‚Рё") || frame.PromptBlock.Contains("Заборонено казати"), "self-review should explicitly block stale sleep replies");
+        AssertTrue(frame.PromptBlock.Contains("Заборонено казати") || frame.PromptBlock.Contains("Заборонено казати"), "self-review should explicitly block stale sleep replies");
         AssertTrue(frame.PromptBlock.Contains("не давай інструкцію в минуле") || frame.PromptBlock.Contains("не давай інструкцію в минуле"), "self-review should warn about past actions");
     }
 
@@ -1123,7 +1125,7 @@ internal static class Program
 
         AssertTrue(!result.Passed, "guard should reject treating an image-only prompt as empty spam");
         AssertTrue(!string.IsNullOrWhiteSpace(result.HardReplacement), "image-only prompt should get a safe replacement");
-        AssertTrue(result.HardReplacement!.Contains("Р¤РѕС‚Рѕ") || result.HardReplacement.Contains("Фото"), "replacement should acknowledge the image");
+        AssertTrue(result.HardReplacement!.Contains("Фото") || result.HardReplacement.Contains("Фото"), "replacement should acknowledge the image");
     }
 
     private static void PostReplyGuardDuplicateImagePromptAvoidsStaleRepeatText()
@@ -1149,7 +1151,7 @@ internal static class Program
         AssertTrue(!result.Passed, "duplicate image prompt fallback should be rejected");
         AssertTrue(!string.IsNullOrWhiteSpace(result.HardReplacement), "duplicate image prompt should get a replacement");
         AssertTrue(!result.HardReplacement!.Contains("Повтор прибрала"), "replacement should not repeat stale duplicate wording");
-        AssertTrue(result.HardReplacement.Contains("Р¤РѕС‚Рѕ") || result.HardReplacement.Contains("Фото"), "replacement should stay anchored to image handling");
+        AssertTrue(result.HardReplacement.Contains("Фото") || result.HardReplacement.Contains("Фото"), "replacement should stay anchored to image handling");
     }
 
     private static void PostReplyGuardBlocksTherapyMetaTone()
@@ -2318,7 +2320,7 @@ Kokonoe should stay plain. Project should be linked.
     private static void ObsidianNormalizesMalformedFrontmatter()
     {
         var normalized = ObsidianMcpService.NormalizeFrontmatter("""
-С‡---
+ч---
 type: [[finance]]-tracker
 tags: [[[kokonoe]], #[[chat]], #category/[[finance]]/expense]
 date: [[2026-05-12]]
@@ -2489,10 +2491,11 @@ Persistent Obsidian context is now a core project requirement.
         Directory.CreateDirectory(dir);
         try
         {
-            var service = new KokoAgentTaskService(dir);
+            var service = new KokoAgentTaskService(dir) { AutoStartOnAdd = false };
             var task = service.AddTask("реалізуй UI і перевір Obsidian пам'ять", priority: 8);
 
             AssertEqual(8, task.Priority, "priority should be stored");
+            AssertEqual(5, service.MaxParallel, "agent board should default to five parallel slots");
             AssertTrue(task.Steps.Any(s => s.Kind == KokoAgentStepKind.Vault), "vault step should be planned");
             AssertTrue(task.Steps.Any(s => s.Kind == KokoAgentStepKind.Implement), "implementation step should be planned");
             AssertTrue(task.Steps.Last().Kind == KokoAgentStepKind.Report, "last step should be report");
@@ -2508,6 +2511,58 @@ Persistent Obsidian context is now a core project requirement.
         {
             try { Directory.Delete(dir, recursive: true); } catch { }
         }
+    }
+
+    private static void AgentTaskServiceImportsObsidianBacklog()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "KokonoeAssistant.Tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            var obsidian = new ObsidianMcpService(dir);
+            obsidian.WriteNote("Kokonoe/Tasks.md", """
+# Tasks
+
+- [task] Перевірити якість пам'яті
+- [task] Додати follow-up після завершення задачі
+""");
+
+            var service = new KokoAgentTaskService(Path.Combine(dir, "data"), obsidian: obsidian)
+            {
+                AutoStartOnAdd = false
+            };
+            var added = service.SyncFromObsidianBacklog(max: 5);
+            var duplicateAdded = service.SyncFromObsidianBacklog(max: 5);
+            var snap = service.GetSnapshot();
+
+            AssertEqual(2, added, "open Obsidian tasks should be imported");
+            AssertEqual(0, duplicateAdded, "sync should not duplicate active objectives");
+            AssertTrue(snap.Tasks.All(t => t.Steps.Any(s => s.Kind == KokoAgentStepKind.Vault)), "imported vault tasks should plan vault inspection");
+        }
+        finally
+        {
+            try { Directory.Delete(dir, recursive: true); } catch { }
+        }
+    }
+
+    private static void AgentCompletionPolicyAsksNextQuestion()
+    {
+        var task = new KokoAgentTask
+        {
+            Id = "test",
+            Objective = "пофікси баг і перевір тести",
+            Status = KokoAgentTaskStatus.Completed,
+            Steps = new()
+            {
+                new KokoAgentStep { Kind = KokoAgentStepKind.Analyze, Status = KokoAgentTaskStatus.Completed },
+                new KokoAgentStep { Kind = KokoAgentStepKind.Implement, Status = KokoAgentTaskStatus.Completed },
+                new KokoAgentStep { Kind = KokoAgentStepKind.Verify, Status = KokoAgentTaskStatus.Completed }
+            }
+        };
+
+        var notice = KokoAgentCompletionPolicy.Build(task);
+        AssertEqual("question", notice.Mode, "implementation tasks should end with a next-question mode");
+        AssertTrue(notice.Notice.Contains("прогнати ширшу перевірку") || notice.Notice.Contains("стабільний прототип"), "notice should include concrete next question");
     }
 
     private static void Run(string name, Action test)

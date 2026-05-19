@@ -52,6 +52,8 @@ namespace KokonoeAssistant.Services
         public int Priority { get; set; } = 5;
         public DateTime CreatedAt { get; set; } = DateTime.Now;
         public DateTime UpdatedAt { get; set; } = DateTime.Now;
+        public string CompletionNotice { get; set; } = "";
+        public string NextQuestion { get; set; } = "";
         public List<KokoAgentStep> Steps { get; set; } = new();
     }
 
@@ -97,17 +99,30 @@ namespace KokonoeAssistant.Services
             Load();
         }
 
-        public int MaxParallel { get; set; } = 2;
+        public int MaxParallel { get; set; } = 5;
+        public bool AutoStartOnAdd { get; set; } = true;
         public event Action<KokoAgentActivitySnapshot>? ActivityChanged;
+        public event Action<KokoAgentTask, KokoAgentCompletionNotice>? TaskCompleted;
 
         public KokoAgentTask AddTask(string objective, int priority = 5)
         {
             if (string.IsNullOrWhiteSpace(objective))
                 throw new ArgumentException("Objective is empty.", nameof(objective));
 
+            objective = objective.Trim();
+
+            lock (_lock)
+            {
+                var existing = _tasks.FirstOrDefault(t =>
+                    t.Status is KokoAgentTaskStatus.Pending or KokoAgentTaskStatus.Running &&
+                    string.Equals(t.Objective, objective, StringComparison.OrdinalIgnoreCase));
+                if (existing != null)
+                    return Clone(existing);
+            }
+
             var task = new KokoAgentTask
             {
-                Objective = objective.Trim(),
+                Objective = objective,
                 Priority = Math.Clamp(priority, 1, 10),
                 Steps = BuildPlan(objective).ToList()
             };
@@ -119,7 +134,27 @@ namespace KokonoeAssistant.Services
             }
 
             EmitActivity("plan", "KokoAgentTaskService", task.Objective, $"Created plan with {task.Steps.Count} steps.", task.Id);
+            if (AutoStartOnAdd)
+                Start();
             return Clone(task);
+        }
+
+        public int SyncFromObsidianBacklog(int max = 5)
+        {
+            if (_obsidian == null) return 0;
+            var queue = _obsidian.BuildTaskQueue();
+            var added = 0;
+            foreach (var item in queue.OpenTasks.Take(Math.Max(0, max)))
+            {
+                var objective = $"Obsidian task from {item.Path}: {item.Text}";
+                var before = GetSnapshot().Tasks.Count;
+                AddTask(objective, priority: 6);
+                if (GetSnapshot().Tasks.Count > before)
+                    added++;
+            }
+            if (added > 0)
+                EmitActivity("plan", "ObsidianBacklog", $"Imported {added} vault tasks.", "Vault backlog synchronized into agent board.");
+            return added;
         }
 
         public KokoAgentTaskSnapshot GetSnapshot()
@@ -281,10 +316,23 @@ namespace KokonoeAssistant.Services
                     step.FinishedAt = DateTime.Now;
                     task.UpdatedAt = DateTime.Now;
                     if (task.Steps.All(s => s.Status == KokoAgentTaskStatus.Completed))
+                    {
                         task.Status = KokoAgentTaskStatus.Completed;
+                        var notice = KokoAgentCompletionPolicy.Build(task);
+                        task.CompletionNotice = notice.Notice;
+                        task.NextQuestion = notice.NextQuestion;
+                        PersistCompletionNotice(task, notice);
+                        try { TaskCompleted?.Invoke(Clone(task), notice); } catch { }
+                    }
                     SaveLocked();
                 }
-                EmitActivity("observe", ToolNameFor(step.Kind), step.Result, $"Step {step.Order} completed.", task.Id, step.Id);
+                var done = task.Status == KokoAgentTaskStatus.Completed && !string.IsNullOrWhiteSpace(task.CompletionNotice);
+                EmitActivity(done ? "report" : "observe",
+                    done ? "CompletionPolicy" : ToolNameFor(step.Kind),
+                    done ? task.CompletionNotice : step.Result,
+                    done ? task.NextQuestion : $"Step {step.Order} completed.",
+                    task.Id,
+                    step.Id);
             }
             catch (OperationCanceledException)
             {
@@ -313,6 +361,15 @@ namespace KokonoeAssistant.Services
             if (_llm == null)
                 return $"Simulated {step.Kind}: {step.Title}";
 
+            var directVaultContext = "";
+            if (step.Kind == KokoAgentStepKind.Vault && _obsidian != null)
+            {
+                directVaultContext = new ObsidianPreflightContextService(_obsidian)
+                    .Build(task.Objective, maxChars: 2400) ?? "";
+                if (!string.IsNullOrWhiteSpace(directVaultContext))
+                    EmitActivity("execute", "ObsidianPreflight", task.Objective, "Vault context loaded before the model gets to improvise.", task.Id, step.Id);
+            }
+
             var vaultHint = step.Kind == KokoAgentStepKind.Vault && _obsidian != null
                 ? "\nVault tools are allowed. Read before writing."
                 : "";
@@ -325,6 +382,9 @@ namespace KokonoeAssistant.Services
             Objective: {task.Objective}
             Step {step.Order}: {step.Title}
             Step kind: {step.Kind}
+            Direct vault context:
+            {directVaultContext}
+
             Return a concise result, risks, and next action. Do not claim external work unless actually done.
             {vaultHint}
             {toolCatalog}
@@ -335,6 +395,23 @@ namespace KokonoeAssistant.Services
                 ct,
                 agentId: AgentIdFor(step.Kind)).ConfigureAwait(false);
             return string.IsNullOrWhiteSpace(result) ? "(empty result)" : result.Trim();
+        }
+
+        private void PersistCompletionNotice(KokoAgentTask task, KokoAgentCompletionNotice notice)
+        {
+            if (_obsidian == null) return;
+            try
+            {
+                var line = $"""
+
+## {DateTime.Now:yyyy-MM-dd HH:mm} · {task.Id}
+- objective: {task.Objective}
+- status: {task.Status}
+- notice: {notice.Notice}
+""";
+                _obsidian.AppendToNote("Kokonoe/Agent/Completions.md", line);
+            }
+            catch { }
         }
 
         private void MarkStepFinished(string taskId, string stepId, KokoAgentTaskStatus status, string error)

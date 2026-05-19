@@ -169,10 +169,19 @@ namespace KokonoeAssistant
             {
                 lock (_lock)
                 {
-                    return _agentTasks ??= new KokoAgentTaskService(
-                        Path.Combine(_vault ?? AppDomain.CurrentDomain.BaseDirectory, "kokonoe-data"),
-                        LlmService,
-                        ObsidianMcp);
+                    if (_agentTasks == null)
+                    {
+                        _agentTasks = new KokoAgentTaskService(
+                            Path.Combine(_vault ?? AppDomain.CurrentDomain.BaseDirectory, "kokonoe-data"),
+                            LlmService,
+                            ObsidianMcp)
+                        {
+                            MaxParallel = 5,
+                            AutoStartOnAdd = true
+                        };
+                        _agentTasks.Start();
+                    }
+                    return _agentTasks;
                 }
             }
         }
@@ -185,7 +194,8 @@ namespace KokonoeAssistant
                 {
                     return _agentRuntime ??= new KokoAgentRuntimeService(
                         Path.Combine(_vault ?? AppDomain.CurrentDomain.BaseDirectory, "kokonoe-data"),
-                        LlmService);
+                        LlmService,
+                        ObsidianMcp);
                 }
             }
         }

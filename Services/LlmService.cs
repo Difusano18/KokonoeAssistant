@@ -529,6 +529,29 @@ namespace KokonoeAssistant.Services
                     },
                     required = new[] { "plan" }
                 }),
+            Tool("create_agent_task",
+                "Create an autonomous Kokonoe agent-board task with an executable plan. Use for multi-step work, follow-up work, bug hunts, vault cleanup, and anything that should continue without blocking the chat.",
+                new {
+                    type = "object",
+                    properties = new {
+                        objective = new { type = "string", description = "Concrete objective for the autonomous task." },
+                        priority = new { type = "integer", description = "1-10 priority. Higher runs first. Default 5." },
+                        start = new { type = "boolean", description = "true starts the runner immediately. Default true." }
+                    },
+                    required = new[] { "objective" }
+                }),
+            Tool("get_agent_board",
+                "Inspect current autonomous tasks, parallel runner status, active step, and completion notices.",
+                new { type = "object", properties = new { }, required = Array.Empty<string>() }),
+            Tool("sync_agent_backlog",
+                "Import open [task] items from Obsidian into the autonomous agent board without duplicating existing running tasks.",
+                new {
+                    type = "object",
+                    properties = new {
+                        max = new { type = "integer", description = "Maximum open Obsidian tasks to import. Default 5." }
+                    },
+                    required = Array.Empty<string>()
+                }),
             Tool("execute_python",
                 "Run short Python code in the isolated Kokonoe agent sandbox. Use for calculations or local data shaping, not for destructive filesystem work.",
                 new {
@@ -1337,7 +1360,7 @@ namespace KokonoeAssistant.Services
                         userText.Contains("нотатк", StringComparison.OrdinalIgnoreCase) ||
                         userText.Contains("vault", StringComparison.OrdinalIgnoreCase) ||
                         userText.Contains("obsidian", StringComparison.OrdinalIgnoreCase) ||
-                        userText.Contains("С‰РѕРґРµРЅРЅРёРє", StringComparison.OrdinalIgnoreCase) ||
+                        userText.Contains("щоденник", StringComparison.OrdinalIgnoreCase) ||
                         userText.Contains("запам'ят", StringComparison.OrdinalIgnoreCase) ||
                         userText.Contains("РґРѕРґР°Р№ РґРѕ", StringComparison.OrdinalIgnoreCase) ||
                         userText.Contains("список нотат", StringComparison.OrdinalIgnoreCase) ||
@@ -2204,7 +2227,7 @@ namespace KokonoeAssistant.Services
                         .ConfigureAwait(false);
                 }
 
-                if (name is "create_agent_task" or "get_agent_board")
+                if (name is "create_agent_task" or "get_agent_board" or "sync_agent_backlog")
                     return ExecuteAgentTaskTool(name, args);
 
                 if (name is "fs_read_text" or "fs_write_text" or "fs_delete")
@@ -2224,7 +2247,7 @@ namespace KokonoeAssistant.Services
                 return new KokoSandboxExecutor(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "kokonoe-data", "agent-runtime-sandbox"))
                     .ExecutePythonAsync(Req(args, "code")).GetAwaiter().GetResult();
 
-            if (name is "create_agent_task" or "get_agent_board")
+            if (name is "create_agent_task" or "get_agent_board" or "sync_agent_backlog")
                 return ExecuteAgentTaskTool(name, args);
 
             if (name is "fs_read_text" or "fs_write_text" or "fs_delete")
@@ -2264,7 +2287,7 @@ namespace KokonoeAssistant.Services
 
                     "append_to_note" => WriteAndLink(
                         () => Obsidian.AppendToNote(Req(args, "path"), Req(args, "content")),
-                        "Р”РѕРґР°РЅРѕ"),
+                        "Додано"),
 
                     "delete_note" => Delete(args),
 
@@ -2277,7 +2300,7 @@ namespace KokonoeAssistant.Services
 
                     "append_to_daily_note" => WriteAndLink(
                         () => Obsidian.AppendToDailyNote(Req(args, "content")),
-                        "Р”РѕРґР°РЅРѕ РґРѕ С‰РѕРґРµРЅРЅРёРєР°"),
+                        "Додано до щоденника"),
 
                     "rebuild_links" => RebuildLinks(),
 
@@ -2337,6 +2360,14 @@ namespace KokonoeAssistant.Services
 
             if (name == "get_agent_board")
                 return RepairMojibake(tasks.RenderBoard());
+
+            if (name == "sync_agent_backlog")
+            {
+                var max = args["max"]?.Value<int>() ?? 5;
+                var added = tasks.SyncFromObsidianBacklog(max);
+                tasks.Start();
+                return $"Agent backlog sync complete: imported {added} Obsidian task(s). Runner active at {tasks.MaxParallel} parallel slots.";
+            }
 
             var objective = RepairMojibake(Req(args, "objective")).Trim();
             var priority = args["priority"]?.Value<int>() ?? 5;
@@ -2443,7 +2474,7 @@ namespace KokonoeAssistant.Services
             "get_daily_note", "rebuild_links", "vault_status", "cleanup_empty_notes", "cleanup_memory_duplicates",
             "init_brain_vault", "maintain_vault_architecture", "get_outgoing_links", "get_backlinks",
             "get_vault_tree", "move_note", "create_folder", "save_architecture_plan",
-            "create_agent_task", "get_agent_board"
+            "create_agent_task", "get_agent_board", "sync_agent_backlog"
         };
 
         private static JArray? TryParseTextToolCalls(string content)
@@ -3180,10 +3211,10 @@ namespace KokonoeAssistant.Services
             }
         }
 
-        // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
+        // ===================================================================
         // TELEGRAM ISOLATED MODE
-        // Обмежений режим без доступу до емоцій, пам'яті, особистих даних
-        // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
+        // ????????? ????? ??? ??????? ?? ??????, ???'??, ????????? ?????
+        // ===================================================================
 
         private const string TG_SYSTEM_PROMPT = @"Ти — Коконое Меркурі з BlazBlue, але це ТЕЛЕГРАМ-РЕЖИМ: публічна, стримана версія.
 

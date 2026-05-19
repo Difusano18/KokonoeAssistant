@@ -19,7 +19,7 @@ namespace KokonoeAssistant.Services
             if (string.IsNullOrWhiteSpace(userText)) return false;
 
             var lower = userText.ToLowerInvariant();
-            var wantsWake = ContainsAny(lower, "розбуд", "будиль", "wake", "Р·Р±СѓРґ", "Р±СѓРґРёР»");
+            var wantsWake = ContainsAny(lower, "розбуд", "будиль", "wake", "збуд", "будил");
             var wantsReminder = ContainsAny(lower, "нагад", "нагадай", "нагадати", "remind", "напиши", "пінгани", "пінг",
                 "нагад", "напиши");
             if (!wantsWake && !wantsReminder) return false;

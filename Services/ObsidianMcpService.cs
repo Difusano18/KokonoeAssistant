@@ -812,7 +812,7 @@ tags: [kokonoe, vault, architecture]
             sb.AppendLine();
             sb.AppendLine("## Ядро");
             sb.AppendLine("- [[Kokonoe/Architecture/Manifest|Маніфест]]");
-            sb.AppendLine("- [[Kokonoe/Architecture/Map|РљР°СЂС‚Р°]]");
+            sb.AppendLine("- [[Kokonoe/Architecture/Map|Карта]]");
             sb.AppendLine("- [[Kokonoe/Architecture/Health|Стан]]");
             sb.AppendLine("- [[Kokonoe/Architecture/Backlog|Беклог]]");
             sb.AppendLine("- [[Kokonoe/Automation/Obsidian Sync|Синхронізація Obsidian]]");
@@ -871,7 +871,7 @@ tags: [kokonoe, vault, architecture]
         {
             var sb = new StringBuilder();
             sb.Append(BuildManagedFrontmatter("vault-map"));
-            sb.AppendLine("# РљР°СЂС‚Р° vault");
+            sb.AppendLine("# Карта vault");
             sb.AppendLine();
             sb.AppendLine("## Вузли посилань");
             foreach (var node in graph.OrderByDescending(x => x.Value.Count).Take(40))
@@ -1145,7 +1145,7 @@ tags: [kokonoe, vault, architecture]
 
             foreach (var group in groups.Take(20))
             {
-                sb.AppendLine("- РіСЂСѓРїР°:");
+                sb.AppendLine("- група:");
                 foreach (var item in group.Take(6))
                     sb.AppendLine($"  - {item.Path}: {item.Text}");
             }

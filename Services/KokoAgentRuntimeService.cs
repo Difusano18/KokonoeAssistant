@@ -33,13 +33,15 @@ namespace KokonoeAssistant.Services
     {
         private readonly object _lock = new();
         private readonly LlmService _llm;
+        private readonly ObsidianMcpService? _obsidian;
         private readonly KokoSandboxExecutor _sandbox;
         private readonly List<KokoAgentActivitySnapshot> _activityLog = new();
         private KokoAgentActivitySnapshot _activity = new();
 
-        public KokoAgentRuntimeService(string dataDir, LlmService llm)
+        public KokoAgentRuntimeService(string dataDir, LlmService llm, ObsidianMcpService? obsidian = null)
         {
             _llm = llm;
+            _obsidian = obsidian;
             _sandbox = new KokoSandboxExecutor(System.IO.Path.Combine(dataDir, "agent-runtime-sandbox"));
         }
 
@@ -74,6 +76,13 @@ namespace KokonoeAssistant.Services
             if (plan.Any(s => s.Kind == KokoAgentStepKind.Vault))
             {
                 await MarkStepAsync(plan, KokoAgentStepKind.Vault, KokoAgentTaskStatus.Running, "Reading supplied memory/context frame.", request.OnStatus, ct);
+                var directVaultContext = BuildDirectVaultContext(request.UserText);
+                if (!string.IsNullOrWhiteSpace(directVaultContext))
+                {
+                    request.Context = string.IsNullOrWhiteSpace(request.Context)
+                        ? directVaultContext
+                        : request.Context + "\n\n" + directVaultContext;
+                }
                 await EmitAsync("execute", "ObsidianContext", Trim(request.Context, 420), "Reading memory context. Guesswork is for amateurs.", request.OnStatus, ct);
                 await MarkStepAsync(plan, KokoAgentStepKind.Vault, KokoAgentTaskStatus.Completed, string.IsNullOrWhiteSpace(request.Context) ? "No external context available." : "Context attached.", request.OnStatus, ct);
             }
@@ -133,6 +142,7 @@ namespace KokonoeAssistant.Services
             await MarkStepAsync(plan, KokoAgentStepKind.Verify, KokoAgentTaskStatus.Completed, "Ready for guard/rewrite layer.", request.OnStatus, ct);
 
             await MarkStepAsync(plan, KokoAgentStepKind.Report, KokoAgentTaskStatus.Completed, "Delivered to chat UI.", request.OnStatus, ct);
+            result.Reply = ApplyCompletionPolicy(result.Reply, request.UserText, plan);
             result.Plan = plan.Select(CloneStep).ToList();
             result.ActivityLog = ActivityLog.ToList();
             return result;
@@ -251,6 +261,39 @@ namespace KokonoeAssistant.Services
             - Якщо на фото гра/скрін, назви що видно і коротко відреагуй як Kokonoe, а не як сухий OCR.
             - Якщо не можеш прочитати зображення, скажи це прямо без згадок Settings/model/HTTP.
             """;
+        }
+
+        private string BuildDirectVaultContext(string userText)
+        {
+            if (_obsidian == null) return "";
+            try
+            {
+                return new ObsidianPreflightContextService(_obsidian).Build(userText, maxChars: 2600) ?? "";
+            }
+            catch
+            {
+                return "";
+            }
+        }
+
+        private static string ApplyCompletionPolicy(string reply, string objective, List<KokoAgentStep> plan)
+        {
+            reply = (reply ?? "").Trim();
+            if (string.IsNullOrWhiteSpace(reply))
+                return reply;
+
+            if (reply.EndsWith("?") || reply.Contains("Чекаю", StringComparison.OrdinalIgnoreCase))
+                return reply;
+
+            var task = new KokoAgentTask
+            {
+                Id = "chat",
+                Objective = objective,
+                Status = KokoAgentTaskStatus.Completed,
+                Steps = plan.Select(CloneStep).ToList()
+            };
+            var notice = KokoAgentCompletionPolicy.Build(task);
+            return reply + "\n\n" + notice.NextQuestion;
         }
 
         private static KokoAgentStep Step(int order, string title, KokoAgentStepKind kind) => new()
