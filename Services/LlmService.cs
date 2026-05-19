@@ -164,6 +164,9 @@ namespace KokonoeAssistant.Services
         }
 
         private void MarkOllamaKeyRateLimited(string? agentId, string keyUsed)
+            => MarkOllamaKeyUnavailable(agentId, keyUsed, 429);
+
+        private void MarkOllamaKeyUnavailable(string? agentId, string keyUsed, int statusCode)
         {
             if (string.IsNullOrWhiteSpace(keyUsed)) return;
             var profile = ResolveAgentProfile(agentId);
@@ -177,7 +180,15 @@ namespace KokonoeAssistant.Services
                 PersistAgentProfiles();
                 return;
             }
-            OllamaPool?.MarkRateLimited(keyUsed);
+            OllamaPool?.MarkUnavailable(keyUsed, statusCode);
+        }
+
+        private bool TryRotateOllamaKeyAfterFailure(string? agentId, string? keyUsed, int statusCode)
+        {
+            if (string.IsNullOrWhiteSpace(keyUsed)) return false;
+            if (statusCode is not (401 or 403 or 429)) return false;
+            MarkOllamaKeyUnavailable(agentId, keyUsed, statusCode);
+            return true;
         }
 
         private void AdvanceAgentKeyIfNeeded(KokoAgentLlmProfile profile)
@@ -999,9 +1010,8 @@ namespace KokonoeAssistant.Services
                                 RecordOllamaKeyRequest(agentId, usedOllamaKey);
                             break;
                         }
-                        if (sysIsOllamaCloud && (int)resp.StatusCode == 429 && !string.IsNullOrEmpty(usedOllamaKey))
+                        if (sysIsOllamaCloud && TryRotateOllamaKeyAfterFailure(agentId, usedOllamaKey, (int)resp.StatusCode))
                         {
-                            MarkOllamaKeyRateLimited(agentId, usedOllamaKey);
                             resp.Dispose();
                             resp = null;
                             continue;
@@ -1179,10 +1189,8 @@ namespace KokonoeAssistant.Services
                             break;
                         }
 
-                        if (visionIsOllamaCloud && (int)resp.StatusCode == 429
-                            && !string.IsNullOrEmpty(ollamaKey))
+                        if (visionIsOllamaCloud && TryRotateOllamaKeyAfterFailure(agentId, ollamaKey, (int)resp.StatusCode))
                         {
-                            MarkOllamaKeyRateLimited(agentId, ollamaKey);
                             resp.Dispose();
                             resp = null;
                             continue;
@@ -1456,10 +1464,8 @@ namespace KokonoeAssistant.Services
                         }
 
                         // 429 Ollama Cloud — позначити ключ як rate-limited, спробувати наступний
-                        if (isOllamaCloud && (int)resp.StatusCode == 429
-                            && !string.IsNullOrEmpty(usedOllamaKey))
+                        if (isOllamaCloud && TryRotateOllamaKeyAfterFailure(agentId, usedOllamaKey, (int)resp.StatusCode))
                         {
-                            MarkOllamaKeyRateLimited(agentId, usedOllamaKey);
                             resp.Dispose();
                             resp = null;
                             continue;
@@ -1880,9 +1886,8 @@ namespace KokonoeAssistant.Services
                             return content;
                     }
 
-                    if ((int)resp.StatusCode == 429 && !string.IsNullOrWhiteSpace(key))
+                    if (TryRotateOllamaKeyAfterFailure(agentId, key, (int)resp.StatusCode))
                     {
-                        MarkOllamaKeyRateLimited(agentId, key);
                         continue;
                     }
 
@@ -3001,10 +3006,8 @@ namespace KokonoeAssistant.Services
                     resp = await _http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, ct);
                     if (resp.IsSuccessStatusCode) break;
 
-                    if (streamIsOllamaCloud && (int)resp.StatusCode == 429
-                        && !string.IsNullOrEmpty(usedOllamaKey))
+                    if (streamIsOllamaCloud && TryRotateOllamaKeyAfterFailure(agentId, usedOllamaKey, (int)resp.StatusCode))
                     {
-                        MarkOllamaKeyRateLimited(agentId, usedOllamaKey);
                         resp.Dispose();
                         resp = null;
                         continue;
@@ -3316,9 +3319,8 @@ namespace KokonoeAssistant.Services
                         break;
                     }
 
-                    if (isOllamaCloud && (int)res.StatusCode == 429 && !string.IsNullOrWhiteSpace(usedOllamaKey))
+                    if (isOllamaCloud && TryRotateOllamaKeyAfterFailure(agentId, usedOllamaKey, (int)res.StatusCode))
                     {
-                        MarkOllamaKeyRateLimited(agentId, usedOllamaKey);
                         res.Dispose();
                         res = null;
                         continue;

@@ -130,7 +130,9 @@ namespace KokonoeAssistant.Services
             }
         }
 
-        public void MarkRateLimited(string keyUsed)
+        public void MarkRateLimited(string keyUsed) => MarkUnavailable(keyUsed, 429);
+
+        public void MarkUnavailable(string keyUsed, int statusCode)
         {
             if (string.IsNullOrEmpty(keyUsed)) return;
             lock (_lock)
@@ -138,7 +140,7 @@ namespace KokonoeAssistant.Services
                 var entry = _keys.FirstOrDefault(k => k.Key == keyUsed);
                 if (entry == null) return;
                 entry.CooldownUntil = DateTime.UtcNow.AddMinutes(_cooldownMinutes);
-                Debug.WriteLine($"[Pool] key '{entry.Name}' got 429 → cooldown until {entry.CooldownUntil:HH:mm:ss} UTC");
+                Debug.WriteLine($"[Pool] key '{entry.Name}' got HTTP {statusCode} → cooldown until {entry.CooldownUntil:HH:mm:ss} UTC");
 
                 // Перейти на наступний негайно
                 int idx = _keys.IndexOf(entry);

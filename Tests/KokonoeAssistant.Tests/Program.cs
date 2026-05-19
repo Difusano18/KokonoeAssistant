@@ -86,6 +86,7 @@ internal static class Program
             Run("Startup greeting sanitizes therapy meta", StartupGreetingSanitizesTherapyMeta);
             Run("Scenario simulation guards temporal continuity", ScenarioSimulationGuardsTemporalContinuity);
             Run("LLM diagnostics snapshot starts idle", LlmDiagnosticsSnapshotStartsIdle);
+            Run("LLM rotates Ollama key after auth failure", LlmRotatesOllamaKeyAfterAuthFailure);
             Run("Inspector renders state report", InspectorRendersStateReport);
             Run("Obsidian vault architecture maintenance", ObsidianVaultArchitectureMaintenance);
             Run("Obsidian unique memory append", ObsidianUniqueMemoryAppend);
@@ -1982,6 +1983,23 @@ internal static class Program
         AssertEqual("idle", diag.Status, "diagnostics should start idle before any request");
         AssertEqual(0L, diag.TotalRequests, "diagnostics should not invent requests");
         AssertTrue(diag.ConsecutiveFailures == 0, "diagnostics should not start in failure state");
+    }
+
+    private static void LlmRotatesOllamaKeyAfterAuthFailure()
+    {
+        var method = typeof(LlmService).GetMethod(
+            "TryRotateOllamaKeyAfterFailure",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+
+        AssertTrue(method != null, "rotation helper should exist");
+        var service = new LlmService();
+
+        bool Call(int status) => (bool)method!.Invoke(service, new object?[] { null, "bad-key", status })!;
+
+        AssertTrue(Call(401), "HTTP 401 should rotate away from the key");
+        AssertTrue(Call(403), "HTTP 403 should rotate away from the key");
+        AssertTrue(Call(429), "HTTP 429 should rotate away from the key");
+        AssertTrue(!Call(500), "HTTP 500 should not burn a key");
     }
 
     private static void InspectorRendersStateReport()
