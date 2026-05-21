@@ -150,6 +150,7 @@ RESPONSE PLAN REPAIR:
         private static string ClassifyIntent(string lower)
         {
             if (ContainsAny(lower, "не хочу жити", "суїцид", "самоушкод", "померти")) return "crisis";
+            if (KokoScreenIntent.IsManualScreenScan(lower)) return "screen";
             if (ContainsAny(lower, "зроби", "виконай", "реаліз", "пофікси", "виправ", "додай", "створи", "запусти")) return "execute";
             if (ContainsAny(lower, "код", "build", "тест", "баг", "помилка", "stacktrace", "exception")) return "engineering";
             if (ContainsAny(lower, "\u043e\u0431\u0441\u0438\u0434\u0456\u0430\u043d", "\u043e\u0431\u0441\u0438\u0434\u0438\u0430\u043d", "\u0449\u043e \u0437\u043d\u0430\u0454\u0448 \u043f\u0440\u043e \u043c\u0435\u043d\u0435", "\u0449\u043e \u0437\u043d\u0430\u0435\u0448 \u043f\u0440\u043e \u043c\u0435\u043d\u0435", "\u0440\u043e\u0437\u043a\u0430\u0436\u0438 \u0432\u0441\u0435 \u0449\u043e \u0437\u043d\u0430\u0454\u0448", "\u0440\u043e\u0437\u043a\u0430\u0437\u0443\u0439 \u0432\u0441\u0435 \u0449\u043e \u0437\u043d\u0430\u0454\u0448", "\u043f\u0440\u043e\u0441\u043a\u0430\u043d\u0443\u0439 \u043e\u0431\u0441\u0438\u0434\u0456\u0430\u043d")) return "memory";
@@ -171,6 +172,7 @@ RESPONSE PLAN REPAIR:
 
         private static string ClassifyCapability(string lower)
         {
+            if (KokoScreenIntent.IsManualScreenScan(lower)) return "screen_awareness";
             if (ContainsAny(lower, "код", "build", "тест", "exception", "stacktrace")) return "codebase";
             if (ContainsAny(lower, "\u043e\u0431\u0441\u0438\u0434\u0456\u0430\u043d", "\u043e\u0431\u0441\u0438\u0434\u0438\u0430\u043d", "\u0449\u043e \u0437\u043d\u0430\u0454\u0448 \u043f\u0440\u043e \u043c\u0435\u043d\u0435", "\u0440\u043e\u0437\u043a\u0430\u0436\u0438 \u0432\u0441\u0435 \u0449\u043e \u0437\u043d\u0430\u0454\u0448", "\u0440\u043e\u0437\u043a\u0430\u0437\u0443\u0439 \u0432\u0441\u0435 \u0449\u043e \u0437\u043d\u0430\u0454\u0448")) return "vault_memory";
             if (ContainsAny(lower, "vault", "obsidian", "нотат", "пам'ят")) return "vault_memory";
@@ -224,6 +226,7 @@ RESPONSE PLAN REPAIR:
             => frame.Intent switch
             {
                 "execute" => "користувач хоче результат, не розмовний пінг-понг",
+                "screen" => "користувач просить локальний знімок екрана і vision-аналіз",
                 "engineering" => "потрібен технічний аналіз і перевірка",
                 "memory" => "відповідь залежить від пам'яті або Vault",
                 "evaluate" => "потрібне судження, а не автоматична згода",
@@ -235,6 +238,7 @@ RESPONSE PLAN REPAIR:
         private static List<string> BuildSteps(KokoResponsePlanFrame frame)
         {
             var steps = new List<string>();
+            if (frame.Capability == "screen_awareness") steps.Add("capture current screen through the local screenshot route, then run vision before answering");
             if (frame.RequiresVaultRead) steps.Add("read relevant memory/vault context before making claims");
             if (frame.RequiresToolUse) steps.Add("use available tools when they materially reduce guessing");
             if (frame.RequiresCritique) steps.Add("identify flaw/tradeoff before proposing improved version");
@@ -255,6 +259,7 @@ RESPONSE PLAN REPAIR:
                 "if context is partial, state the assumption and proceed with the safest useful option"
             };
             if (frame.Risk == "high") constraints.Add("ask confirmation before destructive or broad changes");
+            if (frame.Capability == "screen_awareness") constraints.Add("do not deny local screen capability or ask for an upload when screenshot route is available");
             if (frame.MemoryPolicy == "store_stable_fact") constraints.Add("store only stable facts; temporary state goes to Daily/Logs");
             if (state.PersonalityInCrisis) constraints.Add("crisis mode suppresses sarcasm");
             return constraints;
@@ -288,7 +293,7 @@ RESPONSE PLAN REPAIR:
         }
 
         private static bool IsActionIntent(string intent)
-            => intent is "execute" or "engineering" or "memory" or "architecture" or "design";
+            => intent is "execute" or "engineering" or "memory" or "architecture" or "design" or "screen";
 
         private static bool LooksUnsafeOrContradictory(string lower)
             => ContainsAny(lower, "завжди погодж", "без перевір", "все видали", "не думай", "ігноруй");

@@ -38,6 +38,8 @@ namespace KokonoeAssistant.Services
                 violations.Add("технічну vision-помилку показано користувачу замість нормальної відповіді");
             if (LooksLikeEmptyImageMisread(userLower, replyLower))
                 violations.Add("image-only повідомлення помилково прочитано як порожній спам");
+            if (KokoScreenIntent.IsManualScreenScan(userText) && KokoScreenIntent.LooksLikeScreenCapabilityDenial(reply))
+                violations.Add("screen request was answered with capability denial instead of local screenshot route");
 
             if (violations.Count == 0 && LooksLikeTransportError(reply))
                 return Pass("transport error surfaced; do not hide provider failure");
@@ -236,6 +238,7 @@ Timeline:
 - не цитуй дослівно репліку користувача; називай тему своїми словами або відповідай дією;
 - якщо була стара дія, не наказуй її повторити.
 - якщо користувач питає про пам'ять/профіль/що ти знаєш про нього — синтезуй відомі факти природно, без готового шаблону і без згадки назв файлів, якщо він не питає джерело;
+- якщо користувач просить просканувати/подивитись екран — не кажи, що нема доступу; локальний screenshot route має виконати дію або чесно повідомити про збій capture/vision;
 - не використовуй декоративні ремарки в *зірочках*, якщо користувач сам не почав roleplay;
 - не вигадуй лабораторні/екранні/тілесні образи замість відповіді на конкретний контекст;
 - не вигадуй зовнішні факти про користувача: акаунти, YouTube/Twitch/Discord, мемберства, підписки, покупки, роботу, людей або місця, якщо цього нема в timeline чи репліці користувача;

@@ -2440,49 +2440,17 @@ tags: [kokonoe, live-core, diagnostics]
         }
 
         private static bool LooksLikeManualScreenScan(string? text)
-        {
-            var lower = (text ?? "").ToLowerInvariant();
-            if (string.IsNullOrWhiteSpace(lower)) return false;
-
-            var wantsScan = ContainsAny(lower,
-                "проскануй", "просканируй", "скануй", "сканируй",
-                "подивись", "глянь", "провір", "перевір", "проаналізуй", "що на");
-            var targetScreen = ContainsAny(lower,
-                "екран", "скрін", "скрин", "screen", "монітор", "робочий стіл");
-
-            return wantsScan && targetScreen;
-        }
+            => KokoScreenIntent.IsManualScreenScan(text);
 
         private bool LooksLikeRetryLastScreenScan(string? text)
-        {
-            var lower = (text ?? "").Trim().ToLowerInvariant();
-            if (string.IsNullOrWhiteSpace(lower)) return false;
-            if (string.IsNullOrWhiteSpace(_lastManualScreenScanRequest)) return false;
-            if (DateTime.Now - _lastManualScreenScanAt > TimeSpan.FromMinutes(20)) return false;
-
-            var wantsRetry = ContainsAny(lower,
-                "ще раз", "спробуй ще", "спробуй знов", "повтори", "перепробуй",
-                "retry", "try again", "again");
-            if (!wantsRetry) return false;
-
-            var referencesPrevious = lower.Length <= 48 || ContainsAny(lower,
-                "екран", "скрін", "скрин", "screen", "це", "так", "знімок", "аналіз");
-            return referencesPrevious;
-        }
+            => KokoScreenIntent.IsRetryLastScreenScan(text, _lastManualScreenScanRequest, _lastManualScreenScanAt, DateTime.Now);
 
         private async Task HandleManualScreenScanAsync(string userText, CancellationToken ct, bool isRetry = false)
         {
-            if (!isRetry)
-            {
-                _lastManualScreenScanRequest = userText;
-                _lastManualScreenScanFailures = 0;
-            }
-            _lastManualScreenScanAt = DateTime.Now;
-
-            byte[] screenshot;
+            string reply;
             try
             {
-                screenshot = await Task.Run(() => ServiceContainer.PcControl.TakeScreenshot(), ct);
+                reply = await BuildScreenScanReplyAsync(userText, ct, isRetry);
             }
             catch (Exception ex)
             {
@@ -2496,19 +2464,29 @@ tags: [kokonoe, live-core, diagnostics]
                 return;
             }
 
-            var prompt = $"""
-Ти Kokonoe. Користувач прямо попросив просканувати його поточний екран.
-Запит користувача: {userText}
+            RemoveThinkingBubble();
+            var replyVm = new ChatMessageVm { Role = "assistant", Content = "" };
+            var replyTb = AddMessageBubble(replyVm);
+            if (replyTb != null)
+                await TypeIntoAsync(replyTb, reply, ct);
+            else
+                replyVm.Content = reply;
 
-Завдання:
-- Подивись на скріншот і скажи, що реально видно.
-- Якщо видно чат/програму/помилку/код/порожній стан, назви це прямо.
-- Не вигадуй прихованих мотивів користувача.
-- Не кажи "екран просканований" як службовий штамп; дай корисне спостереження.
-- Не переписуй приватні токени, ключі, email, телефони або довгі приватні рядки.
-- Українською, 2-5 речень, стиль Kokonoe: сухо, розумно, без канцеляриту.
-""";
+            StoreAssistantReply(reply);
+            _ = Task.Run(() => ServiceContainer.ChatLogger.LogExchange("app", userText, reply));
+        }
 
+        private async Task<string> BuildScreenScanReplyAsync(string userText, CancellationToken ct, bool isRetry = false)
+        {
+            if (!isRetry)
+            {
+                _lastManualScreenScanRequest = userText;
+                _lastManualScreenScanFailures = 0;
+            }
+            _lastManualScreenScanAt = DateTime.Now;
+
+            var screenshot = await Task.Run(() => ServiceContainer.PcControl.TakeScreenshot(), ct);
+            var prompt = BuildScreenScanPrompt(userText);
             var reply = await _llm.SendSystemVisionQueryAsync(prompt, screenshot, "image/jpeg", ct);
             if (string.IsNullOrWhiteSpace(reply))
                 reply = await _llm.SendSystemVisionQueryAsync(prompt, screenshot, "image/jpeg", ct);
@@ -2524,16 +2502,26 @@ tags: [kokonoe, live-core, diagnostics]
                 _lastManualScreenScanFailures = 0;
             }
 
-            reply = await GuardAndRepairReplyAsync(userText, reply, "", ct);
+            return await GuardAndRepairReplyAsync(userText, reply, "", ct);
+        }
 
-            RemoveThinkingBubble();
-            var replyVm = new ChatMessageVm { Role = "assistant", Content = "" };
-            var replyTb = AddMessageBubble(replyVm);
-            if (replyTb != null)
-                await TypeIntoAsync(replyTb, reply, ct);
-            else
-                replyVm.Content = reply;
+        private static string BuildScreenScanPrompt(string userText) => $"""
+Ти Kokonoe. Користувач прямо попросив просканувати його поточний екран.
+Запит користувача: {userText}
 
+Завдання:
+- Подивись на скріншот і скажи, що реально видно.
+- Якщо видно чат/програму/помилку/код/порожній стан, назви це прямо.
+- Якщо видно цей же чат KokonoeAssistant, поясни конкретний стан інтерфейсу, а не відмовляйся від аналізу.
+- Не вигадуй прихованих мотивів користувача.
+- Не кажи, що ти не маєш доступу до екрана: у цьому запиті скріншот уже зроблено локальним інструментом.
+- Не кажи "екран просканований" як службовий штамп; дай корисне спостереження.
+- Не переписуй приватні токени, ключі, email, телефони або довгі приватні рядки.
+- Українською, 2-5 речень, стиль Kokonoe: сухо, розумно, без канцеляриту.
+""";
+
+        private static void StoreAssistantReply(string reply)
+        {
             try
             {
                 ServiceContainer.ChatRepository.InsertMessage(new ChatRepository.ChatMessage
@@ -2542,8 +2530,6 @@ tags: [kokonoe, live-core, diagnostics]
                 });
             }
             catch { }
-
-            _ = Task.Run(() => ServiceContainer.ChatLogger.LogExchange("app", userText, reply));
         }
 
         private string BuildContext(string? userText = null)
@@ -7232,6 +7218,9 @@ tags: [kokonoe, dashboard, live]
                 }
 
                 // в”Ђв”Ђ Regular chat в†’ LLM в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+                if (await TryHandleTelegramScreenScanAsync(bot, chatId, from, text, ct))
+                    return;
+
                 if (TryHandleDirectControlCommand(text, out var controlReply))
                 {
                     await Dispatcher.InvokeAsync(() =>
@@ -7959,6 +7948,9 @@ tags: [kokonoe, dashboard, live]
                 }
                 catch { }
 
+                if (await TryHandleTelegramUserScreenScanAsync(msg, svc, _tgUserCts.Token))
+                    return;
+
                 if (TryHandleDirectControlCommand(msg.Text, out var controlReply))
                 {
                     await Dispatcher.InvokeAsync(() =>
@@ -8016,6 +8008,85 @@ tags: [kokonoe, dashboard, live]
             {
                 System.Diagnostics.Debug.WriteLine($"[TgUser] Reply failed: {ex.Message}");
             }
+        }
+
+        private async Task<bool> TryHandleTelegramScreenScanAsync(
+            ITelegramBotClient bot,
+            long chatId,
+            string from,
+            string text,
+            CancellationToken ct)
+        {
+            var isRetry = KokoScreenIntent.IsRetryLastScreenScan(text, _lastManualScreenScanRequest, _lastManualScreenScanAt, DateTime.Now);
+            if (!isRetry && !KokoScreenIntent.IsManualScreenScan(text))
+                return false;
+
+            var effectiveText = isRetry && !string.IsNullOrWhiteSpace(_lastManualScreenScanRequest)
+                ? _lastManualScreenScanRequest
+                : text;
+            string reply;
+            try
+            {
+                await bot.SendMessage(chatId, "Знімаю екран і проганяю через vision. Так, локально, не шаманством.", cancellationToken: ct);
+                reply = await BuildScreenScanReplyAsync(effectiveText, ct, isRetry);
+            }
+            catch (Exception ex)
+            {
+                reply = $"Не змогла зняти екран: {ex.Message}. Команда правильна; цього разу впав локальний capture.";
+            }
+
+            await Dispatcher.InvokeAsync(() =>
+            {
+                _tgMessages.Add($"[Kokonoe]: {reply}");
+                TgScroll.ScrollToBottom();
+                AddMessageBubble(new ChatMessageVm { Role = "user", Content = $"[TG: {from}] {text}" });
+                AddMessageBubble(new ChatMessageVm { Role = "assistant", Content = reply });
+            });
+
+            try { await bot.SendMessage(chatId, reply, cancellationToken: ct); } catch { }
+            StoreAssistantReply(reply);
+            _ = Task.Run(() => ServiceContainer.ChatLogger.LogExchange("tg", text, reply));
+            return true;
+        }
+
+        private async Task<bool> TryHandleTelegramUserScreenScanAsync(
+            Services.TgIncomingMessage msg,
+            Services.TelegramUserService svc,
+            CancellationToken ct)
+        {
+            if (!msg.IsOutgoing)
+                return false;
+
+            var isRetry = KokoScreenIntent.IsRetryLastScreenScan(msg.Text, _lastManualScreenScanRequest, _lastManualScreenScanAt, DateTime.Now);
+            if (!isRetry && !KokoScreenIntent.IsManualScreenScan(msg.Text))
+                return false;
+
+            var effectiveText = isRetry && !string.IsNullOrWhiteSpace(_lastManualScreenScanRequest)
+                ? _lastManualScreenScanRequest
+                : msg.Text;
+            string reply;
+            try
+            {
+                await svc.SendAsync(msg.ChatId, "Знімаю екран і проганяю через vision. Не фантазую, беру локальний знімок.", ct);
+                reply = await BuildScreenScanReplyAsync(effectiveText, ct, isRetry);
+            }
+            catch (Exception ex)
+            {
+                reply = $"Не змогла зняти екран: {ex.Message}. Команда правильна; цього разу впав локальний capture.";
+            }
+
+            await Dispatcher.InvokeAsync(() =>
+            {
+                _tgMessages.Add($"[Kokonoe → {msg.ChatName}]: {reply}");
+                TgScroll.ScrollToBottom();
+                AddMessageBubble(new ChatMessageVm { Role = "user", Content = $"[TG {msg.Sender}]: {msg.Text}" });
+                AddMessageBubble(new ChatMessageVm { Role = "assistant", Content = reply });
+            });
+
+            StoreAssistantReply(reply);
+            await svc.SendAsync(msg.ChatId, reply, ct);
+            _ = Task.Run(() => ServiceContainer.ChatLogger.LogExchange("tg-user", msg.Text, reply));
+            return true;
         }
 
         // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ

@@ -43,7 +43,9 @@ internal static class Program
             Run("Post reply guard blocks hibernation framing after slept", PostReplyGuardBlocksHibernationFramingAfterSlept);
             Run("Post reply guard rejects staged decoration", PostReplyGuardRejectsStagedDecoration);
             Run("Post reply guard blocks duplicate replies", PostReplyGuardBlocksDuplicateReplies);
+            Run("Screen intent detects natural screen scan requests", ScreenIntentDetectsNaturalScreenScanRequests);
             Run("Post reply guard allows repeated screen scan command", PostReplyGuardAllowsRepeatedScreenScanCommand);
+            Run("Post reply guard rejects screen capability denial", PostReplyGuardRejectsScreenCapabilityDenial);
             Run("Post reply guard protects short affection", PostReplyGuardProtectsShortAffection);
             Run("Post reply guard protects short greeting", PostReplyGuardProtectsShortGreeting);
             Run("Post reply guard blocks repeated fallback loop", PostReplyGuardBlocksRepeatedFallbackLoop);
@@ -58,6 +60,7 @@ internal static class Program
             Run("Response planner classifies critical assistant architecture", ResponsePlannerClassifiesCriticalAssistantArchitecture);
             Run("Response planner requires vault read for memory questions", ResponsePlannerRequiresVaultReadForMemoryQuestions);
             Run("Response planner routes Obsidian scan profile questions", ResponsePlannerRoutesObsidianScanProfileQuestions);
+            Run("Response planner routes natural screen questions", ResponsePlannerRoutesNaturalScreenQuestions);
             Run("Memory policy stores stable preference", MemoryPolicyStoresStablePreference);
             Run("Memory policy keeps temporary state out of beliefs", MemoryPolicyKeepsTemporaryStateOutOfBeliefs);
             Run("Continuity reinforces repeated belief", ContinuityReinforcesRepeatedBelief);
@@ -1019,6 +1022,28 @@ internal static class Program
         AssertTrue(result.Violations.Any(v => v.Contains("повторює")), "violation should mention duplicate");
     }
 
+    private static void ScreenIntentDetectsNaturalScreenScanRequests()
+    {
+        var now = new DateTime(2026, 5, 21, 17, 5, 0);
+
+        AssertTrue(KokoScreenIntent.IsManualScreenScan("попробуй знову просканувати мій екран"),
+            "detector should catch infinitive scan wording");
+        AssertTrue(KokoScreenIntent.IsManualScreenScan("що в мене на екрані ?"),
+            "detector should catch natural screen question");
+        AssertTrue(KokoScreenIntent.IsManualScreenScan("що відкрито на моніторі"),
+            "detector should catch open-window screen question");
+        AssertTrue(KokoScreenIntent.IsManualScreenScan("зроби скріншот і скажи що там"),
+            "detector should catch screenshot request");
+        AssertTrue(!KokoScreenIntent.IsManualScreenScan("не дивись на мій екран"),
+            "detector should respect explicit screen privacy block");
+        AssertTrue(!KokoScreenIntent.IsManualScreenScan("що на фото?"),
+            "detector should not steal ordinary image prompts without a screen target");
+        AssertTrue(KokoScreenIntent.IsRetryLastScreenScan("ще раз спробуй", "проскануй мій екран", now.AddMinutes(-2), now),
+            "short retry should repeat recent screen scan");
+        AssertTrue(!KokoScreenIntent.IsRetryLastScreenScan("ще раз спробуй", "проскануй мій екран", now.AddMinutes(-30), now),
+            "stale retry should not bind to old screen scan");
+    }
+
     private static void PostReplyGuardAllowsRepeatedScreenScanCommand()
     {
         var now = new DateTime(2026, 5, 13, 21, 31, 0);
@@ -1034,6 +1059,26 @@ internal static class Program
         var result = new KokoPostReplyGuard().Evaluate("проскануй мій екран", repeated, state, messages, timeline, now);
 
         AssertTrue(result.Passed, "repeatable screen scan commands should not be replaced by duplicate fallback");
+    }
+
+    private static void PostReplyGuardRejectsScreenCapabilityDenial()
+    {
+        var now = new DateTime(2026, 5, 21, 17, 5, 0);
+        var state = new KokoInternalState();
+        var userText = "що в мене на екрані ?";
+        var messages = new[]
+        {
+            new ChatRepository.ChatMessage { Role = "user", Content = userText, Timestamp = now }
+        };
+        var timeline = new KokoConversationTimelineEngine().Build(messages, state, now, userText);
+        var badReply = "Я не маю прямого виду на твій монітор. Зроби скріншот і завантаж його сюди, бо магічним чином без вхідних даних я не бачу екран.";
+
+        var result = new KokoPostReplyGuard().Evaluate(userText, badReply, state, messages, timeline, now);
+
+        AssertTrue(!result.Passed, "guard should reject screen capability denial on local screen requests");
+        AssertTrue(result.ShouldRepair, "screen denial should go through repair, not become final answer");
+        AssertTrue(result.Violations.Any(v => v.Contains("screen request")), "violation should mention screen request routing");
+        AssertTrue(result.RepairInstruction.Contains("локальний screenshot route"), "repair should mention local screenshot route");
     }
 
     private static void PostReplyGuardProtectsShortAffection()
@@ -1341,6 +1386,26 @@ internal static class Program
         AssertEqual("memory", second.Intent, "broad known-about-me question should be memory intent");
         AssertEqual("vault_memory", second.Capability, "broad known-about-me question should route to vault memory");
         AssertTrue(second.RequiresToolUse, "broad known-about-me question should require tool use");
+    }
+
+    private static void ResponsePlannerRoutesNaturalScreenQuestions()
+    {
+        using var ctx = TestContext.Create();
+        var cognition = new KokoCognitionEngine(ctx.TestDir);
+        var state = new KokoInternalState();
+
+        var frame = new KokoResponsePlannerEngine().Build(
+            "що в мене на екрані ?",
+            state,
+            cognition,
+            new DateTime(2026, 5, 21, 17, 5, 0));
+
+        AssertEqual("screen", frame.Intent, "natural screen question should become a screen intent");
+        AssertEqual("screen_awareness", frame.Capability, "natural screen question should route to screen awareness");
+        AssertTrue(frame.RequiresAction, "screen question should be an action request");
+        AssertTrue(frame.RequiresToolUse, "screen question should require local tool use");
+        AssertTrue(frame.Steps.Any(s => s.Contains("capture current screen")), "plan should start with local screenshot capture");
+        AssertTrue(frame.Constraints.Any(c => c.Contains("do not deny local screen capability")), "plan should forbid capability denial");
     }
 
     private static void MemoryPolicyStoresStablePreference()

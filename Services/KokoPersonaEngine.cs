@@ -162,7 +162,8 @@ Rules:
         }
 
         private static bool LooksLikeActionRequest(string lower)
-            => ContainsAny(lower, "зроби", "виконай", "додай", "пофікси", "виправ", "реаліз", "створи", "перепиши", "запусти", "протести");
+            => KokoScreenIntent.IsManualScreenScan(lower) ||
+               ContainsAny(lower, "зроби", "виконай", "додай", "пофікси", "виправ", "реаліз", "створи", "перепиши", "запусти", "протести");
 
         private static bool LooksLikeOpinionOrDesignRequest(string lower)
             => ContainsAny(lower, "як думаєш", "що думаєш", "оцін", "крити", "чи норм", "чи правильно", "архітектур", "поведінц", "краще", "покращ");
