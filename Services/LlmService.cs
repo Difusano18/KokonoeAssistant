@@ -80,12 +80,15 @@ namespace KokonoeAssistant.Services
             var agentKey = ResolveAgentOllamaKey(profile);
             if (!string.IsNullOrWhiteSpace(agentKey))
                 return agentKey.Trim();
+            if (profile?.OllamaKeys?.Count > 0)
+                return "";
 
             if (OllamaPool != null && OllamaPool.TotalKeyCount > 0)
             {
                 OllamaPool.AdvanceIfAtThreshold();
                 var k = OllamaPool.GetActiveKey();
                 if (!string.IsNullOrEmpty(k)) return k;
+                return "";
             }
             return _ollamaApiKey ?? "";
         }
@@ -118,6 +121,8 @@ namespace KokonoeAssistant.Services
                         return key.Key;
                     profile.OllamaActiveKeyIndex = (profile.OllamaActiveKeyIndex + 1) % profile.OllamaKeys.Count;
                 }
+
+                return null;
             }
 
             return string.IsNullOrWhiteSpace(profile.OllamaApiKey) ? null : profile.OllamaApiKey.Trim();
@@ -1360,7 +1365,7 @@ namespace KokonoeAssistant.Services
                     // якщо так — підштовхуємо модель через tool_choice
                     bool looksLikeVaultOp = !string.IsNullOrEmpty(userText) && (
                         userText.Contains("створ", StringComparison.OrdinalIgnoreCase) ||
-                        userText.Contains("РїР°РїРє", StringComparison.OrdinalIgnoreCase) ||
+                        userText.Contains("папк", StringComparison.OrdinalIgnoreCase) ||
                         userText.Contains("перевір", StringComparison.OrdinalIgnoreCase) ||
                         userText.Contains("провір", StringComparison.OrdinalIgnoreCase) ||
                         userText.Contains("запиш", StringComparison.OrdinalIgnoreCase) ||
@@ -1370,7 +1375,7 @@ namespace KokonoeAssistant.Services
                         userText.Contains("obsidian", StringComparison.OrdinalIgnoreCase) ||
                         userText.Contains("щоденник", StringComparison.OrdinalIgnoreCase) ||
                         userText.Contains("запам'ят", StringComparison.OrdinalIgnoreCase) ||
-                        userText.Contains("РґРѕРґР°Р№ РґРѕ", StringComparison.OrdinalIgnoreCase) ||
+                        userText.Contains("додай до", StringComparison.OrdinalIgnoreCase) ||
                         userText.Contains("список нотат", StringComparison.OrdinalIgnoreCase) ||
                         userText.Contains("список пап", StringComparison.OrdinalIgnoreCase));
                     var targetUrl = agentTarget.Url;
@@ -1627,7 +1632,7 @@ namespace KokonoeAssistant.Services
 
                     // Парсинг відповіді залежно від провайдера
                     JObject? message = null;
-                    if (_provider.Equals("claude", StringComparison.OrdinalIgnoreCase))
+                    if (isClaude)
                     {
                         // Claude API format: { role: "assistant", content: [...], stop_reason: ... }
                         var content = respObj["content"] as JArray;
@@ -2420,10 +2425,10 @@ namespace KokonoeAssistant.Services
             results.Count == 0
                 ? "Нічого не знайдено."
                 : string.Join("\n\n", results.Select(r =>
-                    $"рџ“„ {r.Path} [score:{r.Score}]\n{r.Preview[..Math.Min(200, r.Preview.Length)]}"));
+                    $"📄 {r.Path} [score:{r.Score}]\n{r.Preview[..Math.Min(200, r.Preview.Length)]}"));
 
         private static string WrapOk(string path, string label) =>
-            $"вњ“ {label}: {path}";
+            $"✓ {label}: {path}";
 
         private string Delete(JObject args)
         {
@@ -3199,18 +3204,18 @@ namespace KokonoeAssistant.Services
                 if (shouldRebuild) _lastGraphRebuild = DateTime.UtcNow;
             }
 
-            if (!shouldRebuild) return $"вњ“ {label}: {path}";
+            if (!shouldRebuild) return $"✓ {label}: {path}";
 
             try
             {
                 var (changed, added) = Obsidian!.RebuildLinks();
                 var linkInfo = added > 0 ? $" · +{added} зв'язків" : "";
-                return $"вњ“ {label}: {path}{linkInfo}";
+                return $"✓ {label}: {path}{linkInfo}";
             }
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"[LLM] RebuildLinks failed: {ex.Message}");
-                return $"вњ“ {label}: {path}";
+                return $"✓ {label}: {path}";
             }
         }
 
@@ -3243,6 +3248,7 @@ namespace KokonoeAssistant.Services
             CancellationToken ct = default,
             string? agentId = "chat")
         {
+            var diagWatch = Stopwatch.StartNew();
             var dateStamp = $"\n\n=== ДАТА/ЧАС ===\nСьогодні: {DateTime.Now:dddd, dd MMMM yyyy}, {DateTime.Now:HH:mm}";
             var continuity = string.IsNullOrWhiteSpace(extraContext)
                 ? ""
@@ -3261,6 +3267,9 @@ namespace KokonoeAssistant.Services
             var isOllamaCloud = target.Provider.Equals("ollama-cloud", StringComparison.OrdinalIgnoreCase);
             var targetUrl = target.Url;
             var targetModel = target.Model;
+            var diagProvider = string.IsNullOrWhiteSpace(agentId) ? ActiveProviderLabel() : $"{target.Provider}:{agentId}";
+            var diagChannel = "telegram";
+            RecordLlmRequest(diagProvider, targetModel, diagChannel);
 
             object reqBody;
             if (isClaude)
@@ -3299,7 +3308,10 @@ namespace KokonoeAssistant.Services
                     using var req = new HttpRequestMessage(HttpMethod.Post, targetUrl);
 
                     if (isClaude)
+                    {
                         req.Headers.Add("x-api-key", _claudeApiKey);
+                        req.Headers.Add("anthropic-version", "2023-06-01");
+                    }
                     else if (isOllamaCloud)
                     {
                         usedOllamaKey = ResolveOllamaKey(agentId);
@@ -3332,7 +3344,18 @@ namespace KokonoeAssistant.Services
                 if (res == null || !res.IsSuccessStatusCode)
                 {
                     System.Diagnostics.Debug.WriteLine($"[LLM:TG] Error: {raw}");
-                    return "〔помилка LLM〕";
+                    if (res == null)
+                    {
+                        var cd = NearestOllamaCooldown(agentId);
+                        var msg = cd.HasValue
+                            ? $"Усі Ollama Cloud-ключі на cooldown. Найближчий reset через ~{(int)Math.Ceiling(cd.Value.TotalMinutes)} хв."
+                            : "Усі Ollama Cloud-ключі вичерпані або порожні. Додай ключ у Settings → Ollama Cloud.";
+                        RecordLlmFailure(diagProvider, targetModel, diagChannel, null, msg, diagWatch, "tg_pool_cooldown");
+                        return $"[Pool] {msg}";
+                    }
+
+                    RecordLlmFailure(diagProvider, targetModel, diagChannel, (int)res.StatusCode, raw, diagWatch, "tg_friendly_error");
+                    return BuildFriendlyLlmError((int)res.StatusCode, raw, isOllamaCloud ? "Ollama Cloud" : targetModel);
                 }
 
                 var json = JObject.Parse(raw);
@@ -3349,12 +3372,14 @@ namespace KokonoeAssistant.Services
                     text = choices?.FirstOrDefault()?["message"]?["content"]?.ToString() ?? "";
                 }
 
+                RecordLlmSuccess(diagProvider, targetModel, diagChannel, diagWatch);
                 return text;
             }
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"[LLM:TG] Exception: {ex.Message}");
-                return "〔помилка〕";
+                RecordLlmFailure(diagProvider, targetModel, diagChannel, null, ex.Message, diagWatch, "tg_exception");
+                return $"Telegram LLM-запит не зібрав відповідь: {ex.Message}. Перевір provider/model/API key у Settings.";
             }
         }
     }

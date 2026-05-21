@@ -98,23 +98,49 @@ namespace KokonoeAssistant.Services
 
         public string BuildFallback(KokoProactiveContextFrame frame, string level)
         {
-            var last = string.IsNullOrWhiteSpace(frame.LastUserText) ? "останнього сигналу" : $"«{frame.LastUserText}»";
+            var anchor = DescribeContext(frame);
 
             if (frame.AssistantPingsAfterLastUser > 0)
                 return "[мовчання]";
 
             if (!string.IsNullOrWhiteSpace(frame.ActiveIntentUk))
-                return $"Ти казав {last}. Минуло {frame.SilenceTextUk}; {frame.ActiveIntentUk}. Це ще в силі, чи план уже мутував?";
+                return $"Минуло {frame.SilenceTextUk}; активний намір ще висить. Це ще в силі, чи план уже мутував?";
 
             if (!string.IsNullOrWhiteSpace(frame.LastUserText))
                 return level switch
                 {
-                    "silence_l1" => $"Після {last} минуло {frame.SilenceTextUk}. Продовжуєш це, чи вже кинув напризволяще?",
-                    "silence_l2" => $"Контекст був {last}. Минуло {frame.SilenceTextUk}; мені здогадуватись, ти ще там чи вже змінив курс?",
-                    _ => $"Після {last} тиша вже {frame.SilenceTextUk}. Подай сигнал, якщо цей план ще живий."
+                    "silence_l1" => $"Після теми про {anchor} минуло {frame.SilenceTextUk}. Продовжуєш це, чи вже кинув напризволяще?",
+                    "silence_l2" => $"Контекст був про {anchor}. Минуло {frame.SilenceTextUk}; мені здогадуватись, ти ще там чи вже змінив курс?",
+                    _ => $"Після останнього контексту про {anchor} тиша вже {frame.SilenceTextUk}. Подай сигнал, якщо цей план ще живий."
                 };
 
             return "Тиша є, контексту немає. Дуже інформативно. Подай хоча б один нормальний сигнал.";
+        }
+
+        private static string DescribeContext(KokoProactiveContextFrame frame)
+        {
+            var anchor = (frame.AnchorUk ?? "").Trim();
+            var rawLast = Trim(frame.LastUserText, 90);
+            if (!string.IsNullOrWhiteSpace(anchor) &&
+                anchor.Length <= 80 &&
+                !anchor.StartsWith("намір:", StringComparison.OrdinalIgnoreCase) &&
+                !anchor.Equals(rawLast, StringComparison.OrdinalIgnoreCase))
+                return anchor;
+
+            var lower = (frame.LastUserText ?? "").ToLowerInvariant();
+            if (ContainsAny(lower, "екран", "скрін", "screen"))
+                return "екран";
+            if (ContainsAny(lower, "telegram", "тг", "телеграм"))
+                return "Telegram";
+            if (ContainsAny(lower, "obsidian", "vault", "ваульт", "нотат"))
+                return "Obsidian";
+            if (ContainsAny(lower, "курс", "занят", "урок", "пара"))
+                return "курси";
+            if (ContainsAny(lower, "код", "проект", "тест", "коміт", "github"))
+                return "проект";
+            if (ContainsAny(lower, "спат", "сон", "прокин"))
+                return "сон";
+            return "останню задачу";
         }
 
         private static string BuildPromptBlock(KokoProactiveContextFrame frame)

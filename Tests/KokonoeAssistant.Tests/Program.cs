@@ -63,10 +63,12 @@ internal static class Program
             Run("Continuity reinforces repeated belief", ContinuityReinforcesRepeatedBelief);
             Run("Post reply guard repairs sleep leak on profile question", PostReplyGuardRepairsSleepLeakOnProfileQuestion);
             Run("Post reply guard rejects profile quote fallback", PostReplyGuardRejectsProfileQuoteFallback);
+            Run("Post reply guard rejects general quote echo fallback", PostReplyGuardRejectsGeneralQuoteEchoFallback);
             Run("Proactive guard suppresses repeated generic silence", ProactiveGuardSuppressesRepeatedGenericSilence);
             Run("Proactive context anchors silence to last topic", ProactiveContextAnchorsSilenceToLastTopic);
             Run("Proactive context stays silent after goodbye sleep", ProactiveContextStaysSilentAfterGoodbyeSleep);
             Run("Proactive fallback never exposes technical silence wording", ProactiveFallbackNeverExposesTechnicalSilenceWording);
+            Run("Proactive fallback does not quote last user text", ProactiveFallbackDoesNotQuoteLastUserText);
             Run("User quiet command mutes proactive followups", UserQuietCommandMutesProactiveFollowups);
             Run("Short acknowledgement resolves stale intent", ShortAcknowledgementResolvesStaleIntent);
             Run("Screen awareness parses vision JSON", ScreenAwarenessParsesVisionJson);
@@ -84,9 +86,11 @@ internal static class Program
             Run("Startup greeting reacts to quick return", StartupGreetingReactsToQuickReturn);
             Run("Startup greeting prompt uses mood and absence", StartupGreetingPromptUsesMoodAndAbsence);
             Run("Startup greeting sanitizes therapy meta", StartupGreetingSanitizesTherapyMeta);
+            Run("Startup greeting fallback does not quote raw latest user text", StartupGreetingFallbackDoesNotQuoteRawLatestUserText);
             Run("Scenario simulation guards temporal continuity", ScenarioSimulationGuardsTemporalContinuity);
             Run("LLM diagnostics snapshot starts idle", LlmDiagnosticsSnapshotStartsIdle);
             Run("LLM rotates Ollama key after auth failure", LlmRotatesOllamaKeyAfterAuthFailure);
+            Run("LLM agent key pool exhaustion does not reuse legacy key", LlmAgentKeyPoolExhaustionDoesNotReuseLegacyKey);
             Run("Inspector renders state report", InspectorRendersStateReport);
             Run("Obsidian vault architecture maintenance", ObsidianVaultArchitectureMaintenance);
             Run("Obsidian unique memory append", ObsidianUniqueMemoryAppend);
@@ -1450,6 +1454,31 @@ internal static class Program
         AssertTrue(result.Violations.Any(v => v.Contains("user-quote clarification")), "violation should name the quote fallback failure");
     }
 
+    private static void PostReplyGuardRejectsGeneralQuoteEchoFallback()
+    {
+        var now = new DateTime(2026, 5, 19, 15, 9, 0);
+        var state = new KokoInternalState();
+        var userText = "ще раз спробуй";
+        var messages = new[]
+        {
+            new ChatRepository.ChatMessage { Role = "assistant", Content = "Екран зняла, але аналіз не повернувся.", Timestamp = now.AddMinutes(-1) },
+            new ChatRepository.ChatMessage { Role = "user", Content = userText, Timestamp = now }
+        };
+        var timeline = new KokoConversationTimelineEngine().Build(messages, state, now, userText);
+
+        var result = new KokoPostReplyGuard().Evaluate(
+            userText,
+            "«ще раз спробуй»? Що саме я маю спробувати?",
+            state,
+            messages,
+            timeline,
+            now);
+
+        AssertTrue(!result.Passed, "guard should reject quote-echo clarification outside profile questions");
+        AssertTrue(result.Violations.Any(v => v.Contains("дослівно") || v.Contains("user-quote clarification")), "violation should name quote echo or clarification fallback");
+        AssertTrue(result.ShouldRepair, "general quote echo should be repaired instead of surfaced");
+    }
+
     private static void ProactiveGuardSuppressesRepeatedGenericSilence()
     {
         var now = new DateTime(2026, 5, 7, 16, 56, 0);
@@ -1536,6 +1565,23 @@ internal static class Program
         AssertTrue(!fallback.Contains("без другого кола"), "fallback must not expose guard mechanics");
         AssertTrue(!fallback.Contains("ще актуально"), "fallback must not quote a live chat line as a stale task");
         AssertTrue(!fallback.Contains("зайві символи"), "fallback must not use canned technical wording");
+    }
+
+    private static void ProactiveFallbackDoesNotQuoteLastUserText()
+    {
+        var now = new DateTime(2026, 5, 19, 15, 37, 0);
+        var messages = new[]
+        {
+            new ChatRepository.ChatMessage { Role = "user", Content = "чому ти не написала", Timestamp = now.AddHours(-2) }
+        };
+
+        var service = new KokoProactiveContextService();
+        var frame = service.Build(messages, new KokoInternalState(), now);
+        var fallback = service.BuildFallback(frame, "silence_l1");
+
+        AssertTrue(!fallback.Contains("чому ти не написала", StringComparison.OrdinalIgnoreCase), "proactive fallback should not quote raw latest user text");
+        AssertTrue(!fallback.Contains("«"), "proactive fallback should avoid quote framing");
+        AssertTrue(fallback.Contains("останню задачу") || fallback.Contains("контекст") || fallback.Contains("теми"), "fallback should paraphrase the context instead");
     }
 
     private static void UserQuietCommandMutesProactiveFollowups()
@@ -1976,6 +2022,26 @@ internal static class Program
         AssertTrue(!sanitized.Contains("застрягло"), "startup sanitizer should reject stuck-in-head framing");
     }
 
+    private static void StartupGreetingFallbackDoesNotQuoteRawLatestUserText()
+    {
+        var now = new DateTime(2026, 5, 19, 15, 36, 0);
+        var raw = "чому ти не написала";
+        var messages = new[]
+        {
+            new ChatRepository.ChatMessage { Role = "user", Content = raw, Timestamp = now.AddMinutes(-28) }
+        };
+
+        var service = new KokoStartupGreetingService();
+        var frame = service.BuildFrame(messages, now);
+        var fallback = service.BuildFallback(frame);
+        var sanitized = service.Sanitize($"Через 28 хв ти знову тут. «{raw}» не втекло.", frame);
+
+        AssertTrue(!fallback.Contains(raw, StringComparison.OrdinalIgnoreCase), "startup fallback should not quote raw latest user text");
+        AssertTrue(!fallback.Contains("«"), "startup fallback should avoid quote framing");
+        AssertTrue(!fallback.Contains("знову тут", StringComparison.OrdinalIgnoreCase), "startup fallback should avoid dead canned opening");
+        AssertTrue(!sanitized.Contains(raw, StringComparison.OrdinalIgnoreCase), "sanitized startup reply should not preserve quoted raw user text");
+    }
+
     private static void LlmDiagnosticsSnapshotStartsIdle()
     {
         var diag = new LlmService().GetDiagnosticsSnapshot();
@@ -2000,6 +2066,46 @@ internal static class Program
         AssertTrue(Call(403), "HTTP 403 should rotate away from the key");
         AssertTrue(Call(429), "HTTP 429 should rotate away from the key");
         AssertTrue(!Call(500), "HTTP 500 should not burn a key");
+    }
+
+    private static void LlmAgentKeyPoolExhaustionDoesNotReuseLegacyKey()
+    {
+        var service = new LlmService();
+        var profilesField = typeof(LlmService).GetField(
+            "_agentProfiles",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+        var resolve = typeof(LlmService).GetMethod(
+            "ResolveOllamaKey",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+
+        AssertTrue(profilesField != null, "agent profiles field should exist");
+        AssertTrue(resolve != null, "ResolveOllamaKey helper should exist");
+
+        var exhaustedKey = "same-legacy-key";
+        profilesField!.SetValue(service, new Dictionary<string, KokoAgentLlmProfile>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["chat"] = new KokoAgentLlmProfile
+            {
+                AgentId = "chat",
+                Enabled = true,
+                LlmProvider = "ollama-cloud",
+                OllamaApiKey = exhaustedKey,
+                OllamaKeys = new List<OllamaKeyEntry>
+                {
+                    new()
+                    {
+                        Name = "legacy",
+                        Key = exhaustedKey,
+                        Enabled = true,
+                        CooldownUntil = DateTime.UtcNow.AddMinutes(30)
+                    }
+                }
+            }
+        });
+
+        var resolved = (string?)resolve!.Invoke(service, new object?[] { "chat" });
+
+        AssertTrue(string.IsNullOrWhiteSpace(resolved), "exhausted agent key pool must not fall back to the same legacy key");
     }
 
     private static void InspectorRendersStateReport()
@@ -2567,7 +2673,7 @@ Persistent Obsidian context is now a core project requirement.
             var task = service.AddTask("реалізуй UI і перевір Obsidian пам'ять", priority: 8);
 
             AssertEqual(8, task.Priority, "priority should be stored");
-            AssertEqual(5, service.MaxParallel, "agent board should default to five parallel slots");
+            AssertEqual(10, service.MaxParallel, "agent board should default to ten parallel slots");
             AssertTrue(task.Steps.Any(s => s.Kind == KokoAgentStepKind.Vault), "vault step should be planned");
             AssertTrue(task.Steps.Any(s => s.Kind == KokoAgentStepKind.Implement), "implementation step should be planned");
             AssertTrue(task.Steps.Last().Kind == KokoAgentStepKind.Report, "last step should be report");

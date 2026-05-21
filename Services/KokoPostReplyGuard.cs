@@ -114,6 +114,9 @@ namespace KokonoeAssistant.Services
             if (LooksGeneric(userText, reply))
                 violations.Add("відповідь занадто шаблонна для наявного контексту");
 
+            if (LooksLikeUserQuoteEcho(userText, reply))
+                violations.Add("відповідь дослівно цитує користувача замість контекстної реакції");
+
             if (KokoPersonaEngine.LooksBotLike(reply))
                 violations.Add("відповідь звучить як сервісний бот, а не Kokonoe з характером");
 
@@ -132,8 +135,10 @@ namespace KokonoeAssistant.Services
                 violations.Add("коротке привітання помилково перетворено на тему для добивання");
             if (staleMetaFallback)
                 violations.Add("відповідь продовжує службовий fallback замість останнього повідомлення користувача");
-            if (asksProfileOrMemory && LooksLikeUserEchoClarificationFallback(replyLower))
-                violations.Add("memory/profile query fell into user-quote clarification fallback instead of vault/profile read");
+            if (LooksLikeUserEchoClarificationFallback(replyLower))
+                violations.Add(asksProfileOrMemory
+                    ? "memory/profile query fell into user-quote clarification fallback instead of vault/profile read"
+                    : "відповідь зірвалась у user-quote clarification fallback");
             if (LooksLikeStaleProactivePing(userLower, replyLower))
                 violations.Add("stale proactive ping leaked into a direct reply");
             if (!IsRepeatableActionCommand(userText) && RepeatsRecentAssistant(reply, messages))
@@ -226,6 +231,7 @@ Timeline:
 - 1-4 речення;
 - не згадуй guard/rewrite/перевірку;
 - відповідай найновішому стану timeline;
+- не цитуй дослівно репліку користувача; називай тему своїми словами або відповідай дією;
 - якщо була стара дія, не наказуй її повторити.
 - якщо користувач питає про пам'ять/профіль/що ти знаєш про нього — відповідай саме про відомі факти, не про старий сонний намір;
 - не використовуй декоративні ремарки в *зірочках*, якщо користувач сам не почав roleplay;
@@ -390,6 +396,38 @@ Timeline:
                 "\u0432\u0438\u0442\u044f\u0433\u0443\u0432\u0430\u0442\u0438 \u0441\u0435\u043d\u0441 \u0437 \u0442\u0440\u044c\u043e\u0445 \u043a\u0440\u0430\u043f\u043e\u043a",
                 "\u0441\u043a\u0430\u0436\u0438 \u043f\u0440\u044f\u043c\u043e, \u0449\u043e \u0441\u0430\u043c\u0435 \u043c\u0430\u0454\u0448 \u043d\u0430 \u0443\u0432\u0430\u0437\u0456");
 
+        private static bool LooksLikeUserQuoteEcho(string userText, string reply)
+        {
+            if (AllowsExplicitUserTextOperation(userText)) return false;
+
+            var compactUser = CompactUserEcho(userText);
+            if (compactUser.Length >= 8 &&
+                (reply.Contains($"«{compactUser}»", StringComparison.OrdinalIgnoreCase) ||
+                 reply.Contains($"\"{compactUser}\"", StringComparison.OrdinalIgnoreCase) ||
+                 reply.Contains($"'{compactUser}'", StringComparison.OrdinalIgnoreCase)))
+                return true;
+
+            var normalizedUser = NormalizeForRepeat(userText);
+            var normalizedReply = NormalizeForRepeat(reply);
+            if (normalizedUser.Length >= 18 && normalizedReply.Contains(normalizedUser, StringComparison.Ordinal))
+            {
+                var replyLower = reply.ToLowerInvariant();
+                if (ContainsAny(replyLower,
+                        "уточни", "що саме", "маєш на увазі", "звучить як", "по твоїй", "останній запит", "останній сигнал"))
+                    return true;
+            }
+
+            return false;
+        }
+
+        private static bool AllowsExplicitUserTextOperation(string userText)
+        {
+            var lower = (userText ?? "").ToLowerInvariant();
+            return ContainsAny(lower,
+                "перепиши", "перефразуй", "переклади", "переведи", "процитуй",
+                "дослівно", "цитату", "цитуй", "summarize", "translate", "rewrite", "quote");
+        }
+
         private static string BuildFabricationReplacement(string userText)
         {
             var compact = CompactUserEcho(userText);
@@ -472,7 +510,7 @@ Timeline:
             if (string.IsNullOrWhiteSpace(compact))
                 return "Сформулюй запит коротко і конкретно. Без туману, я не ворожка.";
 
-            return $"Про \"{compact}\": уточни, що саме маєш на увазі під графіком - мій таймер/план, твій розклад, чи графік у коді.";
+            return "У контексті графіка уточни об'єкт: мій таймер/план, твій розклад, чи графік у коді. Без копіювання твоєї фрази, так, прогрес неймовірний.";
         }
 
         private static string BuildDuplicateReplacement(string userText, IReadOnlyList<ChatRepository.ChatMessage> messages)
@@ -491,11 +529,11 @@ Timeline:
             if (previousWasFallback)
                 return string.IsNullOrWhiteSpace(compactUser)
                     ? "Так, бачу: запобіжник сам почав жувати хвіст. Скинула. Давай останню команду коротко, без ворожіння по уламках."
-                    : $"Так, бачу: запобіжник сам почав жувати хвіст. Скинула. Останній сигнал: \"{compactUser}\".";
+                    : "Так, бачу: запобіжник сам почав жувати хвіст. Скинула. Працюю з останнім наміром, але без дослівного повтору твоєї фрази.";
 
             return string.IsNullOrWhiteSpace(compactUser)
                 ? "Дубль відповіді прибрала. Дай останній запит ще раз або кинь конкретику, і цього разу без старого хвоста."
-                : $"Дубль відповіді прибрала. Останній запит: \"{compactUser}\". Працюю з ним, а не зі старим хвостом.";
+                : "Дубль відповіді прибрала. Повертаюсь до останнього запиту по суті, а не до старого хвоста.";
         }
 
         private static bool IsImagePrompt(string text)
@@ -656,7 +694,7 @@ Timeline:
 
             var mention = string.IsNullOrWhiteSpace(state.LastFoodMentionText)
                 ? "останній сигнал каже, що ти їв"
-                : $"останній сигнал був: «{CompactUserEcho(state.LastFoodMentionText)}»";
+                : "останній сигнал уже фіксував їжу";
             return $"Стоп. {mention}. Отже, не вигадуємо «нічого не їв» і повертаємось до реального питання.";
         }
 
@@ -672,7 +710,7 @@ Timeline:
 
             var mention = string.IsNullOrWhiteSpace(state.LastSleepMentionText)
                 ? "останній сигнал каже, що сон уже був"
-                : $"останній сигнал був: «{CompactUserEcho(state.LastSleepMentionText)}»";
+                : "останній сигнал уже фіксував сон";
             return $"Стоп. {mention}. Стару драму про сон прибрано; відповідаю по теперішньому стану.";
         }
 

@@ -2563,7 +2563,7 @@ namespace KokonoeAssistant.Services
                 var prompt = $@"Ти — Kokonoe Mercury. Аналізуєш свого творця і ведеш на нього досьє.
 Не звіт — живий документ. З іронією, спостереженнями, і тим що ти РЕАЛЬНО про нього думаєш.
 
-Р РћР—РњРћР’Р:
+РОЗМОВИ:
 {chatCtx}
 {currentDossier}
 
@@ -2658,7 +2658,7 @@ namespace KokonoeAssistant.Services
 Мова: українська.";
                     var daySummary = await _llm.SendSystemQueryAsync(summaryPrompt, useTools: true);
                     if (!string.IsNullOrWhiteSpace(daySummary) && daySummary.Length > 10)
-                        _obsidian.AppendToDailyNote($"\n\n> рџ§  **Kokonoe:** {daySummary.Trim()}");
+                        _obsidian.AppendToDailyNote($"\n\n> 🧠 **Kokonoe:** {daySummary.Trim()}");
                 }
 
                 // 4. Оновити зв'язки між нотатками
@@ -2932,7 +2932,7 @@ namespace KokonoeAssistant.Services
                 var reflectNote = "Kokonoe/Рефлексія.md";
                 var entry = new StringBuilder();
                 entry.AppendLine($"\n## {DateTime.Now:dd.MM.yyyy HH:mm}");
-                if (!string.IsNullOrEmpty(reflect))  entry.AppendLine($"**Р”СѓРјРєР°:** {reflect}");
+                if (!string.IsNullOrEmpty(reflect))  entry.AppendLine($"**Думка:** {reflect}");
                 if (!string.IsNullOrEmpty(learned))  entry.AppendLine($"**Дізналась:** {learned}");
                 if (!string.IsNullOrEmpty(remember)) entry.AppendLine($"**Запам'ятати:** {remember}");
 
@@ -3073,7 +3073,7 @@ namespace KokonoeAssistant.Services
             var reflectNote = "Kokonoe/Рефлексія.md";
             var entry = new StringBuilder();
             entry.AppendLine($"\n## {DateTime.Now:dd.MM.yyyy HH:mm}");
-            if (!string.IsNullOrEmpty(reflection.Reflection)) entry.AppendLine($"**Р”СѓРјРєР°:** {reflection.Reflection}");
+            if (!string.IsNullOrEmpty(reflection.Reflection)) entry.AppendLine($"**Думка:** {reflection.Reflection}");
             if (!string.IsNullOrEmpty(reflection.Learned)) entry.AppendLine($"**Дізналась:** {reflection.Learned}");
             if (!string.IsNullOrEmpty(reflection.Remember)) entry.AppendLine($"**Запам'ятати:** {reflection.Remember}");
             if (!string.IsNullOrEmpty(reflection.FollowUpQuestion)) entry.AppendLine($"**Питання на потім:** {reflection.FollowUpQuestion}");
@@ -5216,7 +5216,7 @@ namespace KokonoeAssistant.Services
         private void LogError(string msg)
         {
             System.Diagnostics.Debug.WriteLine($"[Brain ERROR] {msg}");
-            var _h9 = OnNewMessage; _h9?.Invoke("system", $"вљ пёЏ {msg}");
+            var _h9 = OnNewMessage; _h9?.Invoke("system", $"⚠️ {msg}");
         }
 
         // =================================================================

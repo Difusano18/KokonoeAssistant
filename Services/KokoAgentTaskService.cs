@@ -88,6 +88,7 @@ namespace KokonoeAssistant.Services
         private KokoAgentActivitySnapshot _activity = new();
         private CancellationTokenSource? _runnerCts;
         private int _runningSteps;
+        private int _maxParallel = 10;
 
         public KokoAgentTaskService(string dataDir, LlmService? llm = null, ObsidianMcpService? obsidian = null)
         {
@@ -99,7 +100,11 @@ namespace KokonoeAssistant.Services
             Load();
         }
 
-        public int MaxParallel { get; set; } = 5;
+        public int MaxParallel
+        {
+            get => _maxParallel;
+            set => _maxParallel = Math.Clamp(value, 1, 10);
+        }
         public bool AutoStartOnAdd { get; set; } = true;
         public event Action<KokoAgentActivitySnapshot>? ActivityChanged;
         public event Action<KokoAgentTask, KokoAgentCompletionNotice>? TaskCompleted;
@@ -248,18 +253,12 @@ namespace KokonoeAssistant.Services
         {
             while (!ct.IsCancellationRequested)
             {
-                KokoAgentTask? task;
-                KokoAgentStep? step;
+                var launches = new List<(string TaskId, string StepId)>();
                 lock (_lock)
                 {
-                    if (_runningSteps >= MaxParallel)
+                    while (_runningSteps < MaxParallel)
                     {
-                        task = null;
-                        step = null;
-                    }
-                    else
-                    {
-                        (task, step) = FindNextStepLocked();
+                        var (task, step) = FindNextStepLocked();
                         if (task != null && step != null)
                         {
                             task.Status = KokoAgentTaskStatus.Running;
@@ -267,13 +266,19 @@ namespace KokonoeAssistant.Services
                             step.Status = KokoAgentTaskStatus.Running;
                             step.StartedAt = DateTime.Now;
                             _runningSteps++;
-                            SaveLocked();
+                            launches.Add((task.Id, step.Id));
+                            continue;
                         }
+
+                        break;
                     }
+
+                    if (launches.Count > 0)
+                        SaveLocked();
                 }
 
-                if (task != null && step != null)
-                    _ = Task.Run(() => ExecuteStepAsync(task.Id, step.Id, ct), ct);
+                foreach (var launch in launches)
+                    _ = Task.Run(() => ExecuteStepAsync(launch.TaskId, launch.StepId, ct), ct);
 
                 await Task.Delay(650, ct).ConfigureAwait(false);
             }
@@ -312,6 +317,11 @@ namespace KokonoeAssistant.Services
 
                 lock (_lock)
                 {
+                    task = _tasks.FirstOrDefault(t => t.Id == taskId);
+                    step = task?.Steps.FirstOrDefault(s => s.Id == stepId);
+                    if (task == null || step == null || step.Status != KokoAgentTaskStatus.Running || task.Status == KokoAgentTaskStatus.Canceled)
+                        return;
+
                     step.Status = KokoAgentTaskStatus.Completed;
                     step.FinishedAt = DateTime.Now;
                     task.UpdatedAt = DateTime.Now;

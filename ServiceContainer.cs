@@ -176,7 +176,7 @@ namespace KokonoeAssistant
                             LlmService,
                             ObsidianMcp)
                         {
-                            MaxParallel = 5,
+                            MaxParallel = 10,
                             AutoStartOnAdd = true
                         };
                         _agentTasks.Start();

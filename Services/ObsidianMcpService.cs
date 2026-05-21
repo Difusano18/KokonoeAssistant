@@ -268,10 +268,10 @@ tags: [{SanitizeTagsLine(tagsLine)}]
             var dirName = Path.GetFileName(current);
             if (dirName.StartsWith('.') || dirName == "kokonoe-data") return;
 
-            if (depth > 0) sb.AppendLine($"{indent}рџ“Ѓ {dirName}/");
+            if (depth > 0) sb.AppendLine($"{indent}📁 {dirName}/");
 
             foreach (var f in Directory.GetFiles(current, "*.md").OrderBy(x => x))
-                sb.AppendLine($"{indent}  рџ“„ {Path.GetFileNameWithoutExtension(f)}");
+                sb.AppendLine($"{indent}  📄 {Path.GetFileNameWithoutExtension(f)}");
 
             foreach (var d in Directory.GetDirectories(current).OrderBy(x => x))
                 BuildTree(sb, root, d, depth + 1, maxDepth);

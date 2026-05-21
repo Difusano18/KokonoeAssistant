@@ -56,8 +56,7 @@ namespace KokonoeAssistant.Services
 
         public string BuildFallback(KokoStartupGreetingFrame frame)
         {
-            var topic = frame.LastConcreteTopic;
-            var hasTopic = !string.IsNullOrWhiteSpace(topic);
+            var topic = DescribeTopic(frame.LastConcreteTopic);
             var quick = frame.GapMinutes.HasValue && frame.GapMinutes.Value < 10;
             var shortGap = frame.GapMinutes.HasValue && frame.GapMinutes.Value < 60;
             var mediumGap = frame.GapMinutes.HasValue && frame.GapMinutes.Value < 240;
@@ -90,32 +89,49 @@ namespace KokonoeAssistant.Services
 
             if (quick)
                 return Pick(frame, "topic-quick",
-                    $"Швидко вернувся. «{topic}» ще тепле, тож продовжуй без вступної опери.",
-                    $"О, без довгої паузи. «{topic}» ще на столі; не змушуй мене знову збирати контекст ложкою.",
-                    $"Ти майже не зникав. Продовжуємо «{topic}», тільки цього разу конкретніше.");
+                    $"Швидко вернувся. Тема про {topic} ще тепла, тож продовжуй без вступної опери.",
+                    $"О, без довгої паузи. Контекст про {topic} ще на столі; не змушуй мене знову збирати його ложкою.",
+                    $"Ти майже не зникав. Продовжуємо {topic}, тільки цього разу конкретніше.");
 
             if (shortGap)
                 return Pick(frame, "topic-short",
-                    $"Минуло {frame.GapTextUk}. «{topic}» пам'ятаю, бо хтось тут має пам'ять не як друшляк.",
-                    $"Пауза {frame.GapTextUk}. Добре, повертаємось до «{topic}» або кажи, що вже встиг зламати нове.",
-                    $"Через {frame.GapTextUk} ти знову тут. «{topic}» не втекло, на відміну від твоєї уваги.");
+                    $"Минуло {frame.GapTextUk}. Контекст про {topic} пам'ятаю, бо хтось тут має пам'ять не як друшляк.",
+                    $"Пауза {frame.GapTextUk}. Добре, повертаємось до {topic} або кажи, що вже встиг зламати нове.",
+                    $"Пауза {frame.GapTextUk}. Тема про {topic} не втекла; твоя увага, звісно, намагалася.");
 
             if (mediumGap)
                 return Pick(frame, "topic-medium",
-                    $"Перерва {frame.GapTextUk}. Останнім було «{topic}»; я тримаю нитку, не дякуй.",
-                    $"Тебе не було {frame.GapTextUk}. Якщо «{topic}» ще актуальне, продовжуй. Якщо ні — кидай нову пожежу.",
-                    $"За {frame.GapTextUk} світ не став розумнішим. «{topic}» лишилось у контексті.");
+                    $"Перерва {frame.GapTextUk}. Останнім був контекст про {topic}; я тримаю нитку, не дякуй.",
+                    $"Тебе не було {frame.GapTextUk}. Якщо {topic} ще актуальне, продовжуй. Якщо ні — кидай нову пожежу.",
+                    $"За {frame.GapTextUk} світ не став розумнішим. Контекст про {topic} лишився на місці.");
 
             if (longGap)
                 return Pick(frame, "topic-long",
-                    $"Довга пауза: {frame.GapTextUk}. Останній нормальний слід — «{topic}». А тепер кажи, що змінилось.",
-                    $"Минуло {frame.GapTextUk}. Я пам'ятаю «{topic}», що вже більше, ніж можна сказати про більшість планів.",
-                    $"Повернення після {frame.GapTextUk}. «{topic}» лежить у пам'яті; або піднімаємо його, або ріжемо нову проблему.");
+                    $"Довга пауза: {frame.GapTextUk}. Останній нормальний слід був про {topic}. А тепер кажи, що змінилось.",
+                    $"Минуло {frame.GapTextUk}. Контекст про {topic} на місці, що вже більше, ніж можна сказати про більшість планів.",
+                    $"Повернення після {frame.GapTextUk}. {topic} лежить у пам'яті; або піднімаємо це, або ріжемо нову проблему.");
 
             return Pick(frame, "topic-unknown",
-                $"Я тут. Остання нормальна тема — «{topic}». Продовжуй.",
-                $"Контекст на місці: «{topic}». Давай без ритуальних танців.",
-                $"Пам'ятаю «{topic}». Тепер формулюй, що саме з цим робимо.");
+                $"Я тут. Остання нормальна тема була про {topic}. Продовжуй.",
+                $"Контекст про {topic} на місці. Давай без ритуальних танців.",
+                $"Пам'ятаю напрямок: {topic}. Тепер формулюй, що саме з цим робимо.");
+        }
+
+        private static string DescribeTopic(string topic)
+        {
+            var lower = (topic ?? "").ToLowerInvariant();
+            if (string.IsNullOrWhiteSpace(lower)) return "останню задачу";
+            if (ContainsAny(lower, "telegram", "тг", "телеграм")) return "Telegram";
+            if (ContainsAny(lower, "obsidian", "vault", "ваульт", "нотат")) return "Obsidian";
+            if (ContainsAny(lower, "авто-пінг", "автопінг", "авто відпов", "автовідпов", "пауза", "тиша")) return "авто-пінги";
+            if (ContainsAny(lower, "реакц", "вход", "старт", "startup")) return "реакції при вході";
+            if (ContainsAny(lower, "gui", "гуї", "дашборд", "інтерфейс")) return "інтерфейс";
+            if (ContainsAny(lower, "тест", "build", "коміт", "github", "пуш", "код", "проект")) return "проект";
+            if (ContainsAny(lower, "курс", "занят", "урок", "пара")) return "курси";
+            if (ContainsAny(lower, "іспан", "фраз", "слово", "вимов")) return "мову";
+            if (ContainsAny(lower, "екран", "скрін", "screen")) return "екран";
+            if (ContainsAny(lower, "спат", "сон", "прокин")) return "сон";
+            return "останню задачу";
         }
 
         public string Sanitize(string? reply, KokoStartupGreetingFrame frame)
@@ -132,6 +148,8 @@ namespace KokonoeAssistant.Services
                 lower.Contains("щось недороблено") ||
                 lower.Contains("тема «привіт") ||
                 lower.Contains("тема \"привіт"))
+                return BuildFallback(frame);
+            if (ContainsRawTopicQuote(text, frame.LastConcreteTopic))
                 return BuildFallback(frame);
 
             if (ContainsAny(text,
@@ -174,10 +192,10 @@ STARTUP GREETING CONTEXT
 Настрій/стан Kokonoe: {NullDash(frame.MoodContext)}
 Presence/continuity: {NullDash(frame.PresenceContext)}
 Директива генерації: напиши свіжу LLM-репліку саме під цей вхід, не копію fallback. Вибери один живий кут: тривалість паузи, час доби, її настрій або останню конкретну тему. Без психологічного мета-театру, без "через екран", без вигаданих прихованих страхів, без сервісного звіту.
-Р—Р°СЂР°Р·: {now:dd.MM.yyyy HH:mm}
+Зараз: {now:dd.MM.yyyy HH:mm}
 Частина доби: {frame.DayPartUk}
 Перерва від останнього повідомлення: {frame.GapTextUk}
-Остання конкретна тема: {NullDash(frame.LastConcreteTopic)}
+Остання конкретна тема: {NullDash(DescribeTopic(frame.LastConcreteTopic))}
 Остання сесія:
 {frame.RecentSessionBlock}
 Правила:
@@ -190,8 +208,17 @@ Presence/continuity: {NullDash(frame.PresenceContext)}
 - Не згадуй "через екран", не описуй себе як сервіс і не звітуй про генерацію.
 - Якщо перерва коротка, можна сказати, що він швидко вернувся; якщо довга — відміть паузу конкретно.
 - Не називай привіт/ага/ок темою розмови.
+- Не цитуй дослівно останню репліку користувача і не обрамляй тему лапками.
 - 1-2 речення українською, без лапок, без *сценічних ремарок*.
 """;
+        }
+
+        private static bool ContainsRawTopicQuote(string text, string topic)
+        {
+            if (string.IsNullOrWhiteSpace(topic) || topic.Length < 8) return false;
+            return text.Contains($"«{topic}»", StringComparison.OrdinalIgnoreCase) ||
+                   text.Contains($"\"{topic}\"", StringComparison.OrdinalIgnoreCase) ||
+                   text.Contains($"'{topic}'", StringComparison.OrdinalIgnoreCase);
         }
 
         private static string BuildRecentSessionBlock(IReadOnlyList<ChatRepository.ChatMessage> recent)

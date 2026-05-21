@@ -63,6 +63,9 @@ namespace KokonoeAssistant
         private bool _isGenerating;
         private FrameworkElement? _thinkingElement;
         private TextBlock? _thinkingStatusText;
+        private string _lastManualScreenScanRequest = "";
+        private DateTime _lastManualScreenScanAt = DateTime.MinValue;
+        private int _lastManualScreenScanFailures;
 
         // в”Ђв”Ђ Pending image в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
         private byte[]?  _imgBytes;
@@ -2076,12 +2079,12 @@ tags: [kokonoe, live-core, diagnostics]
                 AddMessageBubble(new ChatMessageVm { Role = "system", Content = "Тестуємо TG..." });
                 try
                 {
-                    if (_tgBot == null) { AddMessageBubble(new ChatMessageVm { Role = "system", Content = "вљ пёЏ _tgBot = null" }); return; }
+                    if (_tgBot == null) { AddMessageBubble(new ChatMessageVm { Role = "system", Content = "⚠️ _tgBot = null" }); return; }
                     var s2 = AppSettings.Load();
                     await _tgBot.SendMessage(s2.TelegramChatId, "🔧 TG тест від Kokonoe");
                     AddMessageBubble(new ChatMessageVm { Role = "system", Content = "✅ TG працює" });
                 }
-                catch (Exception ex) { AddMessageBubble(new ChatMessageVm { Role = "system", Content = $"вќЊ TG error: {ex.Message}" }); }
+                catch (Exception ex) { AddMessageBubble(new ChatMessageVm { Role = "system", Content = $"❌ TG error: {ex.Message}" }); }
                 return;
             }
 
@@ -2140,6 +2143,16 @@ tags: [kokonoe, live-core, diagnostics]
                 {
                     try { ServiceContainer.BrainEngine?.ProcessUserMessage(sendText); } catch { }
                 }, _llmCts?.Token ?? default);
+
+                if (LooksLikeRetryLastScreenScan(sendText))
+                {
+                    await ShowKokoActivityAsync("повторюю знімок екрана");
+                    var retryText = string.IsNullOrWhiteSpace(_lastManualScreenScanRequest)
+                        ? "подивись на екран"
+                        : _lastManualScreenScanRequest;
+                    await HandleManualScreenScanAsync(retryText, _llmCts?.Token ?? default, isRetry: true);
+                    return;
+                }
 
                 if (LooksLikeManualScreenScan(sendText))
                 {
@@ -2443,8 +2456,32 @@ tags: [kokonoe, live-core, diagnostics]
             return wantsScan && targetScreen;
         }
 
-        private async Task HandleManualScreenScanAsync(string userText, CancellationToken ct)
+        private bool LooksLikeRetryLastScreenScan(string? text)
         {
+            var lower = (text ?? "").Trim().ToLowerInvariant();
+            if (string.IsNullOrWhiteSpace(lower)) return false;
+            if (string.IsNullOrWhiteSpace(_lastManualScreenScanRequest)) return false;
+            if (DateTime.Now - _lastManualScreenScanAt > TimeSpan.FromMinutes(20)) return false;
+
+            var wantsRetry = ContainsAny(lower,
+                "ще раз", "спробуй ще", "спробуй знов", "повтори", "перепробуй",
+                "retry", "try again", "again");
+            if (!wantsRetry) return false;
+
+            var referencesPrevious = lower.Length <= 48 || ContainsAny(lower,
+                "екран", "скрін", "скрин", "screen", "це", "так", "знімок", "аналіз");
+            return referencesPrevious;
+        }
+
+        private async Task HandleManualScreenScanAsync(string userText, CancellationToken ct, bool isRetry = false)
+        {
+            if (!isRetry)
+            {
+                _lastManualScreenScanRequest = userText;
+                _lastManualScreenScanFailures = 0;
+            }
+            _lastManualScreenScanAt = DateTime.Now;
+
             byte[] screenshot;
             try
             {
@@ -2458,6 +2495,7 @@ tags: [kokonoe, live-core, diagnostics]
                     Role = "assistant",
                     Content = $"Не змогла зняти екран: {ex.Message}. Нарешті команда була нормальна, а Windows вирішив зобразити меблі."
                 });
+                _lastManualScreenScanFailures++;
                 return;
             }
 
@@ -2474,8 +2512,22 @@ tags: [kokonoe, live-core, diagnostics]
 - Українською, 2-5 речень, стиль Kokonoe: сухо, розумно, без канцеляриту.
 """;
 
-            var reply = await _llm.SendSystemVisionQueryAsync(prompt, screenshot, "image/jpeg", ct)
-                        ?? "Екран зняла, але vision не повернув нормального аналізу. Тобто команда була розумна, а провайдер знову прикинувся цеглою.";
+            var reply = await _llm.SendSystemVisionQueryAsync(prompt, screenshot, "image/jpeg", ct);
+            if (string.IsNullOrWhiteSpace(reply))
+                reply = await _llm.SendSystemVisionQueryAsync(prompt, screenshot, "image/jpeg", ct);
+
+            if (string.IsNullOrWhiteSpace(reply))
+            {
+                _lastManualScreenScanFailures++;
+                var again = _lastManualScreenScanFailures > 1 ? " знову" : "";
+                reply = $"Знімок екрана зробила{again}, але аналіз не повернувся. Не буду вигадувати, що бачу картинку: коротке \"ще раз\" повторить скан, а не запустить тупий допит.";
+            }
+            else
+            {
+                _lastManualScreenScanFailures = 0;
+            }
+
+            reply = await GuardAndRepairReplyAsync(userText, reply, "", ct);
 
             RemoveThinkingBubble();
             var replyVm = new ChatMessageVm { Role = "assistant", Content = "" };
@@ -2686,7 +2738,7 @@ tags: [kokonoe, live-core, diagnostics]
 
                 var todayNote = $"Daily/{DateTime.Now:yyyy-MM-dd}.md";
                 if (allNotes.Any(n => n == todayNote))
-                    vaultLines.Add("Daily: С”");
+                    vaultLines.Add("Daily: є");
 
                 if (vaultLines.Count > 0)
                     parts.Add(("=== VAULT ===\n" + string.Join(" | ", vaultLines), 7));
@@ -4498,7 +4550,7 @@ tags: []
                 if (_isRecording)
                 {
                     _isRecording = false;
-                    RecordBtn.Content = "рџ”„ ...";
+                    RecordBtn.Content = "🔄 ...";
                     RecordBtn.IsEnabled = false;
 
                     await audio.StopRecordingAsync();
@@ -4644,7 +4696,7 @@ tags: []
                 {
                     var node = new TreeViewItem
                     {
-                        Header = $"рџ“Ѓ {dir.Name}",
+                        Header = $"📁 {dir.Name}",
                         Tag = dir.FullName
                     };
                     foreach (var file in dir.GetFiles("*.md").Take(20))
@@ -4662,7 +4714,7 @@ tags: []
                 {
                     VaultTree.Items.Add(new TreeViewItem
                     {
-                        Header = $"рџ“„ {file.Name[..^3]}",
+                        Header = $"📄 {file.Name[..^3]}",
                         Tag    = file.FullName
                     });
                 }
@@ -6470,20 +6522,20 @@ tags: [kokonoe, dashboard, live]
                 {
                     var emoji = emotion.Current.ToString() switch
                     {
-                        "Calm"       => "рџ”µ",
-                        "Curious"    => "рџџЈ",
-                        "Warm"       => "рџ©·",
-                        "Playful"    => "рџџЎ",
-                        "Concerned"  => "рџџ ",
-                        "Protective" => "рџ”ґ",
-                        "Irritated"  => "рџ”ґ",
-                        "Distant"    => "вљ«",
-                        "Tender"     => "рџ©·",
-                        "Focused"    => "рџ”µ",
-                        "Proud"      => "рџЊџ",
-                        "Melancholy" => "рџ©¶",
-                        "Excited"    => "рџџў",
-                        _            => "вљЄ"
+                        "Calm"       => "🔵",
+                        "Curious"    => "🟣",
+                        "Warm"       => "💗",
+                        "Playful"    => "🟡",
+                        "Concerned"  => "🟠",
+                        "Protective" => "🔴",
+                        "Irritated"  => "🔴",
+                        "Distant"    => "⚫",
+                        "Tender"     => "💗",
+                        "Focused"    => "🔵",
+                        "Proud"      => "🌟",
+                        "Melancholy" => "💙",
+                        "Excited"    => "🟢",
+                        _            => "⚪"
                     };
                     var line = $"\n> [{now:HH:mm}] {emoji} **Дашборд** · {curStr} ({connPct}%) · повідомлень: {todayMsgs} · фактів: {factCount} · тіло: {DashboardSomaticLabel(somatic.State)}";
                     obsidian.AppendToDailyNote(line);
@@ -7268,12 +7320,13 @@ tags: [kokonoe, dashboard, live]
                             ? "Що на цьому зображенні? Прокоментуй коротко."
                             : caption;
 
-                        var imgReply = await _llm.SendAsync(prompt, imgBytes, "image/jpeg", null, ct);
+                        var imgReply = await _llm.SendAsync(prompt, imgBytes, "image/jpeg", null, ct, agentId: "chat");
+                        imgReply = await GuardAndRepairReplyAsync(prompt, imgReply, "", ct);
                         await Dispatcher.InvokeAsync(() =>
                         {
                             _tgMessages.Add($"[Kokonoe]: {imgReply}");
                             TgScroll.ScrollToBottom();
-                            AddMessageBubble(new ChatMessageVm { Role = "user",      Content = $"[TG: {from}] рџ“· {caption}" });
+                            AddMessageBubble(new ChatMessageVm { Role = "user",      Content = $"[TG: {from}] 📷 {caption}" });
                             AddMessageBubble(new ChatMessageVm { Role = "assistant", Content = imgReply });
                         });
                         try { await bot.SendMessage(chatId, imgReply, cancellationToken: ct); } catch { }
@@ -7326,7 +7379,7 @@ tags: [kokonoe, dashboard, live]
                     try { ServiceContainer.BrainEngine?.ProcessUserMessage(text); } catch { }
                     try { ServiceContainer.BrainEngine?.Memory?.RecordEpisode(text, "neutral", 0.6f); }
                     catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[ERROR] TG note memory: {ex.Message}"); }
-                    try { _obsidian.AppendToDailyNote($"\n> рџ“ќ [TG {DateTime.Now:HH:mm}] {text}"); }
+                    try { _obsidian.AppendToDailyNote($"\n> 📝 [TG {DateTime.Now:HH:mm}] {text}"); }
                     catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[ERROR] TG daily note: {ex.Message}"); }
                     await bot.SendMessage(chatId, "Записала.", cancellationToken: ct);
                     return;
@@ -7345,14 +7398,14 @@ tags: [kokonoe, dashboard, live]
                 if (awaiting == TgAwaitingMode.Open)
                 {
                     var (openOk, openMsg) = ServiceContainer.PcControl.OpenApp(text);
-                    await bot.SendMessage(chatId, openOk ? $"вњ… {openMsg}" : $"вќЊ {openMsg}", cancellationToken: ct);
+                    await bot.SendMessage(chatId, openOk ? $"✅ {openMsg}" : $"❌ {openMsg}", cancellationToken: ct);
                     return;
                 }
 
                 if (awaiting == TgAwaitingMode.Kill)
                 {
                     var (killOk, killMsg) = ServiceContainer.PcControl.KillProcess(text);
-                    await bot.SendMessage(chatId, killOk ? $"вњ… {killMsg}" : $"вќЊ {killMsg}", cancellationToken: ct);
+                    await bot.SendMessage(chatId, killOk ? $"✅ {killMsg}" : $"❌ {killMsg}", cancellationToken: ct);
                     return;
                 }
 
@@ -7410,7 +7463,7 @@ tags: [kokonoe, dashboard, live]
                     $"{text}\n\n" +
                     "Answer only to this latest message. Do not continue old proactive pings, food reminders, work reminders, or \"are you there\" checks unless this latest message asks about them. " +
                     "If the user asks what you meant, briefly reset the context and answer the current question. Ukrainian only, concise, natural.";
-                var reply = await _llm.SendAsync(tgPrompt, null, "image/jpeg", tgContext, ct);
+                var reply = await _llm.SendAsync(tgPrompt, null, "image/jpeg", tgContext, ct, agentId: "chat");
                 reply = await GuardAndRepairReplyAsync(text, reply, tgContext, ct);
                 await Dispatcher.InvokeAsync(() =>
                 {
@@ -7631,7 +7684,7 @@ tags: [kokonoe, dashboard, live]
                 buttons.Add(new[]
                 {
                     Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData(
-                        $"вњ… {g.Title[..Math.Min(20, g.Title.Length)]}", $"goal_done_{g.Id}")
+                        $"✅ {g.Title[..Math.Min(20, g.Title.Length)]}", $"goal_done_{g.Id}")
                 });
             }
 
@@ -7661,14 +7714,14 @@ tags: [kokonoe, dashboard, live]
             foreach (var h in habits.Take(8))
             {
                 var done  = h.CheckIns?.Any(c => c.Date.Date == today && c.Completed) == true;
-                var emoji = done ? "вњ…" : "в¬њ";
+                var emoji = done ? "✅" : "⬜";
                 sb.AppendLine($"{emoji} {h.Name}");
 
                 if (!done)
                     buttons.Add(new[]
                     {
                         Telegram.Bot.Types.ReplyMarkups.InlineKeyboardButton.WithCallbackData(
-                            $"вњ… {h.Name[..Math.Min(22, h.Name.Length)]}", $"habit_done_{h.Id}")
+                            $"✅ {h.Name[..Math.Min(22, h.Name.Length)]}", $"habit_done_{h.Id}")
                     });
             }
 
@@ -7740,7 +7793,7 @@ tags: [kokonoe, dashboard, live]
                 },
                 new[] { IKB("← Меню", "menu") },
             });
-            await bot.SendMessage(chatId, "рџ–Ґ *PC Control*",
+            await bot.SendMessage(chatId, "🖥 *PC Control*",
                 parseMode: Telegram.Bot.Types.Enums.ParseMode.Markdown,
                 replyMarkup: kb, cancellationToken: ct);
         }
@@ -7753,7 +7806,7 @@ tags: [kokonoe, dashboard, live]
                 using var ms = new System.IO.MemoryStream(bytes);
                 await bot.SendPhoto(chatId,
                     Telegram.Bot.Types.InputFile.FromStream(ms, "screenshot.jpg"),
-                    caption: $"рџ–Ґ {DateTime.Now:HH:mm:ss}",
+                    caption: $"🖥 {DateTime.Now:HH:mm:ss}",
                     cancellationToken: ct);
             }
             catch (Exception ex)
@@ -7806,9 +7859,9 @@ tags: [kokonoe, dashboard, live]
             var kb = new Telegram.Bot.Types.ReplyMarkups.InlineKeyboardMarkup(new[]
             {
                 new[] {
-                    IKB("рџ”‰ -10%", "pc_vol_down"),
-                    IKB($"рџ”Љ {vol}%", "pc_sysinfo"),
-                    IKB("рџ”Љ +10%", "pc_vol_up"),
+                    IKB("🔉 -10%", "pc_vol_down"),
+                    IKB($"🔊 {vol}%", "pc_sysinfo"),
+                    IKB("🔊 +10%", "pc_vol_up"),
                 },
                 new[] {
                     IKB("🔇 Тиша", "pc_vol_mute"),
@@ -8015,7 +8068,7 @@ tags: [kokonoe, dashboard, live]
                 svc.OnStatusChanged += status => Dispatcher.InvokeAsync(() =>
                 {
                     TgStatusLabel.Text = $" · {status}";
-                    if (status.StartsWith("вњ“"))
+                    if (status.StartsWith("✓") || status.StartsWith("✅"))
                         TgStatusDot.Background = (System.Windows.Media.SolidColorBrush)
                             System.Windows.Application.Current.Resources["AccentBase"];
                 });
@@ -8112,6 +8165,7 @@ tags: [kokonoe, dashboard, live]
                 var raw = await _llm.SendTgAsync(prompt, sharedContext, _tgUserCts.Token);
                 if (string.IsNullOrWhiteSpace(raw)) return;
                 var reply = CleanTgReply(raw);
+                reply = await GuardAndRepairReplyAsync(msg.Text, reply, sharedContext, _tgUserCts.Token);
 
                 // Показуємо відповідь в UI
                 await Dispatcher.InvokeAsync(() =>
