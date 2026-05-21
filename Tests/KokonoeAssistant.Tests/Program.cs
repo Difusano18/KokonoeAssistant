@@ -63,6 +63,7 @@ internal static class Program
             Run("Continuity reinforces repeated belief", ContinuityReinforcesRepeatedBelief);
             Run("Post reply guard repairs sleep leak on profile question", PostReplyGuardRepairsSleepLeakOnProfileQuestion);
             Run("Post reply guard rejects profile quote fallback", PostReplyGuardRejectsProfileQuoteFallback);
+            Run("Post reply guard rejects scripted profile source report", PostReplyGuardRejectsScriptedProfileSourceReport);
             Run("Post reply guard rejects general quote echo fallback", PostReplyGuardRejectsGeneralQuoteEchoFallback);
             Run("Proactive guard suppresses repeated generic silence", ProactiveGuardSuppressesRepeatedGenericSilence);
             Run("Proactive context anchors silence to last topic", ProactiveContextAnchorsSilenceToLastTopic);
@@ -1452,6 +1453,31 @@ internal static class Program
         AssertTrue(result.ShouldRepair, "profile quote fallback should be repaired with vault/profile context");
         AssertTrue(string.IsNullOrWhiteSpace(result.HardReplacement), "profile quote fallback should not be surfaced as a hard replacement");
         AssertTrue(result.Violations.Any(v => v.Contains("user-quote clarification")), "violation should name the quote fallback failure");
+    }
+
+    private static void PostReplyGuardRejectsScriptedProfileSourceReport()
+    {
+        var now = new DateTime(2026, 5, 21, 19, 20, 0);
+        var state = new KokoInternalState();
+        var userText = "хто я ?";
+        var messages = new[]
+        {
+            new ChatRepository.ChatMessage { Role = "user", Content = userText, Timestamp = now }
+        };
+        var timeline = new KokoConversationTimelineEngine().Build(messages, state, now, userText);
+
+        var result = new KokoPostReplyGuard().Evaluate(
+            userText,
+            "Перевірила `Creator/Profile.md`, не вгадувала з кавової гущі. Звати тебе Вова, тобі 21 рік. Якщо я ще раз скажу «Артем, 19» — старий контекст треба вирізати.",
+            state,
+            messages,
+            timeline,
+            now);
+
+        AssertTrue(!result.Passed, "guard should reject hardcoded profile source reports on identity questions");
+        AssertTrue(result.ShouldRepair, "scripted profile answer should be repaired through the model");
+        AssertTrue(result.Violations.Any(v => v.Contains("source-report")), "violation should name scripted source reporting");
+        AssertTrue(result.RepairInstruction.Contains("без згадки назв файлів"), "repair should demand natural synthesis without file names");
     }
 
     private static void PostReplyGuardRejectsGeneralQuoteEchoFallback()

@@ -2307,9 +2307,6 @@ tags: [kokonoe, live-core, diagnostics]
                 var brain = ServiceContainer.BrainEngine;
                 if (brain != null && brain.TryApplyUserControlCommand(userText, out reply))
                     return true;
-
-                if (TryBuildProfileIdentityReply(userText, out reply))
-                    return true;
             }
             catch { }
             return false;
@@ -2828,7 +2825,8 @@ LIVE RESPONSE STYLE
 - не вигадуй зовнішні факти про користувача: акаунти, YouTube/Twitch/Discord, мемберства, підписки, роботу, покупки або людей, якщо цього нема в чаті;
 - не психологізуй: не вигадуй, що користувач боїться сказати, що в нього щось застрягло в голові, або що ти «дивишся через екран»;
 - якщо питають про тебе/Коконое — дай прямий опис характеру чи позиції, без терапевтичних питань у відповідь;
-- якщо питають "що ти знаєш про мене" або про пам'ять/профіль — відповідай списком/коротким оглядом відомих фактів з контексту; не підміняй це старим sleep-наміpом;
+- якщо питають "що ти знаєш про мене" або про пам'ять/профіль — синтезуй відповідь з Vault/Obsidian контексту живою мовою; не показуй назви файлів і не рапортуй "перевірила Creator/Profile.md", якщо користувач не питає джерело;
+- не підміняй profile/memory питання старим sleep-наміpом, технічним fallback'ом або готовим шаблоном;
 - допускається суха іронія, але вона має бути прив'язана до події, часу, наміру або питання;
 - краще одна точна фраза, ніж театральна сцена з трьома шарами декорацій.
 """;
@@ -3221,9 +3219,6 @@ tags: []
             {
                 var precheck = await Task.Run(() =>
                 {
-                    if (TryBuildProfileIdentityReply(userText, out var identityReply))
-                        return (Reply: (string?)identityReply, Guard: (KokoPostReplyGuardResult?)null, HasBrain: true);
-
                     var brain = ServiceContainer.BrainEngine;
                     if (brain == null)
                         return (Reply: (string?)GuardTemporalReply(userText, reply), Guard: (KokoPostReplyGuardResult?)null, HasBrain: false);
@@ -3270,179 +3265,6 @@ tags: []
             {
                 return GuardTemporalReply(userText, reply);
             }
-        }
-
-        private bool TryBuildProfileIdentityReply(string userText, out string reply)
-        {
-            reply = "";
-            if (!LooksLikeProfileQuestion(userText))
-                return false;
-
-            try
-            {
-                if (_obsidian == null) return false;
-                var profile = _obsidian.ReadNote("Creator/Profile.md");
-                if (string.IsNullOrWhiteSpace(profile)) return false;
-
-                var name = MatchProfileValue(profile, @"\*\*Ім'?я:\*\*\s*(.+)");
-                if (string.IsNullOrWhiteSpace(name))
-                    name = MatchProfileValue(profile, @"\*\*Ім'?я:\*\*\s*(.+)");
-                var age = MatchProfileValue(profile, @"\*\*Вік:\*\*\s*(.+)");
-                if (string.IsNullOrWhiteSpace(age))
-                    age = MatchProfileValue(profile, @"\*\*Вік:\*\*\s*(.+)");
-                if (LooksLikeBroadProfileQuestion(userText))
-                {
-                    reply = BuildProfileSummaryReply(profile, name, age);
-                    return !string.IsNullOrWhiteSpace(reply);
-                }
-
-                if (string.IsNullOrWhiteSpace(name) && string.IsNullOrWhiteSpace(age))
-                    return false;
-
-                var facts = new List<string>();
-                if (!string.IsNullOrWhiteSpace(name)) facts.Add($"звати тебе {name}");
-                if (!string.IsNullOrWhiteSpace(age)) facts.Add($"тобі {age}");
-
-                reply = "Перевірила `Creator/Profile.md`, не вгадувала з кавової гущі. " +
-                        string.Join(", ", facts) +
-                        ". Якщо я ще раз скажу «Артем, 19» — значить, десь знову проліз отруєний старий контекст, і його треба вирізати, а не слухати.";
-                return true;
-            }
-            catch
-            {
-                return false;
-            }
-        }
-
-        private static bool LooksLikeProfileQuestion(string? userText)
-        {
-            var lower = (userText ?? "").ToLowerInvariant();
-            if (string.IsNullOrWhiteSpace(lower)) return false;
-
-            var asksName = ContainsAny(lower, "як мене звати", "моє ім", "моє ім'я", "хто я", "звати мене");
-            var asksAge = ContainsAny(lower, "скільки мені років", "мій вік", "мені років", "скільки років");
-            asksName = asksName || ContainsAny(lower, "як мене звати", "моє ім", "моє ім'я", "хто я", "звати мене", "ім'я");
-            asksAge = asksAge || ContainsAny(lower, "скільки мені років", "мій вік", "мені років", "скільки років");
-            var asksKnown = LooksLikeBroadProfileQuestion(userText);
-
-            return asksName || asksAge || asksKnown;
-        }
-
-        private static bool LooksLikeBroadProfileQuestion(string? userText)
-        {
-            var lower = (userText ?? "").ToLowerInvariant();
-            return ContainsAny(lower,
-                "\u0449\u043e \u0442\u0438 \u0437\u043d\u0430\u0454\u0448 \u043f\u0440\u043e \u043c\u0435\u043d\u0435",
-                "\u0449\u043e \u0437\u043d\u0430\u0454\u0448 \u043f\u0440\u043e \u043c\u0435\u043d\u0435",
-                "\u0440\u043e\u0437\u043a\u0430\u0436\u0438 \u0432\u0441\u0435 \u0449\u043e \u0437\u043d\u0430\u0454\u0448 \u043f\u0440\u043e \u043c\u0435\u043d\u0435",
-                "\u0440\u043e\u0437\u043a\u0430\u0437\u0443\u0439 \u0432\u0441\u0435 \u0449\u043e \u0437\u043d\u0430\u0454\u0448 \u043f\u0440\u043e \u043c\u0435\u043d\u0435",
-                "\u043f\u0440\u043e\u0441\u043a\u0430\u043d\u0443\u0439 \u043e\u0431\u0441\u0438\u0434\u0456\u0430\u043d",
-                "\u043f\u0430\u043c'\u044f\u0442\u044c \u043f\u0440\u043e \u043c\u0435\u043d\u0435",
-                "\u043f\u0440\u043e\u0444\u0456\u043b\u044c",
-                "що ти знаєш про мене",
-                "розкажи все про мене",
-                "розкажи про мене",
-                "назви все",
-                "назви всее",
-                "що пам'ятаєш про мене",
-                "пам'ять про мене",
-                "мої інтереси",
-                "уподобання",
-                "профіль",
-                "що ти знаєш про мене",
-                "розкажи все про мене",
-                "повністю",
-                "мої інтерес",
-                "інтереси",
-                "профіль",
-                "пам'ять про мене");
-        }
-
-        private string BuildProfileSummaryReply(string profile, string name, string age)
-        {
-            var interests = ExtractProfileSectionBullets(profile, "Плани та інтереси", 4);
-            if (interests.Count == 0) interests = ExtractProfileSectionBullets(profile, "Плани та інтереси", 4);
-            var habits = ExtractProfileSectionBullets(profile, "Звички та режим", 4);
-            if (habits.Count == 0) habits = ExtractProfileSectionBullets(profile, "Звички та режим", 4);
-            var emotional = ExtractProfileSectionBullets(profile, "Емоційні патерни", 4);
-            if (emotional.Count == 0) emotional = ExtractProfileSectionBullets(profile, "Емоційні патерни", 4);
-            var facts = ReadKnownUserFacts(6);
-
-            var sb = new StringBuilder();
-            sb.AppendLine("Перевірила `Creator/Profile.md` і `Kokonoe/Memory/Facts.md`. Так, саме прочитала, а не ворожила по диму.");
-            if (!string.IsNullOrWhiteSpace(name) || !string.IsNullOrWhiteSpace(age))
-                sb.AppendLine($"База: {(string.IsNullOrWhiteSpace(name) ? "ім'я не вказане" : name)}; {(string.IsNullOrWhiteSpace(age) ? "вік не вказаний" : age)}.");
-            if (interests.Count > 0)
-                sb.AppendLine("Інтереси: " + string.Join("; ", interests) + ".");
-            if (habits.Count > 0)
-                sb.AppendLine("Режим/звички: " + string.Join("; ", habits) + ".");
-            if (emotional.Count > 0)
-                sb.AppendLine("Патерни: " + string.Join("; ", emotional) + ".");
-            if (facts.Count > 0)
-                sb.AppendLine("Факти з пам'яті: " + string.Join("; ", facts) + ".");
-            if (interests.Count + habits.Count + emotional.Count + facts.Count == 0)
-                sb.AppendLine("Профіль майже порожній. Отже, або пам'ять не заповнена, або її хтось героїчно не синхронізував.");
-            return sb.ToString().Trim();
-        }
-
-        private List<string> ReadKnownUserFacts(int max)
-        {
-            var result = new List<string>();
-            try
-            {
-                var facts = _obsidian?.ReadNote("Kokonoe/Memory/Facts.md");
-                if (string.IsNullOrWhiteSpace(facts)) return result;
-                foreach (var raw in facts.Replace("\r\n", "\n").Split('\n'))
-                {
-                    var line = raw.Trim();
-                    if (!line.StartsWith("- ", StringComparison.Ordinal)) continue;
-                    var item = System.Text.RegularExpressions.Regex.Replace(line[2..].Trim(), @"^\[[^\]]+\]\s*", "").Trim();
-                    if (item.Length == 0) continue;
-                    if (item.Length > 150) item = item[..150].TrimEnd() + "...";
-                    result.Add(item);
-                    if (result.Count >= max) break;
-                }
-            }
-            catch { }
-            return result;
-        }
-
-        private static List<string> ExtractProfileSectionBullets(string text, string heading, int max)
-        {
-            var lines = text.Replace("\r\n", "\n").Split('\n');
-            var result = new List<string>();
-            var inSection = false;
-            foreach (var raw in lines)
-            {
-                var line = raw.Trim();
-                if (line.StartsWith("## ", StringComparison.Ordinal))
-                {
-                    inSection = line.Contains(heading, StringComparison.OrdinalIgnoreCase);
-                    continue;
-                }
-
-                if (!inSection || !line.StartsWith("- ", StringComparison.Ordinal))
-                    continue;
-
-                var item = line[2..].Trim();
-                if (item.Length > 140) item = item[..140].TrimEnd() + "...";
-                if (!string.IsNullOrWhiteSpace(item))
-                    result.Add(item);
-                if (result.Count >= max)
-                    break;
-            }
-
-            return result;
-        }
-
-        private static string MatchProfileValue(string text, string pattern)
-        {
-            var match = System.Text.RegularExpressions.Regex.Match(
-                text,
-                pattern,
-                System.Text.RegularExpressions.RegexOptions.IgnoreCase);
-            if (!match.Success) return "";
-            return match.Groups[1].Value.Trim().TrimEnd('.', ';');
         }
 
         private static string TrimForPrompt(string? text, int max)

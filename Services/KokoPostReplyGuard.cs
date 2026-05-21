@@ -84,6 +84,8 @@ namespace KokonoeAssistant.Services
                 "сп", "їс", "втом", "голод");
             if (asksProfileOrMemory && staleBodyAdvice)
                 violations.Add("сонний/харчовий контекст протік у відповідь на питання про пам'ять/профіль");
+            if (asksProfileOrMemory && LooksLikeScriptedProfileSourceReport(userLower, replyLower))
+                violations.Add("profile/memory answer exposed scripted source-report instead of natural synthesis");
 
             var activeIntent = state.ShortTermIntents
                 .Where(i => !i.ResolvedAt.HasValue)
@@ -233,7 +235,7 @@ Timeline:
 - відповідай найновішому стану timeline;
 - не цитуй дослівно репліку користувача; називай тему своїми словами або відповідай дією;
 - якщо була стара дія, не наказуй її повторити.
-- якщо користувач питає про пам'ять/профіль/що ти знаєш про нього — відповідай саме про відомі факти, не про старий сонний намір;
+- якщо користувач питає про пам'ять/профіль/що ти знаєш про нього — синтезуй відомі факти природно, без готового шаблону і без згадки назв файлів, якщо він не питає джерело;
 - не використовуй декоративні ремарки в *зірочках*, якщо користувач сам не почав roleplay;
 - не вигадуй лабораторні/екранні/тілесні образи замість відповіді на конкретний контекст;
 - не вигадуй зовнішні факти про користувача: акаунти, YouTube/Twitch/Discord, мемберства, підписки, покупки, роботу, людей або місця, якщо цього нема в timeline чи репліці користувача;
@@ -375,6 +377,10 @@ Timeline:
 
         private static bool IsMemoryOrProfileQuestion(string userLower)
         {
+            if (ContainsAny(userLower,
+                    "хто я", "як мене звати", "моє ім", "моє ім'я", "скільки мені років", "мій вік", "звати мене"))
+                return true;
+
             var broadMemory = ContainsAny(userLower,
                 "\u043f\u0440\u043e \u043c\u0435\u043d\u0435", "\u043f\u0430\u043c'\u044f\u0442", "\u043f\u0430\u043c\u2019\u044f\u0442", "\u043f\u0430\u043c\u02bc\u044f\u0442", "\u0437\u043d\u0430\u0454\u0448", "\u0437\u043d\u0430\u0435\u0448", "\u043f\u0440\u043e\u0444\u0456\u043b", "\u0434\u043e\u0441\u044c\u0454",
                 "vault", "obsidian", "\u043e\u0431\u0441\u0438\u0434\u0456\u0430\u043d", "\u043e\u0431\u0441\u0438\u0434\u0438\u0430\u043d", "\u043d\u043e\u0442\u0430\u0442", "\u0437\u0430\u043c\u0456\u0442");
@@ -385,6 +391,26 @@ Timeline:
                 "\u0449\u043e \u043f\u0430\u043c", "\u043f\u0440\u043e\u0441\u043a\u0430\u043d\u0443\u0439", "\u043f\u0435\u0440\u0435\u0432\u0456\u0440", "\u043f\u0440\u043e\u0447\u0438\u0442\u0430\u0439", "\u0437\u043d\u0430\u0439\u0434\u0438", "\u043f\u0440\u043e\u0444\u0456\u043b", "\u0434\u043e\u0441\u044c\u0454",
                 "vault", "obsidian", "\u043e\u0431\u0441\u0438\u0434\u0456\u0430\u043d", "\u043e\u0431\u0441\u0438\u0434\u0438\u0430\u043d");
         }
+
+        private static bool LooksLikeScriptedProfileSourceReport(string userLower, string replyLower)
+        {
+            if (AsksForMemorySource(userLower)) return false;
+
+            return ContainsAny(replyLower,
+                "creator/profile.md",
+                "kokonoe/memory/facts.md",
+                "перевірила `creator/profile.md",
+                "перевірила creator/profile",
+                "не вгадувала з кавової гущі",
+                "не ворожила по диму",
+                "якщо я ще раз скажу",
+                "старий контекст, і його треба вирізати");
+        }
+
+        private static bool AsksForMemorySource(string userLower)
+            => ContainsAny(userLower,
+                "звідки", "джерело", "джерела", "який файл", "в якому файлі", "де записано", "де ти це знайшла",
+                "покажи файл", "назви файл", "шлях", "source");
 
         private static bool LooksLikeUserEchoClarificationFallback(string replyLower)
             => ContainsAny(replyLower,
