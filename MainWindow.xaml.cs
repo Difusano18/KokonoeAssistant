@@ -2236,7 +2236,8 @@ tags: [kokonoe, live-core, diagnostics]
                 finalReplyTb = agentUi.FinalTextBlock;
 
                 RemoveThinkingBubble();
-                var guardedReply = await GuardAndRepairReplyAsync(sendText, reply, await contextTask, _llmCts?.Token ?? default);
+                var guardUserText = BuildGuardUserText(sendText, imgBytes);
+                var guardedReply = await GuardAndRepairReplyAsync(guardUserText, reply, await contextTask, _llmCts?.Token ?? default);
                 if (!string.Equals(guardedReply, reply, StringComparison.Ordinal))
                 {
                     reply = guardedReply;
@@ -3339,6 +3340,17 @@ tags: []
             {
                 return GuardTemporalReply(userText, reply);
             }
+        }
+
+        private static string BuildGuardUserText(string userText, byte[]? imageBytes)
+        {
+            if (imageBytes == null || imageBytes.Length == 0)
+                return userText;
+
+            var clean = string.IsNullOrWhiteSpace(userText)
+                ? "Що на фото?"
+                : userText.Trim();
+            return "[image] " + clean;
         }
 
         private static string TrimForPrompt(string? text, int max)
@@ -7217,7 +7229,7 @@ tags: [kokonoe, dashboard, live]
                             : caption;
 
                         var imgReply = await _llm.SendAsync(prompt, imgBytes, "image/jpeg", null, ct, agentId: "chat");
-                        imgReply = await GuardAndRepairReplyAsync(prompt, imgReply, "", ct);
+                        imgReply = await GuardAndRepairReplyAsync(BuildGuardUserText(prompt, imgBytes), imgReply, "", ct);
                         await Dispatcher.InvokeAsync(() =>
                         {
                             _tgMessages.Add($"[Kokonoe]: {imgReply}");

@@ -59,6 +59,9 @@ internal static class Program
             Run("Post reply guard repairs vision technical error", PostReplyGuardRepairsVisionTechnicalError);
             Run("Post reply guard protects image only prompt", PostReplyGuardProtectsImageOnlyPrompt);
             Run("Post reply guard duplicate image prompt avoids stale repeat text", PostReplyGuardDuplicateImagePromptAvoidsStaleRepeatText);
+            Run("Post reply guard softens one-letter Telegram ambiguity", PostReplyGuardSoftensOneLetterTelegramAmbiguity);
+            Run("Post reply guard prioritizes image caption over stale one-letter context", PostReplyGuardPrioritizesImageCaptionOverStaleOneLetterContext);
+            Run("Post reply guard repairs blamey answer explanation", PostReplyGuardRepairsBlameyAnswerExplanation);
             Run("Post reply guard blocks therapy meta tone", PostReplyGuardBlocksTherapyMetaTone);
             Run("Post reply guard blocks fabricated external facts", PostReplyGuardBlocksFabricatedExternalFacts);
             Run("Post reply guard blocks stale proactive ping on direct topic", PostReplyGuardBlocksStaleProactivePingOnDirectTopic);
@@ -1372,6 +1375,73 @@ internal static class Program
         AssertTrue(result.ShouldRepair, "duplicate image prompt should be repaired through the model");
         AssertTrue(string.IsNullOrWhiteSpace(result.HardReplacement), "duplicate image prompt should not use stale scripted replacement");
         AssertTrue(result.RepairInstruction.Contains("не цитуй дослівно"), "repair should forbid stale quote echo");
+    }
+
+    private static void PostReplyGuardSoftensOneLetterTelegramAmbiguity()
+    {
+        var now = new DateTime(2026, 5, 23, 0, 19, 0);
+        var state = new KokoInternalState();
+        var userText = "[TG: Yasu] M ?";
+        var badReply = "Що саме «M»? Якщо ти намагаєшся бути загадковим або просто випадково натиснув клавішу — це не працює. Говори конкретно, що тобі треба, або не витрачай мій час.";
+        var messages = new[]
+        {
+            new ChatRepository.ChatMessage { Role = "user", Content = userText, Timestamp = now }
+        };
+        var timeline = new KokoConversationTimelineEngine().Build(messages, state, now, userText);
+
+        var result = new KokoPostReplyGuard().Evaluate(userText, badReply, state, messages, timeline, now);
+
+        AssertTrue(!result.Passed, "guard should reject hostile scolding for a one-letter Telegram turn");
+        AssertTrue(result.ShouldRepair, "one-letter ambiguity should be repaired by the model, not a hardcoded final reply");
+        AssertTrue(result.Violations.Any(v => v.Contains("low-information")), "violation should name low-information input");
+        AssertTrue(result.RepairInstruction.Contains("низькоінформативний") || result.RepairInstruction.Contains("low-information"),
+            "repair should force a soft clarification policy for low-information turns");
+    }
+
+    private static void PostReplyGuardPrioritizesImageCaptionOverStaleOneLetterContext()
+    {
+        var now = new DateTime(2026, 5, 23, 0, 20, 0);
+        var state = new KokoInternalState();
+        var userText = "[image] що це поясни";
+        var badReply = "Що саме «M»? Якщо ти намагаєшся бути загадковим або просто випадково натиснув клавішу — це не працює. Сформулюй нормально.";
+        var messages = new[]
+        {
+            new ChatRepository.ChatMessage { Role = "user", Content = "[TG: Yasu] M ?", Timestamp = now.AddMinutes(-1) },
+            new ChatRepository.ChatMessage { Role = "assistant", Content = "Що саме «M»? Говори конкретно.", Timestamp = now.AddSeconds(-45) },
+            new ChatRepository.ChatMessage { Role = "user", Content = userText, Timestamp = now }
+        };
+        var timeline = new KokoConversationTimelineEngine().Build(messages, state, now, userText);
+
+        var result = new KokoPostReplyGuard().Evaluate(userText, badReply, state, messages, timeline, now);
+
+        AssertTrue(!result.Passed, "guard should reject stale one-letter scolding when the latest turn is image explanation");
+        AssertTrue(result.ShouldRepair, "image-caption context should be repaired through the model");
+        AssertTrue(result.Violations.Any(v => v.Contains("contextual explain")), "violation should name the stale-context image/caption bug");
+        AssertTrue(result.RepairInstruction.Contains("зображення") || result.RepairInstruction.Contains("що це/поясни"),
+            "repair should prioritize the image/caption over stale history");
+    }
+
+    private static void PostReplyGuardRepairsBlameyAnswerExplanation()
+    {
+        var now = new DateTime(2026, 5, 23, 0, 25, 0);
+        var state = new KokoInternalState();
+        var userText = "а що сприяло тобі так відповісти ?";
+        var badReply = "Сприяло? Та те, що ти надіслав мені одну літеру «M» замість нормального речення. Це марна трата часу, формулюй думки словами.";
+        var messages = new[]
+        {
+            new ChatRepository.ChatMessage { Role = "user", Content = "[TG: Yasu] M ?", Timestamp = now.AddMinutes(-6) },
+            new ChatRepository.ChatMessage { Role = "assistant", Content = "Що саме «M»? Говори конкретно.", Timestamp = now.AddMinutes(-5) },
+            new ChatRepository.ChatMessage { Role = "user", Content = userText, Timestamp = now }
+        };
+        var timeline = new KokoConversationTimelineEngine().Build(messages, state, now, userText);
+
+        var result = new KokoPostReplyGuard().Evaluate(userText, badReply, state, messages, timeline, now);
+
+        AssertTrue(!result.Passed, "guard should reject blamey explanations of a bad answer");
+        AssertTrue(result.ShouldRepair, "why-question should be repaired by the model");
+        AssertTrue(result.Violations.Any(v => v.Contains("why-question")), "violation should name the blamey why-question bug");
+        AssertTrue(result.RepairInstruction.Contains("нейтрально") || result.RepairInstruction.Contains("neutrally"),
+            "repair should require a neutral decision-path explanation");
     }
 
     private static void PostReplyGuardBlocksTherapyMetaTone()

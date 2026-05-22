@@ -42,6 +42,12 @@ namespace KokonoeAssistant.Services
                 violations.Add("image-only повідомлення помилково прочитано як порожній спам");
             if (KokoScreenIntent.IsManualScreenScan(userText) && KokoScreenIntent.LooksLikeScreenCapabilityDenial(reply))
                 violations.Add("screen request was answered with capability denial instead of local screenshot route");
+            if (IsLowInformationTurn(userText) && LooksLikeLowInformationScold(replyLower))
+                violations.Add("low-information short message was punished instead of clarified");
+            if (LooksLikeContextualExplainQuestion(userText) && LooksLikeStaleAmbiguityScold(replyLower))
+                violations.Add("contextual explain/image question answered stale one-letter ambiguity instead of the latest prompt");
+            if (IsWhyPreviousReplyQuestion(userLower) && LooksLikeBlameyDecisionExplanation(replyLower))
+                violations.Add("why-question blamed the user instead of explaining the response decision neutrally");
 
             if (violations.Count == 0 && LooksLikeTransportError(reply))
                 return Pass("transport error surfaced; do not hide provider failure");
@@ -195,6 +201,7 @@ namespace KokonoeAssistant.Services
             var cleanTimeline = CleanPromptText(timeline.PromptBlock);
             var personaRules = CleanPromptText(KokoPersonaEngine.BuildRepairRules(userText));
             var planRules = CleanPromptText(KokoResponsePlannerEngine.BuildRepairRules(state.LastResponsePlan));
+            var situationRules = CleanPromptText(BuildSituationRepairRules(userText, violations));
 
             return $"""
 POST-REPLY REPAIR
@@ -209,6 +216,7 @@ Timeline:
 
 {personaRules}
 {planRules}
+{situationRules}
 
 Перепиши відповідь через міркування, не через шаблон.
 Правила:
@@ -223,6 +231,9 @@ Timeline:
 - якщо користувач питає про пам'ять/профіль/що ти знаєш про нього — синтезуй відомі факти природно, без готового шаблону і без згадки назв файлів, якщо він не питає джерело;
 - якщо користувач просить просканувати/подивитись екран — не кажи, що нема доступу; локальний screenshot route має виконати дію або чесно повідомити про збій capture/vision;
 - якщо користувач пише коротко ("привіт", "люблю", "що", "ще раз") — відповідай на соціальний або операційний сенс останнього ходу, не пояснюй внутрішню поломку;
+- якщо користувач пише одну літеру або інший низькоінформативний уламок — не карай і не моралізуй; дай одне коротке уточнення або прив'яжи його до очевидного активного контексту;
+- якщо останнє повідомлення містить зображення/скрін або питання "що це/поясни" — воно має пріоритет над старими короткими репліками в історії;
+- якщо користувач питає, чому відповідь вийшла такою — поясни причину нейтрально як помилку прив'язки контексту і одразу виправ напрям, без звинувачень;
 - не використовуй декоративні ремарки в *зірочках*, якщо користувач сам не почав roleplay;
 - не вигадуй лабораторні/екранні/тілесні образи замість відповіді на конкретний контекст;
 - не вигадуй зовнішні факти про користувача: акаунти, YouTube/Twitch/Discord, мемберства, підписки, покупки, роботу, людей або місця, якщо цього нема в timeline чи репліці користувача;
@@ -235,6 +246,23 @@ Timeline:
 
         private static string CleanPromptText(string? value)
             => LlmService.RepairMojibake(value ?? "").Trim();
+
+        private static string BuildSituationRepairRules(string userText, IReadOnlyList<string> violations)
+        {
+            var rules = new List<string>();
+            if (IsLowInformationTurn(userText))
+                rules.Add("- Latest user turn is low-information noise, not an excuse for a lecture. Ask one compact clarification or map it to the active context.");
+            if (HasImageMarker(userText) || LooksLikeContextualExplainQuestion(userText))
+                rules.Add("- Latest user asks for explanation/context. Explain the current visible/chat context; do not keep punishing an older one-letter message.");
+            if (IsWhyPreviousReplyQuestion((userText ?? "").ToLowerInvariant()))
+                rules.Add("- User asks why the previous answer happened. State the likely routing/context mistake neutrally, then give the corrected answer path.");
+            if (violations.Any(v => v.Contains("one-letter", StringComparison.OrdinalIgnoreCase)))
+                rules.Add("- Stale one-letter ambiguity is not the topic anymore unless the latest user explicitly asks about that exact letter.");
+
+            return rules.Count == 0
+                ? ""
+                : "SITUATION-SPECIFIC FIX:\n" + string.Join("\n", rules);
+        }
 
         private static bool LooksLikeTransportError(string reply)
         {
@@ -302,6 +330,7 @@ Timeline:
         {
             var imagePrompt = ContainsAny(userLower,
                 "\u0444\u043e\u0442\u043e", "\u0437\u043e\u0431\u0440\u0430\u0436", "\u043a\u0430\u0440\u0442\u0438\u043d",
+                "[image]", "[photo]",
                 "фото", "зобр", "картин",
                 "що на фото", "опиши зображення", "проаналізуй фото", "картин");
             if (!imagePrompt) return false;
@@ -313,6 +342,112 @@ Timeline:
                 "пиши щось конкретне",
                 "припиняй цей спам",
                 "продовжуєш кидати порожні");
+        }
+
+        private static bool IsLowInformationTurn(string userText)
+        {
+            var stripped = StripChatPrefix(userText);
+            if (string.IsNullOrWhiteSpace(stripped)) return false;
+            if (stripped.Length > 16) return false;
+
+            var normalized = new string(stripped.Where(char.IsLetterOrDigit).ToArray());
+            if (string.IsNullOrWhiteSpace(normalized)) return false;
+
+            if (normalized.Length <= 1) return true;
+            if (normalized.Length <= 2 && stripped.Any(c => c == '?' || c == '!' || c == '.' || c == '…'))
+                return true;
+
+            return false;
+        }
+
+        private static string StripChatPrefix(string? text)
+        {
+            var value = (text ?? "").Trim();
+            if (value.StartsWith("[", StringComparison.Ordinal))
+            {
+                var end = value.IndexOf(']');
+                if (end >= 0 && end < value.Length - 1)
+                    value = value[(end + 1)..].Trim();
+            }
+
+            if (value.StartsWith("TG:", StringComparison.OrdinalIgnoreCase))
+            {
+                var space = value.IndexOf(' ');
+                if (space >= 0 && space < value.Length - 1)
+                    value = value[(space + 1)..].Trim();
+            }
+
+            return value;
+        }
+
+        private static bool LooksLikeContextualExplainQuestion(string userText)
+        {
+            if (HasImageMarker(userText)) return true;
+
+            var lower = StripChatPrefix(userText).ToLowerInvariant();
+            if (string.IsNullOrWhiteSpace(lower)) return false;
+
+            return ContainsAny(lower,
+                       "що це", "шо це", "що за", "шо за", "поясни", "обясни", "объясни",
+                       "чому так", "почему так", "що сприяло", "що сталося", "що відбулось",
+                       "скрін", "скрин", "фото", "зображ");
+        }
+
+        private static bool HasImageMarker(string? text)
+        {
+            var lower = (text ?? "").TrimStart().ToLowerInvariant();
+            return lower.StartsWith("[image]", StringComparison.Ordinal) ||
+                   lower.StartsWith("[photo]", StringComparison.Ordinal);
+        }
+
+        private static bool IsWhyPreviousReplyQuestion(string userLower)
+            => ContainsAny(userLower,
+                "чому ти так відпов", "чому так відпов", "почему ты так ответ", "почему так ответ",
+                "що сприяло", "що змусило", "що тебе змусило", "чому ти це сказала",
+                "звідки така відповід", "звідки цей висновок");
+
+        private static bool LooksLikeLowInformationScold(string replyLower)
+            => ContainsAny(replyLower,
+                "не витрачай мій час",
+                "марна трата часу",
+                "говори конкретно",
+                "сформулюй нормально",
+                "постав нормальне питання",
+                "випадково натиснув",
+                "випадково натиснула",
+                "намагаєшся бути загадковим",
+                "криптичних повідомлень",
+                "розшифровки криптичних",
+                "одну літеру",
+                "однією приголосною",
+                "однією голосною",
+                "каву гущ",
+                "кавовій гущ");
+
+        private static bool LooksLikeStaleAmbiguityScold(string replyLower)
+            => LooksLikeLowInformationScold(replyLower) ||
+               ContainsAny(replyLower,
+                   "що саме «m»",
+                   "що саме \"m\"",
+                   "що саме m",
+                   "замість нормального речення",
+                   "однією приголосною",
+                   "одну літеру");
+
+        private static bool LooksLikeBlameyDecisionExplanation(string replyLower)
+        {
+            var blame = ContainsAny(replyLower,
+                "сприяло? та те",
+                "ти надіслав",
+                "ти надіслала",
+                "ти написав",
+                "ти написала",
+                "ти кинув",
+                "ти скинув",
+                "замість нормального речення",
+                "формулювати думки словами",
+                "марна трата часу");
+            return blame && LooksLikeStaleAmbiguityScold(replyLower);
         }
 
         private static bool LooksGeneric(string userText, string reply)
@@ -557,6 +692,8 @@ Timeline:
                 "\u0444\u043e\u0442\u043e",
                 "\u0437\u043e\u0431\u0440\u0430\u0436",
                 "\u043a\u0430\u0440\u0442\u0438\u043d",
+                "[image]",
+                "[photo]",
                 "фото",
                 "зобр",
                 "що на фото",

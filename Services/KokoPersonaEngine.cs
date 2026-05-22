@@ -60,6 +60,13 @@ namespace KokonoeAssistant.Services
                 frame.ShouldChallenge = true;
                 frame.ReasonUk = "користувач просить оцінку або архітектурне рішення";
             }
+            else if (LooksLikeLowInformationTurn(lower))
+            {
+                frame.Mode = "low_signal";
+                frame.Stance = "ask one small clarification or use the obvious active context";
+                frame.ShouldAskOneQuestionMax = true;
+                frame.ReasonUk = "повідомлення занадто коротке, щоб робити висновки або сварити";
+            }
             else if (LooksLikeVagueOrSelfContradicting(lower))
             {
                 frame.Mode = "clarify_with_edge";
@@ -139,6 +146,7 @@ PERSONA / ANTI-BOT:
 - не проси уточнення, якщо можна зробити розумне припущення;
 - не цитуй репліку користувача дослівно і не починай з "по твоїй репліці/фразі";
 - якщо користувач пише "ще раз/повтори/спробуй", трактуй це як повтор останньої дії, коли контекст її містить;
+- якщо користувач пише одну літеру або битий уламок, це низький сигнал: одне коротке уточнення без моралі й без лекції;
 - один природний укол дозволений, якщо він не заважає відповіді.
 """;
         }
@@ -158,6 +166,7 @@ Rules:
 - If the user's idea is weak, say so and improve it.
 - Never use service-bot sympathy phrases or generic support scripts.
 - Prefer a concrete action, correction, or decision over soft reassurance.
+- One-letter or garbled messages are low signal: clarify once, do not scold.
 """;
         }
 
@@ -170,6 +179,21 @@ Rules:
 
         private static bool LooksLikeVagueOrSelfContradicting(string lower)
             => ContainsAny(lower, "і все таке", "крч", "ну типу", "якось", "щось там") && lower.Length < 220;
+
+        private static bool LooksLikeLowInformationTurn(string lower)
+        {
+            if (string.IsNullOrWhiteSpace(lower) || lower.Length > 16) return false;
+            if (lower.StartsWith("[", StringComparison.Ordinal))
+            {
+                var end = lower.IndexOf(']');
+                if (end >= 0 && end < lower.Length - 1)
+                    lower = lower[(end + 1)..].Trim();
+            }
+
+            var normalized = new string(lower.Where(char.IsLetterOrDigit).ToArray());
+            return normalized.Length is > 0 and <= 2 &&
+                   (normalized.Length == 1 || lower.Any(c => c == '?' || c == '!' || c == '.' || c == '…'));
+        }
 
         private static bool ContainsAny(string text, params string[] values)
             => values.Any(v => text.Contains(v, StringComparison.OrdinalIgnoreCase));
