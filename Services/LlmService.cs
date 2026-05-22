@@ -91,7 +91,42 @@ namespace KokonoeAssistant.Services
                 if (!string.IsNullOrEmpty(k)) return k;
                 return "";
             }
+            var settingsKey = ResolveSettingsOllamaKey();
+            if (!string.IsNullOrWhiteSpace(settingsKey))
+                return settingsKey;
             return _ollamaApiKey ?? "";
+        }
+
+        private static string ResolveSettingsOllamaKey()
+        {
+            try
+            {
+                var s = AppSettings.Load();
+                if (s.OllamaKeys?.Count > 0)
+                {
+                    s.OllamaActiveKeyIndex = Math.Clamp(s.OllamaActiveKeyIndex, 0, s.OllamaKeys.Count - 1);
+                    for (var tries = 0; tries < s.OllamaKeys.Count; tries++)
+                    {
+                        var idx = (s.OllamaActiveKeyIndex + tries) % s.OllamaKeys.Count;
+                        var key = s.OllamaKeys[idx];
+                        if (IsLiveAgentKey(key))
+                        {
+                            if (idx != s.OllamaActiveKeyIndex)
+                            {
+                                s.OllamaActiveKeyIndex = idx;
+                                s.Save();
+                            }
+                            return key.Key.Trim();
+                        }
+                    }
+                }
+
+                return string.IsNullOrWhiteSpace(s.OllamaApiKey) ? "" : s.OllamaApiKey.Trim();
+            }
+            catch
+            {
+                return "";
+            }
         }
 
         private string? ResolveAgentOllamaKey(KokoAgentLlmProfile? profile)
@@ -134,7 +169,24 @@ namespace KokonoeAssistant.Services
             var profile = ResolveAgentProfile(agentId);
             if (profile?.OllamaKeys?.Count > 0)
                 return Math.Max(1, profile.OllamaKeys.Count(k => IsLiveAgentKey(k)) + 1);
-            return OllamaPool != null ? Math.Max(1, OllamaPool.LiveKeyCount + 1) : 1;
+            if (OllamaPool != null)
+                return Math.Max(1, OllamaPool.LiveKeyCount + 1);
+            return Math.Max(1, GetSettingsOllamaLiveKeyCount() + 1);
+        }
+
+        private static int GetSettingsOllamaLiveKeyCount()
+        {
+            try
+            {
+                var s = AppSettings.Load();
+                if (s.OllamaKeys?.Count > 0)
+                    return s.OllamaKeys.Count(IsLiveAgentKey);
+                return string.IsNullOrWhiteSpace(s.OllamaApiKey) ? 0 : 1;
+            }
+            catch
+            {
+                return 0;
+            }
         }
 
         private TimeSpan? NearestOllamaCooldown(string? agentId)
@@ -167,6 +219,7 @@ namespace KokonoeAssistant.Services
                 return;
             }
             OllamaPool?.RecordRequest(keyUsed);
+            RecordSettingsOllamaKeyRequest(keyUsed);
         }
 
         private void MarkOllamaKeyRateLimited(string? agentId, string keyUsed)
@@ -186,7 +239,41 @@ namespace KokonoeAssistant.Services
                 PersistAgentProfiles();
                 return;
             }
-            OllamaPool?.MarkUnavailable(keyUsed, statusCode);
+            if (OllamaPool != null)
+                OllamaPool.MarkUnavailable(keyUsed, statusCode);
+            else
+                MarkSettingsOllamaKeyUnavailable(keyUsed, statusCode);
+        }
+
+        private static void RecordSettingsOllamaKeyRequest(string keyUsed)
+        {
+            try
+            {
+                var s = AppSettings.Load();
+                var entry = s.OllamaKeys?.FirstOrDefault(k => k.Key == keyUsed);
+                if (entry == null) return;
+                entry.RecentRequests.Add(DateTime.UtcNow);
+                CleanupAgentKey(entry);
+                s.Save();
+            }
+            catch { }
+        }
+
+        private static void MarkSettingsOllamaKeyUnavailable(string keyUsed, int statusCode)
+        {
+            try
+            {
+                var s = AppSettings.Load();
+                var keys = s.OllamaKeys;
+                var entry = keys.FirstOrDefault(k => k.Key == keyUsed);
+                if (entry == null) return;
+                entry.CooldownUntil = DateTime.UtcNow.AddMinutes(Math.Max(1, s.OllamaPoolCooldownMins));
+                var idx = keys.IndexOf(entry);
+                if (idx == s.OllamaActiveKeyIndex && keys.Count > 0)
+                    s.OllamaActiveKeyIndex = (s.OllamaActiveKeyIndex + 1) % keys.Count;
+                s.Save();
+            }
+            catch { }
         }
 
         private bool TryRotateOllamaKeyAfterFailure(string? agentId, string? keyUsed, int statusCode)

@@ -1104,6 +1104,8 @@ internal static class Program
         AssertTrue(result.ShouldRepair, "screen denial should go through repair, not become final answer");
         AssertTrue(result.Violations.Any(v => v.Contains("screen request")), "violation should mention screen request routing");
         AssertTrue(result.RepairInstruction.Contains("локальний screenshot route"), "repair should mention local screenshot route");
+        AssertTrue(KokoScreenIntent.LooksLikeScreenCapabilityDenial("Скріншот зроблено, але надішли мені скріншот як файл."),
+            "screen fallback should reject asking for a screenshot file after local capture already exists");
 
         var colloquialResult = new KokoPostReplyGuard().Evaluate(
             "спробуй сфоткати мій екран",

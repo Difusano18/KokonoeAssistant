@@ -2557,7 +2557,9 @@ tags: [kokonoe, live-core, diagnostics]
                     () => _llm.SendSystemQueryAsync(prompt, ct: fallbackCts.Token),
                     fallbackCts.Token);
                 generated = LlmService.RepairMojibake(generated ?? "").Trim();
-                if (!string.IsNullOrWhiteSpace(generated) && !LlmService.LooksLikeBrokenVisibleText(generated))
+                if (!string.IsNullOrWhiteSpace(generated) &&
+                    !LlmService.LooksLikeBrokenVisibleText(generated) &&
+                    !KokoScreenIntent.LooksLikeScreenCapabilityDenial(generated))
                     return generated;
             }
             catch
