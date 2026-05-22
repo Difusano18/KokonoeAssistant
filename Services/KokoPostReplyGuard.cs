@@ -33,6 +33,8 @@ namespace KokonoeAssistant.Services
 
             if (string.IsNullOrWhiteSpace(reply))
                 violations.Add("порожня відповідь");
+            else if (LlmService.LooksLikeBrokenVisibleText(reply))
+                violations.Add("відповідь пошкоджена: крапкова/битокодована каша замість читабельного тексту");
 
             if (LooksLikeVisionTechnicalError(reply))
                 violations.Add("технічну vision-помилку показано користувачу замість нормальної відповіді");

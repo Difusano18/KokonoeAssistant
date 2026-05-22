@@ -49,6 +49,7 @@ internal static class Program
             Run("Post reply guard protects short affection", PostReplyGuardProtectsShortAffection);
             Run("Post reply guard protects short greeting", PostReplyGuardProtectsShortGreeting);
             Run("Post reply guard blocks repeated fallback loop", PostReplyGuardBlocksRepeatedFallbackLoop);
+            Run("Post reply guard rejects dotted garbage", PostReplyGuardRejectsDottedGarbage);
             Run("Post reply guard replaces vision technical error", PostReplyGuardReplacesVisionTechnicalError);
             Run("Post reply guard protects image only prompt", PostReplyGuardProtectsImageOnlyPrompt);
             Run("Post reply guard duplicate image prompt avoids stale repeat text", PostReplyGuardDuplicateImagePromptAvoidsStaleRepeatText);
@@ -93,6 +94,7 @@ internal static class Program
             Run("Startup greeting fallback does not quote raw latest user text", StartupGreetingFallbackDoesNotQuoteRawLatestUserText);
             Run("Scenario simulation guards temporal continuity", ScenarioSimulationGuardsTemporalContinuity);
             Run("LLM diagnostics snapshot starts idle", LlmDiagnosticsSnapshotStartsIdle);
+            Run("LLM visible text rejects dotted garbage", LlmVisibleTextRejectsDottedGarbage);
             Run("LLM rotates Ollama key after auth failure", LlmRotatesOllamaKeyAfterAuthFailure);
             Run("LLM agent key pool exhaustion does not reuse legacy key", LlmAgentKeyPoolExhaustionDoesNotReuseLegacyKey);
             Run("Inspector renders state report", InspectorRendersStateReport);
@@ -1164,6 +1166,37 @@ internal static class Program
         AssertTrue(result.Violations.Any(v => v.Contains("fallback")), "violation should mention fallback loop");
     }
 
+    private static void PostReplyGuardRejectsDottedGarbage()
+    {
+        var now = new DateTime(2026, 5, 22, 5, 13, 0);
+        var state = new KokoInternalState();
+        var userText = "так спробуй ще раз";
+        var messages = new[]
+        {
+            new ChatRepository.ChatMessage { Role = "user", Content = "спробуй сфоткати мій екран", Timestamp = now.AddMinutes(-1) },
+            new ChatRepository.ChatMessage { Role = "user", Content = userText, Timestamp = now }
+        };
+        var timeline = new KokoConversationTimelineEngine().Build(messages, state, now, userText);
+        var dotted = """
+... ... ..., ... ... ..., ... ... ...
+
+..., ... ... ....
+*........ .... ...*
+
+... ..., Yasu. ... ..., ... ... ... ...
+
+... ... .... ... ... ... IQ ..., ... ... ... ...
+
+Чекаю наступного запиту.
+""";
+
+        var result = new KokoPostReplyGuard().Evaluate(userText, dotted, state, messages, timeline, now);
+
+        AssertTrue(!result.Passed, "guard should reject dotted garbage visible output");
+        AssertTrue(result.ShouldRepair, "dotted garbage should be repaired, not shown");
+        AssertTrue(result.Violations.Any(v => v.Contains("пошкоджена")), "violation should name broken text");
+    }
+
     private static void PostReplyGuardReplacesVisionTechnicalError()
     {
         var now = new DateTime(2026, 5, 13, 2, 16, 0);
@@ -2166,6 +2199,30 @@ internal static class Program
         AssertEqual("idle", diag.Status, "diagnostics should start idle before any request");
         AssertEqual(0L, diag.TotalRequests, "diagnostics should not invent requests");
         AssertTrue(diag.ConsecutiveFailures == 0, "diagnostics should not start in failure state");
+    }
+
+    private static void LlmVisibleTextRejectsDottedGarbage()
+    {
+        var dotted = """
+... ... ..., ... ... ..., ... ... ...
+
+..., ... ... ....
+*........ .... ...*
+
+... ..., Yasu. ... ..., ... ... ... ...
+
+... ... .... ... ... ... IQ ..., ... ... ... ...
+
+Чекаю наступного запиту.
+""";
+
+        AssertTrue(LlmService.LooksLikeBrokenVisibleText(dotted), "dotted replacement garbage must not be visible");
+
+        var repaired = LlmService.RepairMojibake("���� Yasu ����");
+        AssertTrue(!repaired.Contains("..."), "replacement characters should be removed, not converted into dotted UI text");
+
+        var normal = "Бачу чат KokonoeAssistant і твій запит на знімок екрана. Видно темну тему, а збій був у текстовому виводі, не в самому capture.";
+        AssertTrue(!LlmService.LooksLikeBrokenVisibleText(normal), "normal Ukrainian output should remain visible");
     }
 
     private static void LlmRotatesOllamaKeyAfterAuthFailure()

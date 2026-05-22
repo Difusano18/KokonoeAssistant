@@ -2682,7 +2682,7 @@ namespace KokonoeAssistant.Services
         // Remove model-generated garbage tokens that leak into visible output
         private static string CleanGarbage(string text)
         {
-            if (string.IsNullOrEmpty(text)) return "...";
+            if (string.IsNullOrEmpty(text)) return "";
             var originalLength = text.Length;
             text = RepairMojibake(text);
 
@@ -2796,8 +2796,13 @@ namespace KokonoeAssistant.Services
             var result = text.Trim();
             if (result.Length == 0)
             {
-                Debug.WriteLine("[CleanGarbage] Warning: result is empty after cleaning, returning '...'");
-                return "...";
+                Debug.WriteLine("[CleanGarbage] Warning: result is empty after cleaning");
+                return "";
+            }
+            if (LooksLikeBrokenVisibleText(result))
+            {
+                Debug.WriteLine("[CleanGarbage] Rejected broken visible text after cleaning");
+                return "";
             }
             if (result.Length < originalLength)
             {
@@ -2808,21 +2813,52 @@ namespace KokonoeAssistant.Services
 
         private static bool IsBadFinalReply(string text)
         {
-            if (string.IsNullOrWhiteSpace(text)) return true;
+            if (LooksLikeBrokenVisibleText(text)) return true;
             var trimmed = text.Trim();
             if (trimmed.Length < 24) return true;
-            if (trimmed == "...") return true;
 
             var letters = trimmed.Count(char.IsLetter);
             if (letters < 12) return true;
 
+            return false;
+        }
+
+        public static bool LooksLikeBrokenVisibleText(string? text)
+        {
+            if (string.IsNullOrWhiteSpace(text)) return true;
+            var trimmed = text.Trim();
+            if (trimmed == "...") return true;
+
             var replacementCount = trimmed.Count(c => c == '\uFFFD');
+            if (replacementCount > 0) return true;
+            if (ScoreMojibake(trimmed) >= 3) return true;
+
             var dotCount = trimmed.Count(c => c == '.');
             var dotRuns = System.Text.RegularExpressions.Regex.Matches(trimmed, @"\.{3,}").Count;
-            var mojibakeScore = ScoreMojibake(trimmed);
-            if (replacementCount > 0 || mojibakeScore >= 3) return true;
             if (dotRuns >= 4) return true;
             if (dotCount > Math.Max(24, trimmed.Length / 8)) return true;
+
+            var letters = trimmed.Count(char.IsLetter);
+            var punctuation = trimmed.Count(c => !char.IsLetterOrDigit(c) && !char.IsWhiteSpace(c));
+            if (trimmed.Length >= 80 && punctuation > trimmed.Length * 0.55 && letters < trimmed.Length * 0.25)
+                return true;
+
+            var noisyLines = trimmed
+                .Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries)
+                .Select(l => l.Trim())
+                .Count(l =>
+                {
+                    if (l.Length < 8) return false;
+                    var lineLetters = l.Count(char.IsLetter);
+                    var lineDots = l.Count(c => c == '.');
+                    var linePunct = l.Count(c => !char.IsLetterOrDigit(c) && !char.IsWhiteSpace(c));
+                    return lineLetters < 4 && (lineDots >= 6 || linePunct > l.Length / 2);
+                });
+            if (noisyLines >= 3) return true;
+
+            var lower = trimmed.ToLowerInvariant();
+            if (lower.Contains("чекаю наступного запиту") && (dotRuns >= 2 || dotCount > 12))
+                return true;
 
             return false;
         }
@@ -2853,7 +2889,7 @@ namespace KokonoeAssistant.Services
         public static string RepairMojibake(string text)
         {
             if (string.IsNullOrEmpty(text)) return text;
-            text = System.Text.RegularExpressions.Regex.Replace(text, @"\uFFFD{2,}", "...");
+            text = System.Text.RegularExpressions.Regex.Replace(text, @"\uFFFD{2,}", "");
             text = text.Replace("\uFFFD", "");
             if (!LooksLikeMojibake(text)) return text;
 
