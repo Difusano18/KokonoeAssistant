@@ -43,22 +43,22 @@ using WinForms     = System.Windows.Forms;
 
 namespace KokonoeAssistant
 {
-    // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
+    // ------------------------------------------------------------
     // VIEW MODELS
-    // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
+    // ------------------------------------------------------------
 
-    // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
+    // ------------------------------------------------------------
     // MAIN WINDOW
-    // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
+    // ------------------------------------------------------------
 
     public partial class MainWindow : Window
     {
-        // в”Ђв”Ђ Services в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+        // ---- Services ----
         private LlmService         _llm = null!;
         private HealthService      _health = null!;
         private ObsidianMcpService _obsidian = null!;
 
-        // в”Ђв”Ђ Chat в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+        // ---- Chat ----
         private CancellationTokenSource _llmCts = new();
         private bool _isGenerating;
         private FrameworkElement? _thinkingElement;
@@ -67,7 +67,7 @@ namespace KokonoeAssistant
         private DateTime _lastManualScreenScanAt = DateTime.MinValue;
         private int _lastManualScreenScanFailures;
 
-        // в”Ђв”Ђ Pending image в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+        // ---- Pending image ----
         private byte[]?  _imgBytes;
         private string   _imgMime = "image/jpeg";
         private BitmapImage? _imgThumb;
@@ -76,25 +76,25 @@ namespace KokonoeAssistant
         private readonly List<MemoryCortexNodeVm> _memoryCortexNodes = new();
         private double _memoryCortexZoom = 1.0;
 
-        // в”Ђв”Ђ Voice в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+        // ---- Voice ----
         private bool _isRecording;
 
-        // в”Ђв”Ђ Telegram Bot в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+        // ---- Telegram Bot ----
         private TelegramBotClient? _tgBot;
 
         private CancellationTokenSource _tgCts = new();
         private readonly ObservableCollection<string> _tgMessages = new();
 
-        // в”Ђв”Ђ Telegram UserClient (MTProto) в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+        // ---- Telegram UserClient (MTProto) ----
         private CancellationTokenSource _tgUserCts = new();
 
-        // в”Ђв”Ђ Vault в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+        // ---- Vault ----
         private string? _currentNotePath;
 
-        // в”Ђв”Ђ Tab в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+        // ---- Tab ----
         private string _activeTab = "Chat";
 
-        // в”Ђв”Ђ Dashboard в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+        // ---- Dashboard ----
         private DispatcherTimer? _dashTimer;
         private bool _activeDashTabDev = false;
         private readonly ObservableCollection<DashThoughtVm> _dashThoughts    = new();
@@ -119,13 +119,13 @@ namespace KokonoeAssistant
         private WinForms.NotifyIcon? _notifyIcon;
         private CancellationTokenSource? _noticeCts;
 
-        // в”Ђв”Ђ Session chat log (auto-saved to Obsidian) в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+        // ---- Session chat log (auto-saved to Obsidian) ----
         // Created on first message, appended after every exchange.
         private string? _sessionChatPath;
 
-        // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
+        // ------------------------------------------------------------
         // INIT
-        // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
+        // ------------------------------------------------------------
 
         public MainWindow()
         {
@@ -159,7 +159,7 @@ namespace KokonoeAssistant
             });
         }
 
-        // в”Ђв”Ђ Fill work area (above taskbar, not WindowState=Maximized) в”Ђв”Ђ
+        // ---- Fill work area (above taskbar, not WindowState Maximized) ----
         protected override void OnSourceInitialized(EventArgs e)
         {
             base.OnSourceInitialized(e);
@@ -328,7 +328,7 @@ namespace KokonoeAssistant
 
         [DllImport("user32.dll")]
         private static extern bool FlashWindowEx(ref FLASHWINFO pwfi);
-        // в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+        // ------------------------------------------------------------
 
         private void Window_Loaded(object sender, RoutedEventArgs e)
         {
@@ -339,9 +339,9 @@ namespace KokonoeAssistant
             StartUiTextRepairTimer();
         }
 
-        // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
+        // ------------------------------------------------------------
         // HEART UI — pulsing dot + BPM, driven by KokoHeartEngine
-        // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
+        // ------------------------------------------------------------
         private Storyboard? _beatStoryboard;
         private readonly Queue<(DateTime t, double bpm)> _heartHistory = new();
         private readonly Queue<double> _heartRR = new(); // last RR intervals (ms)
@@ -825,9 +825,9 @@ tags: [kokonoe, live-core, diagnostics]
             }
         }
 
-        // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
+        // ------------------------------------------------------------
         // MATRIX RAIN
-        // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
+        // ------------------------------------------------------------
 
         private System.Windows.Threading.DispatcherTimer? _matrixTimer;
         private readonly Random _matrixRng = new();
@@ -1028,9 +1028,9 @@ tags: [kokonoe, live-core, diagnostics]
             }
         }
 
-        // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
+        // ------------------------------------------------------------
         // TAB NAVIGATION
-        // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
+        // ------------------------------------------------------------
 
         private void Tab_Click(object sender, RoutedEventArgs e)
         {
@@ -1147,9 +1147,9 @@ tags: [kokonoe, live-core, diagnostics]
                 : Visibility.Visible;
         }
 
-        // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
+        // ------------------------------------------------------------
         // MEMORY TAB
-        // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
+        // ------------------------------------------------------------
 
         private void MemTabRefresh_Click(object sender, RoutedEventArgs e) => MemTabRefreshData();
 
@@ -1414,7 +1414,7 @@ tags: [kokonoe, live-core, diagnostics]
         }
 
         // PULSE TAB
-        // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
+        // ------------------------------------------------------------
 
         private void PulseTab_SizeChanged(object sender, SizeChangedEventArgs e)
         {
@@ -1581,7 +1581,7 @@ tags: [kokonoe, live-core, diagnostics]
             canvas.Children.Add(dot);
         }
 
-        // в”Ђв”Ђ ECG REAL-TIME ANIMATION в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+        // ---- ECG REAL-TIME ANIMATION ----
         private const double EcgFps       = 40.0;  // frames per second
         private const double EcgScrollPps = 120.0; // pixels per second scroll speed
 
@@ -1688,7 +1688,7 @@ tags: [kokonoe, live-core, diagnostics]
                 }
             };
 
-            // Map [-0.20, 1.0] в†’ [h*0.90, h*0.05]
+            // Map [-0.20, 1.0] -> [h*0.90, h*0.05]
             const double ampLo = -0.25, ampHi = 1.05;
             double ampRng = ampHi - ampLo;
             double mid = h * 0.5;
@@ -1727,9 +1727,9 @@ tags: [kokonoe, live-core, diagnostics]
             DrawEcgBuffer(canvas, _ecgLastBpm);
         }
 
-        // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
+        // ------------------------------------------------------------
         // SANDBOX TAB
-        // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
+        // ------------------------------------------------------------
 
         private async void SandboxRun_Click(object sender, RoutedEventArgs e)
         {
@@ -1939,9 +1939,9 @@ tags: [kokonoe, live-core, diagnostics]
                 $"[{a.UpdatedAt:HH:mm:ss}] {a.Phase}/{a.Tool} :: {TrimLiveCoreLine(a.Thought, _agentDetailLevel == 2 ? 160 : 90)}"));
         }
 
-        // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
+        // ------------------------------------------------------------
         // MCP ENHANCED CATALOG
-        // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
+        // ------------------------------------------------------------
 
         private void McpSyncNotes_Click(object sender, RoutedEventArgs e)
         {
@@ -2028,9 +2028,9 @@ tags: [kokonoe, live-core, diagnostics]
             catch (Exception ex) { McpOutput.Text = $"Error: {ex.Message}"; }
         }
 
-        // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
+        // ------------------------------------------------------------
         // CHAT — SEND MESSAGE
-        // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
+        // ------------------------------------------------------------
 
         private async void Send_Click(object sender, RoutedEventArgs e) => await SendMessage();
 
@@ -2193,26 +2193,28 @@ tags: [kokonoe, live-core, diagnostics]
                     return;
                 }
 
-                if (TryHandleDirectControlCommand(sendText, out var controlReply))
+                var controlCommand = await TryHandleDirectControlCommandAsync(sendText, _llmCts?.Token ?? default);
+                if (controlCommand.Handled)
                 {
                     RemoveThinkingBubble();
                     var replyVm = new ChatMessageVm { Role = "assistant", Content = "" };
                     var replyTb = AddMessageBubble(replyVm);
                     if (replyTb != null)
-                        await TypeIntoAsync(replyTb, controlReply, _llmCts?.Token ?? default);
+                        await TypeIntoAsync(replyTb, controlCommand.Reply, _llmCts?.Token ?? default);
                     else
-                        replyVm.Content = controlReply;
+                        replyVm.Content = controlCommand.Reply;
                     try
                     {
                         ServiceContainer.ChatRepository.InsertMessage(new ChatRepository.ChatMessage
                         {
-                            Content = controlReply,
+                            Content = controlCommand.Reply,
                             Role = "assistant",
                             Author = "Kokonoe",
                             Timestamp = DateTime.Now
                         });
                     }
                     catch { }
+                    _ = Task.Run(() => ServiceContainer.ChatLogger.LogExchange("app", sendText, controlCommand.Reply));
                     return;
                 }
 
@@ -2296,20 +2298,25 @@ tags: [kokonoe, live-core, diagnostics]
             public TextBlock? FinalTextBlock { get; set; }
         }
 
-        private bool TryHandleDirectControlCommand(string userText, out string reply)
+        private async Task<PcIntentExecutionResult> TryHandleDirectControlCommandAsync(string userText, CancellationToken ct)
         {
-            reply = "";
             try
             {
+                string reply;
                 if (TryScheduleWakeOrReminder(userText, out reply))
-                    return true;
+                    return new PcIntentExecutionResult { Handled = true, Reply = reply };
+
+                var pc = await PcIntentRouter.TryExecuteAsync(userText, ServiceContainer.PcControl, ct);
+                if (pc.Handled)
+                    return pc;
 
                 var brain = ServiceContainer.BrainEngine;
                 if (brain != null && brain.TryApplyUserControlCommand(userText, out reply))
-                    return true;
+                    return new PcIntentExecutionResult { Handled = true, Reply = reply };
             }
+            catch (OperationCanceledException) { throw; }
             catch { }
-            return false;
+            return new PcIntentExecutionResult { Handled = false };
         }
 
         private bool TryScheduleWakeOrReminder(string userText, out string reply)
@@ -3377,9 +3384,9 @@ tags: []
             Dispatcher.InvokeAsync(() => MessagesScroll.ScrollToBottom(), DispatcherPriority.Render);
         }
 
-        // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
+        // ------------------------------------------------------------
         // CHAT — HISTORY
-        // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
+        // ------------------------------------------------------------
 
         private void LoadChatHistory()
         {
@@ -3395,7 +3402,7 @@ tags: []
                 foreach (var m in msgs.TakeLast(60))
                     AddMessageBubble(new ChatMessageVm { Role = m.Role, Content = m.Content, Time = m.Timestamp });
 
-                // в”Ђв”Ђ Vault memory bootstrap в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+                // ---- Vault memory bootstrap ----
                 // При рестарті моделі LLM не знає що було раніше.
                 // Інжектуємо ключову інформацію з vault як першу "system" запис
                 // щоб Kokonoe одразу знала контекст.
@@ -3581,8 +3588,8 @@ tags: []
             }
         }
 
-        // в”Ђв”Ђ Auto session log в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
-        // Called in a background Task after every userв†”Kokonoe exchange.
+        // ---- Auto session log ----
+        // Called in a background Task after every user<->Kokonoe exchange.
         // Creates the session file lazily on the first message, then appends.
         private void AppendToSessionLog(string userMsg, string botReply)
         {
@@ -3676,7 +3683,7 @@ tags: []
             var userMaxWidth = GetChatBubbleMaxWidth(620, 132);
             var assistantMaxWidth = GetChatBubbleMaxWidth(700, 132);
 
-            // в”Ђв”Ђ SYSTEM MESSAGE в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+            // ---- SYSTEM MESSAGE ----
             if (vm.Role == "system")
             {
                 var sysBorder = new Border
@@ -3713,7 +3720,7 @@ tags: []
 
             if (isUser)
             {
-                // в”Ђв”Ђ USER BUBBLE (right) в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+                // ---- USER BUBBLE (right) ----
                 var outerUser = new StackPanel
                 {
                     HorizontalAlignment = System.Windows.HorizontalAlignment.Right,
@@ -3776,7 +3783,7 @@ tags: []
             }
             else
             {
-                // в”Ђв”Ђ ASSISTANT BUBBLE (left) в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+                // ---- ASSISTANT BUBBLE (left) ----
                 var outer = new StackPanel
                 {
                     HorizontalAlignment = System.Windows.HorizontalAlignment.Left,
@@ -4014,7 +4021,7 @@ tags: []
             thinkingStack.Children.Add(dotsPanel);
             bubble.Child = thinkingStack;
 
-            // Timer: cycle through dots 0в†’1в†’2в†’0...
+            // Timer: cycle through dots 0->1->2->0...
             int frame = 0;
             var dotsTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(400) };
             dotsTimer.Tick += (_, _) =>
@@ -4148,9 +4155,9 @@ tags: []
             catch { return System.Windows.Media.Brushes.Transparent; }
         }
 
-        // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
+        // ------------------------------------------------------------
         // IMAGE HANDLING
-        // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
+        // ------------------------------------------------------------
 
         private void AttachImage_Click(object sender, RoutedEventArgs e)
         {
@@ -4369,9 +4376,9 @@ tags: []
             PendingImageThumb.Source = null;
         }
 
-        // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
+        // ------------------------------------------------------------
         // VOICE
-        // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
+        // ------------------------------------------------------------
 
         private async void Record_Click(object sender, RoutedEventArgs e)
         {
@@ -4421,9 +4428,9 @@ tags: []
             }
         }
 
-        // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
+        // ------------------------------------------------------------
         // TTS
-        // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
+        // ------------------------------------------------------------
 
         private void SpeakAsync(string text)
         {
@@ -4445,9 +4452,9 @@ tags: []
             catch { }
         }
 
-        // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
+        // ------------------------------------------------------------
         // FORMATTING TOOLBAR
-        // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
+        // ------------------------------------------------------------
 
         private void FmtBold_Click(object s, RoutedEventArgs e)   => WrapSel("**", "**");
         private void FmtItalic_Click(object s, RoutedEventArgs e) => WrapSel("*", "*");
@@ -4466,9 +4473,9 @@ tags: []
             InputBox.Focus();
         }
 
-        // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
+        // ------------------------------------------------------------
         // PIN / EXPORT / SUMMARIZE
-        // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
+        // ------------------------------------------------------------
 
         private void PinMsg_Click(object sender, RoutedEventArgs e)
         {
@@ -4500,9 +4507,9 @@ tags: []
             WMsgBox.Show(summary?.Summary ?? "Немає даних.", "Summary");
         }
 
-        // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
+        // ------------------------------------------------------------
         // SCROLL
-        // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
+        // ------------------------------------------------------------
 
         private void MessagesScroll_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
         {
@@ -4510,9 +4517,9 @@ tags: []
             e.Handled = true;
         }
 
-        // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
+        // ------------------------------------------------------------
         // VAULT SIDEBAR
-        // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
+        // ------------------------------------------------------------
 
         private void LoadVaultSidebar()
         {
@@ -4575,9 +4582,9 @@ tags: []
             // TODO: filter tree
         }
 
-        // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
+        // ------------------------------------------------------------
         // VAULT TAB
-        // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
+        // ------------------------------------------------------------
 
         private void RefreshNotesList()
         {
@@ -4777,13 +4784,13 @@ tags: []
             }
         }
 
-        // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
+        // ------------------------------------------------------------
         // HEALTH TAB
-        // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
+        // ------------------------------------------------------------
 
-        // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
+        // ------------------------------------------------------------
         // CALENDAR TAB
-        // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
+        // ------------------------------------------------------------
 
         private DateTime _calViewDate    = new(DateTime.Today.Year, DateTime.Today.Month, 1);
         private DateTime _calSelectedDate = DateTime.Today;
@@ -4822,7 +4829,7 @@ tags: []
 
             CalMonthLabel.Text = _calViewDate.ToString("MMMM yyyy").ToUpper();
 
-            // в”Ђв”Ђ Weekday header в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+            // ---- Weekday header ----
             CalWeekHeader.Children.Clear();
             CalWeekHeader.ColumnDefinitions.Clear();
             var days = new[] { "ПН", "ВТ", "СР", "ЧТ", "ПТ", "СБ", "НД" };
@@ -4842,7 +4849,7 @@ tags: []
                 CalWeekHeader.Children.Add(tb);
             }
 
-            // в”Ђв”Ђ Day grid в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+            // ---- Day grid ----
             CalDaysGrid.Children.Clear();
             CalDaysGrid.ColumnDefinitions.Clear();
             CalDaysGrid.RowDefinitions.Clear();
@@ -5009,13 +5016,13 @@ tags: []
             }).ToList();
         }
 
-        // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
+        // ------------------------------------------------------------
         // TOOLS TAB — DASHBOARD
-        // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
+        // ------------------------------------------------------------
 
         private void LoadToolsTab() { /* called at startup; real load happens when tab is opened */ }
 
-        // в”Ђв”Ђ Dashboard lifecycle в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+        // ---- Dashboard lifecycle ----
         private void DashLoadAll()
         {
             try
@@ -5108,7 +5115,7 @@ tags: []
             }
         }
 
-        // в”Ђв”Ђ Dashboard tab switching в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+        // ---- Dashboard tab switching ----
         private void DashTabNeuro_Click(object s, System.Windows.Input.MouseButtonEventArgs e)
             => DashSetActiveTab("neuro");
 
@@ -5228,7 +5235,7 @@ tags: []
             catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[Dash] system load: {ex.Message}"); }
         }
 
-        // в”Ђв”Ђ Header в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+        // ---- Header ----
         private void DashLoadEmotionalHeader()
         {
             try
@@ -5295,7 +5302,7 @@ tags: []
             catch { }
         }
 
-        // в”Ђв”Ђ Neuro charts в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+        // ---- Neuro charts ----
         private void DashDrawNeuroCharts()
         {
             try
@@ -5447,7 +5454,7 @@ tags: []
             catch { }
         }
 
-        // в”Ђв”Ђ MOOD 24H в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+        // ---- MOOD 24H ----
         private void DashDrawMood24h()
         {
             try
@@ -5535,7 +5542,7 @@ tags: []
             catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[Dash] mood24h: {ex.Message}"); }
         }
 
-        // в”Ђв”Ђ WEEKLY HEATMAP 7Г—24 в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+        // ---- WEEKLY HEATMAP 7x24 ----
         private void DashDrawWeeklyHeatmap()
         {
             try
@@ -5691,7 +5698,7 @@ tags: []
             catch { }
         }
 
-        // в”Ђв”Ђ KPI Cards в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+        // ---- KPI Cards ----
         private void DashLoadKpiCards()
         {
             try
@@ -5760,7 +5767,7 @@ tags: []
             catch { }
         }
 
-        // в”Ђв”Ђ Thought Stream + Curiosities в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+        // ---- Thought Stream + Curiosities ----
 
         /// <summary>
         /// Очищає текст думки від JSON-форматування, markdown тегів та артефактів.
@@ -5922,7 +5929,7 @@ tags: []
             catch { }
         }
 
-        // в”Ђв”Ђ Health в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+        // ---- Health ----
         private void RefreshRightOpsPanel()
         {
             try
@@ -6221,7 +6228,7 @@ tags: []
             return "критичних ризиків немає, що майже підозріло";
         }
 
-        // в”Ђв”Ђ Obsidian Sync в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+        // ---- Obsidian Sync ----
         private void DashSyncToObsidian(bool forceDaily = false)
         {
             try
@@ -6249,7 +6256,7 @@ tags: []
                     ? "перший знімок після запуску"
                     : _dashLastEmotionSynced;
 
-                // в”Ђв”Ђ Write Kokonoe/Dashboard.md (overwrite, always fresh) в”Ђв”Ђ
+                // ---- Write Kokonoe/Dashboard.md (overwrite, always fresh) ----
                 var thoughts  = brain.GetRecentThoughts(5);
                 var thoughtLines = thoughts
                     .Select(DashboardThoughtForVault)
@@ -6349,7 +6356,7 @@ tags: [kokonoe, dashboard, live]
 """;
                 obsidian.WriteNote("Kokonoe/Dashboard.md", dashContent);
 
-                // в”Ђв”Ђ Append to daily note (throttled or on emotion change) в”Ђв”Ђ
+                // ---- Append to daily note (throttled or on emotion change) ----
                 if (forceDaily)
                 {
                     var emoji = emotion.Current.ToString() switch
@@ -6379,7 +6386,7 @@ tags: [kokonoe, dashboard, live]
             catch { /* vault недоступний — не критично */ }
         }
 
-        // в”Ђв”Ђ Dev section в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+        // ---- Dev section ----
         private void DashDrawDevSection()
         {
             try
@@ -6709,7 +6716,7 @@ tags: [kokonoe, dashboard, live]
         private static int DashGetCurrentSprintDay()
             => (DateTime.Today.DayOfYear - 1) % 14 + 1;
 
-        // в”Ђв”Ђ Sparkline в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+        // ---- Sparkline ----
         private void DashDrawSparkline(Canvas canvas, double[] values, MediaColor color)
         {
             canvas.Children.Clear();
@@ -6737,7 +6744,7 @@ tags: [kokonoe, dashboard, live]
             canvas.Children.Add(dot);
         }
 
-        // в”Ђв”Ђ Data helpers в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+        // ---- Data helpers ----
         private double[] DashBuildConnSparkValues(KokoEmotionEngine emotion)
         {
             var result  = new double[7];
@@ -6821,7 +6828,7 @@ tags: [kokonoe, dashboard, live]
             return result;
         }
 
-        // в”Ђв”Ђ Pie slice в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+        // ---- Pie slice ----
         private static System.Windows.Shapes.Path DashPieSlice(double cx, double cy, double r, double ir,
                               double startDeg, double sweepDeg, MediaBrush fill)
         {
@@ -6847,7 +6854,7 @@ tags: [kokonoe, dashboard, live]
             return new System.Windows.Shapes.Path { Data = geom, Fill = fill, Opacity = 0.88 };
         }
 
-        // в”Ђв”Ђ Drawing primitives в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+        // ---- Drawing primitives ----
         private static System.Windows.Shapes.Line DashHLine(double x1, double x2, double y, MediaColor color, double sw = 1)
             => new() { X1 = x1, X2 = x2, Y1 = y, Y2 = y,
                 Stroke = new System.Windows.Media.SolidColorBrush(color), StrokeThickness = sw };
@@ -6889,7 +6896,7 @@ tags: [kokonoe, dashboard, live]
             return MediaColor.FromArgb(alpha, lerp(a.R, b.R), lerp(a.G, b.G), lerp(a.B, b.B));
         }
 
-        // в”Ђв”Ђ Emotion color map в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+        // ---- Emotion color map ----
         private static MediaColor DashEmotionColorOf(KokoEmotionEngine.EmotionState s) => s switch
         {
             KokoEmotionEngine.EmotionState.Calm       => MediaColor.FromRgb(0,   206, 209),
@@ -6974,9 +6981,9 @@ tags: [kokonoe, dashboard, live]
             catch (Exception ex) { McpOutput.Text = $"Error opening graph: {ex.Message}"; }
         }
 
-        // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
+        // ------------------------------------------------------------
         // TELEGRAM
-        // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
+        // ------------------------------------------------------------
 
         private void InitBrain()
         {
@@ -7091,9 +7098,9 @@ tags: [kokonoe, dashboard, live]
             }
         }
 
-        // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
+        // ------------------------------------------------------------
         // TELEGRAM — HANDLER
-        // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
+        // ------------------------------------------------------------
 
         private bool IsAuthorizedTelegramChat(long chatId)
         {
@@ -7129,7 +7136,7 @@ tags: [kokonoe, dashboard, live]
                     return;
                 }
 
-                // в”Ђв”Ђ Photo message в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+                // ---- Photo message ----
                 if (msg.Photo != null && msg.Photo.Length > 0)
                 {
                     var caption = msg.Caption ?? "";
@@ -7186,7 +7193,7 @@ tags: [kokonoe, dashboard, live]
                 }
                 catch { }
 
-                // в”Ђв”Ђ Commands в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+                // ---- Commands ----
                 if (text.StartsWith("/start") || text == "/menu")
                 {
                     await TgSendMainMenu(bot, chatId, ct);
@@ -7204,7 +7211,7 @@ tags: [kokonoe, dashboard, live]
                     return;
                 }
 
-                // в”Ђв”Ђ Awaiting states в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+                // ---- Awaiting states ----
                 var awaiting = ConsumeTgAwaiting(chatId);
                 if (awaiting == TgAwaitingMode.Note)
                 {
@@ -7220,10 +7227,8 @@ tags: [kokonoe, dashboard, live]
                 if (awaiting == TgAwaitingMode.Command)
                 {
                     await bot.SendMessage(chatId, "⏳ Виконую...", cancellationToken: ct);
-                    var cmdOutput = await ServiceContainer.PcControl.RunCommandAsync(text);
-                    await bot.SendMessage(chatId, $"```\n{cmdOutput}\n```",
-                        parseMode: Telegram.Bot.Types.Enums.ParseMode.Markdown,
-                        cancellationToken: ct);
+                    var cmdOutput = await ServiceContainer.PcControl.RunCommandAsync(text, enforceSafety: true);
+                    await bot.SendMessage(chatId, $"PowerShell:\n{cmdOutput}", cancellationToken: ct);
                     return;
                 }
 
@@ -7241,25 +7246,27 @@ tags: [kokonoe, dashboard, live]
                     return;
                 }
 
-                // в”Ђв”Ђ Regular chat в†’ LLM в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+                // ---- Regular chat - LLM ----
                 if (await TryHandleTelegramScreenScanAsync(bot, chatId, from, text, ct))
                     return;
 
-                if (TryHandleDirectControlCommand(text, out var controlReply))
+                var controlCommand = await TryHandleDirectControlCommandAsync(text, ct);
+                if (controlCommand.Handled)
                 {
                     await Dispatcher.InvokeAsync(() =>
                     {
-                        _tgMessages.Add($"[Kokonoe]: {controlReply}");
+                        _tgMessages.Add($"[Kokonoe]: {controlCommand.Reply}");
                         TgScroll.ScrollToBottom();
                         AddMessageBubble(new ChatMessageVm { Role = "user", Content = $"[TG: {from}] {text}" });
-                        AddMessageBubble(new ChatMessageVm { Role = "assistant", Content = controlReply });
+                        AddMessageBubble(new ChatMessageVm { Role = "assistant", Content = controlCommand.Reply });
                     });
-                    try { await bot.SendMessage(chatId, controlReply, cancellationToken: ct); } catch { }
+                    try { await bot.SendMessage(chatId, controlCommand.Reply, cancellationToken: ct); } catch { }
                     try
                     {
-                        ServiceContainer.ChatRepository.InsertMessage(new ChatRepository.ChatMessage { Content = controlReply, Role = "assistant", Author = "Kokonoe", Timestamp = DateTime.Now });
+                        ServiceContainer.ChatRepository.InsertMessage(new ChatRepository.ChatMessage { Content = controlCommand.Reply, Role = "assistant", Author = "Kokonoe", Timestamp = DateTime.Now });
                     }
                     catch { }
+                    _ = Task.Run(() => ServiceContainer.ChatLogger.LogExchange("tg", text, controlCommand.Reply));
                     return;
                 }
 
@@ -7386,7 +7393,7 @@ tags: [kokonoe, dashboard, live]
                     await TgCompleteGoal(bot, chatId, g["goal_done_".Length..], ct);
                     break;
 
-                // в”Ђв”Ђ PC Control в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+                // ---- PC Control ----
                 case "pc":              await TgSendPcMenu(bot, chatId, ct);           break;
                 case "pc_screenshot":   await TgSendScreenshot(bot, chatId, ct);       break;
                 case "pc_sysinfo":      await TgSendSysInfo(bot, chatId, ct);          break;
@@ -7411,7 +7418,8 @@ tags: [kokonoe, dashboard, live]
                 case "pc_restart_ok":   await bot.SendMessage(chatId, "🔄 Рестарт через 10 секунд.", cancellationToken: ct);
                                         ServiceContainer.PcControl.Restart(10);        break;
                 case "pc_cmd":
-                    await bot.SendMessage(chatId, "PowerShell з Telegram вимкнено. Я не залишаю віддалену консоль просто тому, що хтось назвав це фічею.", cancellationToken: ct);
+                    SetTgAwaiting(chatId, TgAwaitingMode.Command);
+                    await bot.SendMessage(chatId, "PowerShell-команда. Без руйнівних фокусів: видалення, форматування, shutdown/restart через цей шлях блокуються.", cancellationToken: ct);
                     break;
                 case "pc_open":
                     SetTgAwaiting(chatId, TgAwaitingMode.Open);
@@ -7424,7 +7432,7 @@ tags: [kokonoe, dashboard, live]
             }
         }
 
-        // в”Ђв”Ђ Menu builders в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+        // ---- Menu builders ----
 
         private async Task TgSendMainMenu(ITelegramBotClient bot, long chatId, CancellationToken ct)
         {
@@ -7595,7 +7603,7 @@ tags: [kokonoe, dashboard, live]
             await bot.SendMessage(chatId, "Як ти зараз?", replyMarkup: kb, cancellationToken: ct);
         }
 
-        // в”Ђв”Ђ PC Control menus в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+        // ---- PC Control menus ----
 
         private async Task TgSendPcMenu(ITelegramBotClient bot, long chatId, CancellationToken ct)
         {
@@ -7815,9 +7823,9 @@ tags: [kokonoe, dashboard, live]
             if (e.Key == Key.Enter) TgSend_Click(sender, e);
         }
 
-        // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
+        // ------------------------------------------------------------
         // TELEGRAM USER CLIENT (MTProto)
-        // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
+        // ------------------------------------------------------------
 
         /// <summary>
         /// Чистить відповідь від ролплей-ремарок перед відправкою в Telegram.
@@ -7975,27 +7983,28 @@ tags: [kokonoe, dashboard, live]
                 if (await TryHandleTelegramUserScreenScanAsync(msg, svc, _tgUserCts.Token))
                     return;
 
-                if (TryHandleDirectControlCommand(msg.Text, out var controlReply))
+                var controlCommand = await TryHandleDirectControlCommandAsync(msg.Text, _tgUserCts.Token);
+                if (controlCommand.Handled)
                 {
                     await Dispatcher.InvokeAsync(() =>
                     {
-                        _tgMessages.Add($"[Kokonoe → {msg.ChatName}]: {controlReply}");
+                        _tgMessages.Add($"[Kokonoe → {msg.ChatName}]: {controlCommand.Reply}");
                         TgScroll.ScrollToBottom();
                         AddMessageBubble(new ChatMessageVm { Role = "user", Content = $"[TG {msg.Sender}]: {msg.Text}" });
-                        AddMessageBubble(new ChatMessageVm { Role = "assistant", Content = controlReply });
+                        AddMessageBubble(new ChatMessageVm { Role = "assistant", Content = controlCommand.Reply });
                     });
                     try
                     {
                         ServiceContainer.ChatRepository.InsertMessage(new ChatRepository.ChatMessage
                         {
-                            Content = controlReply,
+                            Content = controlCommand.Reply,
                             Role = "assistant",
                             Author = "Kokonoe",
                             Timestamp = DateTime.Now
                         });
                     }
                     catch { }
-                    await svc.SendAsync(msg.ChatId, controlReply, _tgUserCts.Token);
+                    await svc.SendAsync(msg.ChatId, controlCommand.Reply, _tgUserCts.Token);
                     return;
                 }
 
@@ -8113,9 +8122,9 @@ tags: [kokonoe, dashboard, live]
             return true;
         }
 
-        // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
+        // ------------------------------------------------------------
         // SETTINGS PANEL (inline slide-in)
-        // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
+        // ------------------------------------------------------------
 
         private void OpenSettings_Click(object sender, RoutedEventArgs e) => OpenSettingsPanel();
 
@@ -8298,7 +8307,7 @@ tags: [kokonoe, dashboard, live]
             }
         }
 
-        // в”Ђв”Ђ Ollama Cloud key-pool helpers в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+        // ---- Ollama Cloud key-pool helpers ----
 
         private void LoadOllamaKeysVM(AppSettings s)
         {
@@ -8685,9 +8694,9 @@ tags: [kokonoe, dashboard, live]
             }
         }
 
-        // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
+        // ------------------------------------------------------------
         // WINDOW CHROME
-        // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
+        // ------------------------------------------------------------
 
         private void TitleBar_MouseDown(object sender, MouseButtonEventArgs e)
         {
@@ -8715,9 +8724,9 @@ tags: [kokonoe, dashboard, live]
             base.OnClosed(e);
         }
 
-        // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
+        // ------------------------------------------------------------
         // CLEANUP
-        // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
+        // ------------------------------------------------------------
 
         private void Cleanup()
         {

@@ -20,7 +20,7 @@ namespace KokonoeAssistant.Services
             _vault = Path.GetFullPath(vaultPath);
         }
 
-        // в”Ђв”Ђ LIST в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+        // ---- LIST ----
 
         public List<string> ListNotes(string? subfolder = null)
         {
@@ -41,7 +41,7 @@ namespace KokonoeAssistant.Services
                 .ToList();
         }
 
-        // в”Ђв”Ђ READ в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+        // ---- READ ----
 
         public string? ReadNote(string path)
         {
@@ -49,7 +49,7 @@ namespace KokonoeAssistant.Services
             return File.Exists(full) ? File.ReadAllText(full, Encoding.UTF8) : null;
         }
 
-        // в”Ђв”Ђ WRITE / CREATE в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+        // ---- WRITE / CREATE ----
 
         public string WriteNote(string path, string content)
         {
@@ -221,7 +221,7 @@ tags: [{SanitizeTagsLine(tagsLine)}]
             return accepted.Count;
         }
 
-        // в”Ђв”Ђ DELETE в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+        // ---- DELETE ----
 
         public string DeleteNote(string path)
         {
@@ -231,7 +231,7 @@ tags: [{SanitizeTagsLine(tagsLine)}]
             return "Видалено: " + path;
         }
 
-        // в”Ђв”Ђ MOVE / RENAME / FOLDER в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+        // ---- MOVE / RENAME / FOLDER ----
 
         public string MoveNote(string oldPath, string newPath)
         {
@@ -277,7 +277,7 @@ tags: [{SanitizeTagsLine(tagsLine)}]
                 BuildTree(sb, root, d, depth + 1, maxDepth);
         }
 
-        // в”Ђв”Ђ SEARCH в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+        // ---- SEARCH ----
 
         public List<SearchResult> SearchNotes(string query, int max = 10)
         {
@@ -319,7 +319,7 @@ tags: [{SanitizeTagsLine(tagsLine)}]
             return count;
         }
 
-        // в”Ђв”Ђ DAILY NOTE в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+        // ---- DAILY NOTE ----
 
         public string GetOrCreateDailyNote()
         {
@@ -345,7 +345,7 @@ tags: [{SanitizeTagsLine(tagsLine)}]
             return AppendToNote(rel, content);
         }
 
-        // в”Ђв”Ђ VAULT STATUS / HEALTH в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+        // ---- VAULT STATUS / HEALTH ----
 
         /// <summary>
         /// Повертає стан vault: порожні нотатки, осиротілі (без посилань), загальна статистика.
@@ -517,7 +517,7 @@ tags: [{SanitizeTagsLine(tagsLine)}]
             return deleted;
         }
 
-        // в”Ђв”Ђ BRAIN VAULT INITIALIZATION в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+        // ---- BRAIN VAULT INITIALIZATION ----
 
         /// <summary>
         /// Перевіряє стан vault і повертає статус ініціалізації.
@@ -684,7 +684,7 @@ created: {DateTime.Now:yyyy-MM-dd}
             return result;
         }
 
-        // в”Ђв”Ђ TOOLS FOR LLM в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+        // ---- TOOLS FOR LLM ----
 
         public VaultMaintenanceResult MaintainKokonoeVaultArchitecture(string reason = "manual")
         {
@@ -1397,7 +1397,7 @@ vault_status — стан vault (порожні, осиротілі нотатк
 cleanup_empty — видалити порожні нотатки
 """;
 
-        // в”Ђв”Ђ GRAPH / LINKS в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+        // ---- GRAPH / LINKS ----
 
         /// <summary>
         /// Повертає словник: назва нотатки → відносний шлях.
@@ -1568,9 +1568,9 @@ cleanup_empty — видалити порожні нотатки
             return backlinks;
         }
 
-        // в”Ђв”Ђ HELPERS в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+        // ---- HELPERS ----
 
-        // в”Ђв”Ђ SEMANTIC SEARCH в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+        // ---- SEMANTIC SEARCH ----
 
         /// <summary>
         /// Пошук нотаток за змістом з TF-IDF ранжуванням.
@@ -1630,7 +1630,7 @@ cleanup_empty — видалити порожні нотатки
             return (start > 0 ? "…" : "") + content[start..end].Trim() + (end < content.Length ? "…" : "");
         }
 
-        // в”Ђв”Ђ NOTE GRAPH в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+        // ---- NOTE GRAPH ----
 
         /// <summary>Граф посилань: словник {нотатка → список куди веде}</summary>
         public Dictionary<string, List<string>> GetNoteGraph()
@@ -1660,7 +1660,7 @@ cleanup_empty — видалити порожні нотатки
             return graph;
         }
 
-        // в”Ђв”Ђ MERGE NOTES в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+        // ---- MERGE NOTES ----
 
         /// <summary>Злити кілька нотаток в одну (перша — destination, решта — source)</summary>
         public string MergeNotes(string[] paths, string separator = "\n\n---\n\n")
@@ -1690,7 +1690,7 @@ cleanup_empty — видалити порожні нотатки
             return paths[0];
         }
 
-        // в”Ђв”Ђ MODIFIED TODAY в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+        // ---- MODIFIED TODAY ----
 
         /// <summary>Нотатки змінені сьогодні</summary>
         public List<string> GetNotesModifiedToday()
@@ -1703,7 +1703,7 @@ cleanup_empty — видалити порожні нотатки
                 .ToList();
         }
 
-        // в”Ђв”Ђ AUTO TAG в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+        // ---- AUTO TAG ----
 
         /// <summary>Додати теги в frontmatter нотатки на основі її змісту</summary>
         public string AutoTagNote(string relPath, string[] tags)
@@ -1739,7 +1739,7 @@ cleanup_empty — видалити порожні нотатки
             return relPath;
         }
 
-        // в”Ђв”Ђ CLUSTER ORPHANS в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+        // ---- CLUSTER ORPHANS ----
 
         /// <summary>Знайти нотатки без жодних зв'язків (ні вхідних ні вихідних)</summary>
         public List<string> GetIsolatedNotes()

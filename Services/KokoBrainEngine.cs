@@ -12,9 +12,9 @@ using Telegram.Bot;
 
 namespace KokonoeAssistant.Services
 {
-    // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
+    // ------------------------------------------------------------
     // INTERNAL STATE — персистентна пам'ять Kokonoe між сесіями
-    // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
+    // ------------------------------------------------------------
 
     public class KokoInternalState
     {
@@ -74,9 +74,9 @@ namespace KokonoeAssistant.Services
         public DateTime PersonalityShiftAt  { get; set; } = DateTime.MinValue;
 
         // Динаміка тиші — окремі cooldown рівні
-        public DateTime SilenceLevel1At    { get; set; } = DateTime.MinValue; // 1Рі jab
-        public DateTime SilenceLevel2At    { get; set; } = DateTime.MinValue; // 3Рі check
-        public DateTime SilenceLevel3At    { get; set; } = DateTime.MinValue; // 6Рі observation
+        public DateTime SilenceLevel1At    { get; set; } = DateTime.MinValue; // 1h jab
+        public DateTime SilenceLevel2At    { get; set; } = DateTime.MinValue; // 3h check
+        public DateTime SilenceLevel3At    { get; set; } = DateTime.MinValue; // 6h observation
 
         // Кеш релевантної пам'яті
         public string  CachedRelevantMemory{ get; set; } = "";
@@ -213,9 +213,9 @@ namespace KokonoeAssistant.Services
         public DateTime LastWrittenAt { get; set; } = DateTime.MinValue;
     }
 
-    // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
+    // ------------------------------------------------------------
     // BRAIN ENGINE
-    // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
+    // ------------------------------------------------------------
 
     public class KokoBrainEngine : IDisposable
     {
@@ -456,7 +456,7 @@ namespace KokonoeAssistant.Services
             _tgInitialized = true;
         }
 
-        // в”Ђв”Ђ TELEGRAM SELF-INIT в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+        // ---- TELEGRAM SELF-INIT ----
         // Brain ініціалізує свій TG незалежно від MainWindow.
         // Якщо SetTelegram не викликали (помилка в UI або неправильний порядок) —
         // при першій потребі brain сам підключається до TG через settings.
@@ -530,7 +530,7 @@ namespace KokonoeAssistant.Services
             return DateTime.Now - lastUserAt < TimeSpan.FromMinutes(10);
         }
 
-        // в”Ђв”Ђ STATE PERSISTENCE в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+        // ---- STATE PERSISTENCE ----
 
         private KokoInternalState LoadState()
         {
@@ -558,7 +558,7 @@ namespace KokonoeAssistant.Services
             catch { }
         }
 
-        // в”Ђв”Ђ CONTEXT BUILDER в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+        // ---- CONTEXT BUILDER ----
 
         private static bool RepairMojibakeObject(object? value, HashSet<object>? seen = null)
         {
@@ -945,7 +945,7 @@ namespace KokonoeAssistant.Services
             return sb.ToString();
         }
 
-        // в”Ђв”Ђ PERSONALITY INJECTION в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+        // ---- PERSONALITY INJECTION ----
 
         private string BuildPersonalityInjection()
         {
@@ -1288,7 +1288,7 @@ namespace KokonoeAssistant.Services
             return sb.ToString();
         }
 
-        // в”Ђв”Ђ THINK LOOP (inner monologue) в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+        // ---- THINK LOOP (inner monologue) ----
 
         private async Task SafeThinkAsync()
         {
@@ -1667,9 +1667,9 @@ namespace KokonoeAssistant.Services
             catch (Exception ex) { Log($"SendDailyAnalyticsAsync: {ex.Message}"); }
         }
 
-        // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
+        // ------------------------------------------------------------
         // ДИНАМІЧНИЙ НАСТРІЙ
-        // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
+        // ------------------------------------------------------------
 
         /// <summary>
         /// Перераховує MoodScore з декількох незалежних факторів.
@@ -1727,9 +1727,9 @@ namespace KokonoeAssistant.Services
             Log($"Mood computed: {_state.MoodScore:F2} (baseline {_state.BaselineMood:F2}), tone={_state.LastUserEmotionalTone}");
         }
 
-        // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
+        // ------------------------------------------------------------
         // АНАЛІЗ ЕМОЦІЙ + РЕАКТИВНІ ТРИГЕРИ
-        // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
+        // ------------------------------------------------------------
 
         private async Task AnalyzeRecentEmotionsAsync()
         {
@@ -1963,10 +1963,10 @@ namespace KokonoeAssistant.Services
             catch (Exception ex) { Log($"BuildAssociations: {ex.Message}"); }
         }
 
-        // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
+        // ------------------------------------------------------------
         // ОБРОБКА ПОВІДОМЛЕННЯ КОРИСТУВАЧА
         // Виклик після кожного повідомлення з UI — оновлює всі двигуни
-        // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
+        // ------------------------------------------------------------
 
         public void ProcessUserMessage(string content)
         {
@@ -2492,9 +2492,9 @@ namespace KokonoeAssistant.Services
             return decision;
         }
 
-        // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
+        // ------------------------------------------------------------
         // ПЕРЕВІРКА ПЛАНУВАЛЬНИКА
-        // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
+        // ------------------------------------------------------------
 
         private async Task CheckSchedulerAsync()
         {
@@ -3182,7 +3182,7 @@ namespace KokonoeAssistant.Services
             catch { }
         }
 
-        // в”Ђв”Ђ SCREEN CONTEXT в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+        // ---- SCREEN CONTEXT ----
 
         /// <summary>Оновити контекст екрану (раз на 5хв)</summary>
         private async Task RefreshScreenContextAsync()
@@ -3539,7 +3539,7 @@ namespace KokonoeAssistant.Services
             return text.Length <= max ? text : text[..max] + "...";
         }
 
-        // в”Ђв”Ђ DAILY BRIEFING в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+        // ---- DAILY BRIEFING ----
 
         /// <summary>Щоранковий брифінг — о 8:00 в TG</summary>
         private async Task DailyBriefingAsync()
@@ -3605,7 +3605,7 @@ namespace KokonoeAssistant.Services
             catch (Exception ex) { LogError($"DailyBriefing: {ex.Message}"); }
         }
 
-        // в”Ђв”Ђ WHAT DID I MISS в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+        // ---- WHAT DID I MISS ----
 
         /// <summary>Викликати при закритті застосунку — зберегти час виходу</summary>
         public void RecordClose()
@@ -3669,7 +3669,7 @@ namespace KokonoeAssistant.Services
             catch (Exception ex) { Log($"WhatDidIMiss: {ex.Message}"); }
         }
 
-        // в”Ђв”Ђ WEEKLY VAULT DIGEST в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+        // ---- WEEKLY VAULT DIGEST ----
 
         /// <summary>Щонеділі о 20:00 — дайджест vault за тиждень</summary>
         private async Task WeeklyVaultDigestAsync()
@@ -3733,7 +3733,7 @@ namespace KokonoeAssistant.Services
             catch (Exception ex) { LogError($"WeeklyDigest: {ex.Message}"); }
         }
 
-        // в”Ђв”Ђ SPONTANEOUS MESSAGE CHECK в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+        // ---- SPONTANEOUS MESSAGE CHECK ----
 
         private async Task SafeSpontaneousCheckAsync()
         {
@@ -3852,7 +3852,7 @@ namespace KokonoeAssistant.Services
             // Ніч
             if (now.Hour >= 0 && now.Hour < 5) return SpontaneousStyle.NightMessage;
 
-            // Р„ pending thoughts
+            // pending thoughts
             if (_state.PendingThoughts.Any()) return SpontaneousStyle.PendingThought;
 
             // Surprise callback — 5% шанс
@@ -3903,7 +3903,7 @@ namespace KokonoeAssistant.Services
 
             // Вночі — мовчати крім явно високого рівня автономності, кризи і нічного чекіну.
             if ((now.Hour >= 23 || now.Hour < 6) && autonomyLevel < 3) return;
-            // в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+            // ------------------------------------------------------------
 
             // Ранковий привіт (6:30–9:00, один раз на день)
             if (now.Hour >= 6 && now.Hour < 9 &&
@@ -4713,7 +4713,7 @@ namespace KokonoeAssistant.Services
             return text;
         }
 
-        // в”Ђв”Ђ JSON EXTRACTION в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+        // ---- JSON EXTRACTION ----
 
         private static string? ExtractJson(string text)
         {
@@ -4782,7 +4782,7 @@ namespace KokonoeAssistant.Services
             return null;
         }
 
-        // в”Ђв”Ђ PUBLIC API в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+        // ---- PUBLIC API ----
 
         /// <summary>Перевірити vault при старті і додати в pending thoughts якщо потрібна ініціалізація.</summary>
         public void InitVault()

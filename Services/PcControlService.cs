@@ -52,6 +52,10 @@ namespace KokonoeAssistant.Services
             ["spotify"]   = "spotify",
             ["нотатник"]  = "notepad",
             ["notepad"]   = "notepad",
+            ["калькулятор"] = "calc",
+            ["calc"]      = "calc",
+            ["powershell"] = "powershell",
+            ["pwsh"]      = "pwsh",
         };
 
         // ── Screenshot ───────────────────────────────────────────────
@@ -190,10 +194,13 @@ namespace KokonoeAssistant.Services
         /// Виконує команду у PowerShell і повертає stdout+stderr.
         /// УВАГА: викликати тільки для команд що затверджені/введені власником ПК.
         /// </summary>
-        public async Task<string> RunCommandAsync(string command, int timeoutMs = 10_000)
+        public async Task<string> RunCommandAsync(string command, int timeoutMs = 10_000, bool enforceSafety = false)
         {
             try
             {
+                if (enforceSafety && PcCommandSafety.IsBlocked(command, out var reason))
+                    return "Команду заблоковано: " + reason;
+
                 var psi = new ProcessStartInfo
                 {
                     FileName               = "powershell.exe",

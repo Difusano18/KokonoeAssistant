@@ -352,6 +352,7 @@ namespace KokonoeAssistant.Services
 Ти маєш файлові інструменти fs_read_text/fs_write_text/fs_delete у робочій пісочниці; записи/видалення потребують confirmed=true.
 Ти маєш vision, коли користувач надіслав зображення. У desktop/Telegram інтеграції фрази типу ""проскануй екран"", ""що в мене на екрані"", ""зроби скрін"" мають іти через локальний screenshot+vision route.
 Не відповідай на такі запити фразами ""я не бачу твій екран"", ""завантаж скріншот"" або ""нема доступу"", якщо контекст каже, що локальний route доступний. Це не магія, це інструмент.
+Локальні OS/PC дії (відкрити застосунок, системна інформація, процеси, гучність, lock/sleep/monitor, явні PowerShell-команди) перехоплюються host-router-ом до LLM. Якщо дія вже виконана і ти отримала результат у контексті, не рольплей виконання повторно: підсумуй результат і продовжуй.
 Якщо користувач просить виконати задачу: сформуй короткий план, виконай доступними інструментами, перевір результат, потім відповідай.
 Не розкривай ключі, токени або приватні рядки. Якщо бачиш секрет на екрані, назви його як секрет без переписування.
 ";
@@ -647,7 +648,7 @@ namespace KokonoeAssistant.Services
         public string ExecuteRegisteredTool(string name, JObject args)
             => Task.Run(() => ExecuteToolAsync(name, args, CancellationToken.None)).GetAwaiter().GetResult();
 
-        // в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+        // ------------------------------------------------------------
 
         private record HistoryEntry(string Role, object Content, string? ToolCallId = null, string? Name = null);
 
@@ -1716,7 +1717,7 @@ namespace KokonoeAssistant.Services
                         OnProgress?.Invoke("thought", reasoningContent);
                     }
 
-                    // No tool calls в†’ final answer
+                    // No tool calls -> final answer
                     if (toolCalls == null || toolCalls.Count == 0)
                     {
                         if (looksLikeVaultOp && !forceNoTools)
@@ -1807,7 +1808,7 @@ namespace KokonoeAssistant.Services
             }
         }
 
-        // в”Ђв”Ђ Build messages list for API в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+        // ---- Build messages list for API ----
 
         private static bool IsTransientServerError(int statusCode)
         {
@@ -2226,7 +2227,7 @@ namespace KokonoeAssistant.Services
             return text;
         }
 
-        // в”Ђв”Ђ Execute Obsidian tool в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+        // ---- Execute Obsidian tool ----
 
         private async Task<string> ExecuteToolAsync(string name, JObject args, CancellationToken ct)
         {
@@ -2477,7 +2478,7 @@ namespace KokonoeAssistant.Services
         /// Виконує операцію запису і одразу автоматично перебудовує граф посилань.
         /// Зв'язки проставляються без будь-яких команд від користувача.
         /// </summary>
-        // в”Ђв”Ђ Fallback text-based tool call parser в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+        // ---- Fallback text-based tool call parser ----
         // Handles local models (Gemma, Llama) that don't output proper tool_calls JSON.
         // Looks for JSON blocks like: {"name":"create_note","arguments":{...}}
         // or {"tool":"create_note","parameters":{...}} embedded in model output.
@@ -2964,7 +2965,7 @@ namespace KokonoeAssistant.Services
             score += System.Text.RegularExpressions.Regex.Matches(text, @"\u0421\p{IsCyrillic}").Count;
             return score;
         }
-        // в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+        // ------------------------------------------------------------
 
         /// <summary>
         /// Streaming variant — invokes onChunk for each token delta.

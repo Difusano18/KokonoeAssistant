@@ -50,6 +50,10 @@ internal static class Program
             Run("Post reply guard protects short greeting", PostReplyGuardProtectsShortGreeting);
             Run("Post reply guard blocks repeated fallback loop", PostReplyGuardBlocksRepeatedFallbackLoop);
             Run("Post reply guard rejects dotted garbage", PostReplyGuardRejectsDottedGarbage);
+            Run("PC intent router routes safe OS commands", PcIntentRouterRoutesSafeOsCommands);
+            Run("PC intent router separates screen and destructive commands", PcIntentRouterSeparatesScreenAndDestructiveCommands);
+            Run("PC control executes safe PowerShell", PcControlExecutesSafePowerShell);
+            Run("PC control captures screenshot", PcControlCapturesScreenshot);
             Run("Post reply guard replaces vision technical error", PostReplyGuardReplacesVisionTechnicalError);
             Run("Post reply guard protects image only prompt", PostReplyGuardProtectsImageOnlyPrompt);
             Run("Post reply guard duplicate image prompt avoids stale repeat text", PostReplyGuardDuplicateImagePromptAvoidsStaleRepeatText);
@@ -490,7 +494,7 @@ internal static class Program
         {
             Kind = "sleep",
             Summary = "пішов спати/попрощався",
-            SourceText = "Р‘Р°Р№ Р±Р°Р№",
+            SourceText = "Бай бай",
             CreatedAt = now.AddHours(-8),
             FollowUpAt = now.AddMinutes(-5),
             ExpectedUntil = now.AddHours(2)
@@ -498,7 +502,7 @@ internal static class Program
         ctx.Chat.InsertMessage(new ChatRepository.ChatMessage
         {
             Role = "user",
-            Content = "Р‘Р°Р№ Р±Р°Р№",
+            Content = "Бай бай",
             Timestamp = now.AddHours(-8)
         });
 
@@ -1197,6 +1201,59 @@ internal static class Program
         AssertTrue(result.Violations.Any(v => v.Contains("пошкоджена")), "violation should name broken text");
     }
 
+    private static void PcIntentRouterRoutesSafeOsCommands()
+    {
+        var open = PcIntentRouter.Parse("відкрий chrome");
+        AssertTrue(open.Handled, "open app command should be handled before LLM");
+        AssertEqual(PcIntentAction.OpenApp, open.Action, "open app action");
+        AssertTrue(open.Argument.Contains("chrome", StringComparison.OrdinalIgnoreCase), "open target should keep app name");
+
+        var volume = PcIntentRouter.Parse("постав гучність на 37");
+        AssertTrue(volume.Handled, "volume set should be handled");
+        AssertEqual(PcIntentAction.VolumeSet, volume.Action, "volume set action");
+        AssertEqual(37, volume.Number, "volume percent should parse");
+
+        var processes = PcIntentRouter.Parse("що жере RAM зараз");
+        AssertTrue(processes.Handled, "process list request should be handled");
+        AssertEqual(PcIntentAction.Processes, processes.Action, "process action");
+
+        var shell = PcIntentRouter.Parse("ps: Write-Output koko-ok");
+        AssertTrue(shell.Handled, "explicit PowerShell command should be handled");
+        AssertEqual(PcIntentAction.RunPowerShell, shell.Action, "shell action");
+        AssertTrue(shell.Argument.Contains("koko-ok"), "shell command body should be preserved");
+    }
+
+    private static void PcIntentRouterSeparatesScreenAndDestructiveCommands()
+    {
+        var screen = PcIntentRouter.Parse("що в мене на екрані?");
+        AssertTrue(!screen.Handled, "screen questions should stay on screenshot+vision route");
+
+        var shutdown = PcIntentRouter.Parse("вимкни пк");
+        AssertTrue(shutdown.Handled, "shutdown request should be recognized");
+        AssertEqual(PcIntentAction.Shutdown, shutdown.Action, "shutdown action");
+        AssertTrue(shutdown.RequiresConfirmation, "shutdown must not execute without confirmation");
+
+        AssertTrue(PcCommandSafety.IsBlocked("Remove-Item -Recurse C:\\temp", out var reason), "destructive shell command should be blocked");
+        AssertTrue(reason.Contains("remove-item", StringComparison.OrdinalIgnoreCase), "block reason should name command");
+        AssertTrue(!PcCommandSafety.IsBlocked("Write-Output koko-ok", out _), "safe shell probe should be allowed");
+    }
+
+    private static void PcControlExecutesSafePowerShell()
+    {
+        var output = new PcControlService()
+            .RunCommandAsync("Write-Output koko-ok", timeoutMs: 5000, enforceSafety: true)
+            .GetAwaiter()
+            .GetResult();
+        AssertTrue(output.Contains("koko-ok", StringComparison.OrdinalIgnoreCase), "safe PowerShell command should execute");
+    }
+
+    private static void PcControlCapturesScreenshot()
+    {
+        var bytes = new PcControlService().TakeScreenshot();
+        AssertTrue(bytes.Length > 1024, "screenshot should return JPEG bytes");
+        AssertTrue(bytes[0] == 0xFF && bytes[1] == 0xD8, "screenshot should be a JPEG image");
+    }
+
     private static void PostReplyGuardReplacesVisionTechnicalError()
     {
         var now = new DateTime(2026, 5, 13, 2, 16, 0);
@@ -1676,14 +1733,14 @@ internal static class Program
         var now = new DateTime(2026, 5, 8, 16, 27, 0);
         var messages = new[]
         {
-            new ChatRepository.ChatMessage { Role = "user", Content = "Р‘Р°Р№ Р±Р°Р№", Timestamp = now.AddHours(-8) }
+            new ChatRepository.ChatMessage { Role = "user", Content = "Бай бай", Timestamp = now.AddHours(-8) }
         };
         var state = new KokoInternalState();
         state.ShortTermIntents.Add(new ShortTermIntent
         {
             Kind = "sleep",
             Summary = "пішов спати/попрощався",
-            SourceText = "Р‘Р°Р№ Р±Р°Р№",
+            SourceText = "Бай бай",
             CreatedAt = now.AddHours(-8),
             ExpectedUntil = now.AddHours(2),
             FollowUpAt = now.AddMinutes(-5)
