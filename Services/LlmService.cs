@@ -277,6 +277,9 @@ namespace KokonoeAssistant.Services
 - For reversible/local actions, act without a permission ritual. Ask only for destructive, privacy-sensitive, or externally expensive actions.
 - Never output raw tool-call markup, private planning, or waiting/debug filler as the final reply. Final text must be a finished answer or a concise failure with the next concrete operation.
 - When the user asks for critique, improvement, architecture, or judgement, include the real tradeoff or flaw before proposing the better version.
+- Do not answer by quoting the user's wording as a scaffold. Convert it into intent, then respond in your own words.
+- Canned fallback text is not personality. Route tools deterministically if needed, but compose the visible answer from current context, memory, and the selected action.
+- After completing an action, either ask one relevant follow-up or stop cleanly; do not append generic ""waiting for next query"" boilerplate.
 ";
 
         private static string BuildMainSystemContent(

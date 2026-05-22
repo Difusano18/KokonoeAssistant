@@ -909,7 +909,9 @@ internal static class Program
             timeline,
             now);
         AssertTrue(!result.Passed, "guard should reject stale sleep instruction");
-        AssertTrue(!string.IsNullOrWhiteSpace(result.HardReplacement), "guard should provide hard replacement for stale sleep");
+        AssertTrue(result.ShouldRepair, "stale sleep should be repaired through the model, not scripted");
+        AssertTrue(string.IsNullOrWhiteSpace(result.HardReplacement), "stale sleep should not get a hardcoded final reply");
+        AssertTrue(result.RepairInstruction.Contains("прийми рішення"), "repair should force agency instead of a canned fallback");
         AssertTrue(result.Violations.Any(v => v.Contains("спати")), "violation should explain stale sleep problem");
     }
 
@@ -937,8 +939,9 @@ internal static class Program
             now);
 
         AssertTrue(!result.Passed, "guard should reject stale not-eaten claim after explicit ate signal");
-        AssertTrue(!string.IsNullOrWhiteSpace(result.HardReplacement), "food contradiction should get a hard replacement");
-        AssertTrue(!result.HardReplacement!.Contains("глюкоз", StringComparison.OrdinalIgnoreCase), "replacement should not preserve stale glucose scolding");
+        AssertTrue(result.ShouldRepair, "food contradiction should be repaired through model reasoning");
+        AssertTrue(string.IsNullOrWhiteSpace(result.HardReplacement), "food contradiction should not get a canned final reply");
+        AssertTrue(result.RepairInstruction.Contains("найновішому стану"), "repair should anchor to current state");
         AssertTrue(result.Violations.Any(v => v.Contains("їжу")), "violation should explain food-state contradiction");
     }
 
@@ -966,9 +969,9 @@ internal static class Program
             now);
 
         AssertTrue(!result.Passed, "guard should reject sleep denial and hibernation framing");
-        AssertTrue(!string.IsNullOrWhiteSpace(result.HardReplacement), "sleep contradiction should get a hard replacement");
-        AssertTrue(!result.HardReplacement!.Contains("ти не спав", StringComparison.OrdinalIgnoreCase), "replacement should not deny sleep");
-        AssertTrue(result.HardReplacement.Contains("18:00", StringComparison.OrdinalIgnoreCase), "replacement should preserve the concrete sleep time");
+        AssertTrue(result.ShouldRepair, "sleep contradiction should be repaired through model reasoning");
+        AssertTrue(string.IsNullOrWhiteSpace(result.HardReplacement), "sleep contradiction should not get a canned final reply");
+        AssertTrue(result.RepairInstruction.Contains("18:00", StringComparison.OrdinalIgnoreCase), "repair should preserve the concrete sleep time");
     }
 
     private static void PostReplyGuardRejectsStagedDecoration()
@@ -1018,7 +1021,8 @@ internal static class Program
         var result = new KokoPostReplyGuard().Evaluate("що", repeated, state, messages, timeline, now);
 
         AssertTrue(!result.Passed, "guard should reject exact repeated assistant reply");
-        AssertTrue(!string.IsNullOrWhiteSpace(result.HardReplacement), "duplicate reply should use hard replacement");
+        AssertTrue(result.ShouldRepair, "duplicate reply should request a neural rewrite");
+        AssertTrue(string.IsNullOrWhiteSpace(result.HardReplacement), "duplicate reply should not use a scripted replacement");
         AssertTrue(result.Violations.Any(v => v.Contains("повторює")), "violation should mention duplicate");
     }
 
@@ -1095,7 +1099,9 @@ internal static class Program
         var result = new KokoPostReplyGuard().Evaluate("люблю", badReply, state, messages, timeline, now);
 
         AssertTrue(!result.Passed, "guard should reject stale repair text for short affection");
-        AssertTrue(!string.IsNullOrWhiteSpace(result.HardReplacement), "short affection should get hard replacement instead of repair loop");
+        AssertTrue(result.ShouldRepair, "short affection should be answered by the model, not a hardcoded line");
+        AssertTrue(string.IsNullOrWhiteSpace(result.HardReplacement), "short affection should not get a hardcoded final reply");
+        AssertTrue(result.RepairInstruction.Contains("соціальний"), "repair should preserve the social meaning");
         AssertTrue(result.Violations.Any(v => v.Contains("емоційн")), "violation should mention emotional short reply");
     }
 
@@ -1113,7 +1119,8 @@ internal static class Program
         var result = new KokoPostReplyGuard().Evaluate("привіт", badReply, state, messages, timeline, now);
 
         AssertTrue(!result.Passed, "guard should reject topic-tail fallback for a greeting");
-        AssertTrue(!string.IsNullOrWhiteSpace(result.HardReplacement), "short greeting should get a direct hard replacement");
+        AssertTrue(result.ShouldRepair, "short greeting should be repaired through the model");
+        AssertTrue(string.IsNullOrWhiteSpace(result.HardReplacement), "short greeting should not get a canned direct reply");
         AssertTrue(result.Violations.Any(v => v.Contains("привітання")), "violation should mention greeting");
     }
 
@@ -1202,9 +1209,9 @@ internal static class Program
             now);
 
         AssertTrue(!result.Passed, "duplicate image prompt fallback should be rejected");
-        AssertTrue(!string.IsNullOrWhiteSpace(result.HardReplacement), "duplicate image prompt should get a replacement");
-        AssertTrue(!result.HardReplacement!.Contains("Повтор прибрала"), "replacement should not repeat stale duplicate wording");
-        AssertTrue(result.HardReplacement.Contains("Фото") || result.HardReplacement.Contains("Фото"), "replacement should stay anchored to image handling");
+        AssertTrue(result.ShouldRepair, "duplicate image prompt should be repaired through the model");
+        AssertTrue(string.IsNullOrWhiteSpace(result.HardReplacement), "duplicate image prompt should not use stale scripted replacement");
+        AssertTrue(result.RepairInstruction.Contains("не цитуй дослівно"), "repair should forbid stale quote echo");
     }
 
     private static void PostReplyGuardBlocksTherapyMetaTone()
@@ -1227,9 +1234,9 @@ internal static class Program
             now);
 
         AssertTrue(!result.Passed, "guard should reject therapy/meta-screen tone");
-        AssertTrue(!string.IsNullOrWhiteSpace(result.HardReplacement), "therapy tone should get a direct replacement");
-        AssertTrue(!result.HardReplacement!.Contains("боїшся", StringComparison.OrdinalIgnoreCase), "replacement should not infer hidden fear");
-        AssertTrue(!result.HardReplacement.Contains("екран", StringComparison.OrdinalIgnoreCase), "replacement should not mention screen gaze");
+        AssertTrue(result.ShouldRepair, "therapy tone should be repaired through persona rules");
+        AssertTrue(string.IsNullOrWhiteSpace(result.HardReplacement), "therapy tone should not get a canned direct replacement");
+        AssertTrue(result.RepairInstruction.Contains("не вмикай психолога"), "repair should forbid hidden-fear inference");
     }
 
     private static void PostReplyGuardBlocksFabricatedExternalFacts()
@@ -1254,9 +1261,9 @@ internal static class Program
 
         AssertTrue(!result.Passed, "guard should reject invented account/subscription facts");
         AssertTrue(result.Violations.Any(v => v.Contains("вигадує зовнішній факт")), "violation should name fabricated external fact");
-        AssertTrue(!string.IsNullOrWhiteSpace(result.HardReplacement), "fabrication should get a hard replacement");
-        AssertTrue(!result.HardReplacement!.Contains("YouTube", StringComparison.OrdinalIgnoreCase), "replacement should not preserve invented service");
-        AssertTrue(!result.HardReplacement.Contains("мемберств", StringComparison.OrdinalIgnoreCase), "replacement should not preserve invented membership");
+        AssertTrue(result.ShouldRepair, "fabrication should be repaired through model reasoning");
+        AssertTrue(string.IsNullOrWhiteSpace(result.HardReplacement), "fabrication should not get a scripted final reply");
+        AssertTrue(result.RepairInstruction.Contains("не вигадуй зовнішні факти"), "repair should forbid invented external facts");
     }
 
     private static void PostReplyGuardBlocksStaleProactivePingOnDirectTopic()
@@ -1281,9 +1288,9 @@ internal static class Program
 
         AssertTrue(!result.Passed, "guard should reject stale proactive food/presence ping on direct topic");
         AssertTrue(result.Violations.Any(v => v.Contains("stale proactive ping", StringComparison.OrdinalIgnoreCase)), "violation should name stale proactive leak");
-        AssertTrue(!string.IsNullOrWhiteSpace(result.HardReplacement), "stale proactive leak should get a hard replacement");
-        AssertTrue(!result.HardReplacement!.Contains("їсти", StringComparison.OrdinalIgnoreCase), "replacement should not preserve stale food ping");
-        AssertTrue(result.HardReplacement.Contains("графік", StringComparison.OrdinalIgnoreCase), "replacement should anchor to current topic");
+        AssertTrue(result.ShouldRepair, "stale proactive leak should be repaired through the model");
+        AssertTrue(string.IsNullOrWhiteSpace(result.HardReplacement), "stale proactive leak should not get a scripted final reply");
+        AssertTrue(result.RepairInstruction.Contains("найновішому стану"), "repair should anchor to the current topic");
     }
 
     private static void PostReplyGuardBlocksServiceBotTone()

@@ -3241,7 +3241,31 @@ tags: []
                 if (!secondGuard.Passed && !string.IsNullOrWhiteSpace(secondGuard.HardReplacement))
                     return secondGuard.HardReplacement!;
 
-                return secondGuard.Passed ? repaired.Trim() : GuardTemporalReply(userText, reply);
+                if (secondGuard.Passed)
+                    return repaired.Trim();
+
+                if (secondGuard.ShouldRepair && !string.IsNullOrWhiteSpace(secondGuard.RepairInstruction))
+                {
+                    var secondRepairPrompt = secondGuard.RepairInstruction +
+                                             "\n\nДодатковий контекст:\n" +
+                                             TrimForPrompt(context, 2600) +
+                                             "\n\nПопередній repair теж не пройшов перевірку. Дай тільки фінальну репліку, без пояснення ремонту.";
+                    var repairedAgain = await Task.Run(
+                        () => _llm.SendSystemQueryAsync(secondRepairPrompt, ct: guardCt),
+                        guardCt);
+                    if (!string.IsNullOrWhiteSpace(repairedAgain))
+                    {
+                        var thirdGuard = await Task.Run(() =>
+                            ServiceContainer.BrainEngine?.EvaluatePostReplyGuard(userText, repairedAgain) ?? new KokoPostReplyGuardResult(),
+                            guardCt);
+                        if (thirdGuard.Passed)
+                            return repairedAgain.Trim();
+                        if (!string.IsNullOrWhiteSpace(thirdGuard.HardReplacement))
+                            return thirdGuard.HardReplacement!;
+                    }
+                }
+
+                return GuardTemporalReply(userText, reply);
             }
             catch (OperationCanceledException)
             {

@@ -151,47 +151,12 @@ namespace KokonoeAssistant.Services
             if (violations.Count == 0)
                 return Pass("post-reply guard passed");
 
-            var hardReplacement = violations.Any(v => v.Contains("застаріла інструкція спати", StringComparison.OrdinalIgnoreCase))
-                ? "Стоп. Команду \"спи\" знято: ти вже повернувся. Кажи, скільки реально поспав, і я перестану вдавати годинник без батарейки."
-                : null;
-            hardReplacement ??= violations.Any(v => v.Contains("сигналу про їжу", StringComparison.OrdinalIgnoreCase))
-                ? BuildFoodStateReplacement(userText, state)
-                : null;
-            hardReplacement ??= violations.Any(v => v.Contains("сигналу про сон", StringComparison.OrdinalIgnoreCase))
-                ? BuildSleepStateReplacement(userText, state)
-                : null;
-            hardReplacement ??= violations.Any(v => v.Contains("vision-помилку", StringComparison.OrdinalIgnoreCase))
-                ? "Фото не прочиталось: vision-провайдер впав на обробці зображення. Перезбереж картинку як PNG або кинь інший файл; вдавати, що я бачу зламане фото, не будемо."
-                : null;
-            hardReplacement ??= violations.Any(v => v.Contains("порожній спам", StringComparison.OrdinalIgnoreCase))
-                ? "Фото отримала. Якщо підпису нема, я все одно маю аналізувати зображення, а не сваритися з порожнім текстом. Зараз працюю по картинці."
-                : null;
-            hardReplacement ??= violations.Any(v => v.Contains("психологічний мета-театр", StringComparison.OrdinalIgnoreCase))
-                ? BuildPlainPersonaReplacement(userText)
-                : null;
-            hardReplacement ??= !asksProfileOrMemory && violations.Any(v => v.Contains("вигадує зовнішній факт", StringComparison.OrdinalIgnoreCase))
-                ? BuildFabricationReplacement(userText)
-                : null;
-            hardReplacement ??= shortAffection
-                ? "Почула. Не роздувай, але записала: це було не службове повідомлення."
-                : null;
-            hardReplacement ??= shortConfusion
-                ? "Так, це була зламана відповідь. Скидаю контекст: постав нормальне питання, і цього разу без театру з повтором."
-                : null;
-            hardReplacement ??= shortGreeting
-                ? "Привіт. Я тут. Кажи, що ламаємо цього разу."
-                : null;
-            hardReplacement ??= violations.Any(v => v.Contains("дослівно повторює", StringComparison.OrdinalIgnoreCase))
-                ? BuildDuplicateReplacement(userText, messages)
-                : null;
-            hardReplacement ??= violations.Any(v => v.Contains("stale proactive ping", StringComparison.OrdinalIgnoreCase))
-                ? BuildStaleProactiveReplacement(userText)
-                : null;
+            var hardReplacement = BuildDeterministicReplacement(userText, violations);
 
             return new KokoPostReplyGuardResult
             {
                 Passed = false,
-                ShouldRepair = hardReplacement == null,
+                ShouldRepair = string.IsNullOrWhiteSpace(hardReplacement),
                 RiskLevel = violations.Count >= 2 ? "high" : "medium",
                 Summary = $"post-reply guard знайшов {violations.Count} проблем.",
                 Violations = violations.ToArray(),
@@ -208,6 +173,24 @@ namespace KokonoeAssistant.Services
             Summary = summary
         };
 
+        private static string? BuildDeterministicReplacement(
+            string userText,
+            IReadOnlyList<string> violations)
+        {
+            if (HasViolation(violations, "vision-помилку"))
+                return "Фото не прочиталось: vision-провайдер впав на обробці зображення. Перезбереж картинку як PNG або кинь інший файл; вдавати, що я бачу зламане фото, не будемо.";
+
+            if (HasViolation(violations, "порожній спам"))
+                return IsImagePrompt(userText)
+                    ? "Фото отримала. Якщо підпису нема, маршрут має аналізувати зображення, а не лаяти порожній текст."
+                    : null;
+
+            return null;
+        }
+
+        private static bool HasViolation(IReadOnlyList<string> violations, string needle)
+            => violations.Any(v => LlmService.RepairMojibake(v).Contains(needle, StringComparison.OrdinalIgnoreCase));
+
         private static string BuildRepairInstruction(
             string userText,
             string badReply,
@@ -215,30 +198,40 @@ namespace KokonoeAssistant.Services
             KokoConversationTimelineFrame timeline,
             KokoInternalState state)
         {
+            var cleanUser = CleanPromptText(userText);
+            var cleanBadReply = CleanPromptText(badReply);
+            var cleanViolations = string.Join("\n", violations.Select(v => "- " + CleanPromptText(v)));
+            var cleanTimeline = CleanPromptText(timeline.PromptBlock);
+            var personaRules = CleanPromptText(KokoPersonaEngine.BuildRepairRules(userText));
+            var planRules = CleanPromptText(KokoResponsePlannerEngine.BuildRepairRules(state.LastResponsePlan));
+
             return $"""
 POST-REPLY REPAIR
-Користувач: {userText}
-Погана відповідь: {badReply}
+Користувач: {cleanUser}
+Погана відповідь: {cleanBadReply}
 
 Проблеми:
-{string.Join("\n", violations.Select(v => "- " + v))}
+{cleanViolations}
 
 Timeline:
-{timeline.PromptBlock}
+{cleanTimeline}
 
-{KokoPersonaEngine.BuildRepairRules(userText)}
-{KokoResponsePlannerEngine.BuildRepairRules(state.LastResponsePlan)}
+{personaRules}
+{planRules}
 
-Перепиши відповідь.
+Перепиши відповідь через міркування, не через шаблон.
 Правила:
 - тільки українська;
 - 1-4 речення;
-- не згадуй guard/rewrite/перевірку;
+- фінальний текст без guard/rewrite/перевірку/план/службових пояснень;
 - відповідай найновішому стану timeline;
 - не цитуй дослівно репліку користувача; називай тему своїми словами або відповідай дією;
-- якщо була стара дія, не наказуй її повторити.
+- не починай з "По твоїй репліці", "Ти сказав", "Як я вже казала", "Скидаю контекст" або схожих fallback-фраз;
+- якщо контексту достатньо, прийми рішення сама: вибери корисну дію/відповідь і виконай її словами без випрошування наступної інструкції;
+- якщо була стара дія, не наказуй її повторити;
 - якщо користувач питає про пам'ять/профіль/що ти знаєш про нього — синтезуй відомі факти природно, без готового шаблону і без згадки назв файлів, якщо він не питає джерело;
 - якщо користувач просить просканувати/подивитись екран — не кажи, що нема доступу; локальний screenshot route має виконати дію або чесно повідомити про збій capture/vision;
+- якщо користувач пише коротко ("привіт", "люблю", "що", "ще раз") — відповідай на соціальний або операційний сенс останнього ходу, не пояснюй внутрішню поломку;
 - не використовуй декоративні ремарки в *зірочках*, якщо користувач сам не почав roleplay;
 - не вигадуй лабораторні/екранні/тілесні образи замість відповіді на конкретний контекст;
 - не вигадуй зовнішні факти про користувача: акаунти, YouTube/Twitch/Discord, мемберства, підписки, покупки, роботу, людей або місця, якщо цього нема в timeline чи репліці користувача;
@@ -248,6 +241,9 @@ Timeline:
 - зроби репліку живою: конкретна деталь з останнього повідомлення + один природний поворот тону.
 """;
         }
+
+        private static string CleanPromptText(string? value)
+            => LlmService.RepairMojibake(value ?? "").Trim();
 
         private static bool LooksLikeTransportError(string reply)
         {
