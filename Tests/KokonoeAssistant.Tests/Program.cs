@@ -1038,8 +1038,16 @@ internal static class Program
             "detector should catch open-window screen question");
         AssertTrue(KokoScreenIntent.IsManualScreenScan("зроби скріншот і скажи що там"),
             "detector should catch screenshot request");
+        AssertTrue(KokoScreenIntent.IsManualScreenScan("спробуй сфоткати мій екран"),
+            "detector should catch colloquial photo-screen wording");
+        AssertTrue(KokoScreenIntent.IsManualScreenScan("сфоткай екран і скажи що там"),
+            "detector should catch direct photo-screen command");
+        AssertTrue(KokoScreenIntent.IsManualScreenScan("зніми мій монітор"),
+            "detector should catch capture-monitor wording");
         AssertTrue(!KokoScreenIntent.IsManualScreenScan("не дивись на мій екран"),
             "detector should respect explicit screen privacy block");
+        AssertTrue(!KokoScreenIntent.IsManualScreenScan("сфоткай це на телефон"),
+            "detector should not steal ordinary photo requests without a screen target");
         AssertTrue(!KokoScreenIntent.IsManualScreenScan("що на фото?"),
             "detector should not steal ordinary image prompts without a screen target");
         AssertTrue(KokoScreenIntent.IsRetryLastScreenScan("ще раз спробуй", "проскануй мій екран", now.AddMinutes(-2), now),
@@ -1083,6 +1091,17 @@ internal static class Program
         AssertTrue(result.ShouldRepair, "screen denial should go through repair, not become final answer");
         AssertTrue(result.Violations.Any(v => v.Contains("screen request")), "violation should mention screen request routing");
         AssertTrue(result.RepairInstruction.Contains("локальний screenshot route"), "repair should mention local screenshot route");
+
+        var colloquialResult = new KokoPostReplyGuard().Evaluate(
+            "спробуй сфоткати мій екран",
+            "Я не можу сфоткати твій екран самостійно. Зроби скріншот і завантаж його сюди.",
+            state,
+            messages,
+            timeline,
+            now);
+
+        AssertTrue(!colloquialResult.Passed, "guard should reject photo-screen capability denial too");
+        AssertTrue(colloquialResult.ShouldRepair, "photo-screen denial should be repaired through local screenshot route");
     }
 
     private static void PostReplyGuardProtectsShortAffection()
