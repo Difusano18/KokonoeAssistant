@@ -2507,10 +2507,7 @@ namespace KokonoeAssistant.Services
 
                 if (!EnsureTelegram()) return;
 
-                var prompt = $@"Ти — Kokonoe. Ось що ти хотіла написати йому:
-«{entry.Prompt}»
-
-Напиши природньо, своїми словами. Тільки українська. Тільки текст, без пояснень.";
+                var prompt = BuildSchedulerDeliveryPrompt(entry);
 
                 var msg = await _llm.SendSystemQueryAsync(prompt, useTools: true);
                 if (string.IsNullOrWhiteSpace(msg)) return;
@@ -2529,6 +2526,21 @@ namespace KokonoeAssistant.Services
                 catch (Exception ex) { LogError($"TG scheduler: {ex.Message}"); }
             }
             catch (Exception ex) { Log($"CheckScheduler: {ex.Message}"); }
+        }
+
+        private static string BuildSchedulerDeliveryPrompt(KokoSchedulerEngine.ScheduledEntry entry)
+        {
+            return $@"Ти — Kokonoe. Це заплановане нагадування для користувача.
+
+Сирий запис scheduler:
+«{entry.Prompt}»
+
+Правила:
+- Якщо в сирому записі є ""я піду"", ""я буду"", ""мені"", це майже завжди слова користувача з моменту створення нагадування, не твій власний розклад.
+- Не кажи, що ти йдеш на курси, зайнята, маєш дедлайн або власний розклад, якщо це прямо не написано як подія Kokonoe.
+- Перепиши як нагадування користувачу: ""ти планував..."", ""ти просив..."", ""час..."", без службового слова scheduler.
+- Якщо запис виглядає простроченим або контекст слабкий, не вигадуй; скажи коротко, що нагадування було про його план.
+- Тільки українська. 1-3 речення. Тільки фінальний текст.";
         }
 
         // ==============================================================

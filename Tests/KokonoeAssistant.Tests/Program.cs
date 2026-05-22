@@ -62,6 +62,7 @@ internal static class Program
             Run("Post reply guard softens one-letter Telegram ambiguity", PostReplyGuardSoftensOneLetterTelegramAmbiguity);
             Run("Post reply guard prioritizes image caption over stale one-letter context", PostReplyGuardPrioritizesImageCaptionOverStaleOneLetterContext);
             Run("Post reply guard repairs blamey answer explanation", PostReplyGuardRepairsBlameyAnswerExplanation);
+            Run("Post reply guard blocks assistant-owned reminder schedule", PostReplyGuardBlocksAssistantOwnedReminderSchedule);
             Run("Post reply guard blocks therapy meta tone", PostReplyGuardBlocksTherapyMetaTone);
             Run("Post reply guard blocks fabricated external facts", PostReplyGuardBlocksFabricatedExternalFacts);
             Run("Post reply guard blocks stale proactive ping on direct topic", PostReplyGuardBlocksStaleProactivePingOnDirectTopic);
@@ -128,6 +129,7 @@ internal static class Program
             Run("Agent task service imports Obsidian backlog", AgentTaskServiceImportsObsidianBacklog);
             Run("Agent completion policy asks next question", AgentCompletionPolicyAsksNextQuestion);
             Run("Agent completion policy avoids canned wait tail", AgentCompletionPolicyAvoidsCannedWaitTail);
+            Run("Scheduler drops stale user reminders", SchedulerDropsStaleUserReminders);
             Run("Reminder parser handles relative and vague time", ReminderParserHandlesRelativeAndVagueTime);
             Run("Reminder parser handles wake and absolute time", ReminderParserHandlesWakeAndAbsoluteTime);
 
@@ -1442,6 +1444,30 @@ internal static class Program
         AssertTrue(result.Violations.Any(v => v.Contains("why-question")), "violation should name the blamey why-question bug");
         AssertTrue(result.RepairInstruction.Contains("нейтрально") || result.RepairInstruction.Contains("neutrally"),
             "repair should require a neutral decision-path explanation");
+    }
+
+    private static void PostReplyGuardBlocksAssistantOwnedReminderSchedule()
+    {
+        var now = new DateTime(2026, 5, 23, 2, 3, 0);
+        var state = new KokoInternalState();
+        var userText = "які курси в тебе ? ти про що";
+        var badReply = "Я сказала, що йду на курси. Це був мій спосіб сказати, що я буду зайнята і не чекай від мене миттєвих відповідей, поки я не закінчу.";
+        var messages = new[]
+        {
+            new ChatRepository.ChatMessage { Role = "assistant", Content = "Не забудь про 11:30.", Timestamp = now.AddMinutes(-1) },
+            new ChatRepository.ChatMessage { Role = "user", Content = "А що на 11 30", Timestamp = now.AddSeconds(-40) },
+            new ChatRepository.ChatMessage { Role = "assistant", Content = "Я йду на курси.", Timestamp = now.AddSeconds(-30) },
+            new ChatRepository.ChatMessage { Role = "user", Content = userText, Timestamp = now }
+        };
+        var timeline = new KokoConversationTimelineEngine().Build(messages, state, now, userText);
+
+        var result = new KokoPostReplyGuard().Evaluate(userText, badReply, state, messages, timeline, now);
+
+        AssertTrue(!result.Passed, "guard should reject turning a user reminder into Kokonoe's own schedule");
+        AssertTrue(result.ShouldRepair, "misattributed reminder schedule should be repaired by the model");
+        AssertTrue(result.Violations.Any(v => v.Contains("misattributed")), "violation should name reminder misattribution");
+        AssertTrue(result.RepairInstruction.Contains("first-person") || result.RepairInstruction.Contains("курси"),
+            "repair should explain that first-person reminder text belongs to the user unless explicit");
     }
 
     private static void PostReplyGuardBlocksTherapyMetaTone()
@@ -3144,6 +3170,30 @@ Persistent Obsidian context is now a core project requirement.
         AssertEqual("wait", notice.Mode, "plain chat completion should not force a follow-up question");
         AssertTrue(string.IsNullOrWhiteSpace(notice.NextQuestion), "wait mode should not append canned text");
         AssertTrue(!notice.Notice.Contains("Чекаю наступного запиту", StringComparison.OrdinalIgnoreCase), "notice should not use canned wait tail");
+    }
+
+    private static void SchedulerDropsStaleUserReminders()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "KokonoeAssistant.Tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            var scheduler = new KokoSchedulerEngine(dir);
+            scheduler.Schedule(
+                "Нагадай користувачу: я піду на курси заре, напиши мені десь в 11:30",
+                DateTime.Now.AddDays(-3),
+                KokoSchedulerEngine.Priority.High,
+                "user_reminder");
+
+            var due = scheduler.GetDue();
+
+            AssertEqual(0, due.Count, "stale one-time user reminders must not fire days late");
+            AssertTrue(!scheduler.GetAll().Any(), "stale user reminder should be removed from active queue");
+        }
+        finally
+        {
+            try { Directory.Delete(dir, recursive: true); } catch { }
+        }
     }
 
     private static void Run(string name, Action test)

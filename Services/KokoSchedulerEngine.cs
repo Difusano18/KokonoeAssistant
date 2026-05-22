@@ -56,6 +56,9 @@ namespace KokonoeAssistant.Services
         private List<ScheduledEntry> _entries;
         private readonly string _path;
         private readonly object _lock = new();
+        private static readonly TimeSpan MaxGeneralOnceLateness = TimeSpan.FromDays(2);
+        private static readonly TimeSpan MaxUserReminderLateness = TimeSpan.FromHours(12);
+        private static readonly TimeSpan MaxWakeReminderLateness = TimeSpan.FromMinutes(45);
 
         public KokoSchedulerEngine(string dataDir)
         {
@@ -136,6 +139,7 @@ namespace KokonoeAssistant.Services
             lock (_lock)
             {
                 var now = DateTime.Now;
+                ExpireStaleUnsentOnceEntries(now);
                 return _entries
                     .Where(e => !e.Sent && e.FireAt <= now)
                     .Where(e => EvaluateCondition(e.Condition, currentTone))
@@ -205,11 +209,7 @@ namespace KokonoeAssistant.Services
                 _entries.RemoveAll(e =>
                     e.Sent && e.SentAt.HasValue &&
                     (DateTime.Now - e.SentAt.Value).TotalDays > 7);
-                // Також видалити прострочені невідправлені one-time старші 2 днів
-                _entries.RemoveAll(e =>
-                    !e.Sent &&
-                    e.Type == EntryType.Once &&
-                    e.FireAt < DateTime.Now.AddDays(-2));
+                ExpireStaleUnsentOnceEntries(DateTime.Now);
                 Save();
                 return before - _entries.Count;
             }
@@ -248,6 +248,36 @@ namespace KokonoeAssistant.Services
                 else                    File.Move(tmp, _path);
             }
             catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[Scheduler] Save failed: {ex}"); }
+        }
+
+        private void ExpireStaleUnsentOnceEntries(DateTime now)
+        {
+            var removed = _entries.RemoveAll(e => IsStaleUnsentOnce(e, now));
+            if (removed > 0)
+                Save();
+        }
+
+        private static bool IsStaleUnsentOnce(ScheduledEntry entry, DateTime now)
+        {
+            if (entry.Sent || entry.Type != EntryType.Once) return false;
+            return now - entry.FireAt > MaxLatenessFor(entry);
+        }
+
+        private static TimeSpan MaxLatenessFor(ScheduledEntry entry)
+        {
+            var category = entry.Category ?? "";
+            var prompt = entry.Prompt ?? "";
+            if (category.Contains("wake", StringComparison.OrdinalIgnoreCase) ||
+                prompt.Contains("розбуд", StringComparison.OrdinalIgnoreCase) ||
+                prompt.Contains("будиль", StringComparison.OrdinalIgnoreCase) ||
+                prompt.Contains("wake", StringComparison.OrdinalIgnoreCase))
+                return MaxWakeReminderLateness;
+
+            if (category.Contains("user_reminder", StringComparison.OrdinalIgnoreCase) ||
+                prompt.StartsWith("Нагадай користувачу:", StringComparison.OrdinalIgnoreCase))
+                return MaxUserReminderLateness;
+
+            return MaxGeneralOnceLateness;
         }
 
         // ── УМОВИ ─────────────────────────────────────────────────────

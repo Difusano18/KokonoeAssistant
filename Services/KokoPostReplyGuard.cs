@@ -48,6 +48,8 @@ namespace KokonoeAssistant.Services
                 violations.Add("contextual explain/image question answered stale one-letter ambiguity instead of the latest prompt");
             if (IsWhyPreviousReplyQuestion(userLower) && LooksLikeBlameyDecisionExplanation(replyLower))
                 violations.Add("why-question blamed the user instead of explaining the response decision neutrally");
+            if (LooksLikeAssistantOwnedUserReminder(userLower, replyLower))
+                violations.Add("user reminder was misattributed as Kokonoe's own schedule or courses");
 
             if (violations.Count == 0 && LooksLikeTransportError(reply))
                 return Pass("transport error surfaced; do not hide provider failure");
@@ -256,6 +258,8 @@ Timeline:
                 rules.Add("- Latest user asks for explanation/context. Explain the current visible/chat context; do not keep punishing an older one-letter message.");
             if (IsWhyPreviousReplyQuestion((userText ?? "").ToLowerInvariant()))
                 rules.Add("- User asks why the previous answer happened. State the likely routing/context mistake neutrally, then give the corrected answer path.");
+            if (violations.Any(v => v.Contains("own schedule", StringComparison.OrdinalIgnoreCase)))
+                rules.Add("- A reminder containing first-person text belongs to the user unless the data explicitly says it is Kokonoe's schedule. Do not claim Kokonoe has courses or is busy.");
             if (violations.Any(v => v.Contains("one-letter", StringComparison.OrdinalIgnoreCase)))
                 rules.Add("- Stale one-letter ambiguity is not the topic anymore unless the latest user explicitly asks about that exact letter.");
 
@@ -448,6 +452,31 @@ Timeline:
                 "формулювати думки словами",
                 "марна трата часу");
             return blame && LooksLikeStaleAmbiguityScold(replyLower);
+        }
+
+        private static bool LooksLikeAssistantOwnedUserReminder(string userLower, string replyLower)
+        {
+            var asksAboutTimeOrCourses = ContainsAny(userLower,
+                "11 30", "11:30", "11.30", "на 11", "о 11", "об 11",
+                "що на", "шо на", "а що на",
+                "які курси", "какие курсы", "що за курси", "курси в тебе",
+                "ти про що", "про що", "що ти мала на увазі", "что ты имела");
+            if (!asksAboutTimeOrCourses) return false;
+
+            return ContainsAny(replyLower,
+                "я йду на курси",
+                "я іду на курси",
+                "я піду на курси",
+                "я йшла на курси",
+                "я буду зайнята",
+                "я буду зайнятий",
+                "я буду недоступна",
+                "мій розклад",
+                "мої курси",
+                "мені — зайнятися своїми справами",
+                "мені - зайнятися своїми справами",
+                "моїми справами",
+                "моїх курсів");
         }
 
         private static bool LooksGeneric(string userText, string reply)
