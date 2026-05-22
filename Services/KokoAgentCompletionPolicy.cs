@@ -48,11 +48,11 @@ namespace KokonoeAssistant.Services
             else
             {
                 notice.Mode = "wait";
-                notice.NextQuestion = "Чекаю наступного запиту.";
+                notice.NextQuestion = "";
             }
 
-            notice.Notice = notice.Mode == "question"
-                ? $"{notice.Summary} {notice.NextQuestion}"
+            notice.Notice = string.IsNullOrWhiteSpace(notice.NextQuestion)
+                ? notice.Summary
                 : $"{notice.Summary} {notice.NextQuestion}";
             return notice;
         }

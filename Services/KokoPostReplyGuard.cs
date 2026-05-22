@@ -179,19 +179,8 @@ namespace KokonoeAssistant.Services
             string userText,
             IReadOnlyList<string> violations)
         {
-            if (HasViolation(violations, "vision-помилку"))
-                return "Фото не прочиталось: vision-провайдер впав на обробці зображення. Перезбереж картинку як PNG або кинь інший файл; вдавати, що я бачу зламане фото, не будемо.";
-
-            if (HasViolation(violations, "порожній спам"))
-                return IsImagePrompt(userText)
-                    ? "Фото отримала. Якщо підпису нема, маршрут має аналізувати зображення, а не лаяти порожній текст."
-                    : null;
-
             return null;
         }
-
-        private static bool HasViolation(IReadOnlyList<string> violations, string needle)
-            => violations.Any(v => LlmService.RepairMojibake(v).Contains(needle, StringComparison.OrdinalIgnoreCase));
 
         private static string BuildRepairInstruction(
             string userText,

@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using KokonoeAssistant.Services;
+using Newtonsoft.Json.Linq;
 
 namespace KokonoeAssistant.Tests;
 
@@ -54,7 +55,8 @@ internal static class Program
             Run("PC intent router separates screen and destructive commands", PcIntentRouterSeparatesScreenAndDestructiveCommands);
             Run("PC control executes safe PowerShell", PcControlExecutesSafePowerShell);
             Run("PC control captures screenshot", PcControlCapturesScreenshot);
-            Run("Post reply guard replaces vision technical error", PostReplyGuardReplacesVisionTechnicalError);
+            Run("LLM vision compacts oversized screenshots", LlmVisionCompactsOversizedScreenshots);
+            Run("Post reply guard repairs vision technical error", PostReplyGuardRepairsVisionTechnicalError);
             Run("Post reply guard protects image only prompt", PostReplyGuardProtectsImageOnlyPrompt);
             Run("Post reply guard duplicate image prompt avoids stale repeat text", PostReplyGuardDuplicateImagePromptAvoidsStaleRepeatText);
             Run("Post reply guard blocks therapy meta tone", PostReplyGuardBlocksTherapyMetaTone);
@@ -98,6 +100,7 @@ internal static class Program
             Run("Startup greeting fallback does not quote raw latest user text", StartupGreetingFallbackDoesNotQuoteRawLatestUserText);
             Run("Scenario simulation guards temporal continuity", ScenarioSimulationGuardsTemporalContinuity);
             Run("LLM diagnostics snapshot starts idle", LlmDiagnosticsSnapshotStartsIdle);
+            Run("LLM extracts reasoning content for vision replies", LlmExtractsReasoningContentForVisionReplies);
             Run("LLM visible text rejects dotted garbage", LlmVisibleTextRejectsDottedGarbage);
             Run("LLM rotates Ollama key after auth failure", LlmRotatesOllamaKeyAfterAuthFailure);
             Run("LLM agent key pool exhaustion does not reuse legacy key", LlmAgentKeyPoolExhaustionDoesNotReuseLegacyKey);
@@ -120,6 +123,7 @@ internal static class Program
             Run("Agent task service plans and persists", AgentTaskServicePlansAndPersists);
             Run("Agent task service imports Obsidian backlog", AgentTaskServiceImportsObsidianBacklog);
             Run("Agent completion policy asks next question", AgentCompletionPolicyAsksNextQuestion);
+            Run("Agent completion policy avoids canned wait tail", AgentCompletionPolicyAvoidsCannedWaitTail);
             Run("Reminder parser handles relative and vague time", ReminderParserHandlesRelativeAndVagueTime);
             Run("Reminder parser handles wake and absolute time", ReminderParserHandlesWakeAndAbsoluteTime);
 
@@ -1048,6 +1052,8 @@ internal static class Program
             "detector should catch colloquial photo-screen wording");
         AssertTrue(KokoScreenIntent.IsManualScreenScan("сфоткай екран і скажи що там"),
             "detector should catch direct photo-screen command");
+        AssertTrue(KokoScreenIntent.IsManualScreenScan("спробуй зробитискрін мого екрану і проскануй що на ньому"),
+            "detector should catch glued screenshot wording from fast typing");
         AssertTrue(KokoScreenIntent.IsManualScreenScan("зніми мій монітор"),
             "detector should catch capture-monitor wording");
         AssertTrue(!KokoScreenIntent.IsManualScreenScan("не дивись на мій екран"),
@@ -1254,7 +1260,48 @@ internal static class Program
         AssertTrue(bytes[0] == 0xFF && bytes[1] == 0xD8, "screenshot should be a JPEG image");
     }
 
-    private static void PostReplyGuardReplacesVisionTechnicalError()
+    private static void LlmVisionCompactsOversizedScreenshots()
+    {
+        using var bmp = new System.Drawing.Bitmap(2400, 1800);
+        using (var g = System.Drawing.Graphics.FromImage(bmp))
+        {
+            g.Clear(System.Drawing.Color.FromArgb(18, 24, 38));
+            using var brush = new System.Drawing.SolidBrush(System.Drawing.Color.Cyan);
+            using var font = new System.Drawing.Font("Arial", 72);
+            g.DrawString("Kokonoe vision smoke", font, brush, 80, 120);
+            for (var i = 0; i < 80; i++)
+            {
+                using var pen = new System.Drawing.Pen(System.Drawing.Color.FromArgb(40 + i % 180, 80, 180), 3);
+                g.DrawLine(pen, 0, i * 24, 2400, 1800 - i * 11);
+            }
+        }
+
+        using var ms = new MemoryStream();
+        var jpeg = System.Drawing.Imaging.ImageCodecInfo.GetImageEncoders()
+            .First(e => string.Equals(e.MimeType, "image/jpeg", StringComparison.OrdinalIgnoreCase));
+        using var enc = new System.Drawing.Imaging.EncoderParameters(1);
+        enc.Param[0] = new System.Drawing.Imaging.EncoderParameter(System.Drawing.Imaging.Encoder.Quality, 95L);
+        bmp.Save(ms, jpeg, enc);
+        var original = ms.ToArray();
+
+        var changed = LlmService.TryPrepareVisionImageForRequest(
+            original,
+            "image/jpeg",
+            out var compact,
+            out var mime,
+            out var note);
+
+        AssertTrue(changed, "oversized screenshot should be compacted before vision request");
+        AssertEqual("image/jpeg", mime, "compacted vision image should stay jpeg");
+        AssertTrue(compact.Length < original.Length, "compacted screenshot should be smaller");
+        AssertTrue(note.Contains("system_vision_compact"), "compaction note should be diagnostic");
+
+        using var compactStream = new MemoryStream(compact);
+        using var img = System.Drawing.Image.FromStream(compactStream);
+        AssertTrue(Math.Max(img.Width, img.Height) <= 1600, "compacted screenshot should cap the longest edge");
+    }
+
+    private static void PostReplyGuardRepairsVisionTechnicalError()
     {
         var now = new DateTime(2026, 5, 13, 2, 16, 0);
         var state = new KokoInternalState();
@@ -1268,9 +1315,10 @@ internal static class Program
         var result = new KokoPostReplyGuard().Evaluate("що на фото?", badReply, state, messages, timeline, now);
 
         AssertTrue(!result.Passed, "guard should reject technical vision 500 text");
-        AssertTrue(!string.IsNullOrWhiteSpace(result.HardReplacement), "vision technical error should get a user-safe replacement");
-        AssertTrue(!result.HardReplacement!.Contains("Vision Model"), "replacement should not tell user to inspect settings");
-        AssertTrue(!result.HardReplacement.Contains("500"), "replacement should not leak raw status code");
+        AssertTrue(result.ShouldRepair, "vision technical error should be repaired through the model instead of a canned replacement");
+        AssertTrue(string.IsNullOrWhiteSpace(result.HardReplacement), "vision technical error should not get a scripted final reply");
+        AssertTrue(result.RepairInstruction.Contains("не вигадуй") || result.RepairInstruction.Contains("чесно"),
+            "repair prompt should force honest non-fabricated image handling");
     }
 
     private static void PostReplyGuardProtectsImageOnlyPrompt()
@@ -1293,8 +1341,8 @@ internal static class Program
             now);
 
         AssertTrue(!result.Passed, "guard should reject treating an image-only prompt as empty spam");
-        AssertTrue(!string.IsNullOrWhiteSpace(result.HardReplacement), "image-only prompt should get a safe replacement");
-        AssertTrue(result.HardReplacement!.Contains("Фото") || result.HardReplacement.Contains("Фото"), "replacement should acknowledge the image");
+        AssertTrue(result.ShouldRepair, "image-only prompt should be repaired through the model");
+        AssertTrue(string.IsNullOrWhiteSpace(result.HardReplacement), "image-only prompt should not get a scripted final reply");
     }
 
     private static void PostReplyGuardDuplicateImagePromptAvoidsStaleRepeatText()
@@ -2258,6 +2306,25 @@ internal static class Program
         AssertTrue(diag.ConsecutiveFailures == 0, "diagnostics should not start in failure state");
     }
 
+    private static void LlmExtractsReasoningContentForVisionReplies()
+    {
+        var response = JObject.Parse("""
+{
+  "choices": [
+    {
+      "message": {
+        "content": "",
+        "reasoning_content": "Бачу темний інтерфейс KokonoeAssistant і чат зі screen-scan fallback."
+      }
+    }
+  ]
+}
+""");
+
+        var extracted = LlmService.ExtractOpenAiCompatibleMessageText(response);
+        AssertTrue(extracted.Contains("KokonoeAssistant"), "vision parser should use reasoning_content when content is empty");
+    }
+
     private static void LlmVisibleTextRejectsDottedGarbage()
     {
         var dotted = """
@@ -2342,8 +2409,8 @@ internal static class Program
     private static void InspectorRendersStateReport()
     {
         using var ctx = TestContext.Create();
-        ctx.Memory.LearnFact("User builds Kokonoe as a personal assistant", "project", 0.8f);
-        ctx.Memory.RecordEpisode("Somatic layer was added", "focused", 0.7f);
+        ctx.Memory.LearnFactBlocking("User builds Kokonoe as a personal assistant", "project", 0.8f);
+        ctx.Memory.RecordEpisodeBlocking("Somatic layer was added", "focused", 0.7f);
 
         var internalState = new KokoInternalState
         {
@@ -2972,6 +3039,27 @@ Persistent Obsidian context is now a core project requirement.
         var notice = KokoAgentCompletionPolicy.Build(task);
         AssertEqual("question", notice.Mode, "implementation tasks should end with a next-question mode");
         AssertTrue(notice.Notice.Contains("прогнати ширшу перевірку") || notice.Notice.Contains("стабільний прототип"), "notice should include concrete next question");
+    }
+
+    private static void AgentCompletionPolicyAvoidsCannedWaitTail()
+    {
+        var task = new KokoAgentTask
+        {
+            Id = "test",
+            Objective = "відповісти на повідомлення",
+            Status = KokoAgentTaskStatus.Completed,
+            Steps = new()
+            {
+                new KokoAgentStep { Kind = KokoAgentStepKind.Analyze, Status = KokoAgentTaskStatus.Completed },
+                new KokoAgentStep { Kind = KokoAgentStepKind.Respond, Status = KokoAgentTaskStatus.Completed },
+                new KokoAgentStep { Kind = KokoAgentStepKind.Verify, Status = KokoAgentTaskStatus.Completed }
+            }
+        };
+
+        var notice = KokoAgentCompletionPolicy.Build(task);
+        AssertEqual("wait", notice.Mode, "plain chat completion should not force a follow-up question");
+        AssertTrue(string.IsNullOrWhiteSpace(notice.NextQuestion), "wait mode should not append canned text");
+        AssertTrue(!notice.Notice.Contains("Чекаю наступного запиту", StringComparison.OrdinalIgnoreCase), "notice should not use canned wait tail");
     }
 
     private static void Run(string name, Action test)

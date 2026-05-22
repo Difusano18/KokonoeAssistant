@@ -26,6 +26,16 @@ namespace KokonoeAssistant.Services
                 "screen capture", "capture screen");
             if (wantsScan && targetScreen) return true;
 
+            var compact = Compact(lower);
+            var compactWantsScreen = ContainsAny(compact,
+                "зробискрін", "зробитискрін", "зробискрин", "зробитискрин",
+                "знімиекран", "знятиекран", "сфоткайекран", "сфоткатиекран",
+                "сфотографуйекран", "сфотографуватиекран", "фотоекрана",
+                "фотомогоекрана", "скрінмогоекрана", "скринмогоекрана",
+                "сделайскрин", "снимиэкран", "сфоткайэкран", "фотоэкрана",
+                "takescreenshot", "screencapture", "capturescreen");
+            if (compactWantsScreen && targetScreen) return true;
+
             var asksVisibleState = ContainsAny(lower,
                 "що в мене на", "що у мене на", "шо в мене на", "шо у мене на",
                 "що на", "шо на", "что на", "what is on", "what's on",
@@ -79,6 +89,9 @@ namespace KokonoeAssistant.Services
 
         private static string Normalize(string? text)
             => (text ?? "").Replace('\u2019', '\'').Replace('\u02bc', '\'').Trim().ToLowerInvariant();
+
+        private static string Compact(string text)
+            => new(text.Where(char.IsLetterOrDigit).ToArray());
 
         private static bool ContainsAny(string text, params string[] values)
             => values.Any(v => text.Contains(v, StringComparison.OrdinalIgnoreCase));

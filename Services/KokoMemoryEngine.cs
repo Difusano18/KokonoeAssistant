@@ -136,6 +136,11 @@ namespace KokonoeAssistant.Services
             return Task.Run(() => LearnFactAsync(content, category, importance, tags)).Result;
         }
 
+        public MemoryFact LearnFactBlocking(string content, string category = "general", float importance = 0.5f, string[]? tags = null)
+        {
+            return Task.Run(() => LearnFactAsync(content, category, importance, tags)).GetAwaiter().GetResult();
+        }
+
         /// <summary>Пошук фактів за запитом</summary>
         public async Task<List<MemoryFact>> RecallAsync(string query, int max = 10)
         {
@@ -247,6 +252,11 @@ namespace KokonoeAssistant.Services
         public MemoryEpisode RecordEpisode(string summary, string emotionalTone = "neutral", float intensity = 0.5f, string[]? keywords = null)
         {
             return Task.Run(() => RecordEpisodeAsync(summary, emotionalTone, intensity, keywords)).Result;
+        }
+
+        public MemoryEpisode RecordEpisodeBlocking(string summary, string emotionalTone = "neutral", float intensity = 0.5f, string[]? keywords = null)
+        {
+            return Task.Run(() => RecordEpisodeAsync(summary, emotionalTone, intensity, keywords)).GetAwaiter().GetResult();
         }
 
         /// <summary>Останні N епізодів</summary>
@@ -449,6 +459,12 @@ namespace KokonoeAssistant.Services
             string query, int maxFacts = 3, int maxEpisodes = 2)
         {
             return Task.Run(() => FindRelevantAsync(query, maxFacts, maxEpisodes)).Result;
+        }
+
+        public (List<MemoryFact> Facts, List<MemoryEpisode> Episodes) FindRelevantBlocking(
+            string query, int maxFacts = 3, int maxEpisodes = 2)
+        {
+            return Task.Run(() => FindRelevantAsync(query, maxFacts, maxEpisodes)).GetAwaiter().GetResult();
         }
 
         // ── КАУЗАЛЬНІ ЛАНЦЮГИ ────────────────────────────────────────

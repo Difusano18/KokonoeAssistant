@@ -7,6 +7,7 @@ using System.Net.Http;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -686,6 +687,19 @@ namespace KokonoeAssistant.Services
             }
         }
 
+        public static string ExtractOpenAiCompatibleMessageText(JObject response)
+        {
+            var message = response["choices"]?[0]?["message"];
+            if (message == null) return "";
+
+            var content = message["content"]?.ToString() ?? "";
+            if (!string.IsNullOrWhiteSpace(content))
+                return content;
+
+            var reasoning = message["reasoning_content"]?.ToString() ?? "";
+            return reasoning;
+        }
+
         private string ActiveProviderLabel()
         {
             if (IsClaude) return "Claude";
@@ -901,6 +915,86 @@ namespace KokonoeAssistant.Services
             }
         }
 
+        public static bool TryPrepareVisionImageForRequest(
+            byte[]? input,
+            string imageMime,
+            out byte[] normalized,
+            out string normalizedMime,
+            out string note)
+        {
+            normalized = input ?? Array.Empty<byte>();
+            normalizedMime = string.IsNullOrWhiteSpace(imageMime) ? "image/jpeg" : imageMime;
+            note = "";
+
+            if (input == null || input.Length == 0)
+                return false;
+
+            const int maxEdge = 1600;
+            const int softMaxBytes = 1_400_000;
+
+            try
+            {
+                using var src = new MemoryStream(input);
+                var decoder = BitmapDecoder.Create(
+                    src,
+                    BitmapCreateOptions.PreservePixelFormat,
+                    BitmapCacheOption.OnLoad);
+                if (decoder.Frames.Count == 0)
+                    return false;
+
+                BitmapSource frame = decoder.Frames[0];
+                var width = frame.PixelWidth;
+                var height = frame.PixelHeight;
+                var longest = Math.Max(width, height);
+                var needsResize = longest > maxEdge;
+                var needsReencode = input.Length > softMaxBytes ||
+                                    !normalizedMime.Contains("jpeg", StringComparison.OrdinalIgnoreCase);
+                if (!needsResize && !needsReencode)
+                    return false;
+
+                BitmapSource source = frame;
+                if (needsResize && longest > 0)
+                {
+                    var scale = maxEdge / (double)longest;
+                    var transformed = new TransformedBitmap(frame, new ScaleTransform(scale, scale));
+                    transformed.Freeze();
+                    source = transformed;
+                }
+
+                var jpeg = EncodeJpeg(source, input.Length > softMaxBytes * 2 ? 58 : 72);
+                if (jpeg.Length > softMaxBytes && Math.Max(source.PixelWidth, source.PixelHeight) > 1280)
+                {
+                    var scale = 1280.0 / Math.Max(source.PixelWidth, source.PixelHeight);
+                    var smaller = new TransformedBitmap(source, new ScaleTransform(scale, scale));
+                    smaller.Freeze();
+                    jpeg = EncodeJpeg(smaller, 58);
+                    source = smaller;
+                }
+
+                if (jpeg.Length == 0)
+                    return false;
+
+                normalized = jpeg;
+                normalizedMime = "image/jpeg";
+                note = $"system_vision_compact:{width}x{height}/{input.Length}B->{source.PixelWidth}x{source.PixelHeight}/{jpeg.Length}B";
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[LlmService] Vision image compact failed: {ex.Message}");
+                return false;
+            }
+        }
+
+        private static byte[] EncodeJpeg(BitmapSource source, int quality)
+        {
+            var encoder = new JpegBitmapEncoder { QualityLevel = Math.Clamp(quality, 35, 92) };
+            encoder.Frames.Add(BitmapFrame.Create(source));
+            using var dst = new MemoryStream();
+            encoder.Save(dst);
+            return dst.ToArray();
+        }
+
         private object BuildImageUserContent(string text, byte[] imageBytes, string imageMime)
         {
             var b64 = Convert.ToBase64String(imageBytes);
@@ -1101,7 +1195,8 @@ namespace KokonoeAssistant.Services
 
                 var sendImageBytes = imageBytes;
                 var sendImageMime = imageMime;
-                // System vision keeps the caller's compact format first; chat path handles PNG retry on failures.
+                var compactNote = "";
+                TryPrepareVisionImageForRequest(imageBytes, imageMime, out sendImageBytes, out sendImageMime, out compactNote);
 
                 var dateStamp = $"\n\n=== ДАТА/ЧАС ===\nСьогодні: {DateTime.Now:dddd, dd MMMM yyyy}, {DateTime.Now:HH:mm}";
                 var systemContent = BuildMainSystemContent(agentId);
@@ -1187,8 +1282,13 @@ namespace KokonoeAssistant.Services
                         else if (visionIsOllamaCloud)
                         {
                             ollamaKey = ResolveOllamaKey(agentId);
-                            if (!string.IsNullOrEmpty(ollamaKey))
-                                req.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", ollamaKey);
+                            if (string.IsNullOrEmpty(ollamaKey))
+                            {
+                                lastError = "no live Ollama Cloud key for system vision";
+                                resp = null;
+                                break;
+                            }
+                            req.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", ollamaKey);
                         }
 
                         resp = await _http.SendAsync(req, ct);
@@ -1199,7 +1299,7 @@ namespace KokonoeAssistant.Services
                             break;
                         }
 
-                        if (visionIsOllamaCloud && TryRotateOllamaKeyAfterFailure(agentId, ollamaKey, (int)resp.StatusCode))
+                        if (visionIsOllamaCloud && !string.IsNullOrEmpty(ollamaKey) && TryRotateOllamaKeyAfterFailure(agentId, ollamaKey, (int)resp.StatusCode))
                         {
                             resp.Dispose();
                             resp = null;
@@ -1213,7 +1313,7 @@ namespace KokonoeAssistant.Services
                         break;
 
                     lastStatus = resp == null ? null : (int)resp.StatusCode;
-                    lastError = resp == null ? "no live key/response" : await resp.Content.ReadAsStringAsync(ct);
+                    lastError = resp == null ? (lastError ?? "no live key/response") : await resp.Content.ReadAsStringAsync(ct);
                     var shouldTryNextVision = visionIsOllamaCloud
                         && lastStatus is 400 or 500
                         && modelAttempt != visionModels.Last()
@@ -1234,7 +1334,8 @@ namespace KokonoeAssistant.Services
                 {
                     var status = resp == null ? lastStatus : (int)resp.StatusCode;
                     var error = resp == null ? (lastError ?? "no live key/response") : await resp.Content.ReadAsStringAsync(ct);
-                    RecordLlmFailure(diagProvider, lastModel, diagChannel, status, error, diagWatch, "system_vision");
+                    RecordLlmFailure(diagProvider, lastModel, diagChannel, status, error, diagWatch,
+                        string.IsNullOrWhiteSpace(compactNote) ? "system_vision" : compactNote);
                     return null;
                 }
 
@@ -1242,10 +1343,17 @@ namespace KokonoeAssistant.Services
                 var respObj = JObject.Parse(respText);
                 var reply = visionIsClaude
                     ? respObj["content"]?.FirstOrDefault()?["text"]?.ToString()
-                    : respObj["choices"]?[0]?["message"]?["content"]?.ToString();
+                    : ExtractOpenAiCompatibleMessageText(respObj);
+                var cleanReply = CleanGarbage(reply ?? "");
+                if (string.IsNullOrWhiteSpace(cleanReply))
+                {
+                    RecordLlmFailure(diagProvider, lastModel, diagChannel, 200, "empty vision content", diagWatch,
+                        string.IsNullOrWhiteSpace(compactNote) ? "system_vision_empty" : compactNote);
+                    return null;
+                }
 
-                RecordLlmSuccess(diagProvider, diagModel, diagChannel, diagWatch);
-                return CleanGarbage(reply ?? "");
+                RecordLlmSuccess(diagProvider, lastModel, diagChannel, diagWatch, compactNote);
+                return cleanReply;
             }
             catch (Exception ex)
             {

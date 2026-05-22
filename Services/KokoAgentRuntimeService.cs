@@ -293,6 +293,8 @@ namespace KokonoeAssistant.Services
                 Steps = plan.Select(CloneStep).ToList()
             };
             var notice = KokoAgentCompletionPolicy.Build(task);
+            if (notice.Mode != "question" || string.IsNullOrWhiteSpace(notice.NextQuestion))
+                return reply;
             return reply + "\n\n" + notice.NextQuestion;
         }
 

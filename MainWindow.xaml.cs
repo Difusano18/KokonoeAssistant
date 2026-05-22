@@ -2494,15 +2494,17 @@ tags: [kokonoe, live-core, diagnostics]
 
             var screenshot = await Task.Run(() => ServiceContainer.PcControl.TakeScreenshot(), ct);
             var prompt = BuildScreenScanPrompt(userText);
-            var reply = await _llm.SendSystemVisionQueryAsync(prompt, screenshot, "image/jpeg", ct);
-            if (string.IsNullOrWhiteSpace(reply))
-                reply = await _llm.SendSystemVisionQueryAsync(prompt, screenshot, "image/jpeg", ct);
+            string? reply;
+            using (var visionCts = CancellationTokenSource.CreateLinkedTokenSource(ct))
+            {
+                visionCts.CancelAfter(TimeSpan.FromSeconds(90));
+                reply = await _llm.SendSystemVisionQueryAsync(prompt, screenshot, "image/jpeg", visionCts.Token);
+            }
 
             if (string.IsNullOrWhiteSpace(reply))
             {
                 _lastManualScreenScanFailures++;
-                var again = _lastManualScreenScanFailures > 1 ? " знову" : "";
-                reply = $"Знімок екрана зробила{again}, але аналіз не повернувся. Не буду вигадувати, що бачу картинку: коротке \"ще раз\" повторить скан, а не запустить тупий допит.";
+                reply = await BuildScreenScanFallbackReplyAsync(screenshot, _lastManualScreenScanFailures, userText, ct);
             }
             else
             {
@@ -2510,6 +2512,60 @@ tags: [kokonoe, live-core, diagnostics]
             }
 
             return await GuardAndRepairReplyAsync(userText, reply, "", ct);
+        }
+
+        private async Task<string> BuildScreenScanFallbackReplyAsync(
+            byte[] screenshot,
+            int failureCount,
+            string userText,
+            CancellationToken ct)
+        {
+            var diag = _llm.GetDiagnosticsSnapshot();
+            var activity = new ActivityAnalyzer().AnalyzeScreenshot(screenshot);
+            var window = string.IsNullOrWhiteSpace(activity.ActiveWindowTitle)
+                ? "активне вікно не визначилось"
+                : activity.ActiveWindowTitle.Trim();
+            var status = diag.LastStatusCode.HasValue ? diag.LastStatusCode.Value.ToString() : "no-status";
+            var fallback = string.IsNullOrWhiteSpace(diag.LastFallback) ? "vision_empty" : diag.LastFallback;
+            var repeat = failureCount > 1
+                ? $"Це {failureCount}-й порожній результат підряд, тому я не робитиму вигляд, що картинку прочитано."
+                : "Це перший порожній результат у цій серії.";
+            var prompt = $"""
+Ти Kokonoe. Локальний інструмент зробив скріншот, але візуальний аналіз повернув порожній текст.
+Склади коротку відповідь користувачу українською, 2-4 речення.
+
+Факти, які можна використати:
+- Запит користувача: {userText}
+- Скріншот реально зроблено: так
+- Активне вікно з локальної ОС: {window}
+- Візуальний аналізатор не дав опису: status={status}, route={fallback}, provider={diag.Provider}, model={diag.Model}
+- Повторів у цій серії: {failureCount}
+
+Правила:
+- Не вигадуй, що саме видно на скріншоті.
+- Не кажи "я не маю доступу до екрана" і не проси користувача завантажити скріншот: скрін уже є.
+- Не пиши службові слова provider/model/status, якщо не потрібно пояснити збій.
+- Не цитуй дослівно запит користувача.
+- Звучить як Kokonoe: сухо, чесно, без канцеляриту.
+""";
+
+            try
+            {
+                using var fallbackCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                fallbackCts.CancelAfter(TimeSpan.FromSeconds(18));
+                var generated = await Task.Run(
+                    () => _llm.SendSystemQueryAsync(prompt, ct: fallbackCts.Token),
+                    fallbackCts.Token);
+                generated = LlmService.RepairMojibake(generated ?? "").Trim();
+                if (!string.IsNullOrWhiteSpace(generated) && !LlmService.LooksLikeBrokenVisibleText(generated))
+                    return generated;
+            }
+            catch
+            {
+                // Last-resort text below is deliberately factual; no fake image reading.
+            }
+
+            return $"Скріншот зроблено, але опис зображення не повернувся. З локальних даних бачу тільки активне вікно: {window}. {repeat}";
         }
 
         private static string BuildScreenScanPrompt(string userText) => $"""
@@ -2598,7 +2654,7 @@ tags: [kokonoe, live-core, diagnostics]
                 var mem = ServiceContainer.BrainEngine?.Memory;
                 if (mem != null && !string.IsNullOrWhiteSpace(userText))
                 {
-                    var (facts, episodes) = mem.FindRelevant(userText, maxFacts: 5, maxEpisodes: 2);
+                    var (facts, episodes) = mem.FindRelevantBlocking(userText, maxFacts: 5, maxEpisodes: 2);
                     var memParts = new List<string>();
                     foreach (var f in facts)
                         memParts.Add(f.Content);
@@ -3228,10 +3284,10 @@ tags: []
                 if (guard == null)
                     return GuardTemporalReply(userText, reply);
                 if (guard.Passed) return reply;
-                if (!string.IsNullOrWhiteSpace(guard.HardReplacement))
-                    return guard.HardReplacement!;
                 if (!guard.ShouldRepair || string.IsNullOrWhiteSpace(guard.RepairInstruction))
-                    return GuardTemporalReply(userText, reply);
+                    return !string.IsNullOrWhiteSpace(guard.HardReplacement)
+                        ? guard.HardReplacement!
+                        : GuardTemporalReply(userText, reply);
 
                 var repairPrompt = guard.RepairInstruction +
                                    "\n\nДодатковий контекст:\n" +
@@ -3245,8 +3301,6 @@ tags: []
                 var secondGuard = await Task.Run(() =>
                     ServiceContainer.BrainEngine?.EvaluatePostReplyGuard(userText, repaired) ?? new KokoPostReplyGuardResult(),
                     guardCt);
-                if (!secondGuard.Passed && !string.IsNullOrWhiteSpace(secondGuard.HardReplacement))
-                    return secondGuard.HardReplacement!;
 
                 if (secondGuard.Passed)
                     return repaired.Trim();
@@ -3267,10 +3321,11 @@ tags: []
                             guardCt);
                         if (thirdGuard.Passed)
                             return repairedAgain.Trim();
-                        if (!string.IsNullOrWhiteSpace(thirdGuard.HardReplacement))
-                            return thirdGuard.HardReplacement!;
                     }
                 }
+
+                if (!string.IsNullOrWhiteSpace(guard.HardReplacement))
+                    return guard.HardReplacement!;
 
                 return GuardTemporalReply(userText, reply);
             }
@@ -7216,7 +7271,7 @@ tags: [kokonoe, dashboard, live]
                 if (awaiting == TgAwaitingMode.Note)
                 {
                     try { ServiceContainer.BrainEngine?.ProcessUserMessage(text); } catch { }
-                    try { ServiceContainer.BrainEngine?.Memory?.RecordEpisode(text, "neutral", 0.6f); }
+                    try { ServiceContainer.BrainEngine?.Memory?.RecordEpisodeBlocking(text, "neutral", 0.6f); }
                     catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[ERROR] TG note memory: {ex.Message}"); }
                     try { _obsidian.AppendToDailyNote($"\n> 📝 [TG {DateTime.Now:HH:mm}] {text}"); }
                     catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[ERROR] TG daily note: {ex.Message}"); }
@@ -7747,7 +7802,7 @@ tags: [kokonoe, dashboard, live]
             if (!moodMap.TryGetValue(mood, out var m)) return;
 
             // Зберегти в health + emotion
-            try { ServiceContainer.BrainEngine?.Memory?.RecordEpisode($"настрій: {m.Label}", m.Tone, m.Score); } catch { }
+            try { ServiceContainer.BrainEngine?.Memory?.RecordEpisodeBlocking($"настрій: {m.Label}", m.Tone, m.Score); } catch { }
             try { ServiceContainer.EmotionEngine.UpdateFromUserTone(m.Tone, m.Score); } catch { }
             try { _obsidian.AppendToDailyNote($"\n> ❤️ [{DateTime.Now:HH:mm}] Настрій: {m.Label}"); } catch { }
 

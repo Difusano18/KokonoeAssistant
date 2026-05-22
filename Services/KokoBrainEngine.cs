@@ -1483,7 +1483,7 @@ namespace KokonoeAssistant.Services
                 // Зберегти спостереження в Memory і StateEngine
                 if (!string.IsNullOrEmpty(obs))
                 {
-                    try { Memory.RecordEpisode(obs, _state.LastUserEmotionalTone, _state.MoodScore); } catch { }
+                    try { Memory.RecordEpisodeBlocking(obs, _state.LastUserEmotionalTone, _state.MoodScore); } catch { }
                     try { _stateEngine?.RecordObservation(obs); } catch { }
                     // Емоційна пам'ять
                     try { Emotion.RecordEmotionalEvent($"think: {obs[..Math.Min(60, obs.Length)]}", _state.PersonalityDailyMood); } catch { }
@@ -2022,7 +2022,7 @@ namespace KokonoeAssistant.Services
                 {
                     try
                     {
-                        var (facts, episodes) = Memory.FindRelevant(content, maxFacts: 3, maxEpisodes: 2);
+                        var (facts, episodes) = Memory.FindRelevantBlocking(content, maxFacts: 3, maxEpisodes: 2);
                         if (facts.Count > 0 || episodes.Count > 0)
                         {
                             var sb = new StringBuilder();
@@ -2428,7 +2428,7 @@ namespace KokonoeAssistant.Services
                     if (rest.Length > 3 && rest.Length < 200)
                     {
                         var fact = pat.Trim() + " " + rest.Split('.', '!', '?')[0].Trim();
-                        Memory.LearnFact(fact, cat, imp);
+                        Memory.LearnFactBlocking(fact, cat, imp);
                     }
                 }
             }
@@ -3060,8 +3060,8 @@ namespace KokonoeAssistant.Services
             if (!string.IsNullOrEmpty(memoryText))
             {
                 var importance = Math.Clamp(reflection.Importance, 0.1f, 1f);
-                Memory.LearnFact(memoryText, "relationship_reflection", importance, new[] { "reflection", reflection.UserTone });
-                Memory.RecordEpisode(memoryText, reflection.UserTone, importance,
+                Memory.LearnFactBlocking(memoryText, "relationship_reflection", importance, new[] { "reflection", reflection.UserTone });
+                Memory.RecordEpisodeBlocking(memoryText, reflection.UserTone, importance,
                     new[] { "reflection", "relationship", reflection.Aftertaste });
             }
 
@@ -5176,7 +5176,7 @@ namespace KokonoeAssistant.Services
                 var fact = raw.Trim().Trim('"').Trim('\u00AB', '\u00BB');
                 if (fact.Length > 10 && fact.Length < 200)
                 {
-                    Memory.LearnFact(fact, "observation", 0.65f);
+                    Memory.LearnFactBlocking(fact, "observation", 0.65f);
                     _state.SentReminderHashes.Add("fact_" + hash);
                     if (_state.SentReminderHashes.Count > 100)
                         _state.SentReminderHashes.RemoveAt(0);

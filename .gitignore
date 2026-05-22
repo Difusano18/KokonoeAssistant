@@ -28,5 +28,9 @@ kokonoe-data/
 appsettings.local.json
 appsettings.Development.json
 
+# Local project memory / working notes
+PROJECT_MEMORY.md
+ProjectMemory/
+
 # Avatar sketches (personal)
 Avatar/ескізи аватара/
