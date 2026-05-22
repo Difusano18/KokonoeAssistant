@@ -101,6 +101,7 @@ internal static class Program
             Run("Scenario simulation guards temporal continuity", ScenarioSimulationGuardsTemporalContinuity);
             Run("LLM diagnostics snapshot starts idle", LlmDiagnosticsSnapshotStartsIdle);
             Run("LLM extracts reasoning content for vision replies", LlmExtractsReasoningContentForVisionReplies);
+            Run("LLM uses Ollama image URL string payload", LlmUsesOllamaImageUrlStringPayload);
             Run("LLM visible text rejects dotted garbage", LlmVisibleTextRejectsDottedGarbage);
             Run("LLM rotates Ollama key after auth failure", LlmRotatesOllamaKeyAfterAuthFailure);
             Run("LLM agent key pool exhaustion does not reuse legacy key", LlmAgentKeyPoolExhaustionDoesNotReuseLegacyKey);
@@ -2323,6 +2324,17 @@ internal static class Program
 
         var extracted = LlmService.ExtractOpenAiCompatibleMessageText(response);
         AssertTrue(extracted.Contains("KokonoeAssistant"), "vision parser should use reasoning_content when content is empty");
+    }
+
+    private static void LlmUsesOllamaImageUrlStringPayload()
+    {
+        var ollamaBlock = LlmService.BuildOpenAiImageBlockForProvider("ollama-cloud", "image/jpeg", "abc123");
+        AssertEqual("image_url", ollamaBlock["type"]?.ToString(), "Ollama image block should use image_url type");
+        AssertTrue(ollamaBlock["image_url"]?.Type == JTokenType.String, "Ollama OpenAI-compatible vision expects image_url as a data URL string");
+        AssertTrue(ollamaBlock["image_url"]?.ToString().StartsWith("data:image/jpeg;base64,") == true, "Ollama image URL should be a data URI");
+
+        var lmStudioBlock = LlmService.BuildOpenAiImageBlockForProvider("lmstudio", "image/jpeg", "abc123");
+        AssertTrue(lmStudioBlock["image_url"]?.Type == JTokenType.Object, "non-Ollama OpenAI-style providers should keep image_url.url object form");
     }
 
     private static void LlmVisibleTextRejectsDottedGarbage()

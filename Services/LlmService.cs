@@ -995,12 +995,32 @@ namespace KokonoeAssistant.Services
             return dst.ToArray();
         }
 
-        private object BuildImageUserContent(string text, byte[] imageBytes, string imageMime)
+        public static JObject BuildOpenAiImageBlockForProvider(string? provider, string imageMime, string b64)
+        {
+            var dataUrl = $"data:{imageMime};base64,{b64}";
+            var isOllamaCompatible = string.Equals(provider, "ollama-cloud", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(provider, "ollama", StringComparison.OrdinalIgnoreCase);
+
+            return isOllamaCompatible
+                ? new JObject
+                {
+                    ["type"] = "image_url",
+                    ["image_url"] = dataUrl
+                }
+                : new JObject
+                {
+                    ["type"] = "image_url",
+                    ["image_url"] = new JObject { ["url"] = dataUrl }
+                };
+        }
+
+        private object BuildImageUserContent(string text, byte[] imageBytes, string imageMime, string? provider = null)
         {
             var b64 = Convert.ToBase64String(imageBytes);
-            object imageBlock = IsClaude
+            var effectiveProvider = string.IsNullOrWhiteSpace(provider) ? _provider : provider;
+            object imageBlock = string.Equals(effectiveProvider, "claude", StringComparison.OrdinalIgnoreCase)
                 ? new { type = "image", source = new { type = "base64", media_type = imageMime, data = b64 } }
-                : new { type = "image_url", image_url = new { url = $"data:{imageMime};base64,{b64}" } };
+                : BuildOpenAiImageBlockForProvider(effectiveProvider, imageMime, b64);
             return new object[]
             {
                 new { type = "text", text = text },
@@ -1207,7 +1227,7 @@ namespace KokonoeAssistant.Services
 
                 object imageBlock = visionIsClaude
                     ? new { type = "image", source = new { type = "base64", media_type = sendImageMime, data = b64 } }
-                    : new { type = "image_url", image_url = new { url = $"data:{sendImageMime};base64,{b64}" } };
+                    : BuildOpenAiImageBlockForProvider(target.Provider, sendImageMime, b64);
 
                 object userContent = new object[]
                 {
@@ -1428,7 +1448,8 @@ namespace KokonoeAssistant.Services
                     userContent = BuildImageUserContent(
                         string.IsNullOrWhiteSpace(userText) ? "Що на фото?" : userText,
                         sendImageBytes,
-                        sendImageMime);
+                        sendImageMime,
+                        agentTarget.Provider);
                 }
                 else
                 {
@@ -1670,7 +1691,8 @@ namespace KokonoeAssistant.Services
                                 var pngContent = BuildImageUserContent(
                                     string.IsNullOrWhiteSpace(userText) ? "Що на фото?" : userText,
                                     pngBytes,
-                                    pngMime);
+                                    pngMime,
+                                    agentTarget.Provider);
                                 lock (_histLock)
                                 {
                                     if (imageHistoryIdx < _history.Count)
@@ -1692,7 +1714,8 @@ namespace KokonoeAssistant.Services
                                 var placeholderContent = BuildImageUserContent(
                                     placeholderPrompt,
                                     BuildVisionPlaceholderPng(),
-                                    "image/png");
+                                    "image/png",
+                                    agentTarget.Provider);
                                 lock (_histLock)
                                 {
                                     if (imageHistoryIdx < _history.Count)
