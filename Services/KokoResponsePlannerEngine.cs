@@ -94,6 +94,7 @@ namespace KokonoeAssistant.Services
 
             steps.Add(AgentStep(steps.Count + 1, "Execute the selected action or generate the response", KokoAgentStepKind.Respond));
             steps.Add(AgentStep(steps.Count + 1, "Observe result, detect failures, and update task state", KokoAgentStepKind.Verify));
+            steps.Add(AgentStep(steps.Count + 1, "Review work quality and decide whether correction is needed", KokoAgentStepKind.SelfReview));
             steps.Add(AgentStep(steps.Count + 1, "Report concise outcome to the UI", KokoAgentStepKind.Report));
             return steps;
         }

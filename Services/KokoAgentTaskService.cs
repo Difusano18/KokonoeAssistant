@@ -31,6 +31,7 @@ namespace KokonoeAssistant.Services
         Implement,
         Respond,
         Verify,
+        SelfReview,
         Report
     }
 
@@ -328,6 +329,14 @@ namespace KokonoeAssistant.Services
                     step.Status = KokoAgentTaskStatus.Completed;
                     step.FinishedAt = DateTime.Now;
                     task.UpdatedAt = DateTime.Now;
+                    if (step.Kind == KokoAgentStepKind.SelfReview &&
+                        TryExtractSelfReviewScore(step.Result, out var score) &&
+                        score < 7 &&
+                        InsertCorrectionStepLocked(task, step, score))
+                    {
+                        task.UpdatedAt = DateTime.Now;
+                        EmitActivity("plan", "SelfReview", task.Objective, $"Score {score}/10; inserted correction step.", task.Id, step.Id);
+                    }
                     if (task.Steps.All(s => s.Status == KokoAgentTaskStatus.Completed))
                     {
                         task.Status = KokoAgentTaskStatus.Completed;
@@ -383,6 +392,12 @@ namespace KokonoeAssistant.Services
                 return await _sandbox.ExecutePythonAsync("print('sandbox ready')", ct: ct).ConfigureAwait(false);
             }
 
+            if (step.Kind == KokoAgentStepKind.SelfReview)
+            {
+                EmitActivity("observe", "SelfReview", task.Objective, "Reviewing task outputs before report. Yes, checking the work before bragging.", task.Id, step.Id);
+                return BuildSelfReviewReport(task);
+            }
+
             if (_llm == null)
                 return $"Simulated {step.Kind}: {step.Title}";
 
@@ -420,6 +435,100 @@ namespace KokonoeAssistant.Services
                 ct,
                 agentId: AgentIdFor(step.Kind)).ConfigureAwait(false);
             return string.IsNullOrWhiteSpace(result) ? "(empty result)" : result.Trim();
+        }
+
+        private static string BuildSelfReviewReport(KokoAgentTask task)
+        {
+            var findings = new List<string>();
+            var completed = task.Steps
+                .Where(s => s.Status == KokoAgentTaskStatus.Completed && s.Kind != KokoAgentStepKind.SelfReview)
+                .OrderBy(s => s.Order)
+                .ToList();
+            var score = 10;
+
+            var failed = task.Steps.Count(s => s.Status == KokoAgentTaskStatus.Failed);
+            if (failed > 0)
+            {
+                score -= Math.Min(4, failed * 2);
+                findings.Add($"{failed} failed step(s) remain.");
+            }
+
+            var empty = completed.Count(s => string.IsNullOrWhiteSpace(s.Result));
+            if (empty > 0)
+            {
+                score -= Math.Min(3, empty);
+                findings.Add($"{empty} completed step(s) have no result.");
+            }
+
+            var resultBlob = string.Join("\n", completed.Select(s => s.Result ?? ""));
+            var objective = task.Objective ?? "";
+            var lowerObjective = objective.ToLowerInvariant();
+            var lowerBlob = resultBlob.ToLowerInvariant();
+
+            if (ContainsAny(lowerObjective, "background vault", "фоновий", "obsidian", "vault") &&
+                !ContainsAny(lowerBlob, "insightextraction завершено", "vault_cluster.py", "інсайти", "тематичні кластери"))
+            {
+                score -= 3;
+                findings.Add("Vault/background task has no concrete insight or cluster output.");
+            }
+
+            if (ContainsAny(lowerObjective, "systemcontrol", "system control", "ps:", "powershell", "процеси", "ram") &&
+                !ContainsAny(lowerBlob, "systemcontrol завершено", "powershell:", "koko-system-ok", "топ процесів"))
+            {
+                score -= 2;
+                findings.Add("System-control task has no local execution output.");
+            }
+
+            if (ContainsAny(lowerBlob, "чекаю наступного запиту", "просто дай", "я не можу", "не маю доступу", "simulated implement"))
+            {
+                score -= 2;
+                findings.Add("Result contains a weak fallback, denial, or simulated implementation.");
+            }
+
+            score = Math.Clamp(score, 1, 10);
+            if (findings.Count == 0)
+                findings.Add("No blocking defects found.");
+
+            var verdict = score >= 7 ? "pass" : "needs_correction";
+            return $"""
+            SelfReview score: {score}/10
+            Verdict: {verdict}
+            Findings:
+            - {string.Join("\n- ", findings.Select(f => Trim(f, 180)))}
+            """.Trim();
+        }
+
+        private static bool TryExtractSelfReviewScore(string? text, out int score)
+        {
+            score = 10;
+            if (string.IsNullOrWhiteSpace(text))
+                return false;
+            var match = System.Text.RegularExpressions.Regex.Match(text, @"score\s*:\s*(\d{1,2})\s*/\s*10", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            if (!match.Success || !int.TryParse(match.Groups[1].Value, out score))
+                return false;
+            score = Math.Clamp(score, 1, 10);
+            return true;
+        }
+
+        private static bool InsertCorrectionStepLocked(KokoAgentTask task, KokoAgentStep selfReview, int score)
+        {
+            var marker = $"self-review:{selfReview.Id}";
+            if (task.Steps.Any(s => s.Title.Contains(marker, StringComparison.OrdinalIgnoreCase)))
+                return false;
+
+            var order = selfReview.Order + 1;
+            foreach (var step in task.Steps.Where(s => s.Order >= order))
+                step.Order++;
+
+            task.Steps.Add(new KokoAgentStep
+            {
+                Order = order,
+                Title = $"Correct findings from {marker} (score {score}/10)",
+                Kind = KokoAgentStepKind.Implement,
+                Status = KokoAgentTaskStatus.Pending
+            });
+            task.Steps.Sort((a, b) => a.Order.CompareTo(b.Order));
+            return true;
         }
 
         private static async Task<string> ExecuteSystemControlAsync(KokoAgentTask task, CancellationToken ct)
@@ -638,12 +747,73 @@ Objective: {task.Objective}
                     var observation = (string?)cluster["observation"] ?? "";
                     sb.AppendLine($"{theme}: {observation} files=[{string.Join(", ", files)}] keywords=[{string.Join(", ", keywords)}]");
                 }
+                var consolidation = BuildClusterConsolidationPlan(clusters);
+                if (!string.IsNullOrWhiteSpace(consolidation))
+                    sb.AppendLine(consolidation);
                 return sb.ToString().Trim();
             }
             catch (Exception ex)
             {
                 return "clustering failed: " + Trim(ex.Message, 220);
             }
+        }
+
+        private string BuildClusterConsolidationPlan(JArray clusters)
+        {
+            if (_obsidian == null || clusters.Count == 0)
+                return "";
+
+            var autonomy = Math.Clamp(AppSettings.Load().ProactiveAutonomyLevel, 0, 3);
+            var sb = new StringBuilder();
+            foreach (var cluster in clusters.Take(5))
+            {
+                var theme = ((string?)cluster["theme"] ?? "unknown").Trim();
+                var files = cluster["files"]?
+                    .Select(v => v?.ToString() ?? "")
+                    .Where(v => v.EndsWith(".md", StringComparison.OrdinalIgnoreCase))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .Take(5)
+                    .ToArray() ?? Array.Empty<string>();
+                var size = (int?)cluster["size"] ?? files.Length;
+                var folders = files
+                    .Select(f => f.Contains('/') ? f[..f.IndexOf('/')] : "")
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .Count();
+                var messy = size >= 3 && files.Length >= 3 && folders >= 2;
+                if (!messy)
+                    continue;
+
+                if (autonomy >= 3)
+                {
+                    var target = $"Kokonoe/Agent/Consolidated/{DateTime.Now:yyyyMMdd-HHmm}-{SanitizePathPart(theme)}.md";
+                    try
+                    {
+                        var written = _obsidian.ConsolidateNotes(files, target);
+                        sb.AppendLine($"consolidation executed: {theme} -> `{written}` from [{string.Join(", ", files.Take(4))}]");
+                    }
+                    catch (Exception ex)
+                    {
+                        sb.AppendLine($"consolidation failed for {theme}: {Trim(ex.Message, 180)}");
+                    }
+                }
+                else
+                {
+                    sb.AppendLine($"messy cluster proposal: consolidate {theme} into Kokonoe/Agent/Consolidated/{SanitizePathPart(theme)}.md from [{string.Join(", ", files.Take(4))}]");
+                }
+            }
+            return sb.ToString().Trim();
+        }
+
+        private static string SanitizePathPart(string value)
+        {
+            value = string.IsNullOrWhiteSpace(value) ? "cluster" : value.Trim().ToLowerInvariant();
+            foreach (var ch in Path.GetInvalidFileNameChars())
+                value = value.Replace(ch, '-');
+            value = new string(value.Select(ch => char.IsLetterOrDigit(ch) ? ch : '-').ToArray());
+            while (value.Contains("--", StringComparison.Ordinal))
+                value = value.Replace("--", "-", StringComparison.Ordinal);
+            value = value.Trim('-');
+            return string.IsNullOrWhiteSpace(value) ? "cluster" : value[..Math.Min(value.Length, 48)];
         }
 
         private static string ResolveVaultClusterScriptPath()
@@ -837,6 +1007,7 @@ Objective: {task.Objective}
             KokoAgentStepKind.Implement => "LlmService",
             KokoAgentStepKind.Respond => "LlmService",
             KokoAgentStepKind.Verify => "Verifier",
+            KokoAgentStepKind.SelfReview => "SelfReview",
             KokoAgentStepKind.Report => "Reporter",
             _ => "unknown"
         };
@@ -849,6 +1020,7 @@ Objective: {task.Objective}
             KokoAgentStepKind.InsightExtraction => "research",
             KokoAgentStepKind.Implement => "coder",
             KokoAgentStepKind.Verify => "system",
+            KokoAgentStepKind.SelfReview => "research",
             KokoAgentStepKind.Plan => "research",
             _ => "system"
         };

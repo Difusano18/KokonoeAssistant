@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
+using System.Text;
 
 namespace KokonoeAssistant.Services
 {
@@ -26,6 +28,16 @@ namespace KokonoeAssistant.Services
         public bool Passed { get; set; }
         public string Reason { get; set; } = "";
         public string Replacement { get; set; } = "";
+    }
+
+    public sealed class KokoPredictiveContextWarmup
+    {
+        public bool HasContext { get; set; }
+        public string Mode { get; set; } = "";
+        public string AppKey { get; set; } = "";
+        public string Summary { get; set; } = "";
+        public string PromptBlock { get; set; } = "";
+        public string[] SourcePaths { get; set; } = Array.Empty<string>();
     }
 
     public sealed class KokoProactiveContextService
@@ -117,6 +129,56 @@ namespace KokonoeAssistant.Services
             return "Тиша є, контексту немає. Дуже інформативно. Подай хоча б один нормальний сигнал.";
         }
 
+        public KokoPredictiveContextWarmup BuildScreenWarmup(
+            KokoScreenAwarenessAnalysis analysis,
+            ActivityAnalyzer.ActivityState activity,
+            ObsidianMcpService obsidian,
+            DateTime now,
+            int maxChars = 1800)
+        {
+            var window = activity.ActiveWindowTitle ?? "";
+            var mode = KokoScreenAwarenessService.NormalizeMode(
+                analysis.ScreenMode,
+                $"{window} {analysis.SummaryUk} {analysis.ActivityUk} {analysis.CurrentTask}");
+            var appKey = InferAppKey(window, mode);
+            var terms = BuildWarmupTerms(appKey, mode, analysis, window);
+            if (terms.Length == 0)
+                return new KokoPredictiveContextWarmup { Mode = mode, AppKey = appKey };
+
+            var notes = obsidian.ListNotes()
+                .Where(p => p.EndsWith(".md", StringComparison.OrdinalIgnoreCase))
+                .Where(p => !p.Contains("kokonoe-data", StringComparison.OrdinalIgnoreCase))
+                .Where(p => !p.StartsWith("Kokonoe/Agent/Completions", StringComparison.OrdinalIgnoreCase))
+                .Select(path => ScoreWarmupNote(obsidian, path, terms))
+                .Where(n => n.Score > 0 && !string.IsNullOrWhiteSpace(n.Preview))
+                .OrderByDescending(n => n.Score)
+                .ThenBy(n => n.Path)
+                .Take(4)
+                .ToList();
+            if (notes.Count == 0)
+                return new KokoPredictiveContextWarmup { Mode = mode, AppKey = appKey };
+
+            var sb = new StringBuilder();
+            sb.AppendLine("PREDICTIVE SCREEN CONTEXT");
+            sb.AppendLine($"Time: {now:yyyy-MM-dd HH:mm}");
+            sb.AppendLine($"Mode/app: {mode}/{appKey}");
+            sb.AppendLine($"Window: {NullDash(Trim(window, 120))}");
+            sb.AppendLine($"Screen task: {NullDash(Trim(analysis.CurrentTask, 140))}");
+            sb.AppendLine("Warm notes:");
+            foreach (var note in notes)
+                sb.AppendLine($"- `{note.Path}`: {Trim(note.Preview, Math.Max(120, maxChars / Math.Max(1, notes.Count)))}");
+
+            return new KokoPredictiveContextWarmup
+            {
+                HasContext = true,
+                Mode = mode,
+                AppKey = appKey,
+                Summary = $"{mode}/{appKey}: {string.Join(", ", notes.Select(n => n.Path).Take(3))}",
+                PromptBlock = sb.ToString().Trim(),
+                SourcePaths = notes.Select(n => n.Path).ToArray()
+            };
+        }
+
         private static string DescribeContext(KokoProactiveContextFrame frame)
         {
             var anchor = (frame.AnchorUk ?? "").Trim();
@@ -141,6 +203,88 @@ namespace KokonoeAssistant.Services
             if (ContainsAny(lower, "спат", "сон", "прокин"))
                 return "сон";
             return "останню задачу";
+        }
+
+        private static string InferAppKey(string window, string mode)
+        {
+            var lower = (window ?? "").ToLowerInvariant();
+            if (ContainsAny(lower, "visual studio code", "vscode", "visual studio", "rider", "code.exe")) return "vscode";
+            if (ContainsAny(lower, "spotify")) return "spotify";
+            if (ContainsAny(lower, "obsidian")) return "obsidian";
+            if (ContainsAny(lower, "telegram")) return "telegram";
+            if (ContainsAny(lower, "chrome", "edge", "firefox", "browser")) return "browser";
+            if (ContainsAny(lower, "steam", "dota", "game")) return "game";
+            return string.IsNullOrWhiteSpace(mode) ? "unknown" : mode;
+        }
+
+        private static string[] BuildWarmupTerms(string appKey, string mode, KokoScreenAwarenessAnalysis analysis, string window)
+        {
+            var terms = new List<string>();
+            void Add(params string[] values) => terms.AddRange(values.Where(v => !string.IsNullOrWhiteSpace(v)));
+
+            switch (appKey)
+            {
+                case "vscode":
+                    Add("kokonoe", "agent", "task", "bug", "test", "build", "architecture", "manus", "код", "проект");
+                    break;
+                case "spotify":
+                    Add("music", "spotify", "настрій", "mood", "сон", "focus", "energy");
+                    break;
+                case "obsidian":
+                    Add("obsidian", "vault", "memory", "profile", "automemory", "нотат", "пам");
+                    break;
+                case "telegram":
+                    Add("telegram", "chat", "діалог", "kokonoe", "reply", "тг");
+                    break;
+                case "browser":
+                    Add("browser", "research", "курс", "youtube", "пошук", "навч");
+                    break;
+                case "game":
+                    Add("game", "dota", "steam", "гра", "sleep", "break");
+                    break;
+            }
+
+            if (mode == "coding") Add("code", "bug", "tests", "service", "engine");
+            if (mode == "obsidian") Add("vault", "obsidian", "notes");
+            if (!string.IsNullOrWhiteSpace(analysis.CurrentTask)) Add(analysis.CurrentTask.Split(' ').Where(t => t.Length >= 4).Take(5).ToArray());
+            if (!string.IsNullOrWhiteSpace(window)) Add(window.Split(' ', '-', '|').Where(t => t.Length >= 4).Take(5).ToArray());
+
+            return terms
+                .Select(t => t.Trim().ToLowerInvariant())
+                .Where(t => t.Length >= 3)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Take(24)
+                .ToArray();
+        }
+
+        private static (string Path, string Preview, int Score) ScoreWarmupNote(ObsidianMcpService obsidian, string path, string[] terms)
+        {
+            try
+            {
+                var content = obsidian.ReadNote(path) ?? "";
+                if (string.IsNullOrWhiteSpace(content))
+                    return (path, "", 0);
+                var haystack = (path + "\n" + content).ToLowerInvariant();
+                var score = terms.Sum(term => haystack.Contains(term, StringComparison.OrdinalIgnoreCase) ? 1 : 0);
+                if (path.StartsWith("Kokonoe/", StringComparison.OrdinalIgnoreCase)) score++;
+                if (path.Contains("Profile", StringComparison.OrdinalIgnoreCase)) score++;
+                return (path, FirstUsefulLine(content), score);
+            }
+            catch
+            {
+                return (path, "", 0);
+            }
+        }
+
+        private static string FirstUsefulLine(string content)
+        {
+            return content
+                .Replace("\r", "\n")
+                .Split('\n')
+                .Select(l => l.Trim())
+                .Where(l => l.Length >= 24)
+                .FirstOrDefault(l => !l.StartsWith("---") && !l.StartsWith("tags:", StringComparison.OrdinalIgnoreCase))
+                ?? Trim(content, 180);
         }
 
         private static string BuildPromptBlock(KokoProactiveContextFrame frame)

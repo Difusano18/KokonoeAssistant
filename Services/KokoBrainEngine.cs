@@ -181,6 +181,10 @@ namespace KokonoeAssistant.Services
         public DateTime ScreenAwarenessObserveOnlyUntil { get; set; } = DateTime.MinValue;
         public DateTime ProactiveMutedUntil { get; set; } = DateTime.MinValue;
         public string ProactiveMuteReason { get; set; } = "";
+        public DateTime LastPredictiveContextAt { get; set; } = DateTime.MinValue;
+        public string LastPredictiveContextMode { get; set; } = "";
+        public string LastPredictiveContextSummary { get; set; } = "";
+        public string LastPredictiveContextNotes { get; set; } = "";
     }
 
     public class ReactiveTrigger
@@ -967,6 +971,16 @@ namespace KokonoeAssistant.Services
                 if (!string.IsNullOrEmpty(_cachedScreenContext) &&
                     (DateTime.Now - _screenContextCachedAt).TotalMinutes < 10)
                     sb.AppendLine($"\n--- ЩО ВІН ЗАРАЗ РОБИТЬ ---\n{_cachedScreenContext}");
+                if (_state.LastPredictiveContextAt > DateTime.MinValue &&
+                    DateTime.Now - _state.LastPredictiveContextAt < TimeSpan.FromMinutes(60) &&
+                    !string.IsNullOrWhiteSpace(_state.LastPredictiveContextSummary))
+                {
+                    sb.AppendLine("\n--- PREDICTIVE CONTEXT WARM-UP ---");
+                    sb.AppendLine($"Mode: {_state.LastPredictiveContextMode}");
+                    sb.AppendLine($"Summary: {_state.LastPredictiveContextSummary}");
+                    if (!string.IsNullOrWhiteSpace(_state.LastPredictiveContextNotes))
+                        sb.AppendLine($"Notes: {_state.LastPredictiveContextNotes}");
+                }
             }
             catch { }
 
@@ -3431,6 +3445,9 @@ namespace KokonoeAssistant.Services
                 var situation = ScreenAwareness.BuildSituation(analysis, activity, previousSituation);
                 var context = ScreenAwareness.BuildCompactContext(analysis, activity, situation);
                 var patternCandidate = ScreenAwareness.BuildPatternCandidate(analysis, situation, now);
+                var predictiveWarmup = ProactiveContext.BuildScreenWarmup(analysis, activity, _obsidian, now);
+                if (predictiveWarmup.HasContext)
+                    context += "\n\n" + predictiveWarmup.PromptBlock;
 
                 lock (_lock)
                 {
@@ -3450,6 +3467,21 @@ namespace KokonoeAssistant.Services
                     _state.LastKnownUserActivity = string.IsNullOrWhiteSpace(analysis.SummaryUk)
                         ? (activity.ActiveWindowTitle ?? "")
                         : analysis.SummaryUk;
+                    if (predictiveWarmup.HasContext)
+                    {
+                        var isNewWarmup = !string.Equals(_state.LastPredictiveContextMode, predictiveWarmup.Mode, StringComparison.OrdinalIgnoreCase) ||
+                                          now - _state.LastPredictiveContextAt > TimeSpan.FromMinutes(30);
+                        _state.LastPredictiveContextAt = now;
+                        _state.LastPredictiveContextMode = predictiveWarmup.Mode;
+                        _state.LastPredictiveContextSummary = predictiveWarmup.Summary;
+                        _state.LastPredictiveContextNotes = string.Join("; ", predictiveWarmup.SourcePaths.Take(6));
+                        if (isNewWarmup)
+                        {
+                            _state.PendingThoughts.Add("[screen-warmup] " + TrimStateMention(predictiveWarmup.Summary));
+                            if (_state.PendingThoughts.Count > 20)
+                                _state.PendingThoughts.RemoveRange(0, _state.PendingThoughts.Count - 20);
+                        }
+                    }
                     if (!string.IsNullOrWhiteSpace(analysis.SummaryUk))
                     {
                         _state.Observations.Add($"screen {now:HH:mm}: {analysis.SummaryUk}");

@@ -1690,6 +1690,73 @@ cleanup_empty — видалити порожні нотатки
             return paths[0];
         }
 
+        public string ConsolidateNotes(string[] paths, string targetPath)
+        {
+            if (paths == null || paths.Length < 2)
+                throw new ArgumentException("Consolidation needs at least two source notes.", nameof(paths));
+            if (string.IsNullOrWhiteSpace(targetPath))
+                throw new ArgumentException("Target path is empty.", nameof(targetPath));
+            if (!targetPath.EndsWith(".md", StringComparison.OrdinalIgnoreCase))
+                targetPath += ".md";
+
+            var sources = paths
+                .Where(p => !string.IsNullOrWhiteSpace(p))
+                .Select(p => p.Trim().Replace('\\', '/'))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Where(p => !string.Equals(p, targetPath, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+            if (sources.Count < 2)
+                throw new ArgumentException("Consolidation needs at least two distinct source notes.");
+
+            var existingSources = new List<(string Path, string Content)>();
+            foreach (var source in sources)
+            {
+                var full = Resolve(source);
+                if (!File.Exists(full))
+                    continue;
+                var content = File.ReadAllText(full, Encoding.UTF8).Trim();
+                if (string.IsNullOrWhiteSpace(content))
+                    continue;
+                existingSources.Add((source, content));
+            }
+
+            if (existingSources.Count < 2)
+                throw new InvalidOperationException("Not enough readable source notes to consolidate.");
+
+            var title = Path.GetFileNameWithoutExtension(targetPath.Replace('\\', '/'));
+            var sb = new StringBuilder();
+            sb.AppendLine("---");
+            sb.AppendLine("created: " + DateTime.Now.ToString("yyyy-MM-dd HH:mm"));
+            sb.AppendLine("updated: " + DateTime.Now.ToString("yyyy-MM-dd HH:mm"));
+            sb.AppendLine("managed-by: Kokonoe");
+            sb.AppendLine("kind: consolidated-note");
+            sb.AppendLine("tags: [#kokonoe/consolidated]");
+            sb.AppendLine("---");
+            sb.AppendLine();
+            sb.AppendLine("# " + title);
+            sb.AppendLine();
+            sb.AppendLine("> Consolidated by Kokonoe. Source notes are preserved; this file is an index + digest, not a destructive merge.");
+            sb.AppendLine();
+            sb.AppendLine("## Source Index");
+            foreach (var source in existingSources)
+                sb.AppendLine("- [[" + StripMarkdownExtension(source.Path) + "|" + Path.GetFileNameWithoutExtension(source.Path) + "]]");
+            sb.AppendLine();
+
+            foreach (var source in existingSources)
+            {
+                sb.AppendLine("## " + source.Path);
+                sb.AppendLine();
+                sb.AppendLine(source.Content);
+                sb.AppendLine();
+            }
+
+            WriteNote(targetPath, sb.ToString().Trim() + "\n");
+            return targetPath;
+        }
+
+        private static string StripMarkdownExtension(string path)
+            => path.EndsWith(".md", StringComparison.OrdinalIgnoreCase) ? path[..^3] : path;
+
         // ---- MODIFIED TODAY ----
 
         /// <summary>Нотатки змінені сьогодні</summary>

@@ -622,6 +622,17 @@ namespace KokonoeAssistant.Services
                     required = new[] { "old_path", "new_path" }
                 }),
 
+            Tool("consolidate_notes",
+                "Create a non-destructive consolidated note from multiple source notes. Source notes are preserved; target receives source index and combined digest.",
+                new {
+                    type = "object",
+                    properties = new {
+                        paths = new { type = "array", items = new { type = "string" }, description = "Source note paths relative to vault." },
+                        target_path = new { type = "string", description = "Target markdown path relative to vault, e.g. Kokonoe/Consolidated/Topic.md." }
+                    },
+                    required = new[] { "paths", "target_path" }
+                }),
+
             Tool("create_folder",
                 "Створити нову папку у vault. Використовуй для організації нотаток по темах.",
                 new {
@@ -2568,6 +2579,10 @@ namespace KokonoeAssistant.Services
 
                     "move_note" => Obsidian.MoveNote(
                         Req(args, "old_path"), Req(args, "new_path")),
+
+                    "consolidate_notes" => "Consolidated into `" + Obsidian.ConsolidateNotes(
+                        args["paths"]?.ToObject<string[]>() ?? Array.Empty<string>(),
+                        Req(args, "target_path")) + "`",
 
                     "create_folder" => CreateFolderVerified(Req(args, "folder_path")),
 

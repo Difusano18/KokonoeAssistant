@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using KokonoeAssistant.Services;
+using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
 namespace KokonoeAssistant.Tests;
@@ -143,7 +144,11 @@ internal static class Program
             Run("Response planner adds insight extraction", ResponsePlannerAddsInsightExtraction);
             Run("Response planner adds system control", ResponsePlannerAddsSystemControl);
             Run("Agent task service executes system control", AgentTaskServiceExecutesSystemControl);
+            Run("Response planner adds self review", ResponsePlannerAddsSelfReview);
+            Run("Agent task service inserts correction after weak self review", AgentTaskServiceInsertsCorrectionAfterWeakSelfReview);
             Run("Agent task service executes background vault insight", AgentTaskServiceExecutesBackgroundVaultInsight);
+            Run("Obsidian consolidates notes non destructively", ObsidianConsolidatesNotesNonDestructively);
+            Run("Predictive screen warmup loads Obsidian context", PredictiveScreenWarmupLoadsObsidianContext);
             Run("Agent completion policy asks next question", AgentCompletionPolicyAsksNextQuestion);
             Run("Agent completion policy reports insight result", AgentCompletionPolicyReportsInsightResult);
             Run("Agent completion policy avoids canned wait tail", AgentCompletionPolicyAvoidsCannedWaitTail);
@@ -3507,6 +3512,81 @@ Persistent Obsidian context is now a core project requirement.
         }
     }
 
+    private static void ResponsePlannerAddsSelfReview()
+    {
+        var steps = KokoResponsePlannerEngine.BuildAgentStepsForObjective("пофікси баг і перевір результат");
+
+        AssertTrue(steps.Any(s => s.Kind == KokoAgentStepKind.SelfReview), "planner should add self-review step");
+        AssertTrue(steps.First(s => s.Kind == KokoAgentStepKind.Verify).Order <
+                   steps.First(s => s.Kind == KokoAgentStepKind.SelfReview).Order,
+            "self-review should happen after verify");
+        AssertTrue(steps.First(s => s.Kind == KokoAgentStepKind.SelfReview).Order <
+                   steps.First(s => s.Kind == KokoAgentStepKind.Report).Order,
+            "self-review should happen before report");
+    }
+
+    private static void AgentTaskServiceInsertsCorrectionAfterWeakSelfReview()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "KokonoeAssistant.Tests", Guid.NewGuid().ToString("N"));
+        var data = Path.Combine(dir, "data");
+        Directory.CreateDirectory(data);
+        try
+        {
+            var task = new KokoAgentTask
+            {
+                Objective = "Background Vault Scanner: weak self-review fixture",
+                Priority = 5,
+                Steps = new()
+                {
+                    new KokoAgentStep
+                    {
+                        Order = 1,
+                        Kind = KokoAgentStepKind.Analyze,
+                        Status = KokoAgentTaskStatus.Completed,
+                        Result = "Simulated Implement: no actual vault output."
+                    },
+                    new KokoAgentStep
+                    {
+                        Order = 2,
+                        Kind = KokoAgentStepKind.SelfReview,
+                        Status = KokoAgentTaskStatus.Pending,
+                        Title = "Review weak fixture"
+                    },
+                    new KokoAgentStep
+                    {
+                        Order = 3,
+                        Kind = KokoAgentStepKind.Report,
+                        Status = KokoAgentTaskStatus.Pending,
+                        Title = "Report"
+                    }
+                }
+            };
+            File.WriteAllText(Path.Combine(data, "agent-tasks.json"), JsonConvert.SerializeObject(new[] { task }, Formatting.Indented));
+
+            var service = new KokoAgentTaskService(data) { AutoStartOnAdd = false };
+            service.Start();
+            var completed = System.Threading.SpinWait.SpinUntil(() =>
+            {
+                var current = service.GetSnapshot().Tasks.First(t => t.Id == task.Id);
+                return current.Status == KokoAgentTaskStatus.Completed || current.Status == KokoAgentTaskStatus.Failed;
+            }, TimeSpan.FromSeconds(8));
+
+            var finalTask = service.GetSnapshot().Tasks.First(t => t.Id == task.Id);
+            AssertTrue(completed, "weak self-review fixture should finish");
+            AssertEqual(KokoAgentTaskStatus.Completed, finalTask.Status, "task should complete after correction");
+            AssertTrue(finalTask.Steps.Any(s => s.Title.Contains("self-review:", StringComparison.OrdinalIgnoreCase) &&
+                                                s.Kind == KokoAgentStepKind.Implement),
+                "self-review score below 7 should insert an Implement correction step");
+            AssertTrue(finalTask.Steps.First(s => s.Kind == KokoAgentStepKind.SelfReview).Result.Contains("needs_correction"),
+                "self-review should mark weak task as needing correction");
+            service.Stop();
+        }
+        finally
+        {
+            try { Directory.Delete(dir, recursive: true); } catch { }
+        }
+    }
+
     private static void AgentTaskServiceExecutesBackgroundVaultInsight()
     {
         var dir = Path.Combine(Path.GetTempPath(), "KokonoeAssistant.Tests", Guid.NewGuid().ToString("N"));
@@ -3539,6 +3619,69 @@ Persistent Obsidian context is now a core project requirement.
             AssertTrue(insight!.Result.Contains("InsightExtraction завершено"), "insight step should report completed work");
             AssertTrue(insight.Result.Contains("Project/Manus.md"), "insight result should include note path");
             service.Stop();
+        }
+        finally
+        {
+            try { Directory.Delete(dir, recursive: true); } catch { }
+        }
+    }
+
+    private static void ObsidianConsolidatesNotesNonDestructively()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "KokonoeAssistant.Tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            var obsidian = new ObsidianMcpService(dir);
+            obsidian.WriteNote("A/One.md", "# One\n\nКод і агентська пам'ять.");
+            obsidian.WriteNote("B/Two.md", "# Two\n\nАрхітектура і тести.");
+
+            var target = obsidian.ConsolidateNotes(new[] { "A/One.md", "B/Two.md" }, "Kokonoe/Agent/Consolidated/Test.md");
+
+            AssertEqual("Kokonoe/Agent/Consolidated/Test.md", target, "consolidation should return target path");
+            AssertTrue(File.Exists(Path.Combine(dir, "Kokonoe", "Agent", "Consolidated", "Test.md")), "target note should exist");
+            AssertTrue(File.Exists(Path.Combine(dir, "A", "One.md")), "source one should remain");
+            AssertTrue(File.Exists(Path.Combine(dir, "B", "Two.md")), "source two should remain");
+            var content = obsidian.ReadNote(target) ?? "";
+            AssertTrue(content.Contains("Source Index"), "target should contain source index");
+            AssertTrue(content.Contains("Код і агентська пам'ять"), "target should include first source content");
+            AssertTrue(content.Contains("Архітектура і тести"), "target should include second source content");
+        }
+        finally
+        {
+            try { Directory.Delete(dir, recursive: true); } catch { }
+        }
+    }
+
+    private static void PredictiveScreenWarmupLoadsObsidianContext()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "KokonoeAssistant.Tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            var obsidian = new ObsidianMcpService(dir);
+            obsidian.WriteNote("Projects/KokonoeAgent.md", "# Kokonoe Agent\n\nManus architecture, agent tasks, tests, build and bug fixing context.");
+            obsidian.WriteNote("Daily/Noise.md", "# Noise\n\nRandom unrelated note.");
+            var analysis = new KokoScreenAwarenessAnalysis
+            {
+                ScreenMode = "coding",
+                CurrentTask = "editing agent task service",
+                SummaryUk = "користувач редагує код"
+            };
+            var activity = new ActivityAnalyzer.ActivityState
+            {
+                ActiveWindowTitle = "KokonoeAssistant - Visual Studio Code",
+                IsActive = true,
+                PixelDifferencePercentage = 12
+            };
+
+            var warmup = new KokoProactiveContextService()
+                .BuildScreenWarmup(analysis, activity, obsidian, new DateTime(2026, 5, 23, 18, 0, 0));
+
+            AssertTrue(warmup.HasContext, "coding screen should warm up relevant vault context");
+            AssertEqual("vscode", warmup.AppKey, "VS Code window should infer vscode app key");
+            AssertTrue(warmup.SourcePaths.Contains("Projects/KokonoeAgent.md"), "warmup should include relevant project note");
+            AssertTrue(warmup.PromptBlock.Contains("PREDICTIVE SCREEN CONTEXT"), "warmup prompt block should be explicit");
         }
         finally
         {

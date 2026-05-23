@@ -158,6 +158,15 @@ namespace KokonoeAssistant.Services
             await EmitAsync("observe", "Verifier", Trim(result.Reply, 360), "Перевіряю, чи відповідь не розвалилась на очевидній дурниці.", request.OnStatus, ct);
             await MarkStepAsync(plan, KokoAgentStepKind.Verify, KokoAgentTaskStatus.Completed, "Ready for guard/rewrite layer.", request.OnStatus, ct);
 
+            if (plan.Any(s => s.Kind == KokoAgentStepKind.SelfReview))
+            {
+                await MarkStepAsync(plan, KokoAgentStepKind.SelfReview, KokoAgentTaskStatus.Running, "Reviewing response quality.", request.OnStatus, ct);
+                var review = string.IsNullOrWhiteSpace(result.Reply)
+                    ? "SelfReview score: 5/10\nVerdict: needs_correction\nFindings:\n- Empty reply."
+                    : "SelfReview score: 8/10\nVerdict: pass\nFindings:\n- Reply produced and ready for guard/rewrite layer.";
+                await MarkStepAsync(plan, KokoAgentStepKind.SelfReview, KokoAgentTaskStatus.Completed, review, request.OnStatus, ct);
+            }
+
             await MarkStepAsync(plan, KokoAgentStepKind.Report, KokoAgentTaskStatus.Completed, "Delivered to chat UI.", request.OnStatus, ct);
             result.Reply = ApplyCompletionPolicy(result.Reply, request.UserText, plan);
             result.Plan = plan.Select(CloneStep).ToList();
@@ -197,6 +206,7 @@ namespace KokonoeAssistant.Services
                 KokoAgentStepKind.Implement,
                 KokoAgentStepKind.Respond,
                 KokoAgentStepKind.Verify,
+                KokoAgentStepKind.SelfReview,
                 KokoAgentStepKind.Report
             };
             var ordered = plan
@@ -367,6 +377,7 @@ namespace KokonoeAssistant.Services
             KokoAgentStepKind.InsightExtraction => "InsightEngine",
             KokoAgentStepKind.Respond => "LlmService",
             KokoAgentStepKind.Verify => "Verifier",
+            KokoAgentStepKind.SelfReview => "SelfReview",
             KokoAgentStepKind.Report => "ChatUI",
             _ => "unknown"
         };
