@@ -340,7 +340,6 @@ namespace KokonoeAssistant
             Closed += (s, ev) => Cleanup();
             CommandBindings.Add(new CommandBinding(ApplicationCommands.Paste, OnPaste));
             _ = StartupSequenceAsync();
-            HookAgentTaskEvents();
             SetupHeartUI();
             StartUiTextRepairTimer();
         }
@@ -803,6 +802,8 @@ tags: [kokonoe, live-core, diagnostics]
                 SetLoadingProgress(75, "мозок...");
                 InitBrain();
                 StartLiveCoreMonitor();
+                HookAgentTaskEvents();
+                RefreshAgentTaskBoard();
 
                 TgMessagesList.ItemsSource = _tgMessages;
 
@@ -1816,16 +1817,19 @@ tags: [kokonoe, live-core, diagnostics]
             RefreshAgentTaskBoard();
         }
 
-        private void HookAgentTaskEvents()
+        private bool HookAgentTaskEvents()
         {
+            if (!ServiceContainer.IsInitialized)
+                return false;
+
             if (!_agentTaskEventsHooked)
             {
-                _agentTaskEventsHooked = true;
-                ServiceContainer.AgentTasks.ActivityChanged += activity =>
+                var agentTasks = ServiceContainer.AgentTasks;
+                agentTasks.ActivityChanged += activity =>
                 {
                     Dispatcher.InvokeAsync(() => UpdateAgentActivityPanel(activity), DispatcherPriority.Background);
                 };
-                ServiceContainer.AgentTasks.TaskCompleted += (task, notice) =>
+                agentTasks.TaskCompleted += (task, notice) =>
                 {
                     Dispatcher.InvokeAsync(() =>
                     {
@@ -1859,23 +1863,31 @@ tags: [kokonoe, live-core, diagnostics]
                         RefreshAgentTaskBoard();
                     }, DispatcherPriority.Background);
                 };
+                _agentTaskEventsHooked = true;
             }
 
             if (!_agentRuntimeEventsHooked)
             {
-                _agentRuntimeEventsHooked = true;
-                ServiceContainer.AgentRuntime.ActivityChanged += activity =>
+                var agentRuntime = ServiceContainer.AgentRuntime;
+                agentRuntime.ActivityChanged += activity =>
                 {
                     Dispatcher.InvokeAsync(() => UpdateAgentActivityPanel(activity), DispatcherPriority.Background);
                 };
+                _agentRuntimeEventsHooked = true;
             }
+
+            return true;
         }
 
         private void RefreshAgentTaskBoard()
         {
             try
             {
-                HookAgentTaskEvents();
+                if (!HookAgentTaskEvents())
+                {
+                    AgentTaskStatusText.Text = "agent services initializing";
+                    return;
+                }
                 var board = ServiceContainer.AgentTasks.RenderBoard();
                 var snap = ServiceContainer.AgentTasks.GetSnapshot();
                 AgentTaskBoardText.Text = RenderAgentBoard(snap, board);

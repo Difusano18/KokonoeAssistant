@@ -45,6 +45,11 @@ namespace KokonoeAssistant
             lock (_lock) { _vault = vaultPath; }
         }
 
+        public static bool IsInitialized
+        {
+            get { lock (_lock) { return !string.IsNullOrWhiteSpace(_vault); } }
+        }
+
         public static ChatRepository ChatRepository
         {
             get { lock (_lock) { return _chatRepo ??= new ChatRepository(_vault); } }
