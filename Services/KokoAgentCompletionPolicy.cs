@@ -35,10 +35,22 @@ namespace KokonoeAssistant.Services
                 .OrderByDescending(s => s.FinishedAt ?? DateTime.MinValue)
                 .Select(s => Trim(s.Result, 420))
                 .FirstOrDefault();
+            var observationResult = task.Steps
+                .Where(s => s.Kind == KokoAgentStepKind.Observation && !string.IsNullOrWhiteSpace(s.Result))
+                .OrderByDescending(s => s.FinishedAt ?? DateTime.MinValue)
+                .Select(s => Trim(s.Result, 520))
+                .FirstOrDefault();
+
             if (failed.Count > 0)
             {
                 notice.Mode = "question";
                 notice.NextQuestion = "Зупинитися й розібрати першу помилку, чи пустити наступну спробу з іншим маршрутом?";
+            }
+            else if (!string.IsNullOrWhiteSpace(observationResult))
+            {
+                notice.Mode = "question";
+                notice.Summary = $"Task {task.Id}: desktop observation completed. {observationResult}";
+                notice.NextQuestion = "Continue observing longer, or switch to fixing the pattern I found?";
             }
             else if (!string.IsNullOrWhiteSpace(insightResult))
             {

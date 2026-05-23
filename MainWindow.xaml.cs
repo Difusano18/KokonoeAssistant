@@ -2184,6 +2184,30 @@ tags: [kokonoe, live-core, diagnostics]
                     try { ServiceContainer.BrainEngine?.ProcessUserMessage(sendText); } catch { }
                 }, _llmCts?.Token ?? default);
 
+                if (TryStartObservationAgentTask(sendText, out var observationReply))
+                {
+                    RemoveThinkingBubble();
+                    var replyVm = new ChatMessageVm { Role = "assistant", Content = "" };
+                    var replyTb = AddMessageBubble(replyVm);
+                    if (replyTb != null)
+                        await TypeIntoAsync(replyTb, observationReply, _llmCts?.Token ?? default);
+                    else
+                        replyVm.Content = observationReply;
+                    try
+                    {
+                        ServiceContainer.ChatRepository.InsertMessage(new ChatRepository.ChatMessage
+                        {
+                            Content = observationReply,
+                            Role = "assistant",
+                            Author = "Kokonoe",
+                            Timestamp = DateTime.Now
+                        });
+                    }
+                    catch { }
+                    _ = Task.Run(() => ServiceContainer.ChatLogger.LogExchange("app", sendText, observationReply));
+                    return;
+                }
+
                 if (LooksLikeRetryLastScreenScan(sendText))
                 {
                     await ShowKokoActivityAsync("повторюю знімок екрана");
@@ -2361,6 +2385,31 @@ tags: [kokonoe, live-core, diagnostics]
             catch (OperationCanceledException) { throw; }
             catch { }
             return new PcIntentExecutionResult { Handled = false };
+        }
+
+        private bool TryStartObservationAgentTask(string userText, out string reply)
+        {
+            reply = "";
+            try
+            {
+                if (!ServiceContainer.IsInitialized ||
+                    !KokoResponsePlannerEngine.LooksLikeLongObservationObjective(userText))
+                    return false;
+
+                HookAgentTaskEvents();
+                var objective = "Observation: " + userText.Trim();
+                var task = ServiceContainer.AgentTasks.AddTask(objective, priority: 8);
+                ServiceContainer.AgentTasks.Start();
+                var options = KokoObservationService.BuildOptions(objective, task.Id);
+                reply = $"Запустила observation-task `{task.Id}`: {KokoObservationService.DescribePlan(options)}. Згортаю своє вікно перед кадрами, знімаю весь virtual desktop і дам фінальний звіт після завершення.";
+                RefreshAgentTaskBoard();
+                return true;
+            }
+            catch (Exception ex)
+            {
+                reply = "Observation-task не стартував: " + ex.Message;
+                return true;
+            }
         }
 
         private bool TryScheduleWakeOrReminder(string userText, out string reply)
@@ -7482,6 +7531,25 @@ tags: [kokonoe, dashboard, live]
                 }
 
                 // ---- Regular chat - LLM ----
+                if (TryStartObservationAgentTask(text, out var observationReply))
+                {
+                    await Dispatcher.InvokeAsync(() =>
+                    {
+                        _tgMessages.Add($"[Kokonoe]: {observationReply}");
+                        TgScroll.ScrollToBottom();
+                        AddMessageBubble(new ChatMessageVm { Role = "user", Content = $"[TG: {from}] {text}" });
+                        AddMessageBubble(new ChatMessageVm { Role = "assistant", Content = observationReply });
+                    });
+                    try { await bot.SendMessage(chatId, observationReply, cancellationToken: ct); } catch { }
+                    try
+                    {
+                        ServiceContainer.ChatRepository.InsertMessage(new ChatRepository.ChatMessage { Content = observationReply, Role = "assistant", Author = "Kokonoe", Timestamp = DateTime.Now });
+                    }
+                    catch { }
+                    _ = Task.Run(() => ServiceContainer.ChatLogger.LogExchange("tg", text, observationReply));
+                    return;
+                }
+
                 if (await TryHandleTelegramScreenScanAsync(bot, chatId, from, text, ct))
                     return;
 

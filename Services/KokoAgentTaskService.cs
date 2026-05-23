@@ -27,6 +27,7 @@ namespace KokonoeAssistant.Services
         Vision,
         Sandbox,
         SystemControl,
+        Observation,
         InsightExtraction,
         Implement,
         Respond,
@@ -88,6 +89,7 @@ namespace KokonoeAssistant.Services
         private readonly LlmService? _llm;
         private readonly ObsidianMcpService? _obsidian;
         private readonly KokoSandboxExecutor _sandbox;
+        private readonly KokoObservationService _observation;
         private readonly List<KokoAgentTask> _tasks = new();
         private KokoAgentActivitySnapshot _activity = new();
         private CancellationTokenSource? _runnerCts;
@@ -101,6 +103,7 @@ namespace KokonoeAssistant.Services
             _llm = llm;
             _obsidian = obsidian;
             _sandbox = new KokoSandboxExecutor(Path.Combine(dataDir, "agent-sandbox"));
+            _observation = new KokoObservationService(Path.Combine(dataDir, "agent-observations"), new PcControlService(), llm);
             Load();
         }
 
@@ -386,6 +389,12 @@ namespace KokonoeAssistant.Services
                 return await ExecuteSystemControlAsync(task, ct).ConfigureAwait(false);
             }
 
+            if (step.Kind == KokoAgentStepKind.Observation)
+            {
+                EmitActivity("observe", "KokoObservationService", task.Objective, "Starting long-term desktop observation over the full virtual screen.", task.Id, step.Id);
+                return await ExecuteObservationAsync(task, step, ct).ConfigureAwait(false);
+            }
+
             if (step.Kind == KokoAgentStepKind.Sandbox)
             {
                 EmitActivity("execute", "PythonSandbox", task.Objective, "Running safe sandbox health probe.", task.Id, step.Id);
@@ -397,6 +406,9 @@ namespace KokonoeAssistant.Services
                 EmitActivity("observe", "SelfReview", task.Objective, "Reviewing task outputs before report. Yes, checking the work before bragging.", task.Id, step.Id);
                 return BuildSelfReviewReport(task);
             }
+
+            if (step.Kind == KokoAgentStepKind.Report && task.Steps.Any(s => s.Kind == KokoAgentStepKind.Observation))
+                return BuildObservationReport(task);
 
             if (_llm == null)
                 return $"Simulated {step.Kind}: {step.Title}";
@@ -483,6 +495,13 @@ namespace KokonoeAssistant.Services
             {
                 score -= 2;
                 findings.Add("Result contains a weak fallback, denial, or simulated implementation.");
+            }
+
+            if (task.Steps.Any(s => s.Kind == KokoAgentStepKind.Observation) &&
+                !ContainsAny(lowerBlob, "observation", "capture ", "зібрано кадр", "зiбрано кадр"))
+            {
+                score -= 3;
+                findings.Add("Observation task has no captured-frame log or final report.");
             }
 
             score = Math.Clamp(score, 1, 10);
@@ -604,6 +623,47 @@ namespace KokonoeAssistant.Services
                     return text[(index + marker.Length)..].Trim();
             }
             return "";
+        }
+
+        private async Task<string> ExecuteObservationAsync(KokoAgentTask task, KokoAgentStep step, CancellationToken ct)
+        {
+            var options = KokoObservationService.BuildOptions(task.Objective, task.Id);
+            var result = await _observation.RunAsync(
+                options,
+                progress =>
+                {
+                    EmitActivity(
+                        "observe",
+                        "KokoObservationService",
+                        task.Objective,
+                        $"capture {progress.Index}/{progress.Total}: {progress.Summary}",
+                        task.Id,
+                        step.Id);
+                    return Task.CompletedTask;
+                },
+                ct).ConfigureAwait(false);
+
+            return $"""
+            Observation завершено.
+            {result.Summary}
+            """.Trim();
+        }
+
+        private static string BuildObservationReport(KokoAgentTask task)
+        {
+            var observation = task.Steps
+                .Where(s => s.Kind == KokoAgentStepKind.Observation && !string.IsNullOrWhiteSpace(s.Result))
+                .OrderByDescending(s => s.FinishedAt ?? DateTime.MinValue)
+                .Select(s => s.Result)
+                .FirstOrDefault();
+
+            if (string.IsNullOrWhiteSpace(observation))
+                return "Observation report: no observation log was produced.";
+
+            return $"""
+            Observation report:
+            {TrimBlock(observation, 2200)}
+            """.Trim();
         }
 
         private void PersistCompletionNotice(KokoAgentTask task, KokoAgentCompletionNotice notice)
@@ -1003,6 +1063,7 @@ Objective: {task.Objective}
             KokoAgentStepKind.Vision => "VisionModel",
             KokoAgentStepKind.Sandbox => "PythonSandbox",
             KokoAgentStepKind.SystemControl => "PcControlService",
+            KokoAgentStepKind.Observation => "KokoObservationService",
             KokoAgentStepKind.InsightExtraction => "InsightEngine",
             KokoAgentStepKind.Implement => "LlmService",
             KokoAgentStepKind.Respond => "LlmService",
@@ -1017,6 +1078,7 @@ Objective: {task.Objective}
             KokoAgentStepKind.Vault => "obsidian",
             KokoAgentStepKind.Sandbox => "coder",
             KokoAgentStepKind.SystemControl => "system",
+            KokoAgentStepKind.Observation => "vision-observer",
             KokoAgentStepKind.InsightExtraction => "research",
             KokoAgentStepKind.Implement => "coder",
             KokoAgentStepKind.Verify => "system",

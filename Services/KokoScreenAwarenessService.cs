@@ -63,6 +63,7 @@ namespace KokonoeAssistant.Services
 
             return $$"""
 Foreground window metadata: {{foregroundLine}}
+Goal: find subtle patterns and help the user improve efficiency, focus, debugging, or gameplay. Do not hide behind "not important" when there is a useful pattern.
 Ти Kokonoe. Подивись на скрін екрана користувача і зроби короткий screen-awareness аналіз.
 
 Поточний час: {{now:dd.MM.yyyy HH:mm}}

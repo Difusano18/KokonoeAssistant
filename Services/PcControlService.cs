@@ -6,6 +6,7 @@ using System.Drawing.Imaging;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 
@@ -36,6 +37,9 @@ namespace KokonoeAssistant.Services
         [DllImport("user32.dll", SetLastError = true)]
         private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
 
+        [DllImport("user32.dll")]
+        private static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+
         [DllImport("winmm.dll")]
         private static extern int waveOutSetVolume(IntPtr hwo, uint dwVolume);
 
@@ -44,6 +48,8 @@ namespace KokonoeAssistant.Services
 
         private const int WM_SYSCOMMAND = 0x0112;
         private const int SC_MONITORPOWER = 0xF170;
+        private const int SW_RESTORE = 9;
+        private const int SW_MINIMIZE = 6;
 
         // ── Shortcuts: назва → шлях/команда ─────────────────────────
         private readonly Dictionary<string, string> _appShortcuts = new(StringComparer.OrdinalIgnoreCase)
@@ -71,7 +77,37 @@ namespace KokonoeAssistant.Services
         // ── Screenshot ───────────────────────────────────────────────
 
         /// <summary>Знімає скріншот всіх екранів і повертає JPEG bytes.</summary>
-        public byte[] TakeScreenshot()
+        public byte[] TakeScreenshot(bool minimizeSelf = false, bool restoreSelf = false, int settleMs = 220)
+        {
+            var selfHwnd = IntPtr.Zero;
+            if (minimizeSelf)
+            {
+                try
+                {
+                    selfHwnd = Process.GetCurrentProcess().MainWindowHandle;
+                    if (selfHwnd != IntPtr.Zero)
+                    {
+                        ShowWindow(selfHwnd, SW_MINIMIZE);
+                        Thread.Sleep(Math.Clamp(settleMs, 0, 1200));
+                    }
+                }
+                catch { }
+            }
+
+            try
+            {
+                return CaptureVirtualScreenJpeg();
+            }
+            finally
+            {
+                if (restoreSelf && selfHwnd != IntPtr.Zero)
+                {
+                    try { ShowWindow(selfHwnd, SW_RESTORE); } catch { }
+                }
+            }
+        }
+
+        private static byte[] CaptureVirtualScreenJpeg()
         {
             var bounds = SystemInformation.VirtualScreen;
             using var bmp = new Bitmap(bounds.Width, bounds.Height, System.Drawing.Imaging.PixelFormat.Format32bppArgb);

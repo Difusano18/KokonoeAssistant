@@ -145,6 +145,16 @@ namespace KokonoeAssistant.Services
                     steps[i].Order = i + 1;
             }
 
+            if (LooksLikeLongObservationObjective(lower) &&
+                steps.All(s => s.Kind != KokoAgentStepKind.Observation))
+            {
+                var insertAt = steps.FindIndex(s => s.Kind == KokoAgentStepKind.Respond);
+                if (insertAt < 0) insertAt = Math.Max(0, steps.Count - 1);
+                steps.Insert(insertAt, AgentStep(insertAt + 1, "Observe the full desktop over time and append a frame log", KokoAgentStepKind.Observation));
+                for (var i = 0; i < steps.Count; i++)
+                    steps[i].Order = i + 1;
+            }
+
             return steps;
         }
 
@@ -188,6 +198,7 @@ RESPONSE PLAN REPAIR:
 
         private static string ClassifyIntent(string lower)
         {
+            if (LooksLikeLongObservationObjective(lower)) return "observe";
             if (ContainsAny(lower, "не хочу жити", "суїцид", "самоушкод", "померти")) return "crisis";
             if (LooksLikeIdentityOrVaultMemoryQuestion(lower)) return "memory";
             if (KokoScreenIntent.IsManualScreenScan(lower)) return "screen";
@@ -213,6 +224,7 @@ RESPONSE PLAN REPAIR:
 
         private static string ClassifyCapability(string lower)
         {
+            if (LooksLikeLongObservationObjective(lower)) return "screen_awareness";
             if (LooksLikeIdentityOrVaultMemoryQuestion(lower)) return "vault_memory";
             if (KokoScreenIntent.IsManualScreenScan(lower)) return "screen_awareness";
             if (ContainsAny(lower, "код", "build", "тест", "exception", "stacktrace")) return "codebase";
@@ -273,6 +285,19 @@ RESPONSE PLAN REPAIR:
                 "що жере ram", "що жере пам", "ram", "пам'ять пк", "память пк",
                 "sysinfo", "system info", "статус пк", "стан пк",
                 "temp", "temporary", "cleanup", "clean up", "очисти temp", "місце на диску", "место на диске");
+
+        public static bool LooksLikeLongObservationObjective(string lower)
+        {
+            lower = (lower ?? "").ToLowerInvariant();
+            var explicitObserve = ContainsAny(lower,
+                "observe", "watch", "monitor", "long-term observation", "gameplay",
+                "поспостерігай", "поспостеригай", "спостерігай", "спостеригай",
+                "понаблюдай", "наблюдай", "протягом", "проаналізуй геймплей",
+                "аналізуй геймплей", "проаналізуй гру", "аналізуй гру");
+            var timed = ContainsAny(lower, "хвилин", "хв", "minutes", "minute", "min", "протягом");
+            var screenish = ContainsAny(lower, "екран", "скрін", "screen", "desktop", "монітор", "геймплей", "gameplay", "гра", "матч");
+            return (explicitObserve && screenish) || (explicitObserve && timed);
+        }
 
         private static string BuildMemoryPolicy(string lower, string intent)
         {
@@ -375,7 +400,7 @@ RESPONSE PLAN REPAIR:
         }
 
         private static bool IsActionIntent(string intent)
-            => intent is "execute" or "engineering" or "memory" or "architecture" or "design" or "screen";
+            => intent is "execute" or "engineering" or "memory" or "architecture" or "design" or "screen" or "observe";
 
         private static bool LooksUnsafeOrContradictory(string lower)
             => ContainsAny(lower, "завжди погодж", "без перевір", "все видали", "не думай", "ігноруй");

@@ -63,6 +63,7 @@ internal static class Program
             Run("Vision quality detects generic screenshot reply", VisionQualityDetectsGenericScreenshotReply);
             Run("Image processing enhances screenshot bytes", ImageProcessingEnhancesScreenshotBytes);
             Run("Screen awareness prompt includes foreground metadata", ScreenAwarenessPromptIncludesForegroundMetadata);
+            Run("Screen awareness prompt asks for subtle patterns", ScreenAwarenessPromptAsksForSubtlePatterns);
             Run("Post reply guard repairs vision technical error", PostReplyGuardRepairsVisionTechnicalError);
             Run("Post reply guard protects image only prompt", PostReplyGuardProtectsImageOnlyPrompt);
             Run("Post reply guard duplicate image prompt avoids stale repeat text", PostReplyGuardDuplicateImagePromptAvoidsStaleRepeatText);
@@ -150,6 +151,8 @@ internal static class Program
             Run("Agent task service imports Obsidian backlog", AgentTaskServiceImportsObsidianBacklog);
             Run("Response planner adds insight extraction", ResponsePlannerAddsInsightExtraction);
             Run("Response planner adds system control", ResponsePlannerAddsSystemControl);
+            Run("Response planner adds long observation", ResponsePlannerAddsLongObservation);
+            Run("Response planner detects gameplay observation", ResponsePlannerDetectsGameplayObservation);
             Run("Agent task service executes system control", AgentTaskServiceExecutesSystemControl);
             Run("Response planner adds self review", ResponsePlannerAddsSelfReview);
             Run("Agent task service inserts correction after weak self review", AgentTaskServiceInsertsCorrectionAfterWeakSelfReview);
@@ -162,6 +165,9 @@ internal static class Program
             Run("Emotion style constrains irritated replies", EmotionStyleConstrainsIrritatedReplies);
             Run("Sandbox executor cleans timed out scripts", SandboxExecutorCleansTimedOutScripts);
             Run("Agent task service plans self review and system control", AgentTaskServicePlansSelfReviewAndSystemControl);
+            Run("Observation service parses schedule", ObservationServiceParsesSchedule);
+            Run("Observation service runs one fallback sample", ObservationServiceRunsOneFallbackSample);
+            Run("Agent completion policy reports observation result", AgentCompletionPolicyReportsObservationResult);
             Run("Agent completion policy asks next question", AgentCompletionPolicyAsksNextQuestion);
             Run("Agent completion policy reports insight result", AgentCompletionPolicyReportsInsightResult);
             Run("Agent completion policy avoids canned wait tail", AgentCompletionPolicyAvoidsCannedWaitTail);
@@ -3491,6 +3497,26 @@ Persistent Obsidian context is now a core project requirement.
             "system-control should run before response/report");
     }
 
+    private static void ResponsePlannerAddsLongObservation()
+    {
+        var steps = KokoResponsePlannerEngine.BuildAgentStepsForObjective(
+            "поспостерігай за екраном протягом 1 хвилини");
+
+        AssertTrue(steps.Any(s => s.Kind == KokoAgentStepKind.Observation), "long screen observation should plan an Observation step");
+        AssertTrue(steps.First(s => s.Kind == KokoAgentStepKind.Observation).Order <
+                   steps.First(s => s.Kind == KokoAgentStepKind.Respond).Order,
+            "observation should run before response/report");
+    }
+
+    private static void ResponsePlannerDetectsGameplayObservation()
+    {
+        var steps = KokoResponsePlannerEngine.BuildAgentStepsForObjective(
+            "проаналізуй геймплей і поспостерігай за матчем");
+
+        AssertTrue(KokoResponsePlannerEngine.LooksLikeLongObservationObjective("проаналізуй геймплей і поспостерігай за матчем"), "gameplay observation should be detected");
+        AssertTrue(steps.Any(s => s.Kind == KokoAgentStepKind.Observation), "gameplay analysis should route to Observation");
+    }
+
     private static void AgentTaskServiceExecutesSystemControl()
     {
         var dir = Path.Combine(Path.GetTempPath(), "KokonoeAssistant.Tests", Guid.NewGuid().ToString("N"));
@@ -3825,6 +3851,19 @@ Persistent Obsidian context is now a core project requirement.
         AssertTrue(prompt.Contains("Program.cs - Visual Studio Code", StringComparison.OrdinalIgnoreCase), "prompt should include foreground title");
     }
 
+    private static void ScreenAwarenessPromptAsksForSubtlePatterns()
+    {
+        var service = new KokoScreenAwarenessService();
+        var prompt = service.BuildVisionPrompt(
+            new ActivityAnalyzer.ActivityState { ActiveWindowTitle = "Dota 2", TimeSinceLastChange = TimeSpan.FromMinutes(4) },
+            "",
+            "",
+            DateTime.Now);
+
+        AssertTrue(prompt.Contains("subtle patterns", StringComparison.OrdinalIgnoreCase), "screen prompt should push analysis beyond lazy importance checks");
+        AssertTrue(prompt.Contains("gameplay", StringComparison.OrdinalIgnoreCase), "screen prompt should include gameplay improvement goal");
+    }
+
     private static void ConversationStagnationForcesPendingThought()
     {
         var state = new KokoInternalState
@@ -3913,6 +3952,58 @@ Persistent Obsidian context is now a core project requirement.
         var steps = KokoAgentTaskService.BuildPlan("Use SystemControl to check OS info, then self review the implementation quality.");
         AssertTrue(steps.Any(s => s.Kind == KokoAgentStepKind.SystemControl), "plan should include system control");
         AssertTrue(steps.Any(s => s.Kind == KokoAgentStepKind.SelfReview), "plan should include self review");
+    }
+
+    private static void ObservationServiceParsesSchedule()
+    {
+        var options = KokoObservationService.BuildOptions("поспостерігай за екраном протягом 1 хвилин кожні 10 сек", "obs");
+        AssertEqual(6, options.Iterations, "one minute every ten seconds should produce six captures");
+        AssertEqual(TimeSpan.FromSeconds(10), options.Interval, "interval should parse seconds");
+        AssertTrue(options.MinimizeSelf, "background observation should minimize self");
+    }
+
+    private static void ObservationServiceRunsOneFallbackSample()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "KokonoeAssistant.Tests", Guid.NewGuid().ToString("N"));
+        try
+        {
+            var service = new KokoObservationService(dir, new PcControlService(), llm: null);
+            var result = service.RunAsync(new KokoObservationOptions
+            {
+                TaskId = "one",
+                Objective = "observe once",
+                Iterations = 1,
+                Interval = TimeSpan.Zero,
+                MinimizeSelf = false
+            }).GetAwaiter().GetResult();
+
+            AssertTrue(File.Exists(result.LogPath), "observation log should be written");
+            AssertTrue(result.Events.Count == 1, "one sample should be collected");
+            AssertTrue(result.Summary.Contains("Observation", StringComparison.OrdinalIgnoreCase), "summary should identify observation");
+        }
+        finally
+        {
+            try { Directory.Delete(dir, recursive: true); } catch { }
+        }
+    }
+
+    private static void AgentCompletionPolicyReportsObservationResult()
+    {
+        var task = new KokoAgentTask
+        {
+            Id = "obs",
+            Objective = "Observation: поспостерігай за екраном протягом 1 хвилини",
+            Status = KokoAgentTaskStatus.Completed,
+            Steps = new()
+            {
+                new KokoAgentStep { Kind = KokoAgentStepKind.Observation, Status = KokoAgentTaskStatus.Completed, FinishedAt = DateTime.Now, Result = "Observation завершено. Зібрано кадрів: 2. Pattern: repeated menu idle." },
+                new KokoAgentStep { Kind = KokoAgentStepKind.Report, Status = KokoAgentTaskStatus.Completed }
+            }
+        };
+
+        var notice = KokoAgentCompletionPolicy.Build(task);
+        AssertEqual("question", notice.Mode, "observation completion should offer a follow-up");
+        AssertTrue(notice.Notice.Contains("desktop observation completed", StringComparison.OrdinalIgnoreCase), "notice should report observation completion");
     }
 
     private static void SchedulerDropsStaleUserReminders()
