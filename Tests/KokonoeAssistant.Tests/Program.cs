@@ -63,6 +63,8 @@ internal static class Program
             Run("Post reply guard prioritizes image caption over stale one-letter context", PostReplyGuardPrioritizesImageCaptionOverStaleOneLetterContext);
             Run("Post reply guard repairs blamey answer explanation", PostReplyGuardRepairsBlameyAnswerExplanation);
             Run("Post reply guard blocks assistant-owned reminder schedule", PostReplyGuardBlocksAssistantOwnedReminderSchedule);
+            Run("Post reply guard blocks follow-up after conversation close", PostReplyGuardBlocksFollowupAfterConversationClose);
+            Run("Post reply guard protects short apology", PostReplyGuardProtectsShortApology);
             Run("Post reply guard blocks therapy meta tone", PostReplyGuardBlocksTherapyMetaTone);
             Run("Post reply guard blocks fabricated external facts", PostReplyGuardBlocksFabricatedExternalFacts);
             Run("Post reply guard blocks stale proactive ping on direct topic", PostReplyGuardBlocksStaleProactivePingOnDirectTopic);
@@ -82,6 +84,8 @@ internal static class Program
             Run("Proactive guard suppresses repeated generic silence", ProactiveGuardSuppressesRepeatedGenericSilence);
             Run("Proactive context anchors silence to last topic", ProactiveContextAnchorsSilenceToLastTopic);
             Run("Proactive context stays silent after goodbye sleep", ProactiveContextStaysSilentAfterGoodbyeSleep);
+            Run("Conversation close until morning creates silence intent", ConversationCloseUntilMorningCreatesSilenceIntent);
+            Run("Proactive context stays silent after conversation close", ProactiveContextStaysSilentAfterConversationClose);
             Run("Proactive fallback never exposes technical silence wording", ProactiveFallbackNeverExposesTechnicalSilenceWording);
             Run("Proactive fallback does not quote last user text", ProactiveFallbackDoesNotQuoteLastUserText);
             Run("User quiet command mutes proactive followups", UserQuietCommandMutesProactiveFollowups);
@@ -1470,6 +1474,48 @@ internal static class Program
             "repair should explain that first-person reminder text belongs to the user unless explicit");
     }
 
+    private static void PostReplyGuardBlocksFollowupAfterConversationClose()
+    {
+        var now = new DateTime(2026, 5, 23, 2, 57, 0);
+        var state = new KokoInternalState();
+        var userText = "пішов грати .. розмову завершено покрайній мірі до ранку";
+        var badReply = "Грай скільки хочеш — все одно рано чи пізно вернешся. Лише не забудь, що я тут, і в мене ще є питання, на які тобі варто відповісти. Не затримуйся надто довго.";
+        var messages = new[]
+        {
+            new ChatRepository.ChatMessage { Role = "user", Content = userText, Timestamp = now }
+        };
+        var timeline = new KokoConversationTimelineEngine().Build(messages, state, now, userText);
+
+        var result = new KokoPostReplyGuard().Evaluate(userText, badReply, state, messages, timeline, now);
+
+        AssertTrue(!result.Passed, "guard should reject follow-up pressure after the user closed the conversation until morning");
+        AssertTrue(result.ShouldRepair, "conversation-close violation should be repaired through the model");
+        AssertTrue(result.Violations.Any(v => v.Contains("conversation-close")), "violation should name the conversation boundary");
+        AssertTrue(result.RepairInstruction.Contains("until morning") || result.RepairInstruction.Contains("до ранку"),
+            "repair should preserve the do-not-follow-up-until-morning boundary");
+    }
+
+    private static void PostReplyGuardProtectsShortApology()
+    {
+        var now = new DateTime(2026, 5, 23, 2, 56, 0);
+        var state = new KokoInternalState();
+        var userText = "а вибач..";
+        var badReply = "Вибачення? Що це за раптові приступи ввічливості? Якщо відчуваєш провину за те, що витратив мій час — перестань бути розсіяним і почни говорити по справі. Забудь про ці сантименти.";
+        var messages = new[]
+        {
+            new ChatRepository.ChatMessage { Role = "user", Content = userText, Timestamp = now }
+        };
+        var timeline = new KokoConversationTimelineEngine().Build(messages, state, now, userText);
+
+        var result = new KokoPostReplyGuard().Evaluate(userText, badReply, state, messages, timeline, now);
+
+        AssertTrue(!result.Passed, "guard should reject punishing a short apology");
+        AssertTrue(result.ShouldRepair, "apology should be repaired by the model, not a canned final line");
+        AssertTrue(result.Violations.Any(v => v.Contains("apology")), "violation should name apology handling");
+        AssertTrue(result.RepairInstruction.Contains("one line") || result.RepairInstruction.Contains("корот"),
+            "repair should ask for a short acknowledgement");
+    }
+
     private static void PostReplyGuardBlocksTherapyMetaTone()
     {
         var now = new DateTime(2026, 5, 13, 3, 40, 0);
@@ -1900,6 +1946,41 @@ internal static class Program
         AssertTrue(frame.ShouldStaySilentForSleep, "goodbye sleep context should request silence");
         AssertTrue(!check.Passed, "proactive reply should be blocked during sleep/goodbye");
         AssertTrue(check.Replacement is "[мовчання]" or "[мовчання]", "blocked sleep reply should turn into silence marker");
+    }
+
+    private static void ConversationCloseUntilMorningCreatesSilenceIntent()
+    {
+        using var ctx = TestContext.Create();
+        using var health = new HealthService(ctx.TestDir);
+        using var brain = new KokoBrainEngine(new LlmService(), health, new ObsidianMcpService(ctx.TestDir), ctx.Chat, ctx.TestDir);
+
+        brain.ProcessUserMessage("пішов грати .. розмову завершено покрайній мірі до ранку");
+
+        var active = brain.State.ShortTermIntents.Where(i => !i.ResolvedAt.HasValue).ToList();
+        AssertTrue(active.Any(i => i.Kind == "sleep" && i.Summary.Contains("до ранку")), "conversation close until morning should create a silence/sleep intent");
+        AssertTrue(!brain.State.PendingTriggers.Any(t => t.Type == "intent_followup"), "closed conversation must not schedule follow-up pings");
+    }
+
+    private static void ProactiveContextStaysSilentAfterConversationClose()
+    {
+        var now = new DateTime(2026, 5, 23, 3, 26, 0);
+        var messages = new[]
+        {
+            new ChatRepository.ChatMessage
+            {
+                Role = "user",
+                Content = "пішов грати .. розмову завершено покрайній мірі до ранку",
+                Timestamp = now.AddMinutes(-29)
+            }
+        };
+
+        var service = new KokoProactiveContextService();
+        var frame = service.Build(messages, new KokoInternalState(), now);
+        var check = service.Check("Ти вже знову тут, чи ще в іграх застряг?", frame, "silence_l1");
+
+        AssertTrue(frame.ShouldStaySilentForSleep, "conversation close until morning should force proactive silence");
+        AssertTrue(!check.Passed, "proactive ping should be blocked after explicit conversation close");
+        AssertEqual("[мовчання]", check.Replacement, "closed conversation should turn proactive into silence");
     }
 
     private static void ProactiveFallbackNeverExposesTechnicalSilenceWording()

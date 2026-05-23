@@ -50,6 +50,10 @@ namespace KokonoeAssistant.Services
                 violations.Add("why-question blamed the user instead of explaining the response decision neutrally");
             if (LooksLikeAssistantOwnedUserReminder(userLower, replyLower))
                 violations.Add("user reminder was misattributed as Kokonoe's own schedule or courses");
+            if (KokoConversationBoundary.LooksLikeClosedUntilMorning(userText) && LooksLikeIgnoresConversationClosure(replyLower))
+                violations.Add("conversation-close boundary was ignored by follow-up pressure");
+            if (KokoConversationBoundary.LooksLikeShortApology(userText) && LooksLikeApologyScold(replyLower))
+                violations.Add("short apology was punished instead of acknowledged briefly");
 
             if (violations.Count == 0 && LooksLikeTransportError(reply))
                 return Pass("transport error surfaced; do not hide provider failure");
@@ -260,6 +264,10 @@ Timeline:
                 rules.Add("- User asks why the previous answer happened. State the likely routing/context mistake neutrally, then give the corrected answer path.");
             if (violations.Any(v => v.Contains("own schedule", StringComparison.OrdinalIgnoreCase)))
                 rules.Add("- A reminder containing first-person text belongs to the user unless the data explicitly says it is Kokonoe's schedule. Do not claim Kokonoe has courses or is busy.");
+            if (violations.Any(v => v.Contains("conversation-close", StringComparison.OrdinalIgnoreCase)))
+                rules.Add("- User closed the conversation until morning. Do not ask follow-up questions or pressure him to answer; one short sign-off only.");
+            if (violations.Any(v => v.Contains("apology", StringComparison.OrdinalIgnoreCase)))
+                rules.Add("- User gave a short apology. Acknowledge in one line and move on; do not analyze guilt, politeness, or wasted time.");
             if (violations.Any(v => v.Contains("one-letter", StringComparison.OrdinalIgnoreCase)))
                 rules.Add("- Stale one-letter ambiguity is not the topic anymore unless the latest user explicitly asks about that exact letter.");
 
@@ -478,6 +486,34 @@ Timeline:
                 "моїми справами",
                 "моїх курсів");
         }
+
+        private static bool LooksLikeIgnoresConversationClosure(string replyLower)
+            => ContainsAny(replyLower,
+                "у мене ще є питання",
+                "питання, на які тобі варто відповісти",
+                "варто відповісти",
+                "ти вже знову тут",
+                "ще в іграх застряг",
+                "чи ще в іграх",
+                "не затримуйся",
+                "сон тобі не виправдає",
+                "повернешся",
+                "рано чи пізно вернешся",
+                "то що, ти все ще тут",
+                "чи нарешті пішов грати");
+
+        private static bool LooksLikeApologyScold(string replyLower)
+            => ContainsAny(replyLower,
+                "приступи ввічливості",
+                "тобі нарешті стало соромно",
+                "відчуваєш провину",
+                "вина за те",
+                "витратив мій час",
+                "витратила мій час",
+                "забудь про ці сантименти",
+                "сантименти",
+                "перестати бути розсіяним",
+                "почати говорити по справі");
 
         private static bool LooksGeneric(string userText, string reply)
         {

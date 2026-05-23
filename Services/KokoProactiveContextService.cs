@@ -183,7 +183,9 @@ PROACTIVE CONTEXT
             if (ContainsAny(lower, "сон", "спат", "сплю", "ляга"))
                 return "сон";
             if (LooksLikeSleepOrGoodbye(lower))
-                return "прощання/сон";
+                return KokoConversationBoundary.LooksLikeClosedUntilMorning(lower)
+                    ? "розмова закрита до ранку"
+                    : "прощання/сон";
             if (ContainsAny(lower, "код", "проект", "тест", "коміт", "github", "obsidian"))
                 return "проект";
             return Trim(lastUserText, 90);
@@ -250,7 +252,8 @@ PROACTIVE CONTEXT
             => values.Any(v => text.Contains(v, StringComparison.OrdinalIgnoreCase));
 
         private static bool LooksLikeSleepOrGoodbye(string lower)
-            => ContainsAny(lower,
+            => KokoConversationBoundary.LooksLikeClosedUntilMorning(lower) ||
+               ContainsAny(lower,
                 "бай бай", "бай-бай", "баю бай", "баю-бай", "бувай", "пока",
                 "добраніч", "доброй ночи", "спокійної", "спокойной",
                 "я спать", "я спати", "піду спати", "пішов спати", "лягаю");

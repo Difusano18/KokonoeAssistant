@@ -2249,7 +2249,12 @@ namespace KokonoeAssistant.Services
         {
             var lower = content.ToLowerInvariant();
             if (LooksLikeSleepOrGoodbye(lower))
-                return BuildSleepIntent("пішов спати/попрощався", content, now);
+                return BuildSleepIntent(
+                    KokoConversationBoundary.LooksLikeClosedUntilMorning(content)
+                        ? "закрив розмову до ранку"
+                        : "пішов спати/попрощався",
+                    content,
+                    now);
 
             if (!ContainsAny(lower, "піду", "йду", "іду", "пішов", "буду", "зараз", "скоро")) return null;
 
@@ -2377,7 +2382,8 @@ namespace KokonoeAssistant.Services
             => values.Any(v => text.Contains(v, StringComparison.OrdinalIgnoreCase));
 
         private static bool LooksLikeSleepOrGoodbye(string lower)
-            => ContainsAny(lower,
+            => KokoConversationBoundary.LooksLikeClosedUntilMorning(lower) ||
+               ContainsAny(lower,
                 "\u0431\u0430\u0439 \u0431\u0430\u0439", "\u0431\u0430\u0439-\u0431\u0430\u0439", "\u0431\u0443\u0432\u0430\u0439", "\u043f\u043e\u043a\u0430",
                 "\u0434\u043e\u0431\u0440\u0430\u043d\u0456\u0447", "\u0434\u043e\u0431\u0440\u043e\u0457 \u043d\u043e\u0447\u0456", "\u0441\u043f\u043e\u043a\u0456\u0439\u043d\u043e\u0457", "\u0441\u043f\u043e\u043a\u043e\u0439\u043d\u043e\u0439",
                 "\u044f \u0441\u043f\u0430\u0442\u044c", "\u044f \u0441\u043f\u0430\u0442\u0438", "\u043f\u0456\u0434\u0443 \u0441\u043f\u0430\u0442\u0438", "\u043f\u0456\u0448\u043e\u0432 \u0441\u043f\u0430\u0442\u0438", "\u043b\u044f\u0433\u0430\u044e",
