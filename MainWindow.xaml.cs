@@ -2969,6 +2969,12 @@ LIVE RESPONSE STYLE
             var lower = text.ToLowerInvariant();
             var looksObsidian =
                 ContainsAny(lower, "obsidian", "vault", "папк", "нотатк", "журнал", "щоденник", "journal", "spanish", "lesson_", "lesson", "урок");
+            if (KokoObsidianExplorationService.LooksLikeInterestingVaultDive(text))
+            {
+                reply = new KokoObsidianExplorationService().BuildInterestingFinds(_obsidian, text);
+                return true;
+            }
+
             var wantsMutation =
                 ContainsAny(lower, "створ", "созд", "create", "зроби", "запиш", "збереж", "нема", "немає");
             var wantsCheck =
@@ -8074,6 +8080,31 @@ tags: [kokonoe, dashboard, live]
                     }
                     catch { }
                     await svc.SendAsync(msg.ChatId, controlCommand.Reply, _tgUserCts.Token);
+                    return;
+                }
+
+                if (TryHandleDirectObsidianCommand(msg.Text, out var obsidianReply))
+                {
+                    await Dispatcher.InvokeAsync(() =>
+                    {
+                        _tgMessages.Add($"[Kokonoe → {msg.ChatName}]: {obsidianReply}");
+                        TgScroll.ScrollToBottom();
+                        AddMessageBubble(new ChatMessageVm { Role = "user", Content = $"[TG {msg.Sender}]: {msg.Text}" });
+                        AddMessageBubble(new ChatMessageVm { Role = "assistant", Content = obsidianReply });
+                    });
+                    try
+                    {
+                        ServiceContainer.ChatRepository.InsertMessage(new ChatRepository.ChatMessage
+                        {
+                            Content = obsidianReply,
+                            Role = "assistant",
+                            Author = "Kokonoe",
+                            Timestamp = DateTime.Now
+                        });
+                    }
+                    catch { }
+                    await svc.SendAsync(msg.ChatId, obsidianReply, _tgUserCts.Token);
+                    _ = Task.Run(() => ServiceContainer.ChatLogger.LogExchange("tg-user", msg.Text, obsidianReply));
                     return;
                 }
 

@@ -104,7 +104,7 @@ namespace KokonoeAssistant.Services
                 violations.Add("сонний/харчовий контекст протік у відповідь на питання про пам'ять/профіль");
             if (asksProfileOrMemory && LooksLikeScriptedProfileSourceReport(userLower, replyLower))
                 violations.Add("profile/memory answer exposed scripted source-report instead of natural synthesis");
-            if (asksProfileOrMemory && LooksLikeVaultUnavailableDeflection(replyLower))
+            if ((asksProfileOrMemory || LooksLikeVaultOperationRequest(userLower)) && LooksLikeVaultUnavailableDeflection(replyLower))
                 violations.Add("memory/profile question falsely deflected as vault unavailable instead of using loaded context");
 
             var activeIntent = state.ShortTermIntents
@@ -643,6 +643,11 @@ Timeline:
                 "can't access",
                 "cannot access");
         }
+
+        private static bool LooksLikeVaultOperationRequest(string userLower)
+            => ContainsAny(userLower,
+                "obsidian", "vault", "обсидіан", "обсидиан", "нотат", "заміт", "замет",
+                "порий", "порой", "пошукай", "поищи", "розкоп", "найди", "знайди", "цікав", "интерес");
 
         private static bool LooksLikeScriptedProfileSourceReport(string userLower, string replyLower)
         {

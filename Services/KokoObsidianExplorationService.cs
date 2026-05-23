@@ -1,0 +1,167 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Text.RegularExpressions;
+
+namespace KokonoeAssistant.Services
+{
+    public sealed class KokoObsidianExplorationService
+    {
+        private static readonly string[] InterestTerms =
+        {
+            "ідея", "idea", "insight", "спостереж", "observation", "патерн", "pattern",
+            "цікав", "interesting", "важлив", "ризик", "план", "goal", "memory",
+            "емоці", "думк", "гіпотез", "todo", "task", "беклог"
+        };
+
+        public static bool LooksLikeInterestingVaultDive(string? text)
+        {
+            var lower = (text ?? "").ToLowerInvariant();
+            if (string.IsNullOrWhiteSpace(lower)) return false;
+
+            var mentionsVault = ContainsAny(lower,
+                "obsidian", "vault", "обсидіан", "обсидиан", "нотат", "заміт", "замет");
+            if (!mentionsVault) return false;
+
+            return ContainsAny(lower,
+                "порий", "порой", "пошукай", "поищи", "розкоп", "покоп", "знайди", "найди",
+                "щось цікаве", "что-то интерес", "цікав", "интерес", "interesting");
+        }
+
+        public string BuildInterestingFinds(ObsidianMcpService obsidian, string? userText, int maxItems = 3)
+        {
+            if (obsidian == null) throw new ArgumentNullException(nameof(obsidian));
+            maxItems = Math.Clamp(maxItems, 1, 6);
+
+            var candidates = BuildCandidates(obsidian, userText)
+                .OrderByDescending(c => c.Score)
+                .ThenByDescending(c => c.ModifiedAt)
+                .Take(maxItems)
+                .ToList();
+
+            if (candidates.Count == 0)
+                return "Obsidian підключений, але живих нотаток для нормальної знахідки не знайшла. Це не «немає доступу», це просто порожня полиця.";
+
+            var lines = candidates
+                .Select(c => $"- `{c.Path}`: {c.Preview}")
+                .ToList();
+
+            var strongest = candidates[0];
+            return "Порилась у vault, не вдавала телепатію. Зачіпки:\n" +
+                   string.Join("\n", lines) +
+                   $"\n\nНайцікавіше зараз: `{strongest.Path}`. Там є матеріал, який варто розгорнути, а не ховати під пилом.";
+        }
+
+        private static IEnumerable<Candidate> BuildCandidates(ObsidianMcpService obsidian, string? userText)
+        {
+            var semanticBoosts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            if (!string.IsNullOrWhiteSpace(userText))
+            {
+                foreach (var hit in obsidian.SearchSemantic(userText, 12))
+                    semanticBoosts[hit.Path] = Math.Max(semanticBoosts.GetValueOrDefault(hit.Path), hit.Score + 4);
+            }
+
+            foreach (var path in obsidian.ListNotes())
+            {
+                if (!path.EndsWith(".md", StringComparison.OrdinalIgnoreCase))
+                    continue;
+                if (path.Contains("kokonoe-data", StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                var content = obsidian.ReadNote(path);
+                if (string.IsNullOrWhiteSpace(content))
+                    continue;
+                if (content.Contains("managed-by: Kokonoe", StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                var clean = CleanMarkdown(content);
+                if (clean.Length < 40)
+                    continue;
+
+                var fullPath = Path.Combine(obsidian.VaultPath, path.Replace('/', Path.DirectorySeparatorChar));
+                var modified = File.Exists(fullPath) ? File.GetLastWriteTime(fullPath) : DateTime.MinValue;
+                var score = Score(path, clean, modified);
+                if (semanticBoosts.TryGetValue(path, out var boost))
+                    score += boost;
+
+                yield return new Candidate
+                {
+                    Path = path,
+                    Preview = BuildPreview(clean),
+                    ModifiedAt = modified,
+                    Score = score
+                };
+            }
+        }
+
+        private static int Score(string path, string content, DateTime modified)
+        {
+            var lower = (path + "\n" + content).ToLowerInvariant();
+            var score = 0;
+            score += Math.Min(content.Length / 280, 14);
+            score += InterestTerms.Sum(t => Count(lower, t));
+            if (modified.Date == DateTime.Today) score += 8;
+            else if (modified > DateTime.Now.AddDays(-7)) score += 5;
+            else if (modified > DateTime.Now.AddDays(-30)) score += 2;
+            if (ContainsAny(path.ToLowerInvariant(), "journal", "daily", "creator", "analysis", "observ", "idea", "project"))
+                score += 3;
+            return score;
+        }
+
+        private static string BuildPreview(string clean)
+        {
+            var lines = clean
+                .Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries)
+                .Select(l => l.Trim().Trim('-', '*', ' ', '#'))
+                .Where(l => l.Length >= 24)
+                .ToList();
+
+            var chosen = lines.FirstOrDefault(l => InterestTerms.Any(t => l.Contains(t, StringComparison.OrdinalIgnoreCase)))
+                         ?? lines.FirstOrDefault()
+                         ?? clean.Trim();
+
+            return Truncate(chosen, 220);
+        }
+
+        private static string CleanMarkdown(string content)
+        {
+            content = Regex.Replace(content, @"\A---[\s\S]*?---", "");
+            content = Regex.Replace(content, @"<\|[^>]*\|?>", "");
+            content = Regex.Replace(content, @"```[\s\S]*?```", "");
+            content = Regex.Replace(content, @"\s+", " ");
+            return content.Trim();
+        }
+
+        private static string Truncate(string text, int max)
+        {
+            if (text.Length <= max) return text;
+            var cut = text.LastIndexOf(' ', Math.Min(max, text.Length - 1));
+            if (cut < max / 2) cut = max;
+            return text[..cut].TrimEnd() + "...";
+        }
+
+        private static int Count(string text, string term)
+        {
+            var count = 0;
+            var index = 0;
+            while ((index = text.IndexOf(term, index, StringComparison.OrdinalIgnoreCase)) >= 0)
+            {
+                count++;
+                index += Math.Max(term.Length, 1);
+            }
+            return count;
+        }
+
+        private static bool ContainsAny(string text, params string[] values)
+            => values.Any(v => text.Contains(v, StringComparison.OrdinalIgnoreCase));
+
+        private sealed class Candidate
+        {
+            public string Path { get; set; } = "";
+            public string Preview { get; set; } = "";
+            public DateTime ModifiedAt { get; set; }
+            public int Score { get; set; }
+        }
+    }
+}

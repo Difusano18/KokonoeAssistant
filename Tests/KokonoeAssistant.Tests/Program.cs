@@ -83,6 +83,7 @@ internal static class Program
             Run("Post reply guard rejects profile quote fallback", PostReplyGuardRejectsProfileQuoteFallback);
             Run("Post reply guard rejects scripted profile source report", PostReplyGuardRejectsScriptedProfileSourceReport);
             Run("Post reply guard blocks false vault unavailable on identity query", PostReplyGuardBlocksFalseVaultUnavailableOnIdentityQuery);
+            Run("Post reply guard blocks false vault unavailable on Obsidian exploration", PostReplyGuardBlocksFalseVaultUnavailableOnObsidianExploration);
             Run("Post reply guard rejects general quote echo fallback", PostReplyGuardRejectsGeneralQuoteEchoFallback);
             Run("Proactive guard suppresses repeated generic silence", ProactiveGuardSuppressesRepeatedGenericSilence);
             Run("Proactive context anchors silence to last topic", ProactiveContextAnchorsSilenceToLastTopic);
@@ -132,6 +133,7 @@ internal static class Program
             Run("Screen awareness classifies modes", ScreenAwarenessClassifiesModes);
             Run("Proactive context requires natural trigger for silence ping", ProactiveContextRequiresNaturalTriggerForSilencePing);
             Run("Obsidian preflight context loads vault before reply", ObsidianPreflightContextLoadsVaultBeforeReply);
+            Run("Obsidian exploration finds interesting notes", ObsidianExplorationFindsInterestingNotes);
             Run("Telegram unified context loads Obsidian profile preflight", TelegramUnifiedContextLoadsObsidianProfilePreflight);
             Run("Agent task service plans and persists", AgentTaskServicePlansAndPersists);
             Run("Agent task service imports Obsidian backlog", AgentTaskServiceImportsObsidianBacklog);
@@ -1921,6 +1923,30 @@ internal static class Program
         AssertTrue(result.RepairInstruction.Contains("Obsidian preflight") || result.RepairInstruction.Contains("Vault/profile context"), "repair should require loaded vault/profile context");
     }
 
+    private static void PostReplyGuardBlocksFalseVaultUnavailableOnObsidianExploration()
+    {
+        var now = new DateTime(2026, 5, 23, 6, 14, 0);
+        var state = new KokoInternalState();
+        var userText = "порийся в обсидіані найди щось цікаве";
+        var messages = new[]
+        {
+            new ChatRepository.ChatMessage { Role = "user", Content = userText, Timestamp = now }
+        };
+        var timeline = new KokoConversationTimelineEngine().Build(messages, state, now, userText);
+
+        var result = new KokoPostReplyGuard().Evaluate(
+            userText,
+            "Твій Obsidian зараз навіть не підключений. Я не можу залізти в твої нотатки, якщо немає зв'язку з базою.",
+            state,
+            messages,
+            timeline,
+            now);
+
+        AssertTrue(!result.Passed, "guard should reject false vault unavailable deflection for Obsidian exploration");
+        AssertTrue(result.ShouldRepair, "exploration deflection should be repaired");
+        AssertTrue(result.Violations.Any(v => v.Contains("vault unavailable")), "violation should name vault unavailable deflection");
+    }
+
     private static void PostReplyGuardRejectsGeneralQuoteEchoFallback()
     {
         var now = new DateTime(2026, 5, 19, 15, 9, 0);
@@ -3212,6 +3238,38 @@ Persistent Obsidian context is now a core project requirement.
             AssertTrue(context.Contains("Kokonoe should check the vault"), "daily note should be included");
             AssertTrue(context.Contains("pulse_spike"), "somatic events tail should be included");
             AssertTrue(context.Contains("Query-relevant vault recall"), "query semantic recall should be included");
+        }
+        finally
+        {
+            try { Directory.Delete(dir, recursive: true); } catch { }
+        }
+    }
+
+    private static void ObsidianExplorationFindsInterestingNotes()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "KokonoeAssistant.Tests", "vault-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            var obsidian = new ObsidianMcpService(dir);
+            obsidian.WriteNote("Journal/Insight.md", """
+# Insight
+
+Цікаве спостереження: користувач краще реагує на конкретні знахідки з vault, а не на театральні відмовки про відсутній доступ.
+""");
+            obsidian.WriteNote("Project/Idea.md", """
+# Idea
+
+Ідея: Kokonoe має сама знаходити патерни в нотатках і приносити одну сильну зачіпку без зайвого ритуалу.
+""");
+
+            var service = new KokoObsidianExplorationService();
+            var reply = service.BuildInterestingFinds(obsidian, "порийся в обсидіані найди щось цікаве");
+
+            AssertTrue(KokoObsidianExplorationService.LooksLikeInterestingVaultDive("порийся в обсидіані найди щось цікаве"), "exploration request should be detected");
+            AssertTrue(reply.Contains("Порилась у vault"), "reply should confirm real vault exploration");
+            AssertTrue(reply.Contains("Journal/Insight.md") || reply.Contains("Project/Idea.md"), "reply should include actual note paths");
+            AssertTrue(!reply.Contains("не підключ", StringComparison.OrdinalIgnoreCase), "reply should not claim Obsidian is disconnected");
         }
         finally
         {
