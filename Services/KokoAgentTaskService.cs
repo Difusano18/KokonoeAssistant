@@ -25,6 +25,7 @@ namespace KokonoeAssistant.Services
         Vault,
         Vision,
         Sandbox,
+        InsightExtraction,
         Implement,
         Respond,
         Verify,
@@ -88,7 +89,7 @@ namespace KokonoeAssistant.Services
         private KokoAgentActivitySnapshot _activity = new();
         private CancellationTokenSource? _runnerCts;
         private int _runningSteps;
-        private int _maxParallel = 10;
+        private int _maxParallel = 4;
 
         public KokoAgentTaskService(string dataDir, LlmService? llm = null, ObsidianMcpService? obsidian = null)
         {
@@ -362,6 +363,12 @@ namespace KokonoeAssistant.Services
 
         private async Task<string> ExecuteStepCoreAsync(KokoAgentTask task, KokoAgentStep step, CancellationToken ct)
         {
+            if (step.Kind == KokoAgentStepKind.InsightExtraction)
+            {
+                EmitActivity("execute", "InsightEngine", task.Objective, "Scanning recent vault notes and extracting actual findings.", task.Id, step.Id);
+                return await Task.Run(() => BuildInsightExtractionReport(task, ct), ct).ConfigureAwait(false);
+            }
+
             if (step.Kind == KokoAgentStepKind.Sandbox)
             {
                 EmitActivity("execute", "PythonSandbox", task.Objective, "Running safe sandbox health probe.", task.Id, step.Id);
@@ -412,16 +419,166 @@ namespace KokonoeAssistant.Services
             if (_obsidian == null) return;
             try
             {
+                var result = task.Steps
+                    .Where(s => !string.IsNullOrWhiteSpace(s.Result))
+                    .OrderByDescending(s => s.FinishedAt ?? DateTime.MinValue)
+                    .Select(s => Trim(s.Result, 1200))
+                    .FirstOrDefault() ?? "";
                 var line = $"""
 
 ## {DateTime.Now:yyyy-MM-dd HH:mm} · {task.Id}
 - objective: {task.Objective}
 - status: {task.Status}
 - notice: {notice.Notice}
+{(string.IsNullOrWhiteSpace(result) ? "" : "- result: " + result.Replace("\n", "\n  "))}
 """;
                 _obsidian.AppendToNote("Kokonoe/Agent/Completions.md", line);
             }
             catch { }
+        }
+
+        private string BuildInsightExtractionReport(KokoAgentTask task, CancellationToken ct)
+        {
+            if (_obsidian == null)
+                return "InsightExtraction: Obsidian service is unavailable; no vault scan was executed.";
+
+            ct.ThrowIfCancellationRequested();
+            var status = _obsidian.GetVaultStatus();
+            EmitActivity("execute", "ObsidianMcpService", task.Objective,
+                $"Vault status: {status.TotalNotes} notes, {status.EmptyNotes.Count} empty, {status.OrphanNotes.Count} orphan.",
+                task.Id);
+
+            var notes = _obsidian.ListNotes()
+                .Where(p => p.EndsWith(".md", StringComparison.OrdinalIgnoreCase))
+                .Where(p => !p.Contains("kokonoe-data", StringComparison.OrdinalIgnoreCase))
+                .Where(p => !p.StartsWith("Kokonoe/Agent/", StringComparison.OrdinalIgnoreCase))
+                .Select(p => new
+                {
+                    Path = p,
+                    Modified = GetNoteModifiedAt(p)
+                })
+                .OrderByDescending(x => x.Modified)
+                .Take(10)
+                .ToList();
+
+            EmitActivity("execute", "ObsidianMcpService", task.Objective,
+                $"Reading {notes.Count} recently modified notes. Yes, actual files, not vibes.",
+                task.Id);
+
+            var findings = notes
+                .Select(n => BuildFinding(n.Path, n.Modified))
+                .Where(f => f.Score > 0)
+                .OrderByDescending(f => f.Score)
+                .ThenByDescending(f => f.ModifiedAt)
+                .Take(5)
+                .ToList();
+
+            var sb = new StringBuilder();
+            sb.AppendLine("InsightExtraction завершено.");
+            sb.AppendLine($"- Перевірено: {notes.Count} останніх markdown-нотаток.");
+            sb.AppendLine($"- Vault: {status.TotalNotes} нотаток, {status.FilledNotes} заповнених, {status.EmptyNotes.Count} порожніх, {status.OrphanNotes.Count} осиротілих.");
+
+            if (findings.Count == 0)
+            {
+                sb.AppendLine("- Інсайт: у останніх нотатках не знайшла достатньо сильного сигналу. Це результат, не зависання.");
+            }
+            else
+            {
+                sb.AppendLine("- Інсайти:");
+                foreach (var finding in findings)
+                    sb.AppendLine($"  - `{finding.Path}`: {finding.Preview}");
+            }
+
+            var report = sb.ToString().Trim();
+            try
+            {
+                _obsidian.AppendToNote("Kokonoe/Agent/Insights.md", $"""
+
+## {DateTime.Now:yyyy-MM-dd HH:mm} · {task.Id}
+Objective: {task.Objective}
+
+{report}
+""");
+            }
+            catch { }
+
+            return report;
+        }
+
+        private DateTime GetNoteModifiedAt(string path)
+        {
+            try
+            {
+                var full = Path.Combine(_obsidian!.VaultPath, path.Replace('/', Path.DirectorySeparatorChar));
+                return File.Exists(full) ? File.GetLastWriteTime(full) : DateTime.MinValue;
+            }
+            catch
+            {
+                return DateTime.MinValue;
+            }
+        }
+
+        private InsightFinding BuildFinding(string path, DateTime modifiedAt)
+        {
+            try
+            {
+                var content = _obsidian?.ReadNote(path) ?? "";
+                if (string.IsNullOrWhiteSpace(content))
+                    return new InsightFinding { Path = path, ModifiedAt = modifiedAt };
+                if (content.Contains("managed-by: Kokonoe", StringComparison.OrdinalIgnoreCase))
+                    return new InsightFinding { Path = path, ModifiedAt = modifiedAt };
+
+                var clean = CleanMarkdown(content);
+                var lower = (path + "\n" + clean).ToLowerInvariant();
+                var score = 0;
+                score += CountAny(lower, "ідея", "idea", "інсайт", "insight", "спостереж", "патерн", "pattern", "ризик", "план", "todo", "task", "помилка", "баг", "архітектур", "мультизадач");
+                if (modifiedAt > DateTime.Now.AddHours(-24)) score += 4;
+                if (modifiedAt > DateTime.Now.AddDays(-7)) score += 2;
+                if (clean.Length > 300) score += 1;
+
+                return new InsightFinding
+                {
+                    Path = path,
+                    ModifiedAt = modifiedAt,
+                    Score = score,
+                    Preview = Trim(FirstUsefulLine(clean), 260)
+                };
+            }
+            catch
+            {
+                return new InsightFinding { Path = path, ModifiedAt = modifiedAt };
+            }
+        }
+
+        private static string CleanMarkdown(string content)
+        {
+            var lines = content
+                .Replace("\r", "\n")
+                .Split('\n')
+                .Select(l => l.Trim())
+                .Where(l => l.Length > 0)
+                .Where(l => !l.StartsWith("---"))
+                .Where(l => !l.StartsWith("tags:", StringComparison.OrdinalIgnoreCase))
+                .Where(l => !l.StartsWith("created:", StringComparison.OrdinalIgnoreCase));
+            return string.Join(" ", lines).Trim();
+        }
+
+        private static string FirstUsefulLine(string text)
+        {
+            return text
+                .Split(new[] { '.', '!', '?' }, StringSplitOptions.RemoveEmptyEntries)
+                .Select(t => t.Trim().Trim('-', '*', '#', ' '))
+                .FirstOrDefault(t => t.Length >= 24)
+                ?? text.Trim();
+        }
+
+        private static int CountAny(string text, params string[] terms)
+        {
+            var score = 0;
+            foreach (var term in terms)
+                if (text.Contains(term, StringComparison.OrdinalIgnoreCase))
+                    score++;
+            return score;
         }
 
         private void MarkStepFinished(string taskId, string stepId, KokoAgentTaskStatus status, string error)
@@ -506,6 +663,7 @@ namespace KokonoeAssistant.Services
             KokoAgentStepKind.Vault => "ObsidianMcpService",
             KokoAgentStepKind.Vision => "VisionModel",
             KokoAgentStepKind.Sandbox => "PythonSandbox",
+            KokoAgentStepKind.InsightExtraction => "InsightEngine",
             KokoAgentStepKind.Implement => "LlmService",
             KokoAgentStepKind.Respond => "LlmService",
             KokoAgentStepKind.Verify => "Verifier",
@@ -517,6 +675,7 @@ namespace KokonoeAssistant.Services
         {
             KokoAgentStepKind.Vault => "obsidian",
             KokoAgentStepKind.Sandbox => "coder",
+            KokoAgentStepKind.InsightExtraction => "research",
             KokoAgentStepKind.Implement => "coder",
             KokoAgentStepKind.Verify => "system",
             KokoAgentStepKind.Plan => "research",
@@ -541,6 +700,14 @@ namespace KokonoeAssistant.Services
             if (string.IsNullOrWhiteSpace(text)) return "";
             text = text.Replace("\r", " ").Replace("\n", " ").Trim();
             return text.Length <= max ? text : text[..max] + "...";
+        }
+
+        private sealed class InsightFinding
+        {
+            public string Path { get; set; } = "";
+            public string Preview { get; set; } = "";
+            public DateTime ModifiedAt { get; set; }
+            public int Score { get; set; }
         }
     }
 }

@@ -30,6 +30,26 @@ namespace KokonoeAssistant.Services
                 "щось цікаве", "что-то интерес", "цікав", "интерес", "interesting");
         }
 
+        public static bool LooksLikeObsidianWorkRequest(string? text)
+            => LooksLikeInterestingVaultDive(text)
+               || LooksLikeVaultAccessCheck(text)
+               || LooksLikeExplorationFollowup(text);
+
+        public static bool LooksLikeVaultAccessCheck(string? text)
+        {
+            var lower = (text ?? "").ToLowerInvariant();
+            if (string.IsNullOrWhiteSpace(lower)) return false;
+
+            var mentionsVault = ContainsAny(lower,
+                "obsidian", "vault", "обсидіан", "обсідіан", "обсидиан", "обсидиане", "нотат", "заміт", "замет");
+            if (!mentionsVault) return false;
+
+            return ContainsAny(lower,
+                "добрати", "добрaти", "дістати", "достук", "зайди", "зайти", "заліз", "залез",
+                "доступ", "підключ", "подключ", "перевір", "провір", "check", "спробуй",
+                "пробуй", "скан", "проскан", "працює", "работает", "відкрий", "открой");
+        }
+
         public static bool LooksLikeExplorationFollowup(string? text)
         {
             var lower = (text ?? "").ToLowerInvariant().Trim();
@@ -39,6 +59,57 @@ namespace KokonoeAssistant.Services
                 "і що там", "и что там", "шо там", "що там", "ну що", "ну шо", "ну і",
                 "результат", "що знайш", "шо знайш", "що найш", "що нарила", "що накопала",
                 "знайшла", "знайшов", "далі", "там є щось", "є щось");
+        }
+
+        public string BuildAccessReport(ObsidianMcpService obsidian, string? userText, int sampleItems = 5)
+        {
+            if (obsidian == null) throw new ArgumentNullException(nameof(obsidian));
+            sampleItems = Math.Clamp(sampleItems, 1, 10);
+
+            try
+            {
+                var status = obsidian.GetVaultStatus();
+                var notes = obsidian.ListNotes()
+                    .Where(p => p.EndsWith(".md", StringComparison.OrdinalIgnoreCase))
+                    .Where(p => !p.Contains("kokonoe-data", StringComparison.OrdinalIgnoreCase))
+                    .Take(sampleItems)
+                    .ToList();
+
+                var interesting = BuildCandidates(obsidian, userText)
+                    .OrderByDescending(c => c.Score)
+                    .ThenByDescending(c => c.ModifiedAt)
+                    .Take(2)
+                    .ToList();
+
+                var lines = new List<string>
+                {
+                    "Obsidian-task завершено. Не «чекаю», не «сканую вічно» - виконала перевірку.",
+                    $"- Дії: vault_status -> list_notes -> read/sample scan.",
+                    $"- Доступ: є.",
+                    $"- Стан: {status.TotalNotes} нотаток, {status.FilledNotes} заповнених, {status.EmptyNotes.Count} порожніх, {status.OrphanNotes.Count} осиротілих."
+                };
+
+                if (notes.Count > 0)
+                    lines.Add("- Видимі файли: " + string.Join(", ", notes.Select(p => $"`{p}`")));
+                else
+                    lines.Add("- Видимі файли: markdown-нотаток не знайшла.");
+
+                if (interesting.Count > 0)
+                {
+                    lines.Add("- Швидкі зачіпки:");
+                    lines.AddRange(interesting.Select(c => $"  - `{c.Path}`: {c.Preview}"));
+                }
+
+                lines.Add("Висновок: маршрут до Obsidian працює. Обіцянки без результату тепер вважаються сміттєвим fallback, не дією.");
+                return string.Join("\n", lines);
+            }
+            catch (Exception ex)
+            {
+                return "Obsidian-task завершено зі збоєм.\n" +
+                       "- Дії: vault_status -> list_notes.\n" +
+                       "- Доступ: не підтверджений через помилку читання.\n" +
+                       $"- Помилка: {Truncate(ex.Message, 220)}";
+            }
         }
 
         public string BuildInterestingFinds(ObsidianMcpService obsidian, string? userText, int maxItems = 3)
@@ -53,14 +124,20 @@ namespace KokonoeAssistant.Services
                 .ToList();
 
             if (candidates.Count == 0)
-                return "Obsidian підключений, але живих нотаток для нормальної знахідки не знайшла. Це не «немає доступу», це просто порожня полиця.";
+                return "Obsidian-скан завершено.\n" +
+                       "- Дії: list_notes -> semantic_search -> read_notes.\n" +
+                       "- Доступ: є.\n" +
+                       "- Результат: живих нотаток для нормальної знахідки не знайшла. Це не «немає доступу», це просто порожня полиця.";
 
             var lines = candidates
                 .Select(c => $"- `{c.Path}`: {c.Preview}")
                 .ToList();
 
             var strongest = candidates[0];
-            return "Порилась у vault, не вдавала телепатію. Зачіпки:\n" +
+            return "Obsidian-скан завершено.\n" +
+                   "- Дії: list_notes -> semantic_search -> read_notes.\n" +
+                   "- Доступ: є.\n" +
+                   "Порилась у vault, не вдавала телепатію. Зачіпки:\n" +
                    string.Join("\n", lines) +
                    $"\n\nНайцікавіше зараз: `{strongest.Path}`. Там є матеріал, який варто розгорнути, а не ховати під пилом.";
         }

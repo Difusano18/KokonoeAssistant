@@ -106,7 +106,32 @@ namespace KokonoeAssistant.Services
             pseudo.RequiresVaultRead = NeedsVaultRead(lower, pseudo.Intent);
             pseudo.RequiresToolUse = NeedsToolUse(lower, pseudo.Capability, pseudo.RequiresVaultRead);
             pseudo.RequiresAction = IsActionIntent(pseudo.Intent);
-            return new KokoResponsePlannerEngine().BuildAgentSteps(pseudo);
+            var steps = new KokoResponsePlannerEngine().BuildAgentSteps(pseudo)
+                .Select(s => new KokoAgentStep
+                {
+                    Id = s.Id,
+                    Order = s.Order,
+                    Title = s.Title,
+                    Kind = s.Kind,
+                    Status = s.Status,
+                    Result = s.Result,
+                    Error = s.Error,
+                    StartedAt = s.StartedAt,
+                    FinishedAt = s.FinishedAt
+                })
+                .ToList();
+
+            if (LooksLikeBackgroundInsightObjective(lower) &&
+                steps.All(s => s.Kind != KokoAgentStepKind.InsightExtraction))
+            {
+                var insertAt = steps.FindIndex(s => s.Kind == KokoAgentStepKind.Respond);
+                if (insertAt < 0) insertAt = Math.Max(0, steps.Count - 1);
+                steps.Insert(insertAt, AgentStep(insertAt + 1, "Extract concrete insights from recent vault material", KokoAgentStepKind.InsightExtraction));
+                for (var i = 0; i < steps.Count; i++)
+                    steps[i].Order = i + 1;
+            }
+
+            return steps;
         }
 
         private static KokoAgentStep AgentStep(int order, string title, KokoAgentStepKind kind) => new()
@@ -219,6 +244,12 @@ RESPONSE PLAN REPAIR:
                capability is "codebase" or "vault_memory" or "telegram" or "screen_awareness" or "calendar" or "os_control" ||
                ContainsAny(lower, "запусти", "перевір", "прочитай файл", "відкрий", "знайди",
                    "запусти", "перевір", "прочитай файл", "відкрий", "знайди", "виправ", "пофікси", "додай");
+
+        private static bool LooksLikeBackgroundInsightObjective(string lower)
+            => ContainsAny(lower,
+                "background vault", "фоновий огляд", "фоновий скан", "background scanner",
+                "insight extraction", "витягни інсайт", "витягни цікаві", "знайди нові зв'язки",
+                "знайди нові зв’язки", "останні 10 змінених нотаток", "останні змінені нотатки");
 
         private static string BuildMemoryPolicy(string lower, string intent)
         {

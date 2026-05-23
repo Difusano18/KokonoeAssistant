@@ -136,10 +136,14 @@ internal static class Program
             Run("Proactive context requires natural trigger for silence ping", ProactiveContextRequiresNaturalTriggerForSilencePing);
             Run("Obsidian preflight context loads vault before reply", ObsidianPreflightContextLoadsVaultBeforeReply);
             Run("Obsidian exploration finds interesting notes", ObsidianExplorationFindsInterestingNotes);
+            Run("Obsidian access report completes task", ObsidianAccessReportCompletesTask);
             Run("Telegram unified context loads Obsidian profile preflight", TelegramUnifiedContextLoadsObsidianProfilePreflight);
             Run("Agent task service plans and persists", AgentTaskServicePlansAndPersists);
             Run("Agent task service imports Obsidian backlog", AgentTaskServiceImportsObsidianBacklog);
+            Run("Response planner adds insight extraction", ResponsePlannerAddsInsightExtraction);
+            Run("Agent task service executes background vault insight", AgentTaskServiceExecutesBackgroundVaultInsight);
             Run("Agent completion policy asks next question", AgentCompletionPolicyAsksNextQuestion);
+            Run("Agent completion policy reports insight result", AgentCompletionPolicyReportsInsightResult);
             Run("Agent completion policy avoids canned wait tail", AgentCompletionPolicyAvoidsCannedWaitTail);
             Run("Scheduler drops stale user reminders", SchedulerDropsStaleUserReminders);
             Run("Reminder parser handles relative and vague time", ReminderParserHandlesRelativeAndVagueTime);
@@ -3331,6 +3335,29 @@ Persistent Obsidian context is now a core project requirement.
         }
     }
 
+    private static void ObsidianAccessReportCompletesTask()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "KokonoeAssistant.Tests", "vault-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            var obsidian = new ObsidianMcpService(dir);
+            obsidian.WriteNote("Project/Status.md", "# Status\n\nІдея: перевірити, що Obsidian route повертає завершений результат, а не обіцянку сканувати.");
+
+            AssertTrue(KokoObsidianExplorationService.LooksLikeVaultAccessCheck("спробуй тепер добратись в обсидиан"), "access check should be detected");
+            var reply = new KokoObsidianExplorationService().BuildAccessReport(obsidian, "спробуй тепер добратись в обсидиан");
+
+            AssertTrue(reply.Contains("Obsidian-task завершено"), "access report should be a completed task notice");
+            AssertTrue(reply.Contains("Доступ: є"), "access report should confirm access");
+            AssertTrue(reply.Contains("Project/Status.md"), "access report should include visible note path");
+            AssertTrue(!reply.Contains("Починаю сканування", StringComparison.OrdinalIgnoreCase), "access report should not fake pending scan");
+        }
+        finally
+        {
+            try { Directory.Delete(dir, recursive: true); } catch { }
+        }
+    }
+
     private static void TelegramUnifiedContextLoadsObsidianProfilePreflight()
     {
         var dir = Path.Combine(Path.GetTempPath(), "KokonoeAssistant.Tests", "vault-" + Guid.NewGuid().ToString("N"));
@@ -3371,7 +3398,7 @@ Persistent Obsidian context is now a core project requirement.
             var task = service.AddTask("реалізуй UI і перевір Obsidian пам'ять", priority: 8);
 
             AssertEqual(8, task.Priority, "priority should be stored");
-            AssertEqual(10, service.MaxParallel, "agent board should default to ten parallel slots");
+            AssertEqual(4, service.MaxParallel, "agent board should default to four parallel slots");
             AssertTrue(task.Steps.Any(s => s.Kind == KokoAgentStepKind.Vault), "vault step should be planned");
             AssertTrue(task.Steps.Any(s => s.Kind == KokoAgentStepKind.Implement), "implementation step should be planned");
             AssertTrue(task.Steps.Last().Kind == KokoAgentStepKind.Report, "last step should be report");
@@ -3421,6 +3448,57 @@ Persistent Obsidian context is now a core project requirement.
         }
     }
 
+    private static void ResponsePlannerAddsInsightExtraction()
+    {
+        var steps = KokoResponsePlannerEngine.BuildAgentStepsForObjective(
+            "Background Vault Scanner: Проаналізуй останні 10 змінених нотаток в Obsidian та знайди цікаві факти");
+
+        AssertTrue(steps.Any(s => s.Kind == KokoAgentStepKind.Vault), "background scanner should read vault");
+        AssertTrue(steps.Any(s => s.Kind == KokoAgentStepKind.InsightExtraction), "background scanner should extract insights");
+        AssertTrue(steps.First(s => s.Kind == KokoAgentStepKind.InsightExtraction).Order <
+                   steps.First(s => s.Kind == KokoAgentStepKind.Respond).Order,
+            "insight extraction should happen before report/response");
+    }
+
+    private static void AgentTaskServiceExecutesBackgroundVaultInsight()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "KokonoeAssistant.Tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            var vault = Path.Combine(dir, "vault");
+            Directory.CreateDirectory(vault);
+            var obsidian = new ObsidianMcpService(vault);
+            obsidian.WriteNote("Project/Manus.md", "# Manus\n\nІдея: фонова мультизадачність повинна писати результат після завершення, а не зависати у статусі сканування.");
+
+            var service = new KokoAgentTaskService(Path.Combine(dir, "data"), obsidian: obsidian)
+            {
+                AutoStartOnAdd = false
+            };
+            var task = service.AddTask("Background Vault Scanner: Проаналізуй останні 10 змінених нотаток в Obsidian та знайди цікаві факти", priority: 3);
+            service.Start();
+
+            var completed = System.Threading.SpinWait.SpinUntil(() =>
+            {
+                var current = service.GetSnapshot().Tasks.First(t => t.Id == task.Id);
+                return current.Status == KokoAgentTaskStatus.Completed || current.Status == KokoAgentTaskStatus.Failed;
+            }, TimeSpan.FromSeconds(8));
+
+            var finalTask = service.GetSnapshot().Tasks.First(t => t.Id == task.Id);
+            AssertTrue(completed, "background insight task should finish");
+            AssertEqual(KokoAgentTaskStatus.Completed, finalTask.Status, "background insight task should complete");
+            var insight = finalTask.Steps.FirstOrDefault(s => s.Kind == KokoAgentStepKind.InsightExtraction);
+            AssertTrue(insight != null, "task should contain insight extraction step");
+            AssertTrue(insight!.Result.Contains("InsightExtraction завершено"), "insight step should report completed work");
+            AssertTrue(insight.Result.Contains("Project/Manus.md"), "insight result should include note path");
+            service.Stop();
+        }
+        finally
+        {
+            try { Directory.Delete(dir, recursive: true); } catch { }
+        }
+    }
+
     private static void AgentCompletionPolicyAsksNextQuestion()
     {
         var task = new KokoAgentTask
@@ -3439,6 +3517,33 @@ Persistent Obsidian context is now a core project requirement.
         var notice = KokoAgentCompletionPolicy.Build(task);
         AssertEqual("question", notice.Mode, "implementation tasks should end with a next-question mode");
         AssertTrue(notice.Notice.Contains("прогнати ширшу перевірку") || notice.Notice.Contains("стабільний прототип"), "notice should include concrete next question");
+    }
+
+    private static void AgentCompletionPolicyReportsInsightResult()
+    {
+        var task = new KokoAgentTask
+        {
+            Id = "insight",
+            Objective = "Background Vault Scanner: знайди цікаві факти",
+            Status = KokoAgentTaskStatus.Completed,
+            Steps = new()
+            {
+                new KokoAgentStep { Kind = KokoAgentStepKind.Analyze, Status = KokoAgentTaskStatus.Completed },
+                new KokoAgentStep
+                {
+                    Kind = KokoAgentStepKind.InsightExtraction,
+                    Status = KokoAgentTaskStatus.Completed,
+                    FinishedAt = DateTime.Now,
+                    Result = "InsightExtraction завершено. - Інсайти: `Project/Manus.md`: треба показувати completion notice."
+                },
+                new KokoAgentStep { Kind = KokoAgentStepKind.Report, Status = KokoAgentTaskStatus.Completed }
+            }
+        };
+
+        var notice = KokoAgentCompletionPolicy.Build(task);
+        AssertEqual("question", notice.Mode, "insight completion should ask what to do next");
+        AssertTrue(notice.Notice.Contains("фоновий огляд завершено"), "notice should identify background completion");
+        AssertTrue(notice.Notice.Contains("Project/Manus.md"), "notice should include concrete insight result");
     }
 
     private static void AgentCompletionPolicyAvoidsCannedWaitTail()

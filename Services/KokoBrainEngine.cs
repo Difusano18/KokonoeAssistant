@@ -157,6 +157,8 @@ namespace KokonoeAssistant.Services
         public string LastVaultMaintenanceReason { get; set; } = "";
         public string LastVaultMaintenanceSummary { get; set; } = "";
         public string LastVaultMaintenanceError { get; set; } = "";
+        public DateTime LastBackgroundVaultScanAt { get; set; } = DateTime.MinValue;
+        public string LastBackgroundVaultScanSummary { get; set; } = "";
         public List<ShortTermIntent> ShortTermIntents { get; set; } = new();
         public DateTime LastScreenAwarenessAt { get; set; } = DateTime.MinValue;
         public DateTime LastScreenAwarenessCommentAt { get; set; } = DateTime.MinValue;
@@ -288,6 +290,7 @@ namespace KokonoeAssistant.Services
         private int _vaultSyncInFlight;
         private DateTime _lastVaultFreshnessCheckAt = DateTime.MinValue;
         private DateTime _lastAutonomousAgentTaskAt = DateTime.MinValue;
+        private bool _agentCompletionEventsHooked;
         private readonly object    _lock = new();
         private DateTime           _lastInAppSilenceMsgAt = DateTime.MinValue;
 
@@ -365,6 +368,8 @@ namespace KokonoeAssistant.Services
 
             _screenAwarenessTimer = new System.Threading.Timer(_ => _ = GuardedScreenAwarenessAsync(), null,
                 TimeSpan.FromMinutes(3), TimeSpan.FromMinutes(5));
+
+            HookAgentCompletionEvents();
         }
 
         // Reentrancy guards: skip tick if previous still running.
@@ -378,6 +383,7 @@ namespace KokonoeAssistant.Services
             try
             {
                 await SafeThinkAsync();
+                CheckForAutonomousObjectives("think-timer");
                 TryQueueAutonomousAgentCycle("think-timer");
             }
             finally { Interlocked.Exchange(ref _thinkInFlight, 0); }
@@ -393,9 +399,112 @@ namespace KokonoeAssistant.Services
             try
             {
                 await SafeSpontaneousCheckAsync();
+                CheckForAutonomousObjectives("spontaneous-timer");
                 TryQueueAutonomousAgentCycle("spontaneous-timer");
             }
             finally { Interlocked.Exchange(ref _spontaneousInFlight, 0); }
+        }
+
+        private void HookAgentCompletionEvents()
+        {
+            if (_agentCompletionEventsHooked) return;
+            _agentCompletionEventsHooked = true;
+            try
+            {
+                ServiceContainer.AgentTasks.TaskCompleted += (task, notice) =>
+                {
+                    try { ObserveAgentTaskCompletion(task, notice); }
+                    catch (Exception ex) { Log($"ObserveAgentTaskCompletion: {ex.Message}"); }
+                };
+            }
+            catch (Exception ex)
+            {
+                Log($"HookAgentCompletionEvents: {ex.Message}");
+            }
+        }
+
+        private void ObserveAgentTaskCompletion(KokoAgentTask task, KokoAgentCompletionNotice notice)
+        {
+            if (task.Steps.All(s => s.Kind != KokoAgentStepKind.InsightExtraction))
+                return;
+
+            var result = task.Steps
+                .Where(s => s.Kind == KokoAgentStepKind.InsightExtraction && !string.IsNullOrWhiteSpace(s.Result))
+                .OrderByDescending(s => s.FinishedAt ?? DateTime.MinValue)
+                .Select(s => s.Result.Trim())
+                .FirstOrDefault();
+            if (string.IsNullOrWhiteSpace(result))
+                result = notice.Notice;
+
+            lock (_lock)
+            {
+                var thought = "[agent-insight] " + TrimStateMention(result);
+                if (!_state.PendingThoughts.Any(t => string.Equals(t, thought, StringComparison.OrdinalIgnoreCase)))
+                    _state.PendingThoughts.Add(thought);
+                if (_state.PendingThoughts.Count > 20)
+                    _state.PendingThoughts.RemoveRange(0, _state.PendingThoughts.Count - 20);
+
+                _state.LastBackgroundVaultScanAt = DateTime.Now;
+                _state.LastBackgroundVaultScanSummary = TrimStateMention(result);
+                _state.LastAutonomyDecision = $"agent_completed:{task.Id}";
+                _state.LastAutonomyDecisionAt = DateTime.Now;
+                _state.AutonomyDecisionLog.Add($"[{DateTime.Now:HH:mm}] insight task {task.Id} completed");
+                if (_state.AutonomyDecisionLog.Count > 80)
+                    _state.AutonomyDecisionLog.RemoveRange(0, _state.AutonomyDecisionLog.Count - 80);
+                SaveState();
+            }
+        }
+
+        private void CheckForAutonomousObjectives(string source)
+        {
+            try
+            {
+                var now = DateTime.Now;
+                var level = Math.Clamp(AppSettings.Load().ProactiveAutonomyLevel, 0, 3);
+                if (level <= 0)
+                    return;
+
+                var lastUser = _chatRepo.GetMessages(20)
+                    .Where(m => m.Role == "user")
+                    .OrderByDescending(m => m.Timestamp)
+                    .FirstOrDefault();
+                if (lastUser == null)
+                    return;
+
+                var silence = now - lastUser.Timestamp;
+                if (silence < TimeSpan.FromMinutes(30))
+                    return;
+
+                DateTime lastScan;
+                lock (_lock) { lastScan = _state.LastBackgroundVaultScanAt; }
+                if (now - lastScan < TimeSpan.FromHours(6))
+                    return;
+
+                var existing = ServiceContainer.AgentTasks.GetSnapshot().Tasks.Any(t =>
+                    t.Status is KokoAgentTaskStatus.Pending or KokoAgentTaskStatus.Running &&
+                    t.Objective.Contains("Background Vault Scanner", StringComparison.OrdinalIgnoreCase));
+                if (existing)
+                    return;
+
+                var objective = "Background Vault Scanner: Проаналізуй останні 10 змінених нотаток в Obsidian та знайди цікаві факти, суперечності або задачі. Запиши результат як insight, без очікування команди користувача.";
+                var task = ServiceContainer.AgentTasks.AddTask(objective, priority: 3);
+                ServiceContainer.AgentTasks.Start();
+
+                lock (_lock)
+                {
+                    _state.LastBackgroundVaultScanAt = now;
+                    _state.LastAutonomyDecision = $"queued_background_vault_scan:{task.Id}";
+                    _state.LastAutonomyDecisionAt = now;
+                    _state.AutonomyDecisionLog.Add($"[{now:HH:mm}] {source} queued background vault scan {task.Id}");
+                    if (_state.AutonomyDecisionLog.Count > 80)
+                        _state.AutonomyDecisionLog.RemoveRange(0, _state.AutonomyDecisionLog.Count - 80);
+                    SaveState();
+                }
+            }
+            catch (Exception ex)
+            {
+                Log($"CheckForAutonomousObjectives: {ex.Message}");
+            }
         }
 
         private void TryQueueAutonomousAgentCycle(string source)

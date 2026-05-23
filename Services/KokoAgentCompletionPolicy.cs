@@ -30,10 +30,21 @@ namespace KokonoeAssistant.Services
             };
 
             var lower = objective.ToLowerInvariant();
+            var insightResult = task.Steps
+                .Where(s => s.Kind == KokoAgentStepKind.InsightExtraction && !string.IsNullOrWhiteSpace(s.Result))
+                .OrderByDescending(s => s.FinishedAt ?? DateTime.MinValue)
+                .Select(s => Trim(s.Result, 420))
+                .FirstOrDefault();
             if (failed.Count > 0)
             {
                 notice.Mode = "question";
                 notice.NextQuestion = "Зупинитися й розібрати першу помилку, чи пустити наступну спробу з іншим маршрутом?";
+            }
+            else if (!string.IsNullOrWhiteSpace(insightResult))
+            {
+                notice.Mode = "question";
+                notice.Summary = $"Задача {task.Id}: фоновий огляд завершено. {insightResult}";
+                notice.NextQuestion = "Копати глибше по цій зачіпці чи залишити як інсайт у черзі?";
             }
             else if (LooksLikeImplementation(lower))
             {
@@ -65,5 +76,11 @@ namespace KokonoeAssistant.Services
 
         private static bool ContainsAny(string text, params string[] needles)
             => needles.Any(n => text.Contains(n, StringComparison.OrdinalIgnoreCase));
+
+        private static string Trim(string text, int max)
+        {
+            text = (text ?? "").Replace("\r", " ").Replace("\n", " ").Trim();
+            return text.Length <= max ? text : text[..max] + "...";
+        }
     }
 }

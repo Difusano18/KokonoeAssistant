@@ -109,6 +109,9 @@ namespace KokonoeAssistant
         private DateTime _lastObsidianPreflightAt = DateTime.MinValue;
         private string _lastObsidianExploreRequest = "";
         private DateTime _lastObsidianExploreAt = DateTime.MinValue;
+        private string _lastObsidianTaskRequest = "";
+        private string _lastObsidianTaskReply = "";
+        private DateTime _lastObsidianTaskAt = DateTime.MinValue;
         private bool _liveCoreVaultScanInFlight;
         private bool _rightOpsVaultScanInFlight;
         private int _liveCoreMemoryItems;
@@ -337,6 +340,7 @@ namespace KokonoeAssistant
             Closed += (s, ev) => Cleanup();
             CommandBindings.Add(new CommandBinding(ApplicationCommands.Paste, OnPaste));
             _ = StartupSequenceAsync();
+            HookAgentTaskEvents();
             SetupHeartUI();
             StartUiTextRepairTimer();
         }
@@ -1835,6 +1839,24 @@ tags: [kokonoe, live-core, diagnostics]
                             Thought = notice.Notice,
                             TaskId = task.Id
                         });
+                        var visible = BuildVisibleAgentCompletion(task, notice);
+                        if (!string.IsNullOrWhiteSpace(visible))
+                        {
+                            AddMessageBubble(new ChatMessageVm { Role = "assistant", Content = visible });
+                            try
+                            {
+                                ServiceContainer.ChatRepository.InsertMessage(new ChatRepository.ChatMessage
+                                {
+                                    Content = visible,
+                                    Role = "assistant",
+                                    Author = "Kokonoe",
+                                    Timestamp = DateTime.Now
+                                });
+                            }
+                            catch { }
+                            _ = Task.Run(() => ServiceContainer.ChatLogger.LogExchange("agent", task.Objective, visible));
+                        }
+                        RefreshAgentTaskBoard();
                     }, DispatcherPriority.Background);
                 };
             }
@@ -2162,6 +2184,9 @@ tags: [kokonoe, live-core, diagnostics]
                     await HandleManualScreenScanAsync(sendText, _llmCts?.Token ?? default);
                     return;
                 }
+
+                if (KokoObsidianExplorationService.LooksLikeObsidianWorkRequest(sendText))
+                    await ShowKokoActivityAsync("Obsidian: перевіряю vault і читаю нотатки");
 
                 var obsidianCommand = await Task.Run(() =>
                 {
@@ -2515,6 +2540,23 @@ tags: [kokonoe, live-core, diagnostics]
             }
 
             return await GuardAndRepairReplyAsync(userText, reply, "", ct);
+        }
+
+        private static string BuildVisibleAgentCompletion(KokoAgentTask task, KokoAgentCompletionNotice notice)
+        {
+            if (task.Steps.All(s => s.Kind != KokoAgentStepKind.InsightExtraction) && task.Priority < 6)
+                return "";
+
+            var result = task.Steps
+                .Where(s => !string.IsNullOrWhiteSpace(s.Result))
+                .OrderByDescending(s => s.FinishedAt ?? DateTime.MinValue)
+                .Select(s => s.Result.Trim())
+                .FirstOrDefault() ?? notice.Notice;
+
+            var prefix = task.Steps.Any(s => s.Kind == KokoAgentStepKind.InsightExtraction)
+                ? "Фоновий vault-скан завершено."
+                : "Задача завершена.";
+            return prefix + "\n" + TrimOpsLine(result, 900);
         }
 
         private async Task<string> BuildScreenScanFallbackReplyAsync(
@@ -3018,6 +3060,14 @@ LIVE RESPONSE STYLE
             return new KokoObsidianExplorationService().BuildInterestingFinds(_obsidian, request);
         }
 
+        private string BuildObsidianAccessReply(string request)
+        {
+            _lastObsidianTaskRequest = request ?? "";
+            _lastObsidianTaskAt = DateTime.Now;
+            _lastObsidianTaskReply = new KokoObsidianExplorationService().BuildAccessReport(_obsidian, request);
+            return _lastObsidianTaskReply;
+        }
+
         private bool TryHandleDirectObsidianCommand(string text, out string reply)
         {
             reply = "";
@@ -3026,7 +3076,13 @@ LIVE RESPONSE STYLE
 
             var lower = text.ToLowerInvariant();
             var looksObsidian =
-                ContainsAny(lower, "obsidian", "vault", "папк", "нотатк", "журнал", "щоденник", "journal", "spanish", "lesson_", "lesson", "урок");
+                ContainsAny(lower, "obsidian", "vault", "обсидіан", "обсідіан", "обсидиан", "папк", "нотатк", "журнал", "щоденник", "journal", "spanish", "lesson_", "lesson", "урок");
+            if (KokoObsidianExplorationService.LooksLikeVaultAccessCheck(text))
+            {
+                reply = BuildObsidianAccessReply(text);
+                return true;
+            }
+
             if (KokoObsidianExplorationService.LooksLikeInterestingVaultDive(text))
             {
                 reply = BuildObsidianExplorationReply(text);
