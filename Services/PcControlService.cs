@@ -5,6 +5,7 @@ using System.Drawing;
 using System.Drawing.Imaging;
 using System.IO;
 using System.Runtime.InteropServices;
+using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 
@@ -23,8 +24,17 @@ namespace KokonoeAssistant.Services
         [DllImport("user32.dll")]
         private static extern int SendMessage(IntPtr hWnd, int Msg, int wParam, int lParam);
 
-        [DllImport("user32.dll")]
-        private static extern IntPtr GetForegroundWindow();
+        [DllImport("user32.dll", EntryPoint = "GetForegroundWindow")]
+        private static extern IntPtr GetForegroundWindowHandle();
+
+        [DllImport("user32.dll", CharSet = CharSet.Auto, SetLastError = true)]
+        private static extern int GetWindowText(IntPtr hWnd, StringBuilder lpString, int nMaxCount);
+
+        [DllImport("user32.dll", SetLastError = true)]
+        private static extern int GetClassName(IntPtr hWnd, StringBuilder lpClassName, int nMaxCount);
+
+        [DllImport("user32.dll", SetLastError = true)]
+        private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
 
         [DllImport("winmm.dll")]
         private static extern int waveOutSetVolume(IntPtr hwo, uint dwVolume);
@@ -163,8 +173,46 @@ namespace KokonoeAssistant.Services
 
         public void TurnOffMonitor()
         {
-            var hwnd = GetForegroundWindow();
+            var hwnd = GetForegroundWindowHandle();
             SendMessage(hwnd, WM_SYSCOMMAND, SC_MONITORPOWER, 2);
+        }
+
+        public ForegroundWindowInfo GetForegroundWindow()
+        {
+            var info = new ForegroundWindowInfo();
+            try
+            {
+                var hwnd = GetForegroundWindowHandle();
+                info.Handle = hwnd.ToInt64();
+                if (hwnd == IntPtr.Zero)
+                    return info;
+
+                var title = new StringBuilder(512);
+                if (GetWindowText(hwnd, title, title.Capacity) > 0)
+                    info.Title = title.ToString();
+
+                var cls = new StringBuilder(256);
+                if (GetClassName(hwnd, cls, cls.Capacity) > 0)
+                    info.ClassName = cls.ToString();
+
+                GetWindowThreadProcessId(hwnd, out var pid);
+                info.ProcessId = (int)pid;
+                if (pid > 0)
+                {
+                    try
+                    {
+                        using var proc = Process.GetProcessById((int)pid);
+                        info.ProcessName = proc.ProcessName;
+                    }
+                    catch { }
+                }
+            }
+            catch (Exception ex)
+            {
+                info.Error = ex.Message;
+            }
+
+            return info;
         }
 
         // ── Apps ─────────────────────────────────────────────────────
@@ -312,5 +360,27 @@ namespace KokonoeAssistant.Services
         public string Name    { get; set; } = "";
         public double FreeGb  { get; set; }
         public double TotalGb { get; set; }
+    }
+
+    public class ForegroundWindowInfo
+    {
+        public long Handle { get; set; }
+        public string Title { get; set; } = "";
+        public string ClassName { get; set; } = "";
+        public string ProcessName { get; set; } = "";
+        public int ProcessId { get; set; }
+        public string Error { get; set; } = "";
+
+        public bool HasWindow => Handle != 0;
+
+        public override string ToString()
+        {
+            if (!string.IsNullOrWhiteSpace(Error))
+                return "foreground error: " + Error;
+            var process = string.IsNullOrWhiteSpace(ProcessName) ? "unknown" : ProcessName;
+            var title = string.IsNullOrWhiteSpace(Title) ? "untitled" : Title;
+            var cls = string.IsNullOrWhiteSpace(ClassName) ? "unknown-class" : ClassName;
+            return $"{process}#{ProcessId} | {cls} | {title}";
+        }
     }
 }

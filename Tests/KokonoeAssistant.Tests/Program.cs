@@ -1,4 +1,6 @@
 using System;
+using System.Drawing;
+using System.Drawing.Imaging;
 using System.IO;
 using KokonoeAssistant.Services;
 using Newtonsoft.Json;
@@ -57,6 +59,10 @@ internal static class Program
             Run("PC control executes safe PowerShell", PcControlExecutesSafePowerShell);
             Run("PC control captures screenshot", PcControlCapturesScreenshot);
             Run("LLM vision compacts oversized screenshots", LlmVisionCompactsOversizedScreenshots);
+            Run("Vision quality detects unusable denial", VisionQualityDetectsUnusableDenial);
+            Run("Vision quality detects generic screenshot reply", VisionQualityDetectsGenericScreenshotReply);
+            Run("Image processing enhances screenshot bytes", ImageProcessingEnhancesScreenshotBytes);
+            Run("Screen awareness prompt includes foreground metadata", ScreenAwarenessPromptIncludesForegroundMetadata);
             Run("Post reply guard repairs vision technical error", PostReplyGuardRepairsVisionTechnicalError);
             Run("Post reply guard protects image only prompt", PostReplyGuardProtectsImageOnlyPrompt);
             Run("Post reply guard duplicate image prompt avoids stale repeat text", PostReplyGuardDuplicateImagePromptAvoidsStaleRepeatText);
@@ -127,6 +133,7 @@ internal static class Program
             Run("LLM vault tool routing avoids accidental writes", LlmVaultToolRoutingAvoidsAccidentalWrites);
             Run("Obsidian memory quality and task queue", ObsidianMemoryQualityAndTaskQueue);
             Run("Obsidian memory duplicate cleanup", ObsidianMemoryDuplicateCleanup);
+            Run("Obsidian self-healing memory writes report", ObsidianSelfHealingMemoryWritesReport);
             Run("Obsidian memory review suggestions", ObsidianMemoryReviewSuggestions);
             Run("Obsidian normalizes malformed frontmatter", ObsidianNormalizesMalformedFrontmatter);
             Run("Obsidian vault doctor repairs phantom graph links", ObsidianVaultDoctorRepairsPhantomGraphLinks);
@@ -149,6 +156,12 @@ internal static class Program
             Run("Agent task service executes background vault insight", AgentTaskServiceExecutesBackgroundVaultInsight);
             Run("Obsidian consolidates notes non destructively", ObsidianConsolidatesNotesNonDestructively);
             Run("Predictive screen warmup loads Obsidian context", PredictiveScreenWarmupLoadsObsidianContext);
+            Run("Conversation stagnation forces pending thought", ConversationStagnationForcesPendingThought);
+            Run("Conversation stagnation prompt expires", ConversationStagnationPromptExpires);
+            Run("Natural synthesis detects source reporting", NaturalSynthesisDetectsSourceReporting);
+            Run("Emotion style constrains irritated replies", EmotionStyleConstrainsIrritatedReplies);
+            Run("Sandbox executor cleans timed out scripts", SandboxExecutorCleansTimedOutScripts);
+            Run("Agent task service plans self review and system control", AgentTaskServicePlansSelfReviewAndSystemControl);
             Run("Agent completion policy asks next question", AgentCompletionPolicyAsksNextQuestion);
             Run("Agent completion policy reports insight result", AgentCompletionPolicyReportsInsightResult);
             Run("Agent completion policy avoids canned wait tail", AgentCompletionPolicyAvoidsCannedWaitTail);
@@ -3755,6 +3768,151 @@ Persistent Obsidian context is now a core project requirement.
         AssertEqual("wait", notice.Mode, "plain chat completion should not force a follow-up question");
         AssertTrue(string.IsNullOrWhiteSpace(notice.NextQuestion), "wait mode should not append canned text");
         AssertTrue(!notice.Notice.Contains("Чекаю наступного запиту", StringComparison.OrdinalIgnoreCase), "notice should not use canned wait tail");
+    }
+
+    private static void VisionQualityDetectsUnusableDenial()
+    {
+        AssertTrue(VisionResponseQuality.LooksUnusable("I cannot see the image from here."), "vision denial should be unusable");
+        AssertTrue(VisionResponseQuality.LooksUnusable("HTTP 500 from vision model"), "vision backend failure should be unusable");
+    }
+
+    private static void VisionQualityDetectsGenericScreenshotReply()
+    {
+        AssertTrue(VisionResponseQuality.LooksGeneric("Looks like a screenshot, but I cannot determine anything concrete."), "generic screenshot answer should retry");
+        AssertTrue(!VisionResponseQuality.LooksGeneric("The foreground window is Visual Studio Code with Program.cs open and a failing test list visible."), "concrete answer should pass");
+    }
+
+    private static void ImageProcessingEnhancesScreenshotBytes()
+    {
+        using var bitmap = new Bitmap(24, 24);
+        using (var g = Graphics.FromImage(bitmap))
+        {
+            g.Clear(Color.FromArgb(30, 40, 50));
+            g.FillRectangle(Brushes.White, 4, 4, 12, 12);
+        }
+
+        using var ms = new MemoryStream();
+        bitmap.Save(ms, ImageFormat.Jpeg);
+        var enhanced = ImageProcessingService.EnhanceForVision(ms.ToArray());
+
+        AssertTrue(enhanced.Length > 0, "enhanced screenshot should return bytes");
+        AssertTrue(enhanced[0] == 0xFF, "enhanced screenshot should be a jpeg");
+    }
+
+    private static void ScreenAwarenessPromptIncludesForegroundMetadata()
+    {
+        var service = new KokoScreenAwarenessService();
+        var prompt = service.BuildVisionPrompt(
+            new ActivityAnalyzer.ActivityState
+            {
+                ActiveWindowTitle = "Visual Studio Code",
+                TimeSinceLastChange = TimeSpan.FromMinutes(11),
+                PixelDifferencePercentage = 0.4
+            },
+            "",
+            "",
+            new DateTime(2026, 5, 23, 10, 0, 0),
+            new ForegroundWindowInfo
+            {
+                Handle = 42,
+                Title = "Program.cs - Visual Studio Code",
+                ClassName = "Chrome_WidgetWin_1",
+                ProcessName = "Code",
+                ProcessId = 1234
+            });
+
+        AssertTrue(prompt.Contains("Foreground window metadata", StringComparison.OrdinalIgnoreCase), "prompt should expose foreground metadata");
+        AssertTrue(prompt.Contains("Program.cs - Visual Studio Code", StringComparison.OrdinalIgnoreCase), "prompt should include foreground title");
+    }
+
+    private static void ConversationStagnationForcesPendingThought()
+    {
+        var state = new KokoInternalState
+        {
+            PendingThoughts = new() { "[screen-warmup] Review Manus orchestration and pending tests." }
+        };
+        var now = new DateTime(2026, 5, 23, 12, 0, 0);
+
+        KokoConversationStagnationGuard.Observe(state, "m", now);
+        KokoConversationStagnationGuard.Observe(state, "m", now.AddMinutes(1));
+        var forced = KokoConversationStagnationGuard.Observe(state, "m", now.AddMinutes(2));
+
+        AssertTrue(forced, "third repeated short phrase should force a useful topic");
+        AssertTrue(state.LastForcedTopic.Contains("Manus", StringComparison.OrdinalIgnoreCase), "forced topic should come from pending thoughts");
+    }
+
+    private static void ConversationStagnationPromptExpires()
+    {
+        var state = new KokoInternalState
+        {
+            ConversationLoopCount = 4,
+            LastForcedTopic = "[screen-warmup] stale",
+            LastForcedTopicAt = DateTime.Now.AddMinutes(-20)
+        };
+
+        AssertTrue(string.IsNullOrWhiteSpace(KokoConversationStagnationGuard.BuildPromptBlock(state)), "forced topic prompt should expire");
+    }
+
+    private static void NaturalSynthesisDetectsSourceReporting()
+    {
+        AssertTrue(KokoNaturalSynthesisPolicy.LooksLikeSourceReporting("I checked Creator/Profile.md and found your name."), "file-source reporting should be blocked");
+        AssertTrue(KokoNaturalSynthesisPolicy.LooksLikeSourceReporting("According to Obsidian, your project is Kokonoe."), "Obsidian-source reporting should be blocked");
+    }
+
+    private static void EmotionStyleConstrainsIrritatedReplies()
+    {
+        var directive = KokoResponseStyleEngine.BuildEmotionLengthDirective(KokoEmotionEngine.EmotionState.Irritated);
+        AssertTrue(directive.Contains("1-2", StringComparison.OrdinalIgnoreCase), "irritated style should be short");
+        AssertTrue(directive.Contains("sharp", StringComparison.OrdinalIgnoreCase), "irritated style should be sharper");
+    }
+
+    private static void ObsidianSelfHealingMemoryWritesReport()
+    {
+        var vault = Path.Combine(Path.GetTempPath(), "KokonoeAssistant.Tests", Guid.NewGuid().ToString("N"));
+        try
+        {
+            Directory.CreateDirectory(Path.Combine(vault, "Kokonoe", "Memory"));
+            File.WriteAllText(Path.Combine(vault, "Kokonoe", "Memory", "Facts.md"),
+                "- User prefers direct concise answers about Kokonoe architecture.\n- duplicate line\n- duplicate line\n", System.Text.Encoding.UTF8);
+            File.WriteAllText(Path.Combine(vault, "Kokonoe", "Memory", "B.md"),
+                "- User prefers direct replies about Kokonoe architecture.\n", System.Text.Encoding.UTF8);
+
+            var service = new ObsidianMcpService(vault);
+            var summary = service.SelfHealMemoryConflicts();
+
+            AssertTrue(summary.Contains("Self-healing memory", StringComparison.OrdinalIgnoreCase), "summary should identify self-healing pass");
+            AssertTrue(File.Exists(Path.Combine(vault, "Kokonoe", "Memory", "Self-Healing.md")), "self-healing report should be written");
+            AssertTrue(File.ReadAllText(Path.Combine(vault, "Kokonoe", "Memory", "Facts.md")).Split("duplicate line").Length <= 2, "exact duplicate line should be cleaned");
+        }
+        finally
+        {
+            try { Directory.Delete(vault, recursive: true); } catch { }
+        }
+    }
+
+    private static void SandboxExecutorCleansTimedOutScripts()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "KokonoeAssistant.Tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            var sandbox = new KokoSandboxExecutor(dir);
+            var output = sandbox.ExecutePythonAsync("import time\ntime.sleep(3)", timeoutMs: 200).GetAwaiter().GetResult();
+
+            AssertTrue(output.Contains("timeout", StringComparison.OrdinalIgnoreCase) || output.Contains("unavailable", StringComparison.OrdinalIgnoreCase), "sandbox should timeout or report unavailable python");
+            AssertEqual(0, Directory.GetFiles(dir, "agent-*.py").Length, "sandbox scripts should be deleted after execution");
+        }
+        finally
+        {
+            try { Directory.Delete(dir, recursive: true); } catch { }
+        }
+    }
+
+    private static void AgentTaskServicePlansSelfReviewAndSystemControl()
+    {
+        var steps = KokoAgentTaskService.BuildPlan("Use SystemControl to check OS info, then self review the implementation quality.");
+        AssertTrue(steps.Any(s => s.Kind == KokoAgentStepKind.SystemControl), "plan should include system control");
+        AssertTrue(steps.Any(s => s.Kind == KokoAgentStepKind.SelfReview), "plan should include self review");
     }
 
     private static void SchedulerDropsStaleUserReminders()

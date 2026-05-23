@@ -53,13 +53,16 @@ namespace KokonoeAssistant.Services
             ActivityAnalyzer.ActivityState activity,
             string lastSummary,
             string lastComment,
-            DateTime now)
+            DateTime now,
+            ForegroundWindowInfo? foreground = null)
         {
             var window = string.IsNullOrWhiteSpace(activity.ActiveWindowTitle)
                 ? "невідоме вікно"
                 : activity.ActiveWindowTitle;
+            var foregroundLine = foreground?.ToString() ?? "unavailable";
 
             return $$"""
+Foreground window metadata: {{foregroundLine}}
 Ти Kokonoe. Подивись на скрін екрана користувача і зроби короткий screen-awareness аналіз.
 
 Поточний час: {{now:dd.MM.yyyy HH:mm}}

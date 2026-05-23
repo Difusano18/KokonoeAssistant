@@ -377,7 +377,7 @@ namespace KokonoeAssistant.Services
             if (step.Kind == KokoAgentStepKind.InsightExtraction)
             {
                 EmitActivity("execute", "InsightEngine", task.Objective, "Scanning recent vault notes and extracting actual findings.", task.Id, step.Id);
-                return await Task.Run(() => BuildInsightExtractionReport(task, ct), ct).ConfigureAwait(false);
+                return await BuildInsightExtractionReportAsync(task, ct).ConfigureAwait(false);
             }
 
             if (step.Kind == KokoAgentStepKind.SystemControl)
@@ -629,7 +629,7 @@ namespace KokonoeAssistant.Services
             catch { }
         }
 
-        private string BuildInsightExtractionReport(KokoAgentTask task, CancellationToken ct)
+        private async Task<string> BuildInsightExtractionReportAsync(KokoAgentTask task, CancellationToken ct)
         {
             if (_obsidian == null)
                 return "InsightExtraction: Obsidian service is unavailable; no vault scan was executed.";
@@ -665,7 +665,7 @@ namespace KokonoeAssistant.Services
                 .Take(5)
                 .ToList();
 
-            var clusterReport = BuildVaultClusterReport(task, ct);
+            var clusterReport = await BuildVaultClusterReportAsync(task, ct).ConfigureAwait(false);
 
             var sb = new StringBuilder();
             sb.AppendLine("InsightExtraction завершено.");
@@ -706,7 +706,7 @@ Objective: {task.Objective}
             return report;
         }
 
-        private string BuildVaultClusterReport(KokoAgentTask task, CancellationToken ct)
+        private async Task<string> BuildVaultClusterReportAsync(KokoAgentTask task, CancellationToken ct)
         {
             if (_obsidian == null)
                 return "";
@@ -723,7 +723,7 @@ Objective: {task.Objective}
                 var code = "VAULT_PATH = " + JsonConvert.SerializeObject(_obsidian.VaultPath) + "\n" +
                            "LIMIT = 120\n" +
                            script;
-                var raw = _sandbox.ExecutePythonAsync(code, timeoutMs: 12_000, ct: ct, stdoutLimit: 12_000).GetAwaiter().GetResult();
+                var raw = await _sandbox.ExecutePythonAsync(code, timeoutMs: 12_000, ct: ct, stdoutLimit: 12_000).ConfigureAwait(false);
                 var stdout = ExtractSandboxStdout(raw);
                 if (string.IsNullOrWhiteSpace(stdout))
                     return "clustering skipped: " + Trim(raw, 260);

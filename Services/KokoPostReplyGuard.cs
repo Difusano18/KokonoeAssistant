@@ -106,6 +106,8 @@ namespace KokonoeAssistant.Services
                 violations.Add("сонний/харчовий контекст протік у відповідь на питання про пам'ять/профіль");
             if (asksProfileOrMemory && LooksLikeScriptedProfileSourceReport(userLower, replyLower))
                 violations.Add("profile/memory answer exposed scripted source-report instead of natural synthesis");
+            if ((asksProfileOrMemory || vaultRequestOrFollowup) && KokoNaturalSynthesisPolicy.LooksLikeSourceReporting(reply))
+                violations.Add("memory/vault answer reports source mechanics instead of natural synthesis");
             if ((asksProfileOrMemory || vaultRequestOrFollowup) && LooksLikeVaultUnavailableDeflection(replyLower))
                 violations.Add("memory/profile question falsely deflected as vault unavailable instead of using loaded context");
             if (vaultRequestOrFollowup && LooksLikeVaultPseudoProgress(replyLower))
@@ -284,6 +286,8 @@ Timeline:
                 rules.Add("- Vault/profile context is expected for this question. Use loaded Obsidian preflight or memory context; do not claim Vault is unavailable unless the context explicitly says it failed.");
             if (violations.Any(v => v.Contains("pseudo-progress", StringComparison.OrdinalIgnoreCase)))
                 rules.Add("- Obsidian exploration must return concrete note paths/previews now. Do not answer with 'scanning', 'I'll look', or any fake async progress unless a real background job exists.");
+            if (violations.Any(v => v.Contains("source mechanics", StringComparison.OrdinalIgnoreCase)))
+                rules.Add("- Synthesize memory naturally. Say 'I remember...' or state the fact directly; do not name note files, Vault, or Obsidian unless the user asks for sources.");
 
             return rules.Count == 0
                 ? ""

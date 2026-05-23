@@ -1300,7 +1300,8 @@ namespace KokonoeAssistant.Services
             byte[] imageBytes,
             string imageMime = "image/jpeg",
             CancellationToken ct = default,
-            string? agentId = null)
+            string? agentId = null,
+            int? maxTokensOverride = null)
         {
             var diagWatch = Stopwatch.StartNew();
             var target = ResolveAgentTarget(agentId);
@@ -1322,6 +1323,7 @@ namespace KokonoeAssistant.Services
                 var dateStamp = $"\n\n=== ДАТА/ЧАС ===\nСьогодні: {DateTime.Now:dddd, dd MMMM yyyy}, {DateTime.Now:HH:mm}";
                 var systemContent = BuildMainSystemContent(agentId);
                 var b64 = Convert.ToBase64String(sendImageBytes);
+                var visionMaxTokens = Math.Clamp(maxTokensOverride ?? SystemMaxTokens, 256, MainMaxTokens);
 
                 var visionIsClaude = target.Provider.Equals("claude", StringComparison.OrdinalIgnoreCase);
                 var visionIsOllamaCloud = target.Provider.Equals("ollama-cloud", StringComparison.OrdinalIgnoreCase);
@@ -1358,7 +1360,7 @@ namespace KokonoeAssistant.Services
                         reqBody = new
                         {
                             model = modelAttempt,
-                            max_tokens = SystemMaxTokens,
+                            max_tokens = visionMaxTokens,
                             temperature = target.Temperature,
                             system = SanitizeContent(systemContent),
                             messages = new[]
@@ -1377,7 +1379,7 @@ namespace KokonoeAssistant.Services
                                 new { role = "system", content = SanitizeContent(systemContent) },
                                 new { role = "user", content = userContent }
                             },
-                            max_tokens = SystemMaxTokens,
+                            max_tokens = visionMaxTokens,
                             temperature = target.Temperature,
                             stream = false
                         };

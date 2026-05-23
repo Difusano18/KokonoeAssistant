@@ -1056,6 +1056,77 @@ tags: [kokonoe, vault, architecture]
             return result;
         }
 
+        public string SelfHealMemoryConflicts()
+        {
+            var quality = AnalyzeMemoryQuality();
+            var cleanup = CleanupDuplicateMemoryItems(dryRun: false);
+            var consolidated = new List<string>();
+
+            foreach (var group in quality.SimilarGroups.Take(3))
+            {
+                var paths = group
+                    .Select(i => i.Path)
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .Where(p => !p.StartsWith("Kokonoe/Memory/Consolidated/", StringComparison.OrdinalIgnoreCase))
+                    .Take(5)
+                    .ToArray();
+                if (paths.Length < 2)
+                    continue;
+
+                var seed = group.FirstOrDefault()?.Normalized ?? "memory";
+                var slug = SanitizeConsolidationName(seed);
+                var target = $"Kokonoe/Memory/Consolidated/{DateTime.Now:yyyyMMdd-HHmm}-{slug}.md";
+                try
+                {
+                    consolidated.Add(ConsolidateNotes(paths, target));
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"[ObsidianMcp] SelfHealMemoryConflicts consolidate failed: {ex.Message}");
+                }
+            }
+
+            var sb = new StringBuilder();
+            sb.AppendLine($"Self-healing memory: removed {cleanup.TotalRemoved} exact duplicate line(s).");
+            sb.AppendLine($"Similar groups: {quality.SimilarGroups.Count}; consolidated notes: {consolidated.Count}.");
+            if (consolidated.Count > 0)
+                sb.AppendLine("Targets: " + string.Join(", ", consolidated.Take(5)));
+            UpsertManagedNote("Kokonoe/Memory/Self-Healing.md", BuildSelfHealingNote(quality, cleanup, consolidated), new VaultMaintenanceResult());
+            return sb.ToString().Trim();
+        }
+
+        private string BuildSelfHealingNote(MemoryQualityReport quality, MemoryCleanupResult cleanup, List<string> consolidated)
+        {
+            var sb = new StringBuilder();
+            sb.Append(BuildManagedFrontmatter("memory-self-healing"));
+            sb.AppendLine("# Self-Healing Memory");
+            sb.AppendLine();
+            sb.AppendLine($"- Ran: {DateTime.Now:yyyy-MM-dd HH:mm}");
+            sb.AppendLine($"- Exact duplicate lines removed: {cleanup.TotalRemoved}");
+            sb.AppendLine($"- Exact duplicate groups: {quality.DuplicateGroups.Count}");
+            sb.AppendLine($"- Similar/conflicting groups: {quality.SimilarGroups.Count}");
+            sb.AppendLine($"- Consolidated target notes: {consolidated.Count}");
+            foreach (var target in consolidated.Take(20))
+                sb.AppendLine($"  - [[{StripMarkdownExtension(target)}]]");
+            return sb.ToString();
+        }
+
+        private static string SanitizeConsolidationName(string value)
+        {
+            value = string.IsNullOrWhiteSpace(value) ? "memory" : value.Trim().ToLowerInvariant();
+            foreach (var ch in Path.GetInvalidFileNameChars())
+                value = value.Replace(ch, '-');
+
+            var cleaned = new string(value.Select(ch => char.IsLetterOrDigit(ch) ? ch : '-').ToArray());
+            while (cleaned.Contains("--", StringComparison.Ordinal))
+                cleaned = cleaned.Replace("--", "-", StringComparison.Ordinal);
+
+            cleaned = cleaned.Trim('-');
+            if (string.IsNullOrWhiteSpace(cleaned))
+                cleaned = "memory";
+            return cleaned.Length <= 48 ? cleaned : cleaned[..48];
+        }
+
         private static List<List<MemoryQualityItem>> FindSimilarMemoryGroups(List<MemoryQualityItem> items, double threshold, int maxGroups)
         {
             var groups = new List<List<MemoryQualityItem>>();

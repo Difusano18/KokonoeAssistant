@@ -2537,12 +2537,33 @@ tags: [kokonoe, live-core, diagnostics]
             _lastManualScreenScanAt = DateTime.Now;
 
             var screenshot = await Task.Run(() => ServiceContainer.PcControl.TakeScreenshot(), ct);
-            var prompt = BuildScreenScanPrompt(userText);
+            var foreground = ServiceContainer.PcControl.GetForegroundWindow();
+            var prompt = BuildScreenScanPrompt(userText, foreground);
             string? reply;
             using (var visionCts = CancellationTokenSource.CreateLinkedTokenSource(ct))
             {
                 visionCts.CancelAfter(TimeSpan.FromSeconds(90));
                 reply = await _llm.SendSystemVisionQueryAsync(prompt, screenshot, "image/jpeg", visionCts.Token);
+            }
+
+            if (VisionResponseQuality.LooksUnusable(reply) || VisionResponseQuality.LooksGeneric(reply))
+            {
+                try
+                {
+                    var enhanced = await Task.Run(() => ImageProcessingService.EnhanceForVision(screenshot), ct);
+                    var retryPrompt = VisionResponseQuality.BuildRetryPrompt(prompt, foreground.ToString());
+                    using var repairCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                    repairCts.CancelAfter(TimeSpan.FromSeconds(120));
+                    var repaired = await _llm.SendSystemVisionQueryAsync(
+                        retryPrompt,
+                        enhanced.Length > 0 ? enhanced : screenshot,
+                        "image/jpeg",
+                        repairCts.Token,
+                        maxTokensOverride: 2048);
+                    if (!VisionResponseQuality.LooksUnusable(repaired) && !VisionResponseQuality.LooksGeneric(repaired))
+                        reply = repaired;
+                }
+                catch { }
             }
 
             if (string.IsNullOrWhiteSpace(reply))
@@ -2631,7 +2652,8 @@ tags: [kokonoe, live-core, diagnostics]
             return $"Скріншот зроблено, але опис зображення не повернувся. З локальних даних бачу тільки активне вікно: {window}. {repeat}";
         }
 
-        private static string BuildScreenScanPrompt(string userText) => $"""
+        private static string BuildScreenScanPrompt(string userText, ForegroundWindowInfo? foreground = null) => $"""
+Foreground window: {foreground?.ToString() ?? "-"}
 Ти Kokonoe. Користувач прямо попросив просканувати його поточний екран.
 Запит користувача: {userText}
 
@@ -2675,6 +2697,14 @@ tags: [kokonoe, live-core, diagnostics]
             catch { }
 
             parts.Add((BuildLiveResponseStyleContext(userText), 0));
+
+            try
+            {
+                var cognitive = ServiceContainer.BrainEngine?.BuildCognitiveStabilityContext(userText);
+                if (!string.IsNullOrWhiteSpace(cognitive))
+                    parts.Add((cognitive, 0));
+            }
+            catch { }
 
             try
             {

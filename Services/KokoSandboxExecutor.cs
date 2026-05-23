@@ -32,7 +32,10 @@ namespace KokonoeAssistant.Services
 
             var python = ResolvePythonCommand();
             if (python == null)
+            {
+                try { File.Delete(scriptPath); } catch { }
                 return "Python sandbox unavailable: neither py nor python was found.";
+            }
 
             using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
             timeout.CancelAfter(timeoutMs);
@@ -49,31 +52,48 @@ namespace KokonoeAssistant.Services
             };
 
             using var process = Process.Start(startInfo);
-            if (process == null)
-                return "Python sandbox failed: process did not start.";
-
-            var stdoutTask = process.StandardOutput.ReadToEndAsync(timeout.Token);
-            var stderrTask = process.StandardError.ReadToEndAsync(timeout.Token);
-
             try
             {
-                await process.WaitForExitAsync(timeout.Token).ConfigureAwait(false);
-            }
-            catch (OperationCanceledException)
-            {
-                try { process.Kill(entireProcessTree: true); } catch { }
-                return $"Python sandbox timeout after {timeoutMs} ms.";
-            }
+                if (process == null)
+                    return "Python sandbox failed: process did not start.";
 
-            var stdout = await stdoutTask.ConfigureAwait(false);
-            var stderr = await stderrTask.ConfigureAwait(false);
-            return $"""
-            exit={process.ExitCode}
-            stdout:
-            {Trim(stdout, stdoutLimit)}
-            stderr:
-            {Trim(stderr, stderrLimit)}
-            """.Trim();
+                var stdoutTask = process.StandardOutput.ReadToEndAsync(timeout.Token);
+                var stderrTask = process.StandardError.ReadToEndAsync(timeout.Token);
+
+                try
+                {
+                    await process.WaitForExitAsync(timeout.Token).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException)
+                {
+                    try { process.Kill(entireProcessTree: true); } catch { }
+                    return $"Python sandbox timeout after {timeoutMs} ms.";
+                }
+
+                var stdout = await stdoutTask.ConfigureAwait(false);
+                var stderr = await stderrTask.ConfigureAwait(false);
+                return $"""
+                exit={process.ExitCode}
+                stdout:
+                {Trim(stdout, stdoutLimit)}
+                stderr:
+                {Trim(stderr, stderrLimit)}
+                """.Trim();
+            }
+            finally
+            {
+                if (process != null)
+                {
+                    try
+                    {
+                        if (!process.HasExited)
+                            process.Kill(entireProcessTree: true);
+                    }
+                    catch { }
+                }
+
+                try { File.Delete(scriptPath); } catch { }
+            }
         }
 
         private static (string FileName, string ArgumentsPrefix)? ResolvePythonCommand()
@@ -97,7 +117,11 @@ namespace KokonoeAssistant.Services
                     CreateNoWindow = true
                 });
                 if (process == null) return false;
-                process.WaitForExit(1500);
+                if (!process.WaitForExit(1500))
+                {
+                    try { process.Kill(entireProcessTree: true); } catch { }
+                    return false;
+                }
                 return process.ExitCode == 0;
             }
             catch

@@ -185,6 +185,14 @@ namespace KokonoeAssistant.Services
         public string LastPredictiveContextMode { get; set; } = "";
         public string LastPredictiveContextSummary { get; set; } = "";
         public string LastPredictiveContextNotes { get; set; } = "";
+        public int ConversationLoopCount { get; set; }
+        public string LastShortUserPhraseNormalized { get; set; } = "";
+        public DateTime LastShortUserPhraseAt { get; set; } = DateTime.MinValue;
+        public string LastForcedTopic { get; set; } = "";
+        public DateTime LastForcedTopicAt { get; set; } = DateTime.MinValue;
+        public DateTime LastMemorySelfHealAt { get; set; } = DateTime.MinValue;
+        public string LastMemorySelfHealSummary { get; set; } = "";
+        public string LastMemorySelfHealError { get; set; } = "";
     }
 
     public class ReactiveTrigger
@@ -292,6 +300,7 @@ namespace KokonoeAssistant.Services
         private int _spontaneousInFlight;
         private int _screenAwarenessInFlight;
         private int _vaultSyncInFlight;
+        private int _memorySelfHealInFlight;
         private DateTime _lastVaultFreshnessCheckAt = DateTime.MinValue;
         private DateTime _lastAutonomousAgentTaskAt = DateTime.MinValue;
         private bool _agentCompletionEventsHooked;
@@ -479,6 +488,8 @@ namespace KokonoeAssistant.Services
                 if (silence < TimeSpan.FromMinutes(30))
                     return;
 
+                TryRunMemorySelfHealing("autonomous-objectives");
+
                 DateTime lastScan;
                 lock (_lock) { lastScan = _state.LastBackgroundVaultScanAt; }
                 if (now - lastScan < TimeSpan.FromHours(6))
@@ -509,6 +520,56 @@ namespace KokonoeAssistant.Services
             {
                 Log($"CheckForAutonomousObjectives: {ex.Message}");
             }
+        }
+
+        private void TryRunMemorySelfHealing(string source)
+        {
+            var settings = AppSettings.Load();
+            if (Math.Clamp(settings.ProactiveAutonomyLevel, 0, 3) < 2)
+                return;
+
+            lock (_lock)
+            {
+                if (_state.LastMemorySelfHealAt > DateTime.MinValue &&
+                    DateTime.Now - _state.LastMemorySelfHealAt < TimeSpan.FromHours(12))
+                    return;
+            }
+
+            if (Interlocked.CompareExchange(ref _memorySelfHealInFlight, 1, 0) != 0)
+                return;
+
+            _ = Task.Run(() =>
+            {
+                try
+                {
+                    var result = _obsidian.SelfHealMemoryConflicts();
+                    lock (_lock)
+                    {
+                        _state.LastMemorySelfHealAt = DateTime.Now;
+                        _state.LastMemorySelfHealSummary = result;
+                        _state.LastMemorySelfHealError = "";
+                        _state.AutonomyDecisionLog.Add($"[{DateTime.Now:HH:mm}] {source} memory self-heal: {TrimStateMention(result)}");
+                        if (_state.AutonomyDecisionLog.Count > 80)
+                            _state.AutonomyDecisionLog.RemoveRange(0, _state.AutonomyDecisionLog.Count - 80);
+                        SaveState();
+                    }
+                    Log("MemorySelfHeal: " + result);
+                }
+                catch (Exception ex)
+                {
+                    lock (_lock)
+                    {
+                        _state.LastMemorySelfHealAt = DateTime.Now;
+                        _state.LastMemorySelfHealError = ex.Message;
+                        SaveState();
+                    }
+                    Log($"MemorySelfHeal failed: {ex.Message}");
+                }
+                finally
+                {
+                    Interlocked.Exchange(ref _memorySelfHealInFlight, 0);
+                }
+            });
         }
 
         private void TryQueueAutonomousAgentCycle(string source)
@@ -2103,6 +2164,7 @@ namespace KokonoeAssistant.Services
                 // proactive timers immediately answer with stale "are you there" pings.
                 _state.LastSpontaneousAt = now;
                 ApplyUserControlCommand(content, now);
+                KokoConversationStagnationGuard.Observe(_state, content, now);
                 var autonomyLevel = AppSettings.Load().ProactiveAutonomyLevel;
                 var msgs = _chatRepo.GetMessages(20).OrderBy(m => m.Timestamp).ToList();
 
@@ -3412,6 +3474,9 @@ namespace KokonoeAssistant.Services
                 if (screenshot.Length == 0) return;
 
                 var activity = _screenActivityAnalyzer.AnalyzeScreenshot(screenshot);
+                var foreground = ServiceContainer.PcControl.GetForegroundWindow();
+                if (string.IsNullOrWhiteSpace(activity.ActiveWindowTitle) && !string.IsNullOrWhiteSpace(foreground.Title))
+                    activity.ActiveWindowTitle = foreground.Title;
                 var hash = _screenActivityAnalyzer.GenerateScreenshotHash(screenshot);
                 var screenChanged = activity.IsActive ||
                     (!string.IsNullOrWhiteSpace(_state.LastScreenAwarenessHash) &&
@@ -3421,10 +3486,33 @@ namespace KokonoeAssistant.Services
                     activity,
                     _state.LastScreenAwarenessSummary,
                     _state.LastScreenAwarenessComment,
-                    now);
+                    now,
+                    foreground);
 
                 using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(90));
                 var raw = await _llm.SendSystemVisionQueryAsync(prompt, screenshot, "image/jpeg", cts.Token);
+                if (LooksLikeVisionFailure(raw))
+                {
+                    try
+                    {
+                        var enhanced = ImageProcessingService.EnhanceForVision(screenshot);
+                        var retryPrompt = VisionResponseQuality.BuildRetryPrompt(prompt, foreground.ToString());
+                        using var retryCts = new CancellationTokenSource(TimeSpan.FromSeconds(120));
+                        var retryRaw = await _llm.SendSystemVisionQueryAsync(
+                            retryPrompt,
+                            enhanced.Length > 0 ? enhanced : screenshot,
+                            "image/jpeg",
+                            retryCts.Token,
+                            maxTokensOverride: 2048);
+                        if (!LooksLikeVisionFailure(retryRaw))
+                            raw = retryRaw;
+                    }
+                    catch (Exception ex)
+                    {
+                        Log($"ScreenAwareness vision repair failed: {ex.Message}");
+                    }
+                }
+
                 if (LooksLikeVisionFailure(raw))
                 {
                     RegisterVisionFailure(raw, now, activity);
@@ -3475,6 +3563,12 @@ namespace KokonoeAssistant.Services
                         _state.LastPredictiveContextMode = predictiveWarmup.Mode;
                         _state.LastPredictiveContextSummary = predictiveWarmup.Summary;
                         _state.LastPredictiveContextNotes = string.Join("; ", predictiveWarmup.SourcePaths.Take(6));
+                        if (string.Equals(predictiveWarmup.AppKey, "browser", StringComparison.OrdinalIgnoreCase) &&
+                            activity.TimeSinceLastChange >= TimeSpan.FromMinutes(10))
+                        {
+                            _state.CachedRelevantMemory = predictiveWarmup.PromptBlock;
+                            _state.RelevantMemoryCachedAt = now;
+                        }
                         if (isNewWarmup)
                         {
                             _state.PendingThoughts.Add("[screen-warmup] " + TrimStateMention(predictiveWarmup.Summary));
@@ -5049,6 +5143,17 @@ namespace KokonoeAssistant.Services
                 Log($"SelfReview failed: {ex.Message}");
                 return "SELF-REVIEW BEFORE REPLY\nSelf-review failed; still verify current time, active intent, and immediate context before answering.\n";
             }
+        }
+
+        public string BuildCognitiveStabilityContext(string? userText = null)
+        {
+            var sb = new StringBuilder();
+            var stagnation = KokoConversationStagnationGuard.BuildPromptBlock(_state);
+            if (!string.IsNullOrWhiteSpace(stagnation))
+                sb.AppendLine(stagnation);
+            sb.AppendLine(KokoNaturalSynthesisPolicy.PromptRules);
+            sb.AppendLine(KokoResponseStyleEngine.BuildEmotionLengthDirective(Emotion.Current));
+            return sb.ToString().Trim();
         }
 
         public string BuildResponsePlanContext(string? userText = null)
