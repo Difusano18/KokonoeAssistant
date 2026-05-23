@@ -6,6 +6,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 
 namespace KokonoeAssistant.Services
 {
@@ -25,6 +26,7 @@ namespace KokonoeAssistant.Services
         Vault,
         Vision,
         Sandbox,
+        SystemControl,
         InsightExtraction,
         Implement,
         Respond,
@@ -369,6 +371,12 @@ namespace KokonoeAssistant.Services
                 return await Task.Run(() => BuildInsightExtractionReport(task, ct), ct).ConfigureAwait(false);
             }
 
+            if (step.Kind == KokoAgentStepKind.SystemControl)
+            {
+                EmitActivity("execute", "PcControlService", task.Objective, "Routing a safe OS-control step through the local PC controller.", task.Id, step.Id);
+                return await ExecuteSystemControlAsync(task, ct).ConfigureAwait(false);
+            }
+
             if (step.Kind == KokoAgentStepKind.Sandbox)
             {
                 EmitActivity("execute", "PythonSandbox", task.Objective, "Running safe sandbox health probe.", task.Id, step.Id);
@@ -412,6 +420,81 @@ namespace KokonoeAssistant.Services
                 ct,
                 agentId: AgentIdFor(step.Kind)).ConfigureAwait(false);
             return string.IsNullOrWhiteSpace(result) ? "(empty result)" : result.Trim();
+        }
+
+        private static async Task<string> ExecuteSystemControlAsync(KokoAgentTask task, CancellationToken ct)
+        {
+            ct.ThrowIfCancellationRequested();
+            var objective = task.Objective ?? "";
+            var routed = await PcIntentRouter.TryExecuteAsync(objective, ServiceContainer.PcControl, ct).ConfigureAwait(false);
+            if (routed.Handled)
+            {
+                return $"""
+                SystemControl завершено через PcIntentRouter.
+                - Action: {routed.Action}
+                - Result:
+                {TrimBlock(routed.Reply, 1800)}
+                """.Trim();
+            }
+
+            var command = BuildSafeSystemControlCommand(objective);
+            if (string.IsNullOrWhiteSpace(command))
+                return "SystemControl пропущено: objective не містить безпечної системної дії.";
+
+            if (PcCommandSafety.IsBlocked(command, out var reason))
+                return "SystemControl заблоковано: " + reason;
+
+            var output = await ServiceContainer.PcControl
+                .RunCommandAsync(command, timeoutMs: 8_000, enforceSafety: true)
+                .ConfigureAwait(false);
+            return $"""
+            SystemControl завершено через PowerShell.
+            - Command: {Trim(command, 260)}
+            - Output:
+            {TrimBlock(output, 1800)}
+            """.Trim();
+        }
+
+        private static string BuildSafeSystemControlCommand(string objective)
+        {
+            var text = objective ?? "";
+            var lower = text.ToLowerInvariant();
+            var ps = ExtractPowerShellPayload(text);
+            if (!string.IsNullOrWhiteSpace(ps))
+                return ps;
+
+            if (ContainsAny(lower, "process", "процес", "tasklist", "ram", "пам'ять", "память", "memory", "що жере"))
+            {
+                return "Get-Process | Sort-Object WorkingSet -Descending | Select-Object -First 12 ProcessName,Id,@{Name='MB';Expression={[math]::Round($_.WorkingSet/1MB,1)}} | Format-Table -AutoSize";
+            }
+
+            if (ContainsAny(lower, "temp", "temporary", "cleanup", "clean up", "очист", "сміт", "мусор"))
+            {
+                return "$temp=[System.IO.Path]::GetTempPath(); $m=Get-ChildItem -LiteralPath $temp -File -ErrorAction SilentlyContinue | Measure-Object Length -Sum; [pscustomobject]@{TempPath=$temp; Files=$m.Count; MB=[math]::Round(($m.Sum/1MB),1)} | Format-List";
+            }
+
+            if (ContainsAny(lower, "disk", "диск", "місце", "место", "storage"))
+            {
+                return "Get-PSDrive -PSProvider FileSystem | Select-Object Name,@{Name='FreeGB';Expression={[math]::Round($_.Free/1GB,1)}},@{Name='UsedGB';Expression={[math]::Round($_.Used/1GB,1)}} | Format-Table -AutoSize";
+            }
+
+            if (ContainsAny(lower, "sysinfo", "system info", "статус пк", "стан пк", "систем"))
+            {
+                return "$os=Get-CimInstance Win32_OperatingSystem; [pscustomobject]@{Caption=$os.Caption; Version=$os.Version; FreeMemoryMB=[math]::Round($os.FreePhysicalMemory/1024,1); TotalMemoryMB=[math]::Round($os.TotalVisibleMemorySize/1024,1); Uptime=((Get-Date)-$os.LastBootUpTime).ToString()} | Format-List";
+            }
+
+            return "";
+        }
+
+        private static string ExtractPowerShellPayload(string text)
+        {
+            foreach (var marker in new[] { "ps:", "powershell:", "pwsh:", "shell:", "команда:" })
+            {
+                var index = text.IndexOf(marker, StringComparison.OrdinalIgnoreCase);
+                if (index >= 0)
+                    return text[(index + marker.Length)..].Trim();
+            }
+            return "";
         }
 
         private void PersistCompletionNotice(KokoAgentTask task, KokoAgentCompletionNotice notice)
@@ -473,6 +556,8 @@ namespace KokonoeAssistant.Services
                 .Take(5)
                 .ToList();
 
+            var clusterReport = BuildVaultClusterReport(task, ct);
+
             var sb = new StringBuilder();
             sb.AppendLine("InsightExtraction завершено.");
             sb.AppendLine($"- Перевірено: {notes.Count} останніх markdown-нотаток.");
@@ -489,6 +574,13 @@ namespace KokonoeAssistant.Services
                     sb.AppendLine($"  - `{finding.Path}`: {finding.Preview}");
             }
 
+            if (!string.IsNullOrWhiteSpace(clusterReport))
+            {
+                sb.AppendLine("- Тематичні кластери:");
+                foreach (var line in clusterReport.Split('\n', StringSplitOptions.RemoveEmptyEntries).Take(8))
+                    sb.AppendLine("  - " + line.Trim());
+            }
+
             var report = sb.ToString().Trim();
             try
             {
@@ -503,6 +595,83 @@ Objective: {task.Objective}
             catch { }
 
             return report;
+        }
+
+        private string BuildVaultClusterReport(KokoAgentTask task, CancellationToken ct)
+        {
+            if (_obsidian == null)
+                return "";
+
+            try
+            {
+                var scriptPath = ResolveVaultClusterScriptPath();
+                if (string.IsNullOrWhiteSpace(scriptPath) || !File.Exists(scriptPath))
+                    return "";
+
+                ct.ThrowIfCancellationRequested();
+                EmitActivity("execute", "ThematicClustering", task.Objective, "Running vault_cluster.py over the vault. Actual clustering, not mystic noise.", task.Id);
+                var script = File.ReadAllText(scriptPath, Encoding.UTF8);
+                var code = "VAULT_PATH = " + JsonConvert.SerializeObject(_obsidian.VaultPath) + "\n" +
+                           "LIMIT = 120\n" +
+                           script;
+                var raw = _sandbox.ExecutePythonAsync(code, timeoutMs: 12_000, ct: ct, stdoutLimit: 12_000).GetAwaiter().GetResult();
+                var stdout = ExtractSandboxStdout(raw);
+                if (string.IsNullOrWhiteSpace(stdout))
+                    return "clustering skipped: " + Trim(raw, 260);
+
+                var json = JObject.Parse(stdout);
+                if (!string.IsNullOrWhiteSpace((string?)json["error"]))
+                    return "clustering error: " + Trim((string?)json["error"] ?? "", 220);
+
+                var scanned = (int?)json["scanned"] ?? 0;
+                var clusters = json["clusters"] as JArray;
+                if (clusters == null || clusters.Count == 0)
+                    return $"vault_cluster.py: scanned {scanned} notes; stable clusters not found.";
+
+                var sb = new StringBuilder();
+                sb.AppendLine($"vault_cluster.py: {clusters.Count} themes from {scanned} scanned notes.");
+                foreach (var cluster in clusters.Take(4))
+                {
+                    var theme = (string?)cluster["theme"] ?? "unknown";
+                    var files = cluster["files"]?.Select(v => v?.ToString() ?? "").Where(v => v.Length > 0).Take(3).ToList() ?? new List<string>();
+                    var keywords = cluster["keywords"]?.Select(v => v?.ToString() ?? "").Where(v => v.Length > 0).Take(5).ToList() ?? new List<string>();
+                    var observation = (string?)cluster["observation"] ?? "";
+                    sb.AppendLine($"{theme}: {observation} files=[{string.Join(", ", files)}] keywords=[{string.Join(", ", keywords)}]");
+                }
+                return sb.ToString().Trim();
+            }
+            catch (Exception ex)
+            {
+                return "clustering failed: " + Trim(ex.Message, 220);
+            }
+        }
+
+        private static string ResolveVaultClusterScriptPath()
+        {
+            var current = new DirectoryInfo(AppContext.BaseDirectory);
+            while (current != null)
+            {
+                var candidate = Path.Combine(current.FullName, "Services", "agent-sandbox", "vault_cluster.py");
+                if (File.Exists(candidate))
+                    return candidate;
+                current = current.Parent;
+            }
+            return "";
+        }
+
+        private static string ExtractSandboxStdout(string sandboxOutput)
+        {
+            if (string.IsNullOrWhiteSpace(sandboxOutput))
+                return "";
+            var stdoutMarker = "stdout:";
+            var stdoutIndex = sandboxOutput.IndexOf(stdoutMarker, StringComparison.OrdinalIgnoreCase);
+            if (stdoutIndex < 0)
+                return "";
+            var text = sandboxOutput[(stdoutIndex + stdoutMarker.Length)..].Trim();
+            var stderrIndex = text.IndexOf("\nstderr:", StringComparison.OrdinalIgnoreCase);
+            if (stderrIndex >= 0)
+                text = text[..stderrIndex].Trim();
+            return text;
         }
 
         private DateTime GetNoteModifiedAt(string path)
@@ -663,6 +832,7 @@ Objective: {task.Objective}
             KokoAgentStepKind.Vault => "ObsidianMcpService",
             KokoAgentStepKind.Vision => "VisionModel",
             KokoAgentStepKind.Sandbox => "PythonSandbox",
+            KokoAgentStepKind.SystemControl => "PcControlService",
             KokoAgentStepKind.InsightExtraction => "InsightEngine",
             KokoAgentStepKind.Implement => "LlmService",
             KokoAgentStepKind.Respond => "LlmService",
@@ -675,6 +845,7 @@ Objective: {task.Objective}
         {
             KokoAgentStepKind.Vault => "obsidian",
             KokoAgentStepKind.Sandbox => "coder",
+            KokoAgentStepKind.SystemControl => "system",
             KokoAgentStepKind.InsightExtraction => "research",
             KokoAgentStepKind.Implement => "coder",
             KokoAgentStepKind.Verify => "system",
@@ -699,6 +870,13 @@ Objective: {task.Objective}
         {
             if (string.IsNullOrWhiteSpace(text)) return "";
             text = text.Replace("\r", " ").Replace("\n", " ").Trim();
+            return text.Length <= max ? text : text[..max] + "...";
+        }
+
+        private static string TrimBlock(string? text, int max)
+        {
+            if (string.IsNullOrWhiteSpace(text)) return "";
+            text = text.Trim();
             return text.Length <= max ? text : text[..max] + "...";
         }
 

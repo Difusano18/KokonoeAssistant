@@ -141,6 +141,8 @@ internal static class Program
             Run("Agent task service plans and persists", AgentTaskServicePlansAndPersists);
             Run("Agent task service imports Obsidian backlog", AgentTaskServiceImportsObsidianBacklog);
             Run("Response planner adds insight extraction", ResponsePlannerAddsInsightExtraction);
+            Run("Response planner adds system control", ResponsePlannerAddsSystemControl);
+            Run("Agent task service executes system control", AgentTaskServiceExecutesSystemControl);
             Run("Agent task service executes background vault insight", AgentTaskServiceExecutesBackgroundVaultInsight);
             Run("Agent completion policy asks next question", AgentCompletionPolicyAsksNextQuestion);
             Run("Agent completion policy reports insight result", AgentCompletionPolicyReportsInsightResult);
@@ -3458,6 +3460,51 @@ Persistent Obsidian context is now a core project requirement.
         AssertTrue(steps.First(s => s.Kind == KokoAgentStepKind.InsightExtraction).Order <
                    steps.First(s => s.Kind == KokoAgentStepKind.Respond).Order,
             "insight extraction should happen before report/response");
+    }
+
+    private static void ResponsePlannerAddsSystemControl()
+    {
+        var steps = KokoResponsePlannerEngine.BuildAgentStepsForObjective(
+            "SystemControl: ps: Write-Output koko-system-ok");
+
+        AssertTrue(steps.Any(s => s.Kind == KokoAgentStepKind.SystemControl), "system-control objective should plan a SystemControl step");
+        AssertTrue(steps.First(s => s.Kind == KokoAgentStepKind.SystemControl).Order <
+                   steps.First(s => s.Kind == KokoAgentStepKind.Respond).Order,
+            "system-control should run before response/report");
+    }
+
+    private static void AgentTaskServiceExecutesSystemControl()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "KokonoeAssistant.Tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            var service = new KokoAgentTaskService(Path.Combine(dir, "data"))
+            {
+                AutoStartOnAdd = false
+            };
+            var task = service.AddTask("SystemControl: ps: Write-Output koko-system-ok", priority: 4);
+            AssertTrue(task.Steps.Any(s => s.Kind == KokoAgentStepKind.SystemControl), "task should contain system-control step");
+            service.Start();
+
+            var completed = System.Threading.SpinWait.SpinUntil(() =>
+            {
+                var current = service.GetSnapshot().Tasks.First(t => t.Id == task.Id);
+                return current.Status == KokoAgentTaskStatus.Completed || current.Status == KokoAgentTaskStatus.Failed;
+            }, TimeSpan.FromSeconds(8));
+
+            var finalTask = service.GetSnapshot().Tasks.First(t => t.Id == task.Id);
+            AssertTrue(completed, "system-control task should finish");
+            AssertEqual(KokoAgentTaskStatus.Completed, finalTask.Status, "system-control task should complete");
+            var systemStep = finalTask.Steps.FirstOrDefault(s => s.Kind == KokoAgentStepKind.SystemControl);
+            AssertTrue(systemStep != null, "system-control result should exist");
+            AssertTrue(systemStep!.Result.Contains("koko-system-ok", StringComparison.OrdinalIgnoreCase), "PowerShell output should be captured");
+            service.Stop();
+        }
+        finally
+        {
+            try { Directory.Delete(dir, recursive: true); } catch { }
+        }
     }
 
     private static void AgentTaskServiceExecutesBackgroundVaultInsight()

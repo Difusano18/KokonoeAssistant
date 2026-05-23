@@ -486,7 +486,7 @@ namespace KokonoeAssistant.Services
                 if (existing)
                     return;
 
-                var objective = "Background Vault Scanner: Проаналізуй останні 10 змінених нотаток в Obsidian та знайди цікаві факти, суперечності або задачі. Запиши результат як insight, без очікування команди користувача.";
+                var objective = "Background Vault Scanner: Проаналізуй останні 10 змінених нотаток в Obsidian, запусти vault_cluster.py для тематичного групування, знайди цікаві факти, суперечності або задачі. Запиши результат як insight, без очікування команди користувача.";
                 var task = ServiceContainer.AgentTasks.AddTask(objective, priority: 3);
                 ServiceContainer.AgentTasks.Start();
 

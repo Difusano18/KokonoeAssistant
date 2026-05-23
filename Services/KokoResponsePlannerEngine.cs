@@ -83,10 +83,13 @@ namespace KokonoeAssistant.Services
             if (frame.RequiresVaultRead || frame.Capability == "vault_memory")
                 steps.Add(AgentStep(steps.Count + 1, "Inspect relevant Obsidian vault and memory notes", KokoAgentStepKind.Vault));
 
+            if (frame.Capability == "os_control")
+                steps.Add(AgentStep(steps.Count + 1, "Execute safe local system-control route", KokoAgentStepKind.SystemControl));
+
             if (frame.Capability == "codebase" || (frame.RequiresAction && frame.RequiresToolUse))
                 steps.Add(AgentStep(steps.Count + 1, "Prepare implementation route and affected files", KokoAgentStepKind.Implement));
 
-            if (frame.RequiresToolUse || frame.Capability == "codebase")
+            if ((frame.RequiresToolUse || frame.Capability == "codebase") && frame.Capability != "os_control")
                 steps.Add(AgentStep(steps.Count + 1, "Run safe sandbox or tool probe when computation is needed", KokoAgentStepKind.Sandbox));
 
             steps.Add(AgentStep(steps.Count + 1, "Execute the selected action or generate the response", KokoAgentStepKind.Respond));
@@ -127,6 +130,16 @@ namespace KokonoeAssistant.Services
                 var insertAt = steps.FindIndex(s => s.Kind == KokoAgentStepKind.Respond);
                 if (insertAt < 0) insertAt = Math.Max(0, steps.Count - 1);
                 steps.Insert(insertAt, AgentStep(insertAt + 1, "Extract concrete insights from recent vault material", KokoAgentStepKind.InsightExtraction));
+                for (var i = 0; i < steps.Count; i++)
+                    steps[i].Order = i + 1;
+            }
+
+            if (LooksLikeSystemControlObjective(lower) &&
+                steps.All(s => s.Kind != KokoAgentStepKind.SystemControl))
+            {
+                var insertAt = steps.FindIndex(s => s.Kind == KokoAgentStepKind.Respond);
+                if (insertAt < 0) insertAt = Math.Max(0, steps.Count - 1);
+                steps.Insert(insertAt, AgentStep(insertAt + 1, "Execute safe local system-control route", KokoAgentStepKind.SystemControl));
                 for (var i = 0; i < steps.Count; i++)
                     steps[i].Order = i + 1;
             }
@@ -250,6 +263,15 @@ RESPONSE PLAN REPAIR:
                 "background vault", "фоновий огляд", "фоновий скан", "background scanner",
                 "insight extraction", "витягни інсайт", "витягни цікаві", "знайди нові зв'язки",
                 "знайди нові зв’язки", "останні 10 змінених нотаток", "останні змінені нотатки");
+
+        private static bool LooksLikeSystemControlObjective(string lower)
+            => ContainsAny(lower,
+                "systemcontrol", "system control", "pc control", "os control",
+                "powershell", "pwsh", "shell:", "ps:", "команда:",
+                "процеси", "процесы", "top processes", "tasklist",
+                "що жере ram", "що жере пам", "ram", "пам'ять пк", "память пк",
+                "sysinfo", "system info", "статус пк", "стан пк",
+                "temp", "temporary", "cleanup", "clean up", "очисти temp", "місце на диску", "место на диске");
 
         private static string BuildMemoryPolicy(string lower, string intent)
         {

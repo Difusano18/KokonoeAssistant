@@ -2698,7 +2698,12 @@
             <Border Grid.Row="2" Background="{DynamicResource AccentBgBase}"
                     BorderBrush="{DynamicResource AccentBgBorder2}" BorderThickness="0,1,0,0">
                 <Grid Margin="14,0">
-                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
                         <Ellipse Width="5" Height="5" Fill="{DynamicResource Brush_Ok}" VerticalAlignment="Center" Margin="0,0,4,0"/>
                         <TextBlock x:Name="StatusCoreLabel" Text="core.online"
                                    FontSize="9" FontFamily="Consolas" Foreground="{DynamicResource AccentDim}"
@@ -2713,7 +2718,14 @@
                                    FontSize="9" FontFamily="Consolas" Foreground="{DynamicResource AccentDim}"
                                    VerticalAlignment="Center"/>
                     </StackPanel>
-                    <TextBlock x:Name="StatusTimestamp" Text=""
+                    <TextBlock x:Name="ThoughtStreamStatusText" Grid.Column="1"
+                               Text="agent: idle"
+                               FontSize="9" FontFamily="Consolas"
+                               Foreground="{DynamicResource AccentBase}"
+                               VerticalAlignment="Center"
+                               Margin="18,0,18,0"
+                               TextTrimming="CharacterEllipsis"/>
+                    <TextBlock x:Name="StatusTimestamp" Grid.Column="2" Text=""
                                FontSize="9" FontFamily="Consolas" Foreground="{DynamicResource AccentDim}"
                                HorizontalAlignment="Right" VerticalAlignment="Center"/>
                 </Grid>

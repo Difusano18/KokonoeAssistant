@@ -1894,6 +1894,10 @@ tags: [kokonoe, live-core, diagnostics]
             AgentToolText.Text = $"tool: {activity.Tool}";
             AgentFocusText.Text = $"focus: {activity.Focus}";
             AgentThoughtText.Text = $"thought: {activity.Thought}";
+            ThoughtStreamStatusText.Text =
+                $"agent {activity.Phase} · {activity.Tool} · {TrimLiveCoreLine(activity.Focus, 120)}";
+            ThoughtStreamStatusText.ToolTip =
+                $"{activity.UpdatedAt:HH:mm:ss} {activity.Phase}/{activity.Tool}\n{activity.Focus}\n{activity.Thought}";
             UpdateAgentEmotionLine();
             AppendAgentActivity(activity);
         }

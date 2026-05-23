@@ -101,6 +101,23 @@ namespace KokonoeAssistant.Services
                 await MarkStepAsync(plan, KokoAgentStepKind.Sandbox, KokoAgentTaskStatus.Completed, sandbox, request.OnStatus, ct);
             }
 
+            if (plan.Any(s => s.Kind == KokoAgentStepKind.SystemControl))
+            {
+                await MarkStepAsync(plan, KokoAgentStepKind.SystemControl, KokoAgentTaskStatus.Running, "Routing local OS action.", request.OnStatus, ct);
+                await EmitAsync("execute", "PcControlService", request.UserText, "Виконую локальний системний route через контрольований PC-шар.", request.OnStatus, ct);
+                var pc = await PcIntentRouter.TryExecuteAsync(request.UserText, ServiceContainer.PcControl, ct).ConfigureAwait(false);
+                var pcResult = pc.Handled
+                    ? $"SystemControl: {pc.Action}\n{pc.Reply}"
+                    : "SystemControl: запит не збігся з безпечним PC-router; передаю у відповідь без вигаданого виконання.";
+                if (pc.Handled && !string.IsNullOrWhiteSpace(pc.Reply))
+                {
+                    request.Context = string.IsNullOrWhiteSpace(request.Context)
+                        ? pcResult
+                        : request.Context + "\n\n" + pcResult;
+                }
+                await MarkStepAsync(plan, KokoAgentStepKind.SystemControl, KokoAgentTaskStatus.Completed, pcResult, request.OnStatus, ct);
+            }
+
             if (request.ImageBytes != null && request.ImageBytes.Length > 0)
             {
                 await MarkStepAsync(plan, KokoAgentStepKind.Vision, KokoAgentTaskStatus.Running, "Reading attached image.", request.OnStatus, ct);
@@ -175,6 +192,7 @@ namespace KokonoeAssistant.Services
                 KokoAgentStepKind.Vault,
                 KokoAgentStepKind.Vision,
                 KokoAgentStepKind.Sandbox,
+                KokoAgentStepKind.SystemControl,
                 KokoAgentStepKind.InsightExtraction,
                 KokoAgentStepKind.Implement,
                 KokoAgentStepKind.Respond,
@@ -345,6 +363,7 @@ namespace KokonoeAssistant.Services
             KokoAgentStepKind.Plan => "KokoResponsePlanner",
             KokoAgentStepKind.Vision => "VisionModel",
             KokoAgentStepKind.Sandbox => "PythonSandbox",
+            KokoAgentStepKind.SystemControl => "PcControlService",
             KokoAgentStepKind.InsightExtraction => "InsightEngine",
             KokoAgentStepKind.Respond => "LlmService",
             KokoAgentStepKind.Verify => "Verifier",

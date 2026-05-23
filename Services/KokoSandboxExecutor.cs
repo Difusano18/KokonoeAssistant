@@ -17,7 +17,12 @@ namespace KokonoeAssistant.Services
             Directory.CreateDirectory(_workspace);
         }
 
-        public async Task<string> ExecutePythonAsync(string code, int timeoutMs = 8000, CancellationToken ct = default)
+        public async Task<string> ExecutePythonAsync(
+            string code,
+            int timeoutMs = 8000,
+            CancellationToken ct = default,
+            int stdoutLimit = 3000,
+            int stderrLimit = 2000)
         {
             if (string.IsNullOrWhiteSpace(code))
                 return "Sandbox skipped: empty code.";
@@ -65,9 +70,9 @@ namespace KokonoeAssistant.Services
             return $"""
             exit={process.ExitCode}
             stdout:
-            {Trim(stdout, 3000)}
+            {Trim(stdout, stdoutLimit)}
             stderr:
-            {Trim(stderr, 2000)}
+            {Trim(stderr, stderrLimit)}
             """.Trim();
         }
 
