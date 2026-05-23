@@ -24,7 +24,11 @@ namespace KokonoeAssistant.Services
         Shutdown,
         Restart,
         AbortShutdown,
-        RunPowerShell
+        RunPowerShell,
+        RunShellChain,
+        WorkspaceScenario,
+        FocusWindow,
+        ArrangeWindows
     }
 
     public sealed class PcIntentParseResult
@@ -53,6 +57,18 @@ namespace KokonoeAssistant.Services
 
         private static readonly Regex ShellVerbRegex = new(
             @"(?:виконай|запусти|run|execute)\s+(?:ps|powershell|pwsh|shell|команду|команда)\s*[:\-]\s*(.+)$",
+            RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+        private static readonly Regex ShellChainRegex = new(
+            @"^\s*(?:chain|pipeline|commands?|команди|ланцюжок)\s*[:\-]\s*(.+)$",
+            RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+        private static readonly Regex FocusWindowRegex = new(
+            @"(?:focus|switch to|перемкни(?:сь)? на|фокус(?:уй)?|активуй вікно)\s+(.+)$",
+            RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+        private static readonly Regex ArrangeWindowsRegex = new(
+            @"(?:arrange|tile|розстав|упорядкуй|наведи лад).*(?:windows|вікна|окна)",
             RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
         private static readonly Regex VolumeNumberRegex = new(
@@ -85,6 +101,48 @@ namespace KokonoeAssistant.Services
 
             if (KokoScreenIntent.IsManualScreenScan(original))
                 return NoMatch();
+
+            var chain = ShellChainRegex.Match(original);
+            if (chain.Success)
+            {
+                return new PcIntentParseResult
+                {
+                    Handled = true,
+                    Action = PcIntentAction.RunShellChain,
+                    Argument = chain.Groups[1].Value.Trim()
+                };
+            }
+
+            if (LooksLikeWorkspaceScenario(lower))
+            {
+                return new PcIntentParseResult
+                {
+                    Handled = true,
+                    Action = PcIntentAction.WorkspaceScenario,
+                    Argument = original
+                };
+            }
+
+            var focus = FocusWindowRegex.Match(original);
+            if (focus.Success)
+            {
+                return new PcIntentParseResult
+                {
+                    Handled = true,
+                    Action = PcIntentAction.FocusWindow,
+                    Argument = CleanTarget(focus.Groups[1].Value)
+                };
+            }
+
+            if (ArrangeWindowsRegex.IsMatch(original))
+            {
+                return new PcIntentParseResult
+                {
+                    Handled = true,
+                    Action = PcIntentAction.ArrangeWindows,
+                    Argument = original
+                };
+            }
 
             var shell = TryExtractShellCommand(original);
             if (!string.IsNullOrWhiteSpace(shell))
@@ -153,7 +211,14 @@ namespace KokonoeAssistant.Services
             {
                 var target = CleanTarget(kill.Groups[1].Value);
                 if (!string.IsNullOrWhiteSpace(target) && !LooksLikeDocumentRequest(target))
-                    return new PcIntentParseResult { Handled = true, Action = PcIntentAction.KillProcess, Argument = target };
+                    return new PcIntentParseResult
+                    {
+                        Handled = true,
+                        Action = PcIntentAction.KillProcess,
+                        Argument = target,
+                        RequiresConfirmation = true,
+                        ConfirmationText = $"Process stop requires direct confirmation. Target: {target}. I will not close apps from a loose phrase."
+                    };
             }
 
             var open = OpenRegex.Match(original);
@@ -247,6 +312,30 @@ namespace KokonoeAssistant.Services
                             return Done(parsed.Action, "Команду заблоковано: " + reason);
                         var output = await pc.RunCommandAsync(parsed.Argument, enforceSafety: true);
                         return Done(parsed.Action, "PowerShell:\n" + output);
+
+                    case PcIntentAction.RunShellChain:
+                    {
+                        var chain = await pc.RunCommandChainAsync(parsed.Argument, ct: ct);
+                        return Done(parsed.Action, FormatShellChain(chain));
+                    }
+
+                    case PcIntentAction.WorkspaceScenario:
+                    {
+                        var scenario = pc.RunWorkspaceScenario(parsed.Argument);
+                        return Done(parsed.Action, scenario.ToString());
+                    }
+
+                    case PcIntentAction.FocusWindow:
+                    {
+                        var focused = pc.FocusWindow(parsed.Argument);
+                        return Done(parsed.Action, focused.Message);
+                    }
+
+                    case PcIntentAction.ArrangeWindows:
+                    {
+                        var arranged = pc.ArrangeWorkspaceWindows(parsed.Argument);
+                        return Done(parsed.Action, arranged.Message);
+                    }
                 }
             }
             catch (OperationCanceledException)
@@ -277,6 +366,9 @@ namespace KokonoeAssistant.Services
             sb.AppendLine($"ОС: {info.OsVersion}");
             sb.AppendLine($"Аптайм: {info.Uptime.Days}д {info.Uptime.Hours}г {info.Uptime.Minutes}хв");
             sb.AppendLine($"RAM: {info.RamUsedGb:F1} / {info.RamTotalGb:F1} GB");
+            sb.AppendLine($"CPU: {info.CpuPercent:F1}%");
+            if (info.TopProcesses.Count > 0)
+                sb.AppendLine("Top: " + string.Join(", ", info.TopProcesses.Take(3).Select(p => $"{p.ProcessName} {p.MemoryMb:F0}MB/{p.CpuPercent:F1}%")));
             sb.AppendLine($"Гучність: {info.VolumePercent}%");
             sb.AppendLine("Диски:");
             foreach (var d in info.Drives)
@@ -285,6 +377,35 @@ namespace KokonoeAssistant.Services
                 sb.AppendLine($"- {d.Name} {used:F0}/{d.TotalGb:F0} GB");
             }
             return sb.ToString().Trim();
+        }
+
+        private static string FormatShellChain(ShellCommandChainResult chain)
+        {
+            var sb = new StringBuilder();
+            sb.AppendLine(chain.Summary);
+            foreach (var step in chain.Steps)
+            {
+                var status = step.Succeeded ? "ok" : step.Blocked ? "blocked" : step.TimedOut ? "timeout" : $"exit {step.ExitCode}";
+                sb.AppendLine($"{step.Order}. {status}: {step.Command}");
+                var tail = string.IsNullOrWhiteSpace(step.Error) ? step.Output : step.Error;
+                if (!string.IsNullOrWhiteSpace(tail))
+                    sb.AppendLine("   " + TrimLine(tail, 260));
+            }
+            return sb.ToString().Trim();
+        }
+
+        private static bool LooksLikeWorkspaceScenario(string lower)
+            => ContainsAny(lower,
+                "підготуй все для кодингу", "підготуй для кодингу", "для кодингу",
+                "prepare coding", "coding workspace", "workspace for coding",
+                "підготуй робоче місце", "підготуй workspace", "режим кодингу",
+                "gaming workspace", "режим гри", "режим ігри");
+
+        private static string TrimLine(string? text, int max)
+        {
+            if (string.IsNullOrWhiteSpace(text)) return "";
+            var clean = text.Replace("\r", " ").Replace("\n", " ").Trim();
+            return clean.Length <= max ? clean : clean[..Math.Max(0, max - 3)] + "...";
         }
 
         private static PcIntentParseResult Match(PcIntentAction action)

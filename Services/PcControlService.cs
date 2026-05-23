@@ -4,8 +4,10 @@ using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.IO;
+using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
@@ -40,6 +42,12 @@ namespace KokonoeAssistant.Services
         [DllImport("user32.dll")]
         private static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
 
+        [DllImport("user32.dll")]
+        private static extern bool SetForegroundWindow(IntPtr hWnd);
+
+        [DllImport("user32.dll", SetLastError = true)]
+        private static extern bool MoveWindow(IntPtr hWnd, int x, int y, int width, int height, bool repaint);
+
         [DllImport("winmm.dll")]
         private static extern int waveOutSetVolume(IntPtr hwo, uint dwVolume);
 
@@ -72,6 +80,9 @@ namespace KokonoeAssistant.Services
             ["calc"]      = "calc",
             ["powershell"] = "powershell",
             ["pwsh"]      = "pwsh",
+            ["obsidian"]  = "obsidian",
+            ["обсидіан"]  = "obsidian",
+            ["обсидиан"]  = "obsidian",
         };
 
         // ── Screenshot ───────────────────────────────────────────────
@@ -166,6 +177,12 @@ namespace KokonoeAssistant.Services
 
             // Volume
             info.VolumePercent = GetVolume();
+            try
+            {
+                info.TopProcesses = CaptureTopProcessResources(10, sampleMs: 220);
+                info.CpuPercent = Math.Clamp(info.TopProcesses.Sum(p => Math.Max(0, p.CpuPercent)), 0.0, 100.0);
+            }
+            catch { }
 
             return info;
         }
@@ -278,45 +295,135 @@ namespace KokonoeAssistant.Services
         /// Виконує команду у PowerShell і повертає stdout+stderr.
         /// УВАГА: викликати тільки для команд що затверджені/введені власником ПК.
         /// </summary>
+        public WorkspaceScenarioResult RunWorkspaceScenario(string request, bool dryRun = false)
+        {
+            var scenario = ResolveWorkspaceScenario(request);
+            var result = new WorkspaceScenarioResult
+            {
+                Scenario = scenario.Name,
+                WorkMode = scenario.WorkMode,
+                RequestedAt = DateTime.Now
+            };
+
+            foreach (var app in scenario.Apps)
+            {
+                var opened = dryRun ? (ok: true, msg: "dry-run open app") : OpenApp(app);
+                result.Actions.Add(new WorkspaceScenarioAction
+                {
+                    Kind = "open-app",
+                    Target = app,
+                    Succeeded = opened.ok,
+                    Message = opened.msg
+                });
+                Thread.Sleep(120);
+            }
+
+            foreach (var note in scenario.Notes)
+            {
+                var opened = dryRun ? (ok: true, msg: "dry-run open note") : OpenObsidianNote(note);
+                result.Actions.Add(new WorkspaceScenarioAction
+                {
+                    Kind = "open-note",
+                    Target = note,
+                    Succeeded = opened.ok,
+                    Message = opened.msg
+                });
+            }
+
+            if (scenario.Arrange)
+            {
+                var arranged = dryRun
+                    ? new WindowActionResult { Succeeded = true, Message = "dry-run arrange windows" }
+                    : ArrangeWorkspaceWindows(scenario.WorkMode);
+                result.Actions.Add(new WorkspaceScenarioAction
+                {
+                    Kind = "arrange-windows",
+                    Target = scenario.WorkMode,
+                    Succeeded = arranged.Succeeded,
+                    Message = arranged.Message
+                });
+            }
+
+            return result;
+        }
+
+        public (bool ok, string msg) OpenObsidianNote(string path)
+        {
+            try
+            {
+                var clean = string.IsNullOrWhiteSpace(path)
+                    ? "Kokonoe/Agent/Insights.md"
+                    : path.Trim().Trim('"');
+                var uri = "obsidian://open?path=" + Uri.EscapeDataString(clean.Replace('\\', '/'));
+                Process.Start(new ProcessStartInfo(uri) { UseShellExecute = true });
+                return (true, $"Opened Obsidian note: {clean}");
+            }
+            catch (Exception ex)
+            {
+                var app = OpenApp("obsidian");
+                return app.ok
+                    ? (true, "Opened Obsidian; note URI failed: " + ex.Message)
+                    : (false, "Obsidian note open failed: " + ex.Message);
+            }
+        }
+
+        private static WorkspaceScenario ResolveWorkspaceScenario(string? request)
+        {
+            var lower = (request ?? "").ToLowerInvariant();
+            if (ContainsAny(lower, "game", "gaming", "гра", "ігри", "игры", "пограти"))
+            {
+                return new WorkspaceScenario
+                {
+                    Name = "gaming",
+                    WorkMode = "Gaming",
+                    Apps = new[] { "spotify", "telegram" },
+                    Notes = new[] { "Kokonoe/Memory/Screen Patterns.md" },
+                    Arrange = false
+                };
+            }
+
+            if (ContainsAny(lower, "obsidian", "vault", "notes", "нотат", "замет"))
+            {
+                return new WorkspaceScenario
+                {
+                    Name = "vault-review",
+                    WorkMode = "Vault",
+                    Apps = new[] { "obsidian" },
+                    Notes = new[] { "Kokonoe/Agent/Insights.md", "Kokonoe/Memory/Screen Patterns.md" },
+                    Arrange = true
+                };
+            }
+
+            return new WorkspaceScenario
+            {
+                Name = "coding",
+                WorkMode = "Coding",
+                Apps = new[] { "code", "wt", "obsidian" },
+                Notes = new[] { "Architecture/MANUS_ARCHITECT_RULES.md", "ProjectMemory/CURRENT_STATE.md" },
+                Arrange = true
+            };
+        }
+
         public async Task<string> RunCommandAsync(string command, int timeoutMs = 10_000, bool enforceSafety = false)
         {
             try
             {
-                if (enforceSafety && PcCommandSafety.IsBlocked(command, out var reason))
-                    return "Команду заблоковано: " + reason;
-
-                var psi = new ProcessStartInfo
-                {
-                    FileName               = "powershell.exe",
-                    Arguments              = $"-NoProfile -NonInteractive -Command \"{EscapePs(command)}\"",
-                    RedirectStandardOutput = true,
-                    RedirectStandardError  = true,
-                    UseShellExecute        = false,
-                    CreateNoWindow         = true,
-                };
-
-                using var proc = new Process { StartInfo = psi };
-                proc.Start();
-
-                var outTask = proc.StandardOutput.ReadToEndAsync();
-                var errTask = proc.StandardError.ReadToEndAsync();
-
-                var finished = proc.WaitForExit(timeoutMs);
-                var stdout = await outTask;
-                var stderr = await errTask;
-
-                if (!finished)
-                {
-                    try { proc.Kill(); } catch { }
-                    return "⏱ Timeout — команда перевищила ліміт часу.";
-                }
-
-                var result = (stdout + stderr).Trim();
-                return string.IsNullOrEmpty(result) ? "(немає виводу)" : result[..Math.Min(3000, result.Length)];
+                var detailed = await RunCommandDetailedAsync(command, timeoutMs, enforceSafety, CancellationToken.None)
+                    .ConfigureAwait(false);
+                if (detailed.Blocked)
+                    return "Command blocked: " + detailed.Error;
+                if (detailed.TimedOut)
+                    return "Timeout: command exceeded the time limit.";
+                var combined = (detailed.Output + "\n" + detailed.Error).Trim();
+                if (string.IsNullOrWhiteSpace(combined))
+                    combined = "(no output)";
+                if (detailed.ExitCode != 0)
+                    combined = $"exit={detailed.ExitCode}\n{combined}".Trim();
+                return combined[..Math.Min(3000, combined.Length)];
             }
             catch (Exception ex)
             {
-                return $"Помилка виконання: {ex.Message}";
+                return $"Execution error: {ex.Message}";
             }
         }
 
@@ -325,8 +432,248 @@ namespace KokonoeAssistant.Services
 
         // ── Processes ────────────────────────────────────────────────
 
+        public async Task<ShellCommandChainResult> RunCommandChainAsync(
+            string chain,
+            int timeoutPerStepMs = 120_000,
+            CancellationToken ct = default)
+        {
+            var commands = SplitCommandChain(chain);
+            var result = new ShellCommandChainResult { RequestedAt = DateTime.Now };
+
+            if (commands.Count == 0)
+            {
+                result.Summary = "No commands found in chain.";
+                return result;
+            }
+
+            for (var i = 0; i < commands.Count; i++)
+            {
+                ct.ThrowIfCancellationRequested();
+                var step = await RunCommandDetailedAsync(commands[i], timeoutPerStepMs, enforceSafety: true, ct)
+                    .ConfigureAwait(false);
+                step.Order = i + 1;
+                result.Steps.Add(step);
+                if (!step.Succeeded)
+                    break;
+            }
+
+            result.Summary = BuildChainSummary(result);
+            return result;
+        }
+
+        private async Task<ShellCommandStepResult> RunCommandDetailedAsync(
+            string command,
+            int timeoutMs,
+            bool enforceSafety,
+            CancellationToken ct)
+        {
+            var step = new ShellCommandStepResult { Command = command };
+            if (enforceSafety && PcCommandSafety.IsBlocked(command, out var reason))
+            {
+                step.Blocked = true;
+                step.Error = reason;
+                return step;
+            }
+
+            using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            timeoutCts.CancelAfter(Math.Max(1000, timeoutMs));
+
+            var psi = new ProcessStartInfo
+            {
+                FileName = "powershell.exe",
+                Arguments = $"-NoProfile -NonInteractive -Command \"{EscapePs(command)}\"",
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true,
+            };
+
+            using var proc = new Process { StartInfo = psi };
+            proc.Start();
+
+            var outTask = proc.StandardOutput.ReadToEndAsync();
+            var errTask = proc.StandardError.ReadToEndAsync();
+
+            try
+            {
+                await proc.WaitForExitAsync(timeoutCts.Token).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+            {
+                step.TimedOut = true;
+                try { if (!proc.HasExited) proc.Kill(entireProcessTree: true); } catch { }
+            }
+
+            step.Output = (await outTask.ConfigureAwait(false)).Trim();
+            step.Error = (await errTask.ConfigureAwait(false)).Trim();
+            step.ExitCode = step.TimedOut ? -1 : proc.ExitCode;
+            return step;
+        }
+
+        private static List<string> SplitCommandChain(string? chain)
+        {
+            if (string.IsNullOrWhiteSpace(chain))
+                return new List<string>();
+            var text = Regex.Replace(
+                chain.Trim(),
+                @"^\s*(?:chain|pipeline|commands?|команди|ланцюжок)\s*[:\-]\s*",
+                "",
+                RegexOptions.IgnoreCase);
+            return Regex.Split(text, @"\s*(?:->|&&|\r?\n)\s*")
+                .Select(s => s.Trim())
+                .Where(s => !string.IsNullOrWhiteSpace(s))
+                .ToList();
+        }
+
+        private static string BuildChainSummary(ShellCommandChainResult result)
+        {
+            if (result.Steps.Count == 0)
+                return "No commands executed.";
+
+            var failed = result.Steps.FirstOrDefault(s => !s.Succeeded);
+            if (failed == null)
+                return $"Shell chain completed: {result.Steps.Count}/{result.Steps.Count} steps passed.";
+
+            var reason = failed.Blocked
+                ? "blocked by PcCommandSafety"
+                : failed.TimedOut
+                    ? "timed out"
+                    : $"exit code {failed.ExitCode}";
+            var tail = string.IsNullOrWhiteSpace(failed.Error) ? failed.Output : failed.Error;
+            return $"Shell chain stopped at step {failed.Order}: {reason}. {TrimLine(tail, 260)}";
+        }
+
+        public WindowActionResult FocusWindow(string query)
+        {
+            var window = FindWindow(query);
+            if (window.Handle == IntPtr.Zero)
+            {
+                return new WindowActionResult
+                {
+                    Action = "focus",
+                    Query = query,
+                    Succeeded = false,
+                    Message = $"No matching window for '{query}'."
+                };
+            }
+
+            try
+            {
+                ShowWindow(window.Handle, SW_RESTORE);
+                var ok = SetForegroundWindow(window.Handle);
+                return new WindowActionResult
+                {
+                    Action = "focus",
+                    Query = query,
+                    Succeeded = ok,
+                    Message = ok
+                        ? $"Focused {window.ProcessName}: {window.Title}"
+                        : $"Window found but focus was refused by Windows: {window.Title}"
+                };
+            }
+            catch (Exception ex)
+            {
+                return new WindowActionResult { Action = "focus", Query = query, Succeeded = false, Message = ex.Message };
+            }
+        }
+
+        public WindowActionResult ArrangeWorkspaceWindows(string layoutOrMode)
+        {
+            try
+            {
+                var windows = FindCandidateWindows(layoutOrMode).Take(4).ToList();
+                if (windows.Count == 0)
+                {
+                    return new WindowActionResult
+                    {
+                        Action = "arrange",
+                        Query = layoutOrMode,
+                        Succeeded = false,
+                        Message = "No matching windows to arrange."
+                    };
+                }
+
+                var area = Screen.PrimaryScreen?.WorkingArea ?? SystemInformation.VirtualScreen;
+                if (windows.Count == 1)
+                {
+                    MoveWindow(windows[0].Handle, area.Left, area.Top, area.Width, area.Height, true);
+                }
+                else if (windows.Count == 2)
+                {
+                    MoveWindow(windows[0].Handle, area.Left, area.Top, area.Width / 2, area.Height, true);
+                    MoveWindow(windows[1].Handle, area.Left + area.Width / 2, area.Top, area.Width / 2, area.Height, true);
+                }
+                else
+                {
+                    var leftWidth = (int)(area.Width * 0.58);
+                    MoveWindow(windows[0].Handle, area.Left, area.Top, leftWidth, area.Height, true);
+                    var rightX = area.Left + leftWidth;
+                    var rightW = area.Width - leftWidth;
+                    var rowH = area.Height / Math.Max(1, windows.Count - 1);
+                    for (var i = 1; i < windows.Count; i++)
+                        MoveWindow(windows[i].Handle, rightX, area.Top + rowH * (i - 1), rightW, rowH, true);
+                }
+
+                return new WindowActionResult
+                {
+                    Action = "arrange",
+                    Query = layoutOrMode,
+                    Succeeded = true,
+                    Message = $"Arranged {windows.Count} window(s) for {layoutOrMode}."
+                };
+            }
+            catch (Exception ex)
+            {
+                return new WindowActionResult { Action = "arrange", Query = layoutOrMode, Succeeded = false, Message = ex.Message };
+            }
+        }
+
+        private static WindowMatch FindWindow(string? query)
+        {
+            var q = (query ?? "").Trim().ToLowerInvariant();
+            foreach (var p in Process.GetProcesses())
+            {
+                try
+                {
+                    if (p.MainWindowHandle == IntPtr.Zero)
+                        continue;
+                    var title = p.MainWindowTitle ?? "";
+                    if (string.IsNullOrWhiteSpace(q) ||
+                        p.ProcessName.Contains(q, StringComparison.OrdinalIgnoreCase) ||
+                        title.Contains(q, StringComparison.OrdinalIgnoreCase))
+                        return new WindowMatch(p.MainWindowHandle, p.ProcessName, title);
+                }
+                catch { }
+                finally { try { p.Dispose(); } catch { } }
+            }
+            return default;
+        }
+
+        private static List<WindowMatch> FindCandidateWindows(string? layoutOrMode)
+        {
+            var q = (layoutOrMode ?? "").ToLowerInvariant();
+            var desired = ContainsAny(q, "gaming", "game", "гра")
+                ? new[] { "steam", "discord", "spotify", "telegram", "chrome", "msedge", "firefox" }
+                : ContainsAny(q, "vault", "obsidian", "notes")
+                    ? new[] { "obsidian", "code", "wt", "windowsterminal", "powershell" }
+                    : new[] { "code", "devenv", "rider", "wt", "windowsterminal", "powershell", "obsidian" };
+
+            var matches = new List<WindowMatch>();
+            foreach (var name in desired)
+            {
+                var match = FindWindow(name);
+                if (match.Handle != IntPtr.Zero && matches.All(m => m.Handle != match.Handle))
+                    matches.Add(match);
+            }
+            return matches;
+        }
+
         public string GetTopProcesses()
         {
+            var resources = CaptureTopProcessResources(15, sampleMs: 0);
+            if (resources.Count > 0)
+                return string.Join(Environment.NewLine, resources.Select(p => $"{p.ProcessName} ({p.MemoryMb:F0} MB, cpu {p.CpuPercent:F1}%)"));
+
             var procs = Process.GetProcesses();
             var sb = new System.Text.StringBuilder();
             // сортуємо по WorkingSet (RAM)
@@ -350,6 +697,75 @@ namespace KokonoeAssistant.Services
                 if (++count >= 15) break;
             }
             return sb.ToString().Trim();
+        }
+
+        private static List<ProcessResourceInfo> CaptureTopProcessResources(int count, int sampleMs)
+        {
+            var first = new Dictionary<int, TimeSpan>();
+            var sw = Stopwatch.StartNew();
+            foreach (var p in Process.GetProcesses())
+            {
+                try { first[p.Id] = p.TotalProcessorTime; }
+                catch { }
+                finally { try { p.Dispose(); } catch { } }
+            }
+
+            if (sampleMs > 0)
+                Thread.Sleep(sampleMs);
+            sw.Stop();
+            var elapsedMs = Math.Max(1, sw.Elapsed.TotalMilliseconds);
+            var cpuDenominator = elapsedMs * Math.Max(1, Environment.ProcessorCount);
+
+            var list = new List<ProcessResourceInfo>();
+            foreach (var p in Process.GetProcesses())
+            {
+                try
+                {
+                    var cpu = 0.0;
+                    if (first.TryGetValue(p.Id, out var before))
+                    {
+                        var delta = (p.TotalProcessorTime - before).TotalMilliseconds;
+                        cpu = Math.Clamp(delta / cpuDenominator * 100.0, 0.0, 100.0);
+                    }
+
+                    list.Add(new ProcessResourceInfo
+                    {
+                        ProcessName = p.ProcessName,
+                        ProcessId = p.Id,
+                        MemoryMb = p.WorkingSet64 / 1024.0 / 1024.0,
+                        CpuPercent = cpu
+                    });
+                }
+                catch { }
+                finally { try { p.Dispose(); } catch { } }
+            }
+
+            return list
+                .OrderByDescending(p => p.CpuPercent)
+                .ThenByDescending(p => p.MemoryMb)
+                .Take(Math.Max(1, count))
+                .ToList();
+        }
+
+        private static bool ContainsAny(string text, params string[] values)
+            => values.Any(v => text.Contains(v, StringComparison.OrdinalIgnoreCase));
+
+        private static string TrimLine(string? text, int max)
+        {
+            if (string.IsNullOrWhiteSpace(text)) return "";
+            var clean = text.Replace("\r", " ").Replace("\n", " ").Trim();
+            return clean.Length <= max ? clean : clean[..Math.Max(0, max - 3)] + "...";
+        }
+
+        private readonly record struct WindowMatch(IntPtr Handle, string ProcessName, string Title);
+
+        private sealed class WorkspaceScenario
+        {
+            public string Name { get; init; } = "coding";
+            public string WorkMode { get; init; } = "Coding";
+            public IReadOnlyList<string> Apps { get; init; } = Array.Empty<string>();
+            public IReadOnlyList<string> Notes { get; init; } = Array.Empty<string>();
+            public bool Arrange { get; init; }
         }
 
         public (bool ok, string msg) KillProcess(string nameOrPid)
@@ -384,11 +800,13 @@ namespace KokonoeAssistant.Services
         public TimeSpan Uptime        { get; set; }
         public double   RamTotalGb    { get; set; }
         public double   RamUsedGb     { get; set; }
+        public double   CpuPercent    { get; set; }
         public int      VolumePercent { get; set; }
         public string   UserName      { get; set; } = "";
         public string   MachineName   { get; set; } = "";
         public string   OsVersion     { get; set; } = "";
         public List<DriveInfo_> Drives { get; set; } = new();
+        public List<ProcessResourceInfo> TopProcesses { get; set; } = new();
     }
 
     public class DriveInfo_
@@ -418,5 +836,67 @@ namespace KokonoeAssistant.Services
             var cls = string.IsNullOrWhiteSpace(ClassName) ? "unknown-class" : ClassName;
             return $"{process}#{ProcessId} | {cls} | {title}";
         }
+    }
+
+    public class ProcessResourceInfo
+    {
+        public string ProcessName { get; set; } = "";
+        public int ProcessId { get; set; }
+        public double MemoryMb { get; set; }
+        public double CpuPercent { get; set; }
+    }
+
+    public class ShellCommandStepResult
+    {
+        public int Order { get; set; }
+        public string Command { get; set; } = "";
+        public int ExitCode { get; set; }
+        public bool Blocked { get; set; }
+        public bool TimedOut { get; set; }
+        public string Output { get; set; } = "";
+        public string Error { get; set; } = "";
+        public bool Succeeded => !Blocked && !TimedOut && ExitCode == 0;
+    }
+
+    public class ShellCommandChainResult
+    {
+        public DateTime RequestedAt { get; set; }
+        public List<ShellCommandStepResult> Steps { get; set; } = new();
+        public string Summary { get; set; } = "";
+        public bool Succeeded => Steps.Count > 0 && Steps.All(s => s.Succeeded);
+    }
+
+    public class WorkspaceScenarioAction
+    {
+        public string Kind { get; set; } = "";
+        public string Target { get; set; } = "";
+        public bool Succeeded { get; set; }
+        public string Message { get; set; } = "";
+    }
+
+    public class WorkspaceScenarioResult
+    {
+        public string Scenario { get; set; } = "";
+        public string WorkMode { get; set; } = "";
+        public DateTime RequestedAt { get; set; }
+        public List<WorkspaceScenarioAction> Actions { get; set; } = new();
+        public bool Succeeded => Actions.Count > 0 && Actions.Any(a => a.Succeeded);
+
+        public override string ToString()
+        {
+            var sb = new StringBuilder();
+            sb.AppendLine($"Scenario {Scenario} ({WorkMode})");
+            foreach (var action in Actions)
+                sb.AppendLine($"- {action.Kind}: {action.Target} => {(action.Succeeded ? "ok" : "fail")} | {action.Message}");
+            return sb.ToString().Trim();
+        }
+    }
+
+    public class WindowActionResult
+    {
+        public string Action { get; set; } = "";
+        public string Query { get; set; } = "";
+        public bool Succeeded { get; set; }
+        public string Message { get; set; } = "";
     }
 }

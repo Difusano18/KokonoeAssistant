@@ -193,6 +193,10 @@ namespace KokonoeAssistant.Services
         public DateTime LastMemorySelfHealAt { get; set; } = DateTime.MinValue;
         public string LastMemorySelfHealSummary { get; set; } = "";
         public string LastMemorySelfHealError { get; set; } = "";
+        public DateTime LastResourceGuardianAt { get; set; } = DateTime.MinValue;
+        public DateTime LastResourceGuardianPromptAt { get; set; } = DateTime.MinValue;
+        public string LastResourceGuardianSummary { get; set; } = "";
+        public string LastWorkMode { get; set; } = "Unknown";
     }
 
     public class ReactiveTrigger
@@ -293,12 +297,14 @@ namespace KokonoeAssistant.Services
         private readonly System.Threading.Timer _thinkTimer;
         private readonly System.Threading.Timer _spontaneousTimer;
         private readonly System.Threading.Timer _screenAwarenessTimer;
+        private readonly System.Threading.Timer _resourceGuardianTimer;
         private bool               _disposed;
         // Семафор: тільки один фоновий LLM-запит за раз (щоб не забивати чергу)
         private readonly SemaphoreSlim _bgLlmSemaphore = new(1, 1);
         private int _thinkInFlight;
         private int _spontaneousInFlight;
         private int _screenAwarenessInFlight;
+        private int _resourceGuardianInFlight;
         private int _vaultSyncInFlight;
         private int _memorySelfHealInFlight;
         private DateTime _lastVaultFreshnessCheckAt = DateTime.MinValue;
@@ -381,6 +387,9 @@ namespace KokonoeAssistant.Services
 
             _screenAwarenessTimer = new System.Threading.Timer(_ => _ = GuardedScreenAwarenessAsync(), null,
                 TimeSpan.FromMinutes(3), TimeSpan.FromMinutes(5));
+
+            _resourceGuardianTimer = new System.Threading.Timer(_ => _ = GuardedResourceGuardianAsync(), null,
+                TimeSpan.FromMinutes(2), TimeSpan.FromMinutes(5));
 
             HookAgentCompletionEvents();
         }
@@ -621,6 +630,79 @@ namespace KokonoeAssistant.Services
             }
             try { await SafeScreenAwarenessAsync(); }
             finally { Interlocked.Exchange(ref _screenAwarenessInFlight, 0); }
+        }
+
+        private async Task GuardedResourceGuardianAsync()
+        {
+            if (Interlocked.CompareExchange(ref _resourceGuardianInFlight, 1, 0) != 0)
+            {
+                Log("ResourceGuardian skipped - previous tick still in flight");
+                return;
+            }
+
+            try { await SafeResourceGuardianAsync(); }
+            finally { Interlocked.Exchange(ref _resourceGuardianInFlight, 0); }
+        }
+
+        private async Task SafeResourceGuardianAsync()
+        {
+            if (_disposed) return;
+
+            var now = DateTime.Now;
+            DateTime lastAt;
+            DateTime lastPromptAt;
+            string modeSeed;
+            lock (_lock)
+            {
+                lastAt = _state.LastResourceGuardianAt;
+                lastPromptAt = _state.LastResourceGuardianPromptAt;
+                modeSeed = string.IsNullOrWhiteSpace(_state.LastScreenAwarenessMode)
+                    ? _state.LastScreenAwarenessWindow
+                    : _state.LastScreenAwarenessMode;
+            }
+
+            if (lastAt > DateTime.MinValue && now - lastAt < TimeSpan.FromMinutes(5))
+                return;
+
+            SystemInfo info;
+            try
+            {
+                info = await Task.Run(() => ServiceContainer.PcControl.GetSystemInfo()).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                Log($"ResourceGuardian system info failed: {ex.Message}");
+                return;
+            }
+
+            var decision = KokoResourceGuardianService.Evaluate(info, modeSeed, now, lastPromptAt);
+            lock (_lock)
+            {
+                _state.LastResourceGuardianAt = now;
+                _state.LastWorkMode = decision.WorkMode;
+                _state.LastResourceGuardianSummary =
+                    $"{decision.WorkMode}; cpu {info.CpuPercent:F1}%; ram {info.RamUsedGb:F1}/{info.RamTotalGb:F1} GB; {decision.Reason}";
+                _state.AutonomyDecisionLog.Add($"[{now:HH:mm}] resource guardian: {_state.LastResourceGuardianSummary}");
+                if (_state.AutonomyDecisionLog.Count > 80)
+                    _state.AutonomyDecisionLog.RemoveRange(0, _state.AutonomyDecisionLog.Count - 80);
+                SaveState();
+            }
+
+            if (!decision.ShouldPrompt || string.IsNullOrWhiteSpace(decision.Message))
+                return;
+
+            var sent = await SendTgAndLog(decision.Message, "resource_guardian");
+            lock (_lock)
+            {
+                _state.LastResourceGuardianPromptAt = now;
+                if (sent)
+                    _state.LastSpontaneousAt = now;
+                SaveState();
+            }
+            if (sent)
+            {
+                try { OnNewMessage?.Invoke("assistant", decision.Message); } catch { }
+            }
         }
 
         public void SetTelegram(TelegramBotClient bot, long chatId)
@@ -5066,6 +5148,20 @@ namespace KokonoeAssistant.Services
         public Task ForceSpontaneous(string trigger = "random") => SendSpontaneousAsync(trigger);
 
         public KokoInternalState State => _state;
+
+        public string GetCurrentWorkModeLabel()
+        {
+            lock (_lock)
+            {
+                if (!string.IsNullOrWhiteSpace(_state.LastWorkMode))
+                    return _state.LastWorkMode;
+                return KokoResourceGuardianService.NormalizeWorkMode(
+                    string.IsNullOrWhiteSpace(_state.LastScreenAwarenessMode)
+                        ? _state.LastScreenAwarenessWindow
+                        : _state.LastScreenAwarenessMode);
+            }
+        }
+
         public void TriggerSpontaneous() => _ = SafeSpontaneousCheckAsync();
 
         public KokoSelfReviewFrame BuildSelfReviewFrame(string? userText = null)
@@ -5988,6 +6084,7 @@ CHAT:
             _thinkTimer.Dispose();
             _spontaneousTimer.Dispose();
             _screenAwarenessTimer.Dispose();
+            _resourceGuardianTimer.Dispose();
             _bgLlmSemaphore.Dispose();
         }
     }

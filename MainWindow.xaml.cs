@@ -1906,10 +1906,12 @@ tags: [kokonoe, live-core, diagnostics]
             AgentToolText.Text = $"tool: {activity.Tool}";
             AgentFocusText.Text = $"focus: {activity.Focus}";
             AgentThoughtText.Text = $"thought: {activity.Thought}";
+            var workMode = "Unknown";
+            try { workMode = ServiceContainer.BrainEngine.GetCurrentWorkModeLabel(); } catch { }
             ThoughtStreamStatusText.Text =
-                $"agent {activity.Phase} · {activity.Tool} · {TrimLiveCoreLine(activity.Focus, 120)}";
+                $"mode {workMode} | agent {activity.Phase} | {activity.Tool} | {TrimLiveCoreLine(activity.Focus, 120)}";
             ThoughtStreamStatusText.ToolTip =
-                $"{activity.UpdatedAt:HH:mm:ss} {activity.Phase}/{activity.Tool}\n{activity.Focus}\n{activity.Thought}";
+                $"{activity.UpdatedAt:HH:mm:ss} mode={workMode} {activity.Phase}/{activity.Tool}\n{activity.Focus}\n{activity.Thought}";
             UpdateAgentEmotionLine();
             AppendAgentActivity(activity);
         }
@@ -7970,6 +7972,7 @@ tags: [kokonoe, dashboard, live]
             sb.AppendLine($"*ОС:* {info.OsVersion}");
             sb.AppendLine($"*Аптайм:* {info.Uptime.Days}д {info.Uptime.Hours}г {info.Uptime.Minutes}хв");
             sb.AppendLine($"*RAM:* {info.RamUsedGb:F1} / {info.RamTotalGb:F1} GB");
+            sb.AppendLine($"*CPU:* {info.CpuPercent:F1}%");
             sb.AppendLine($"*Гучність:* {info.VolumePercent}%\n");
             sb.AppendLine("*Диски:*");
             foreach (var d in info.Drives)

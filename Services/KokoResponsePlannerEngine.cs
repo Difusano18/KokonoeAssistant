@@ -280,6 +280,9 @@ RESPONSE PLAN REPAIR:
         private static bool LooksLikeSystemControlObjective(string lower)
             => ContainsAny(lower,
                 "systemcontrol", "system control", "pc control", "os control",
+                "chain:", "pipeline:", "commands:", "команди:", "ланцюжок",
+                "підготуй все для кодингу", "coding workspace", "workspace for coding",
+                "focus window", "switch to", "arrange windows", "розстав вікна", "упорядкуй вікна",
                 "powershell", "pwsh", "shell:", "ps:", "команда:",
                 "процеси", "процесы", "top processes", "tasklist",
                 "що жере ram", "що жере пам", "ram", "пам'ять пк", "память пк",

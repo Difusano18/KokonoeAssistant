@@ -57,6 +57,13 @@ internal static class Program
             Run("PC intent router routes safe OS commands", PcIntentRouterRoutesSafeOsCommands);
             Run("PC intent router separates screen and destructive commands", PcIntentRouterSeparatesScreenAndDestructiveCommands);
             Run("PC control executes safe PowerShell", PcControlExecutesSafePowerShell);
+            Run("PC control executes shell chain", PcControlExecutesShellChain);
+            Run("PC control stops shell chain on failed step", PcControlStopsShellChainOnFailedStep);
+            Run("PC control blocks unsafe shell chain step", PcControlBlocksUnsafeShellChainStep);
+            Run("PC control resolves coding workspace scenario", PcControlResolvesCodingWorkspaceScenario);
+            Run("PC intent router routes shell chain and scenario", PcIntentRouterRoutesShellChainAndScenario);
+            Run("Resource guardian prompts on browser pressure in gaming", ResourceGuardianPromptsOnBrowserPressureInGaming);
+            Run("Resource guardian respects prompt cooldown", ResourceGuardianRespectsPromptCooldown);
             Run("PC control captures screenshot", PcControlCapturesScreenshot);
             Run("LLM vision compacts oversized screenshots", LlmVisionCompactsOversizedScreenshots);
             Run("Vision quality detects unusable denial", VisionQualityDetectsUnusableDenial);
@@ -1301,6 +1308,98 @@ internal static class Program
             .GetAwaiter()
             .GetResult();
         AssertTrue(output.Contains("koko-ok", StringComparison.OrdinalIgnoreCase), "safe PowerShell command should execute");
+    }
+
+    private static void PcControlExecutesShellChain()
+    {
+        var result = new PcControlService()
+            .RunCommandChainAsync("Write-Output one -> Write-Output two", timeoutPerStepMs: 5000)
+            .GetAwaiter()
+            .GetResult();
+
+        AssertTrue(result.Succeeded, "safe chain should succeed");
+        AssertEqual(2, result.Steps.Count, "both chain steps should run");
+        AssertTrue(result.Steps[0].Output.Contains("one"), "first output should be captured");
+        AssertTrue(result.Steps[1].Output.Contains("two"), "second output should be captured");
+    }
+
+    private static void PcControlStopsShellChainOnFailedStep()
+    {
+        var result = new PcControlService()
+            .RunCommandChainAsync("Write-Output before -> exit 7 -> Write-Output after", timeoutPerStepMs: 5000)
+            .GetAwaiter()
+            .GetResult();
+
+        AssertTrue(!result.Succeeded, "chain should fail");
+        AssertEqual(2, result.Steps.Count, "chain should stop on failed step");
+        AssertEqual(7, result.Steps[1].ExitCode, "failed exit code should be preserved");
+    }
+
+    private static void PcControlBlocksUnsafeShellChainStep()
+    {
+        var result = new PcControlService()
+            .RunCommandChainAsync("Write-Output safe -> Remove-Item -Recurse C:\\temp -> Write-Output after", timeoutPerStepMs: 5000)
+            .GetAwaiter()
+            .GetResult();
+
+        AssertTrue(!result.Succeeded, "unsafe chain should not succeed");
+        AssertEqual(2, result.Steps.Count, "blocked step should stop the chain");
+        AssertTrue(result.Steps[1].Blocked, "destructive command should be blocked");
+    }
+
+    private static void PcControlResolvesCodingWorkspaceScenario()
+    {
+        var result = new PcControlService().RunWorkspaceScenario("prepare coding workspace", dryRun: true);
+        AssertEqual("coding", result.Scenario, "default workspace scenario should be coding");
+        AssertEqual("Coding", result.WorkMode, "scenario should expose work mode");
+        AssertTrue(result.Actions.Any(a => a.Kind == "open-app" && a.Target == "code"), "coding scenario should include VS Code");
+        AssertTrue(result.Actions.Any(a => a.Kind == "open-note"), "coding scenario should include notes");
+    }
+
+    private static void PcIntentRouterRoutesShellChainAndScenario()
+    {
+        var chain = PcIntentRouter.Parse("chain: Write-Output one -> Write-Output two");
+        AssertTrue(chain.Handled, "chain prefix should route to PC control");
+        AssertEqual(PcIntentAction.RunShellChain, chain.Action, "chain action");
+
+        var scenario = PcIntentRouter.Parse("prepare coding workspace");
+        AssertTrue(scenario.Handled, "workspace command should route to PC control");
+        AssertEqual(PcIntentAction.WorkspaceScenario, scenario.Action, "workspace action");
+
+        var kill = PcIntentRouter.Parse("kill chrome");
+        AssertTrue(kill.Handled, "kill request should be recognized");
+        AssertTrue(kill.RequiresConfirmation, "kill request must require confirmation");
+    }
+
+    private static void ResourceGuardianPromptsOnBrowserPressureInGaming()
+    {
+        var info = new SystemInfo
+        {
+            CpuPercent = 40,
+            RamTotalGb = 16,
+            RamUsedGb = 11,
+            TopProcesses =
+            {
+                new ProcessResourceInfo { ProcessName = "chrome", MemoryMb = 1500, CpuPercent = 25 }
+            }
+        };
+        var decision = KokoResourceGuardianService.Evaluate(info, "game", new DateTime(2026, 5, 24, 12, 0, 0), DateTime.MinValue);
+        AssertTrue(decision.ShouldPrompt, "gaming browser pressure should prompt");
+        AssertTrue(decision.Message.Contains("не закриваю", StringComparison.OrdinalIgnoreCase), "prompt should not auto-close");
+    }
+
+    private static void ResourceGuardianRespectsPromptCooldown()
+    {
+        var now = new DateTime(2026, 5, 24, 12, 0, 0);
+        var info = new SystemInfo
+        {
+            TopProcesses =
+            {
+                new ProcessResourceInfo { ProcessName = "chrome", MemoryMb = 1800, CpuPercent = 30 }
+            }
+        };
+        var decision = KokoResourceGuardianService.Evaluate(info, "game", now, now.AddMinutes(-5));
+        AssertTrue(!decision.ShouldPrompt, "resource guardian should respect prompt cooldown");
     }
 
     private static void PcControlCapturesScreenshot()
