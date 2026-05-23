@@ -97,6 +97,8 @@ namespace KokonoeAssistant.Services
                 violations.Add("сонний контекст протік у відповідь на іншу тему");
 
             var asksProfileOrMemory = IsMemoryOrProfileQuestion(userLower);
+            var hasVaultExplorationContext = HasRecentVaultExplorationContext(userText, messages, now);
+            var vaultRequestOrFollowup = LooksLikeVaultOperationRequest(userLower) || hasVaultExplorationContext;
             var staleBodyAdvice = ContainsAny(replyLower,
                 "\u0441\u043f\u0438", "\u0457\u0441\u0442\u0438", "\u0432\u0442\u043e\u043c\u0438\u0432", "\u0433\u043e\u043b\u043e\u0434",
                 "сп", "їс", "втом", "голод");
@@ -104,8 +106,10 @@ namespace KokonoeAssistant.Services
                 violations.Add("сонний/харчовий контекст протік у відповідь на питання про пам'ять/профіль");
             if (asksProfileOrMemory && LooksLikeScriptedProfileSourceReport(userLower, replyLower))
                 violations.Add("profile/memory answer exposed scripted source-report instead of natural synthesis");
-            if ((asksProfileOrMemory || LooksLikeVaultOperationRequest(userLower)) && LooksLikeVaultUnavailableDeflection(replyLower))
+            if ((asksProfileOrMemory || vaultRequestOrFollowup) && LooksLikeVaultUnavailableDeflection(replyLower))
                 violations.Add("memory/profile question falsely deflected as vault unavailable instead of using loaded context");
+            if (vaultRequestOrFollowup && LooksLikeVaultPseudoProgress(replyLower))
+                violations.Add("vault exploration returned pseudo-progress instead of actual Obsidian result");
 
             var activeIntent = state.ShortTermIntents
                 .Where(i => !i.ResolvedAt.HasValue)
@@ -278,6 +282,8 @@ Timeline:
                 rules.Add("- Stale one-letter ambiguity is not the topic anymore unless the latest user explicitly asks about that exact letter.");
             if (violations.Any(v => v.Contains("vault unavailable", StringComparison.OrdinalIgnoreCase)))
                 rules.Add("- Vault/profile context is expected for this question. Use loaded Obsidian preflight or memory context; do not claim Vault is unavailable unless the context explicitly says it failed.");
+            if (violations.Any(v => v.Contains("pseudo-progress", StringComparison.OrdinalIgnoreCase)))
+                rules.Add("- Obsidian exploration must return concrete note paths/previews now. Do not answer with 'scanning', 'I'll look', or any fake async progress unless a real background job exists.");
 
             return rules.Count == 0
                 ? ""
@@ -638,16 +644,49 @@ Timeline:
                 "не дає мені відповіді",
                 "не дає відповіді",
                 "система наразі не дає",
+                "зв'язок не працює",
+                "зв’язок не працює",
+                "чорна діра",
+                "не бачу жодного файлу",
+                "не бачу жодної нотатки",
                 "currently unavailable",
                 "no access",
                 "can't access",
                 "cannot access");
         }
 
+        private static bool LooksLikeVaultPseudoProgress(string replyLower)
+        {
+            var promisesScan = ContainsAny(replyLower,
+                "сканую", "просканую", "шукаю", "пошукаю", "перевіряю", "переглядаю",
+                "доступ є", "якщо знайду", "якщо ні", "починаю скан", "завантаження даних",
+                "scanning", "searching", "checking");
+            if (!promisesScan) return false;
+
+            return !ContainsAny(replyLower,
+                ".md", "`", "зачіпк", "знайшла", "знайшов", "найцікавіше", "порилась у vault",
+                "note", "path", "preview");
+        }
+
+        private static bool HasRecentVaultExplorationContext(
+            string userText,
+            IReadOnlyList<ChatRepository.ChatMessage> messages,
+            DateTime now)
+        {
+            if (!KokoObsidianExplorationService.LooksLikeExplorationFollowup(userText))
+                return false;
+
+            return messages
+                .Where(m => now - m.Timestamp <= TimeSpan.FromMinutes(60))
+                .OrderByDescending(m => m.Timestamp)
+                .Take(12)
+                .Any(m => m.Role == "user" && KokoObsidianExplorationService.LooksLikeInterestingVaultDive(m.Content));
+        }
+
         private static bool LooksLikeVaultOperationRequest(string userLower)
             => ContainsAny(userLower,
-                "obsidian", "vault", "обсидіан", "обсидиан", "нотат", "заміт", "замет",
-                "порий", "порой", "пошукай", "поищи", "розкоп", "найди", "знайди", "цікав", "интерес");
+                "obsidian", "vault", "обсидіан", "обсідіан", "обсидиан", "нотат", "заміт", "замет",
+                "порий", "порій", "порой", "пошукай", "поищи", "розкоп", "найди", "знайди", "цікав", "интерес");
 
         private static bool LooksLikeScriptedProfileSourceReport(string userLower, string replyLower)
         {

@@ -107,6 +107,8 @@ namespace KokonoeAssistant
         private DispatcherTimer? _uiRepairTimer;
         private DateTime _liveCoreLastVaultScan = DateTime.MinValue;
         private DateTime _lastObsidianPreflightAt = DateTime.MinValue;
+        private string _lastObsidianExploreRequest = "";
+        private DateTime _lastObsidianExploreAt = DateTime.MinValue;
         private bool _liveCoreVaultScanInFlight;
         private bool _rightOpsVaultScanInFlight;
         private int _liveCoreMemoryItems;
@@ -2163,7 +2165,7 @@ tags: [kokonoe, live-core, diagnostics]
 
                 var obsidianCommand = await Task.Run(() =>
                 {
-                    var handled = TryHandleDirectObsidianCommand(sendText, out var replyText);
+                    var handled = TryHandleObsidianCommandOrFollowup(sendText, out var replyText);
                     return (handled, replyText);
                 }, _llmCts?.Token ?? default);
 
@@ -2960,6 +2962,62 @@ LIVE RESPONSE STYLE
         private static bool ContainsAny(string text, params string[] values)
             => values.Any(v => text.Contains(v, StringComparison.OrdinalIgnoreCase));
 
+        private bool TryHandleObsidianCommandOrFollowup(string text, out string reply)
+        {
+            if (TryHandleObsidianExplorationFollowup(text, out reply))
+                return true;
+
+            return TryHandleDirectObsidianCommand(text, out reply);
+        }
+
+        private bool TryHandleObsidianExplorationFollowup(string text, out string reply)
+        {
+            reply = "";
+            if (string.IsNullOrWhiteSpace(text) || _obsidian == null)
+                return false;
+            if (!KokoObsidianExplorationService.LooksLikeExplorationFollowup(text))
+                return false;
+
+            var request = FindRecentObsidianExplorationRequest();
+            if (string.IsNullOrWhiteSpace(request))
+                return false;
+
+            reply = BuildObsidianExplorationReply(request);
+            return true;
+        }
+
+        private string FindRecentObsidianExplorationRequest()
+        {
+            var now = DateTime.Now;
+            if (!string.IsNullOrWhiteSpace(_lastObsidianExploreRequest) &&
+                now - _lastObsidianExploreAt <= TimeSpan.FromMinutes(60))
+            {
+                return _lastObsidianExploreRequest;
+            }
+
+            try
+            {
+                return ServiceContainer.ChatRepository
+                    .GetMessages(30)
+                    .Where(m => m.Role == "user" && now - m.Timestamp <= TimeSpan.FromMinutes(60))
+                    .OrderByDescending(m => m.Timestamp)
+                    .Select(m => m.Content ?? "")
+                    .FirstOrDefault(KokoObsidianExplorationService.LooksLikeInterestingVaultDive)
+                    ?? "";
+            }
+            catch
+            {
+                return "";
+            }
+        }
+
+        private string BuildObsidianExplorationReply(string request)
+        {
+            _lastObsidianExploreRequest = request ?? "";
+            _lastObsidianExploreAt = DateTime.Now;
+            return new KokoObsidianExplorationService().BuildInterestingFinds(_obsidian, request);
+        }
+
         private bool TryHandleDirectObsidianCommand(string text, out string reply)
         {
             reply = "";
@@ -2971,7 +3029,7 @@ LIVE RESPONSE STYLE
                 ContainsAny(lower, "obsidian", "vault", "папк", "нотатк", "журнал", "щоденник", "journal", "spanish", "lesson_", "lesson", "урок");
             if (KokoObsidianExplorationService.LooksLikeInterestingVaultDive(text))
             {
-                reply = new KokoObsidianExplorationService().BuildInterestingFinds(_obsidian, text);
+                reply = BuildObsidianExplorationReply(text);
                 return true;
             }
 
@@ -7345,7 +7403,7 @@ tags: [kokonoe, dashboard, live]
                     return;
                 }
 
-                if (TryHandleDirectObsidianCommand(text, out var obsidianReply))
+                if (TryHandleObsidianCommandOrFollowup(text, out var obsidianReply))
                 {
                     await Dispatcher.InvokeAsync(() =>
                     {
@@ -8083,7 +8141,7 @@ tags: [kokonoe, dashboard, live]
                     return;
                 }
 
-                if (TryHandleDirectObsidianCommand(msg.Text, out var obsidianReply))
+                if (TryHandleObsidianCommandOrFollowup(msg.Text, out var obsidianReply))
                 {
                     await Dispatcher.InvokeAsync(() =>
                     {

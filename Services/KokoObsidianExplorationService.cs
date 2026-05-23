@@ -21,12 +21,24 @@ namespace KokonoeAssistant.Services
             if (string.IsNullOrWhiteSpace(lower)) return false;
 
             var mentionsVault = ContainsAny(lower,
-                "obsidian", "vault", "обсидіан", "обсидиан", "нотат", "заміт", "замет");
+                "obsidian", "vault", "обсидіан", "обсідіан", "обсидиан", "обсидиане", "нотат", "заміт", "замет");
             if (!mentionsVault) return false;
 
             return ContainsAny(lower,
-                "порий", "порой", "пошукай", "поищи", "розкоп", "покоп", "знайди", "найди",
+                "порий", "порій", "порой", "пошукай", "пошукайся", "поищи", "розкоп", "покоп",
+                "проскан", "скан", "переглянь", "подивись", "прочеш", "знайди", "найди",
                 "щось цікаве", "что-то интерес", "цікав", "интерес", "interesting");
+        }
+
+        public static bool LooksLikeExplorationFollowup(string? text)
+        {
+            var lower = (text ?? "").ToLowerInvariant().Trim();
+            if (string.IsNullOrWhiteSpace(lower)) return false;
+
+            return ContainsAny(lower,
+                "і що там", "и что там", "шо там", "що там", "ну що", "ну шо", "ну і",
+                "результат", "що знайш", "шо знайш", "що найш", "що нарила", "що накопала",
+                "знайшла", "знайшов", "далі", "там є щось", "є щось");
         }
 
         public string BuildInterestingFinds(ObsidianMcpService obsidian, string? userText, int maxItems = 3)

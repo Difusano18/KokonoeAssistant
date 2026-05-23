@@ -84,6 +84,8 @@ internal static class Program
             Run("Post reply guard rejects scripted profile source report", PostReplyGuardRejectsScriptedProfileSourceReport);
             Run("Post reply guard blocks false vault unavailable on identity query", PostReplyGuardBlocksFalseVaultUnavailableOnIdentityQuery);
             Run("Post reply guard blocks false vault unavailable on Obsidian exploration", PostReplyGuardBlocksFalseVaultUnavailableOnObsidianExploration);
+            Run("Post reply guard blocks Obsidian pseudo progress", PostReplyGuardBlocksObsidianPseudoProgress);
+            Run("Post reply guard blocks Obsidian followup deflection", PostReplyGuardBlocksObsidianFollowupDeflection);
             Run("Post reply guard rejects general quote echo fallback", PostReplyGuardRejectsGeneralQuoteEchoFallback);
             Run("Proactive guard suppresses repeated generic silence", ProactiveGuardSuppressesRepeatedGenericSilence);
             Run("Proactive context anchors silence to last topic", ProactiveContextAnchorsSilenceToLastTopic);
@@ -1947,6 +1949,56 @@ internal static class Program
         AssertTrue(result.Violations.Any(v => v.Contains("vault unavailable")), "violation should name vault unavailable deflection");
     }
 
+    private static void PostReplyGuardBlocksObsidianPseudoProgress()
+    {
+        var now = new DateTime(2026, 5, 23, 6, 41, 0);
+        var state = new KokoInternalState();
+        var userText = "порійся в обсідіані найди щось цікаве";
+        var messages = new[]
+        {
+            new ChatRepository.ChatMessage { Role = "user", Content = userText, Timestamp = now }
+        };
+        var timeline = new KokoConversationTimelineEngine().Build(messages, state, now, userText);
+
+        var result = new KokoPostReplyGuard().Evaluate(
+            userText,
+            "Доступ є — сканую. Якщо знайду щось цікаве, скажу. Якщо ні — доведеться витратити час на ще точніше налаштування.",
+            state,
+            messages,
+            timeline,
+            now);
+
+        AssertTrue(!result.Passed, "guard should reject fake async Obsidian scanning");
+        AssertTrue(result.ShouldRepair, "pseudo-progress should be repaired");
+        AssertTrue(result.Violations.Any(v => v.Contains("pseudo-progress")), "violation should name pseudo-progress");
+    }
+
+    private static void PostReplyGuardBlocksObsidianFollowupDeflection()
+    {
+        var now = new DateTime(2026, 5, 23, 6, 44, 0);
+        var state = new KokoInternalState();
+        var userText = "і що там ???";
+        var messages = new[]
+        {
+            new ChatRepository.ChatMessage { Role = "user", Content = "порійся в обсідіані найди щось цікаве", Timestamp = now.AddMinutes(-3) },
+            new ChatRepository.ChatMessage { Role = "assistant", Content = "Доступ є — сканую. Якщо знайду щось цікаве, скажу.", Timestamp = now.AddMinutes(-3) },
+            new ChatRepository.ChatMessage { Role = "user", Content = userText, Timestamp = now }
+        };
+        var timeline = new KokoConversationTimelineEngine().Build(messages, state, now, userText);
+
+        var result = new KokoPostReplyGuard().Evaluate(
+            userText,
+            "Там. Порожньо. Я не бачу жодного файлу, жодної нотатки. Твій Obsidian для мене зараз — чорна діра, зв'язок не працює.",
+            state,
+            messages,
+            timeline,
+            now);
+
+        AssertTrue(!result.Passed, "guard should reject stale follow-up deflection after an Obsidian exploration request");
+        AssertTrue(result.ShouldRepair, "follow-up deflection should be repaired");
+        AssertTrue(result.Violations.Any(v => v.Contains("vault unavailable")), "violation should name vault unavailable deflection");
+    }
+
     private static void PostReplyGuardRejectsGeneralQuoteEchoFallback()
     {
         var now = new DateTime(2026, 5, 19, 15, 9, 0);
@@ -3267,6 +3319,8 @@ Persistent Obsidian context is now a core project requirement.
             var reply = service.BuildInterestingFinds(obsidian, "порийся в обсидіані найди щось цікаве");
 
             AssertTrue(KokoObsidianExplorationService.LooksLikeInterestingVaultDive("порийся в обсидіані найди щось цікаве"), "exploration request should be detected");
+            AssertTrue(KokoObsidianExplorationService.LooksLikeInterestingVaultDive("порійся в обсідіані найди щось цікаве"), "typed Ukrainian exploration request should be detected");
+            AssertTrue(KokoObsidianExplorationService.LooksLikeExplorationFollowup("і що там ???"), "follow-up should be detected");
             AssertTrue(reply.Contains("Порилась у vault"), "reply should confirm real vault exploration");
             AssertTrue(reply.Contains("Journal/Insight.md") || reply.Contains("Project/Idea.md"), "reply should include actual note paths");
             AssertTrue(!reply.Contains("не підключ", StringComparison.OrdinalIgnoreCase), "reply should not claim Obsidian is disconnected");
