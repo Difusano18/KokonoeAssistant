@@ -4965,12 +4965,15 @@ namespace KokonoeAssistant.Services
             };
         }
 
-        public string BuildUnifiedExternalContext(string channel = "external")
+        public string BuildUnifiedExternalContext(string channel = "external", string? userText = null)
         {
             var now = DateTime.Now;
             RefreshTemporalState(now, channel);
             var autonomyLevel = Math.Clamp(AppSettings.Load().ProactiveAutonomyLevel, 0, 3);
             var presence = BuildPresenceFrame(now, autonomyLevel);
+            KokoResponsePlanFrame? responsePlan = null;
+            if (!string.IsNullOrWhiteSpace(userText))
+                responsePlan = ResponsePlanner.Build(userText, _state, Cognition, now);
             var active = _state.ShortTermIntents
                 .Where(i => !i.ResolvedAt.HasValue)
                 .OrderBy(i => i.FollowUpAt)
@@ -4988,6 +4991,20 @@ namespace KokonoeAssistant.Services
             sb.AppendLine($"last_activity: {NullDash(_state.LastKnownUserActivity)}");
             sb.AppendLine($"active_intents: {(active.Length == 0 ? "none" : string.Join("; ", active))}");
             sb.AppendLine("Use this as private continuity only. Do not quote labels.");
+            if (responsePlan != null)
+            {
+                sb.AppendLine();
+                sb.AppendLine(responsePlan.PromptBlock);
+            }
+            if (responsePlan?.RequiresVaultRead == true || responsePlan?.Capability == "vault_memory")
+            {
+                var preflight = new ObsidianPreflightContextService(_obsidian).Build(userText, now, 3200);
+                if (!string.IsNullOrWhiteSpace(preflight))
+                {
+                    sb.AppendLine();
+                    sb.AppendLine(preflight);
+                }
+            }
             return sb.ToString();
         }
 

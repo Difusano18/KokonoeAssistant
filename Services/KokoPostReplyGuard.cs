@@ -54,6 +54,8 @@ namespace KokonoeAssistant.Services
                 violations.Add("conversation-close boundary was ignored by follow-up pressure");
             if (KokoConversationBoundary.LooksLikeShortApology(userText) && LooksLikeApologyScold(replyLower))
                 violations.Add("short apology was punished instead of acknowledged briefly");
+            if (LooksLikePunitiveNetworkThreat(userLower, replyLower))
+                violations.Add("reply invented a punitive network-control threat instead of answering the chat boundary");
 
             if (violations.Count == 0 && LooksLikeTransportError(reply))
                 return Pass("transport error surfaced; do not hide provider failure");
@@ -102,6 +104,8 @@ namespace KokonoeAssistant.Services
                 violations.Add("сонний/харчовий контекст протік у відповідь на питання про пам'ять/профіль");
             if (asksProfileOrMemory && LooksLikeScriptedProfileSourceReport(userLower, replyLower))
                 violations.Add("profile/memory answer exposed scripted source-report instead of natural synthesis");
+            if (asksProfileOrMemory && LooksLikeVaultUnavailableDeflection(replyLower))
+                violations.Add("memory/profile question falsely deflected as vault unavailable instead of using loaded context");
 
             var activeIntent = state.ShortTermIntents
                 .Where(i => !i.ResolvedAt.HasValue)
@@ -268,8 +272,12 @@ Timeline:
                 rules.Add("- User closed the conversation until morning. Do not ask follow-up questions or pressure him to answer; one short sign-off only.");
             if (violations.Any(v => v.Contains("apology", StringComparison.OrdinalIgnoreCase)))
                 rules.Add("- User gave a short apology. Acknowledge in one line and move on; do not analyze guilt, politeness, or wasted time.");
+            if (violations.Any(v => v.Contains("network-control", StringComparison.OrdinalIgnoreCase)))
+                rules.Add("- Do not threaten fake OS/network punishment in normal chat. If setting a boundary, answer briefly without claiming you will block access.");
             if (violations.Any(v => v.Contains("one-letter", StringComparison.OrdinalIgnoreCase)))
                 rules.Add("- Stale one-letter ambiguity is not the topic anymore unless the latest user explicitly asks about that exact letter.");
+            if (violations.Any(v => v.Contains("vault unavailable", StringComparison.OrdinalIgnoreCase)))
+                rules.Add("- Vault/profile context is expected for this question. Use loaded Obsidian preflight or memory context; do not claim Vault is unavailable unless the context explicitly says it failed.");
 
             return rules.Count == 0
                 ? ""
@@ -354,6 +362,27 @@ Timeline:
                 "пиши щось конкретне",
                 "припиняй цей спам",
                 "продовжуєш кидати порожні");
+        }
+
+        private static bool LooksLikePunitiveNetworkThreat(string userLower, string replyLower)
+        {
+            var userAskedNetworkControl = ContainsAny(userLower,
+                "заблокуй інтернет",
+                "заблокуй мережу",
+                "вимкни інтернет",
+                "відключи інтернет",
+                "block network",
+                "disable internet");
+            if (userAskedNetworkControl) return false;
+
+            return ContainsAny(replyLower,
+                "заблокую твій доступ до мережі",
+                "заблокую доступ до мережі",
+                "відключу тобі інтернет",
+                "вимкну тобі інтернет",
+                "заблокую інтернет",
+                "block your network",
+                "block your internet");
         }
 
         private static bool IsLowInformationTurn(string userText)
@@ -568,6 +597,12 @@ Timeline:
         private static bool IsMemoryOrProfileQuestion(string userLower)
         {
             if (ContainsAny(userLower,
+                    "хто я", "як мене звати", "як мене звать", "моє ім'я", "моє ім’я", "моє імя",
+                    "звати мене", "як мене називати", "нікнейм", "псевдонім", "у vault написано моє",
+                    "в vault написано моє", "в obsidian написано моє", "в обсидіані написано моє"))
+                return true;
+
+            if (ContainsAny(userLower,
                     "хто я", "як мене звати", "моє ім", "моє ім'я", "скільки мені років", "мій вік", "звати мене"))
                 return true;
 
@@ -580,6 +615,33 @@ Timeline:
                 "\u0449\u043e \u0437\u043d\u0430\u0454\u0448", "\u0449\u043e \u0437\u043d\u0430\u0435\u0448", "\u0440\u043e\u0437\u043a\u0430\u0436\u0438 \u0432\u0441\u0435", "\u0440\u043e\u0437\u043a\u0430\u0437\u0443\u0439 \u0432\u0441\u0435", "\u0440\u043e\u0437\u043a\u0430\u0436\u0438 \u043f\u0440\u043e \u043c\u0435\u043d\u0435",
                 "\u0449\u043e \u043f\u0430\u043c", "\u043f\u0440\u043e\u0441\u043a\u0430\u043d\u0443\u0439", "\u043f\u0435\u0440\u0435\u0432\u0456\u0440", "\u043f\u0440\u043e\u0447\u0438\u0442\u0430\u0439", "\u0437\u043d\u0430\u0439\u0434\u0438", "\u043f\u0440\u043e\u0444\u0456\u043b", "\u0434\u043e\u0441\u044c\u0454",
                 "vault", "obsidian", "\u043e\u0431\u0441\u0438\u0434\u0456\u0430\u043d", "\u043e\u0431\u0441\u0438\u0434\u0438\u0430\u043d");
+        }
+
+        private static bool LooksLikeVaultUnavailableDeflection(string replyLower)
+        {
+            var mentionsVault = ContainsAny(replyLower,
+                "vault", "obsidian", "обсидіан", "обсидиан", "пам'ять", "пам’ять", "профіль");
+            if (!mentionsVault) return false;
+
+            return ContainsAny(replyLower,
+                "доступ відсут",
+                "доступ зараз відсут",
+                "зараз відсут",
+                "відсут",
+                "нема доступу",
+                "немає доступу",
+                "не маю доступу",
+                "недоступ",
+                "не підключ",
+                "не можу прочитати",
+                "не можу зайти",
+                "не дає мені відповіді",
+                "не дає відповіді",
+                "система наразі не дає",
+                "currently unavailable",
+                "no access",
+                "can't access",
+                "cannot access");
         }
 
         private static bool LooksLikeScriptedProfileSourceReport(string userLower, string replyLower)

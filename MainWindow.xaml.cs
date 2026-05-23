@@ -8077,7 +8077,7 @@ tags: [kokonoe, dashboard, live]
                     return;
                 }
 
-                var sharedContext = ServiceContainer.BrainEngine?.BuildUnifiedExternalContext("telegram") ?? "";
+                var sharedContext = ServiceContainer.BrainEngine?.BuildUnifiedExternalContext("telegram", msg.Text) ?? "";
                 var raw = await _llm.SendTgAsync(prompt, sharedContext, _tgUserCts.Token);
                 if (string.IsNullOrWhiteSpace(raw)) return;
                 var reply = CleanTgReply(raw);

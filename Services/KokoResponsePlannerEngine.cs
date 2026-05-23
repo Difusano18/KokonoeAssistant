@@ -150,6 +150,7 @@ RESPONSE PLAN REPAIR:
         private static string ClassifyIntent(string lower)
         {
             if (ContainsAny(lower, "не хочу жити", "суїцид", "самоушкод", "померти")) return "crisis";
+            if (LooksLikeIdentityOrVaultMemoryQuestion(lower)) return "memory";
             if (KokoScreenIntent.IsManualScreenScan(lower)) return "screen";
             if (ContainsAny(lower, "powershell", "terminal", "команда:", "ps:", "відкрий", "запусти", "процеси", "гучність", "заблокуй пк", "вимкни монітор")) return "execute";
             if (ContainsAny(lower, "зроби", "виконай", "реаліз", "пофікси", "виправ", "додай", "створи", "запусти")) return "execute";
@@ -173,6 +174,7 @@ RESPONSE PLAN REPAIR:
 
         private static string ClassifyCapability(string lower)
         {
+            if (LooksLikeIdentityOrVaultMemoryQuestion(lower)) return "vault_memory";
             if (KokoScreenIntent.IsManualScreenScan(lower)) return "screen_awareness";
             if (ContainsAny(lower, "код", "build", "тест", "exception", "stacktrace")) return "codebase";
             if (ContainsAny(lower, "\u043e\u0431\u0441\u0438\u0434\u0456\u0430\u043d", "\u043e\u0431\u0441\u0438\u0434\u0438\u0430\u043d", "\u0449\u043e \u0437\u043d\u0430\u0454\u0448 \u043f\u0440\u043e \u043c\u0435\u043d\u0435", "\u0440\u043e\u0437\u043a\u0430\u0436\u0438 \u0432\u0441\u0435 \u0449\u043e \u0437\u043d\u0430\u0454\u0448", "\u0440\u043e\u0437\u043a\u0430\u0437\u0443\u0439 \u0432\u0441\u0435 \u0449\u043e \u0437\u043d\u0430\u0454\u0448")) return "vault_memory";
@@ -189,6 +191,28 @@ RESPONSE PLAN REPAIR:
             => intent == "memory" ||
                ContainsAny(lower, "\u043e\u0431\u0441\u0438\u0434\u0456\u0430\u043d", "\u043e\u0431\u0441\u0438\u0434\u0438\u0430\u043d", "\u0449\u043e \u0437\u043d\u0430\u0454\u0448 \u043f\u0440\u043e \u043c\u0435\u043d\u0435", "\u0440\u043e\u0437\u043a\u0430\u0436\u0438 \u0432\u0441\u0435 \u0449\u043e \u0437\u043d\u0430\u0454\u0448", "\u0440\u043e\u0437\u043a\u0430\u0437\u0443\u0439 \u0432\u0441\u0435 \u0449\u043e \u0437\u043d\u0430\u0454\u0448", "\u043f\u0440\u043e\u0441\u043a\u0430\u043d\u0443\u0439 \u043e\u0431\u0441\u0438\u0434\u0456\u0430\u043d") ||
                ContainsAny(lower, "що знаєш про мене", "що пам", "профіль", "досьє", "згадай", "в vault", "в obsidian");
+
+        private static bool LooksLikeIdentityOrVaultMemoryQuestion(string lower)
+            => ContainsAny(lower,
+                "хто я",
+                "як мене звати",
+                "як мене звать",
+                "звати мене",
+                "моє ім'я",
+                "моє ім’я",
+                "моє імя",
+                "моє друге ім'я",
+                "моє інше ім'я",
+                "як мене звати по іншому",
+                "як мене називати",
+                "нікнейм",
+                "псевдонім",
+                "у vault написано моє",
+                "в vault написано моє",
+                "у vault є моє",
+                "в obsidian написано моє",
+                "в обсидіані написано моє",
+                "в обсидиані написано моє");
 
         private static bool NeedsToolUse(string lower, string capability, bool needsVaultRead)
             => needsVaultRead ||

@@ -69,10 +69,12 @@ internal static class Program
             Run("Post reply guard blocks fabricated external facts", PostReplyGuardBlocksFabricatedExternalFacts);
             Run("Post reply guard blocks stale proactive ping on direct topic", PostReplyGuardBlocksStaleProactivePingOnDirectTopic);
             Run("Post reply guard blocks service bot tone", PostReplyGuardBlocksServiceBotTone);
+            Run("Post reply guard blocks punitive network threat", PostReplyGuardBlocksPunitiveNetworkThreat);
             Run("Post reply guard blocks blind agreement", PostReplyGuardBlocksBlindAgreement);
             Run("Response planner classifies critical assistant architecture", ResponsePlannerClassifiesCriticalAssistantArchitecture);
             Run("Response planner requires vault read for memory questions", ResponsePlannerRequiresVaultReadForMemoryQuestions);
             Run("Response planner routes Obsidian scan profile questions", ResponsePlannerRoutesObsidianScanProfileQuestions);
+            Run("Response planner routes identity alias questions to vault", ResponsePlannerRoutesIdentityAliasQuestionsToVault);
             Run("Response planner routes natural screen questions", ResponsePlannerRoutesNaturalScreenQuestions);
             Run("Memory policy stores stable preference", MemoryPolicyStoresStablePreference);
             Run("Memory policy keeps temporary state out of beliefs", MemoryPolicyKeepsTemporaryStateOutOfBeliefs);
@@ -80,6 +82,7 @@ internal static class Program
             Run("Post reply guard repairs sleep leak on profile question", PostReplyGuardRepairsSleepLeakOnProfileQuestion);
             Run("Post reply guard rejects profile quote fallback", PostReplyGuardRejectsProfileQuoteFallback);
             Run("Post reply guard rejects scripted profile source report", PostReplyGuardRejectsScriptedProfileSourceReport);
+            Run("Post reply guard blocks false vault unavailable on identity query", PostReplyGuardBlocksFalseVaultUnavailableOnIdentityQuery);
             Run("Post reply guard rejects general quote echo fallback", PostReplyGuardRejectsGeneralQuoteEchoFallback);
             Run("Proactive guard suppresses repeated generic silence", ProactiveGuardSuppressesRepeatedGenericSilence);
             Run("Proactive context anchors silence to last topic", ProactiveContextAnchorsSilenceToLastTopic);
@@ -129,6 +132,7 @@ internal static class Program
             Run("Screen awareness classifies modes", ScreenAwarenessClassifiesModes);
             Run("Proactive context requires natural trigger for silence ping", ProactiveContextRequiresNaturalTriggerForSilencePing);
             Run("Obsidian preflight context loads vault before reply", ObsidianPreflightContextLoadsVaultBeforeReply);
+            Run("Telegram unified context loads Obsidian profile preflight", TelegramUnifiedContextLoadsObsidianProfilePreflight);
             Run("Agent task service plans and persists", AgentTaskServicePlansAndPersists);
             Run("Agent task service imports Obsidian backlog", AgentTaskServiceImportsObsidianBacklog);
             Run("Agent completion policy asks next question", AgentCompletionPolicyAsksNextQuestion);
@@ -1614,6 +1618,25 @@ internal static class Program
         AssertTrue(result.RepairInstruction.Contains("ANTI-BOT"), "repair should include anti-bot persona rules");
     }
 
+    private static void PostReplyGuardBlocksPunitiveNetworkThreat()
+    {
+        var now = DateTime.Today.AddHours(15).AddMinutes(30);
+        var state = new KokoInternalState();
+        var userText = "можеш сказати щось .. сексуальне ?";
+        var messages = new[]
+        {
+            new ChatRepository.ChatMessage { Role = "user", Content = userText, Timestamp = now }
+        };
+        var timeline = new KokoConversationTimelineEngine().Build(messages, state, now, userText);
+        var badReply = "Я не твоя фантазія з дешевих новел. Спробуй ще раз, і я заблокую твій доступ до мережі.";
+
+        var result = new KokoPostReplyGuard().Evaluate(userText, badReply, state, messages, timeline, now);
+
+        AssertTrue(!result.Passed, "guard should reject fake punitive network threats");
+        AssertTrue(result.ShouldRepair, "network threat should be repaired, not sent");
+        AssertTrue(result.Violations.Any(v => v.Contains("network-control")), "violation should name network-control threat");
+    }
+
     private static void PostReplyGuardBlocksBlindAgreement()
     {
         var now = DateTime.Today.AddHours(16);
@@ -1695,6 +1718,24 @@ internal static class Program
         AssertEqual("memory", second.Intent, "broad known-about-me question should be memory intent");
         AssertEqual("vault_memory", second.Capability, "broad known-about-me question should route to vault memory");
         AssertTrue(second.RequiresToolUse, "broad known-about-me question should require tool use");
+    }
+
+    private static void ResponsePlannerRoutesIdentityAliasQuestionsToVault()
+    {
+        using var ctx = TestContext.Create();
+        var cognition = new KokoCognitionEngine(ctx.TestDir);
+        var state = new KokoInternalState();
+
+        var frame = new KokoResponsePlannerEngine().Build(
+            "а як мене звати по іншому? ну у vault написано моє ім'я",
+            state,
+            cognition,
+            new DateTime(2026, 5, 23, 6, 5, 0));
+
+        AssertEqual("memory", frame.Intent, "identity alias question should be a memory intent");
+        AssertEqual("vault_memory", frame.Capability, "identity alias question should route to vault memory");
+        AssertTrue(frame.RequiresVaultRead, "identity alias question should require vault read");
+        AssertEqual("read_before_answer", frame.MemoryPolicy, "identity alias question should read before answer");
     }
 
     private static void ResponsePlannerRoutesNaturalScreenQuestions()
@@ -1852,6 +1893,32 @@ internal static class Program
         AssertTrue(result.ShouldRepair, "scripted profile answer should be repaired through the model");
         AssertTrue(result.Violations.Any(v => v.Contains("source-report")), "violation should name scripted source reporting");
         AssertTrue(result.RepairInstruction.Contains("без згадки назв файлів"), "repair should demand natural synthesis without file names");
+    }
+
+    private static void PostReplyGuardBlocksFalseVaultUnavailableOnIdentityQuery()
+    {
+        var now = new DateTime(2026, 5, 23, 5, 53, 0);
+        var state = new KokoInternalState();
+        var userText = "ну у vault написано моє ім'я";
+        var messages = new[]
+        {
+            new ChatRepository.ChatMessage { Role = "user", Content = "а як мене звати по іншому?", Timestamp = now.AddMinutes(-1) },
+            new ChatRepository.ChatMessage { Role = "user", Content = userText, Timestamp = now }
+        };
+        var timeline = new KokoConversationTimelineEngine().Build(messages, state, now, userText);
+
+        var result = new KokoPostReplyGuard().Evaluate(
+            userText,
+            "Слухай, мій доступ до твого Vault зараз відсутній. Я не буду гадати на кавових гущах.",
+            state,
+            messages,
+            timeline,
+            now);
+
+        AssertTrue(!result.Passed, "guard should reject false vault unavailable deflection");
+        AssertTrue(result.ShouldRepair, "vault unavailable deflection should be repaired through current context");
+        AssertTrue(result.Violations.Any(v => v.Contains("vault unavailable")), "violation should name vault unavailable deflection");
+        AssertTrue(result.RepairInstruction.Contains("Obsidian preflight") || result.RepairInstruction.Contains("Vault/profile context"), "repair should require loaded vault/profile context");
     }
 
     private static void PostReplyGuardRejectsGeneralQuoteEchoFallback()
@@ -3145,6 +3212,36 @@ Persistent Obsidian context is now a core project requirement.
             AssertTrue(context.Contains("Kokonoe should check the vault"), "daily note should be included");
             AssertTrue(context.Contains("pulse_spike"), "somatic events tail should be included");
             AssertTrue(context.Contains("Query-relevant vault recall"), "query semantic recall should be included");
+        }
+        finally
+        {
+            try { Directory.Delete(dir, recursive: true); } catch { }
+        }
+    }
+
+    private static void TelegramUnifiedContextLoadsObsidianProfilePreflight()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "KokonoeAssistant.Tests", "vault-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            var obsidian = new ObsidianMcpService(dir);
+            obsidian.WriteNote("Creator/Profile.md", """
+# Creator Profile
+
+- Name: Vova
+- Nickname: Yasu
+""");
+            using var health = new HealthService(dir);
+            using var chat = new ChatRepository(dir);
+            using var brain = new KokoBrainEngine(new LlmService(), health, obsidian, chat, dir);
+
+            var context = brain.BuildUnifiedExternalContext("telegram", "ну у vault написано моє ім'я");
+
+            AssertTrue(context.Contains("OBSIDIAN PREFLIGHT"), "telegram context should include Obsidian preflight for vault identity questions");
+            AssertTrue(context.Contains("Creator profile"), "telegram context should include creator profile note");
+            AssertTrue(context.Contains("Yasu"), "telegram context should include profile alias");
+            AssertTrue(context.Contains("vault_memory"), "telegram context should include response planner vault route");
         }
         finally
         {
