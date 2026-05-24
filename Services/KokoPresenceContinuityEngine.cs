@@ -38,13 +38,18 @@ namespace KokonoeAssistant.Services
             KokoInternalState state,
             IReadOnlyList<ChatRepository.ChatMessage> messages,
             DateTime now,
-            int autonomyLevel = 2)
+            int autonomyLevel = 2,
+            SystemInfo? systemInfoOverride = null,
+            KokoScreenAwarenessAnalysis? screenAnalysisOverride = null)
         {
             autonomyLevel = Math.Clamp(autonomyLevel, 0, 3);
             var lastUser = messages
                 .Where(m => m.Role == "user")
                 .OrderByDescending(m => m.Timestamp)
                 .FirstOrDefault();
+
+            var sysInfo = systemInfoOverride ?? ServiceContainer.PcControl.GetSystemInfo();
+            var idleMinutes = sysInfo.IdleTime.TotalMinutes;
 
             var frame = new KokoPresenceFrame
             {
@@ -53,7 +58,8 @@ namespace KokonoeAssistant.Services
                 StyleHint = "observation",
                 ToneHint = "dry, attentive, not generic",
                 SummaryUk = "Немає свіжого сигналу, який вартий втручання.",
-                Priority = 0
+                Priority = 0,
+                ExtraContext = $"[PC_IDLE: {idleMinutes:F1}m]"
             };
 
             if (lastUser == null)
@@ -90,7 +96,7 @@ namespace KokonoeAssistant.Services
                 return frame;
             }
 
-            ApplySilenceContinuity(frame, state, now, autonomyLevel);
+            ApplySilenceContinuity(frame, state, now, autonomyLevel, sysInfo, screenAnalysisOverride);
             frame.ExtraContext = BuildPromptBlock(frame, state, now, null);
             return frame;
         }
@@ -163,14 +169,80 @@ namespace KokonoeAssistant.Services
             frame.SummaryUk = $"Намір уже закритий: {intent.Summary}. Він повернувся/оновив стан {FormatDuration(now - intent.ResolvedAt!.Value)} тому.";
         }
 
-        private static void ApplySilenceContinuity(KokoPresenceFrame frame, KokoInternalState state, DateTime now, int autonomyLevel)
+        private static void ApplySilenceContinuity(
+            KokoPresenceFrame frame,
+            KokoInternalState state,
+            DateTime now,
+            int autonomyLevel,
+            SystemInfo sysInfo,
+            KokoScreenAwarenessAnalysis? screenAnalysisOverride)
         {
             var silence = frame.SilenceMinutes;
-            if (silence < 25)
+            var idleMinutes = sysInfo.IdleTime.TotalMinutes;
+            var screen = BuildScreenPresenceSignal(state, now, screenAnalysisOverride);
+
+            if (idleMinutes < 1.0 && silence > 5 && silence < 360)
             {
-                frame.SituationKind = "recent_contact";
-                frame.SummaryUk = $"Він писав {FormatDuration(TimeSpan.FromMinutes(silence))} тому; не треба вдавати драму.";
-                frame.Priority = 10;
+                frame.SituationKind = "physically_present";
+                frame.Trigger = "presence_pc_active_chat_silent";
+                frame.StyleHint = "observation";
+                frame.ToneHint = "user is physically active at PC but silent in chat; do not treat this as absence";
+                frame.Priority = 28;
+                frame.ShouldInterrupt = false;
+                frame.SummaryUk = $"ПК активний: ввід був {FormatDuration(sysInfo.IdleTime)} тому, але в чаті тиша {FormatDuration(TimeSpan.FromMinutes(silence))}.";
+                return;
+            }
+
+            if (idleMinutes >= 5.0 && screen.HasRecentContext)
+            {
+                if (screen.HasActiveContent)
+                {
+                    frame.SituationKind = "physically_present";
+                    frame.Trigger = "presence_screen_active_idle_input";
+                    frame.StyleHint = "observation";
+                    frame.ToneHint = "input is idle, but screen content is active; assume watching/reading/playing, not away";
+                    frame.Priority = 48;
+                    frame.ShouldInterrupt = false;
+                    frame.SummaryUk = $"Ввід неактивний {FormatDuration(sysInfo.IdleTime)}, але екран активний ({screen.Mode}/{screen.Activity}). Ймовірно, він дивиться або читає, а не відійшов.";
+                    return;
+                }
+
+                if (screen.HasInactiveScreen)
+                {
+                    frame.SituationKind = "away";
+                    frame.Trigger = "presence_screen_idle_away";
+                    frame.StyleHint = "distant";
+                    frame.ToneHint = "user is likely away; do background work, do not ping with where-are-you messages";
+                    frame.Priority = 18;
+                    frame.ShouldInterrupt = false;
+                    frame.SummaryUk = $"Ввід неактивний {FormatDuration(sysInfo.IdleTime)} і екран без активності ({screen.Mode}/{screen.Activity}). Схоже, він відійшов від ПК.";
+                    return;
+                }
+            }
+
+            // AWAY detection (Idle > 15m)
+            if (idleMinutes >= 15.0)
+            {
+                frame.SituationKind = "away";
+                frame.Trigger = "presence_away";
+                frame.StyleHint = "distant";
+                frame.ToneHint = "user is away from PC; do not disturb with small talk, use for background tasks";
+                frame.Priority = 20;
+                frame.ShouldInterrupt = false;
+                frame.SummaryUk = $"Він відійшов від ПК ({FormatDuration(sysInfo.IdleTime)} без вводу).";
+                return;
+            }
+
+            // IDLE detection (Idle 2-15m)
+            if (idleMinutes >= 2.0)
+            {
+                frame.SituationKind = "idle_staring";
+                frame.Trigger = "presence_idle_staring";
+                frame.StyleHint = "observation";
+                frame.ToneHint = "user is at PC but idle; maybe staring at something? check screen if possible";
+                frame.Priority = 55;
+                frame.ShouldInterrupt = autonomyLevel >= 2 && now - state.LastPresenceInterruptAt > TimeSpan.FromMinutes(30);
+                frame.SummaryUk = $"Він за комп'ютером, але не активний {FormatDuration(sysInfo.IdleTime)}.";
                 return;
             }
 
@@ -183,9 +255,18 @@ namespace KokonoeAssistant.Services
                 frame.Priority = 72;
                 frame.ShouldInterrupt = autonomyLevel >= 3 && now - state.LastPresenceInterruptAt > TimeSpan.FromHours(8);
                 frame.NextUsefulAt = now;
-                frame.SummaryUk = $"Довга тиша: {FormatDuration(TimeSpan.FromMinutes(silence))}. Це вже не звичайна пауза.";
+                frame.SummaryUk = $"Довга тиша в чаті: {FormatDuration(TimeSpan.FromMinutes(silence))}.";
                 return;
             }
+
+            if (silence < 25)
+            {
+                frame.SituationKind = "recent_contact";
+                frame.SummaryUk = $"Він писав {FormatDuration(TimeSpan.FromMinutes(silence))} тому; не треба вдавати драму.";
+                frame.Priority = 10;
+                return;
+            }
+
 
             if (silence >= 90)
             {
@@ -196,7 +277,7 @@ namespace KokonoeAssistant.Services
                 frame.Priority = 62;
                 frame.ShouldInterrupt = autonomyLevel >= 3 && now - state.LastPresenceInterruptAt > TimeSpan.FromHours(3);
                 frame.NextUsefulAt = now;
-                frame.SummaryUk = $"Середня тиша: {FormatDuration(TimeSpan.FromMinutes(silence))}. Можна підколоти, якщо немає важливішого.";
+                frame.SummaryUk = $"Середня тиша в чаті: {FormatDuration(TimeSpan.FromMinutes(silence))}.";
                 return;
             }
 
@@ -206,7 +287,66 @@ namespace KokonoeAssistant.Services
             frame.ToneHint = "light presence; do not overreact";
             frame.Priority = 32;
             frame.ShouldInterrupt = false;
-            frame.SummaryUk = $"Коротка тиша: {FormatDuration(TimeSpan.FromMinutes(silence))}. Просто врахувати в тоні.";
+            frame.SummaryUk = $"Коротка тиша в чаті: {FormatDuration(TimeSpan.FromMinutes(silence))}.";
+        }
+
+        private static ScreenPresenceSignal BuildScreenPresenceSignal(
+            KokoInternalState state,
+            DateTime now,
+            KokoScreenAwarenessAnalysis? overrideAnalysis)
+        {
+            var signal = new ScreenPresenceSignal();
+            if (overrideAnalysis != null)
+            {
+                signal.HasRecentContext = true;
+                signal.Mode = KokoScreenAwarenessService.NormalizeMode(
+                    overrideAnalysis.ScreenMode,
+                    $"{overrideAnalysis.SummaryUk} {overrideAnalysis.ActivityUk} {overrideAnalysis.CurrentTask}");
+                signal.Activity = overrideAnalysis.ActivityUk ?? "";
+                signal.Progress = overrideAnalysis.Progress ?? "";
+                signal.Text = $"{overrideAnalysis.SummaryUk} {overrideAnalysis.ActivityUk} {overrideAnalysis.CurrentTask} {overrideAnalysis.Progress}".ToLowerInvariant();
+                return EnrichScreenPresenceSignal(signal);
+            }
+
+            if (state.LastScreenAwarenessAt <= DateTime.MinValue ||
+                now - state.LastScreenAwarenessAt > TimeSpan.FromMinutes(45))
+                return signal;
+
+            signal.HasRecentContext = true;
+            signal.Mode = KokoScreenAwarenessService.NormalizeMode(
+                state.LastScreenAwarenessMode,
+                $"{state.LastScreenAwarenessWindow} {state.LastScreenAwarenessSummary} {state.LastScreenAwarenessActivity}");
+            signal.Activity = state.LastScreenAwarenessActivity ?? "";
+            signal.Progress = state.LastScreenSituationProgress ?? "";
+            signal.Text = $"{state.LastScreenAwarenessWindow} {state.LastScreenAwarenessSummary} {state.LastScreenAwarenessActivity} {state.LastScreenSituationTask} {state.LastScreenSituationProgress}".ToLowerInvariant();
+            return EnrichScreenPresenceSignal(signal);
+        }
+
+        private static ScreenPresenceSignal EnrichScreenPresenceSignal(ScreenPresenceSignal signal)
+        {
+            var contentMode = signal.Mode is not ("idle" or "desktop" or "private" or "unknown" or "");
+            var active = ContainsAny(signal.Text, "active", "changed", "moving", "switching", "актив", "змін", "рух", "гра", "video", "youtube") ||
+                         signal.Progress is "moving" or "switching";
+            var stuckContent = contentMode &&
+                               (ContainsAny(signal.Text, "stuck", "завис", "exception", "error", "debug") ||
+                                signal.Progress == "stuck");
+            var inactiveDesktop = ContainsAny(signal.Text, "idle", "same", "без змін", "desktop") ||
+                                  signal.Progress == "idle";
+
+            signal.HasActiveContent = contentMode && (active || stuckContent);
+            signal.HasInactiveScreen = (inactiveDesktop && !contentMode) || signal.Mode is "idle" or "desktop";
+            return signal;
+        }
+
+        private sealed class ScreenPresenceSignal
+        {
+            public bool HasRecentContext { get; set; }
+            public bool HasActiveContent { get; set; }
+            public bool HasInactiveScreen { get; set; }
+            public string Mode { get; set; } = "";
+            public string Activity { get; set; } = "";
+            public string Progress { get; set; } = "";
+            public string Text { get; set; } = "";
         }
 
         private static string BuildPromptBlock(KokoPresenceFrame frame, KokoInternalState state, DateTime now, ShortTermIntent? intent)
@@ -220,6 +360,8 @@ namespace KokonoeAssistant.Services
                 sb.AppendLine($"Остання репліка користувача: «{Trim(frame.LastUserText, 180)}».");
             if (frame.SilenceMinutes > 0)
                 sb.AppendLine($"Минуло від останньої репліки: {FormatDuration(TimeSpan.FromMinutes(frame.SilenceMinutes))}.");
+            if (state.LastScreenAwarenessAt > DateTime.MinValue && now - state.LastScreenAwarenessAt < TimeSpan.FromMinutes(45))
+                sb.AppendLine($"Screen presence: mode={NullDash(state.LastScreenAwarenessMode)}, activity={NullDash(state.LastScreenAwarenessActivity)}, summary={Trim(state.LastScreenAwarenessSummary, 140)}.");
             if (intent != null)
             {
                 sb.AppendLine($"Намір: {intent.Summary}.");
@@ -297,5 +439,8 @@ namespace KokonoeAssistant.Services
             text = (text ?? "").Trim();
             return text.Length <= max ? text : text[..max].TrimEnd() + "...";
         }
+
+        private static string NullDash(string? text)
+            => string.IsNullOrWhiteSpace(text) ? "-" : text.Trim();
     }
 }

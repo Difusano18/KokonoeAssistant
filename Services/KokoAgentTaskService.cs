@@ -576,10 +576,43 @@ namespace KokonoeAssistant.Services
         {
             ct.ThrowIfCancellationRequested();
             var objective = task.Objective ?? "";
+            var pcPlan = PcIntentRouter.TryBuildActionPlan(objective);
+            if (pcPlan == null &&
+                (KokoScreenIntent.IsManualScreenScan(objective) ||
+                 KokoResponsePlannerEngine.LooksLikeFullContextScanObjective(objective)))
+            {
+                pcPlan = PcActionPlan.Single("SystemControl full context scan", "getContextV2", "Normal", PcActionRiskTier.Observe);
+            }
+
+            if (pcPlan == null)
+            {
+                var plannedShell = BuildSafeSystemControlCommand(objective);
+                if (!string.IsNullOrWhiteSpace(plannedShell))
+                {
+                    pcPlan = PcActionPlan.Single("SystemControl shell probe", "shell", plannedShell, PcActionRiskTier.RiskyLocal);
+                    pcPlan.Actions[0].Arguments["command"] = plannedShell;
+                }
+            }
+
+            if (pcPlan == null)
+                return "SystemControl skipped: objective did not contain a plannable PC action.";
+
+            var pcExecution = await new PcActionExecutor(pc: ServiceContainer.PcControl)
+                .ExecuteAsync(pcPlan, ServiceContainer.PcControl.GetContextV2(PcObservationMode.Light), ct)
+                .ConfigureAwait(false);
+            return $"""
+            SystemControl routed through PcActionExecutor.
+            - Action: {pcPlan.Actions.FirstOrDefault()?.ActionType}
+            - Decision: {pcExecution.Decision.Kind}
+            - Result:
+            {TrimBlock(PcIntentRouter.FormatExecutionResult(pcExecution), 2200)}
+            """.Trim();
+
+#if false
             if (KokoScreenIntent.IsManualScreenScan(objective) ||
                 KokoResponsePlannerEngine.LooksLikeFullContextScanObjective(objective))
             {
-                var context = ServiceContainer.PcControl.GetAllContext();
+                var context = ServiceContainer.PcControl.GetContextV2(PcObservationMode.Normal);
                 return $"""
                 SystemControl completed through full context scan.
                 {TrimBlock(PcIntentRouter.FormatAllContext(context), 2200)}
@@ -613,6 +646,7 @@ namespace KokonoeAssistant.Services
             - Output:
             {TrimBlock(output, 1800)}
             """.Trim();
+#endif
         }
 
         private static string BuildSafeSystemControlCommand(string objective)
@@ -749,7 +783,7 @@ namespace KokonoeAssistant.Services
                 var context = ServiceContainer.PcControl.GetAllContext();
                 return $"""
                 HardReset executed: local full-context scan completed after refusal.
-                {TrimBlock(PcIntentRouter.FormatAllContext(context), 2400)}
+                {TrimBlock(context.ToString(), 2400)}
                 """.Trim();
             }
 

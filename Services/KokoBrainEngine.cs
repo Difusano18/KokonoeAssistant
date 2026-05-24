@@ -3559,6 +3559,9 @@ namespace KokonoeAssistant.Services
                 var foreground = ServiceContainer.PcControl.GetForegroundWindow();
                 if (string.IsNullOrWhiteSpace(activity.ActiveWindowTitle) && !string.IsNullOrWhiteSpace(foreground.Title))
                     activity.ActiveWindowTitle = foreground.Title;
+                var idleTime = TimeSpan.Zero;
+                try { idleTime = ServiceContainer.PcControl.GetSystemInfo().IdleTime; }
+                catch (Exception ex) { Log($"ScreenAwareness idle-time read failed: {ex.Message}"); }
                 var hash = _screenActivityAnalyzer.GenerateScreenshotHash(screenshot);
                 var screenChanged = activity.IsActive ||
                     (!string.IsNullOrWhiteSpace(_state.LastScreenAwarenessHash) &&
@@ -3569,7 +3572,8 @@ namespace KokonoeAssistant.Services
                     _state.LastScreenAwarenessSummary,
                     _state.LastScreenAwarenessComment,
                     now,
-                    foreground);
+                    foreground,
+                    idleTime);
 
                 using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(90));
                 var raw = await _llm.SendSystemVisionQueryAsync(prompt, screenshot, "image/jpeg", cts.Token);

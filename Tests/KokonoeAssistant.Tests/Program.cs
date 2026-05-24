@@ -26,6 +26,10 @@ internal static class Program
             Run("Short term intent followup bypasses ordinary initiative", ShortTermIntentFollowupBypassesOrdinaryInitiative);
             Run("Presence detects overdue course followup", PresenceDetectsOverdueCourseFollowup);
             Run("Presence waits for return home intent", PresenceWaitsForReturnHomeIntent);
+            Run("Presence treats active screen idle input as present", PresenceTreatsActiveScreenIdleInputAsPresent);
+            Run("Presence treats unchanged screen idle input as away", PresenceTreatsUnchangedScreenIdleInputAsAway);
+            Run("Presence treats stuck coding idle input as present", PresenceTreatsStuckCodingIdleInputAsPresent);
+            Run("Presence treats active input chat silence as present", PresenceTreatsActiveInputChatSilenceAsPresent);
             Run("Autonomy blocks generic ping during active intent", AutonomyBlocksGenericPingDuringActiveIntent);
             Run("Presence refuses stale sleep instruction after return", PresenceRefusesStaleSleepInstructionAfterReturn);
             Run("Presence never interrupts active sleep intent", PresenceNeverInterruptsActiveSleepIntent);
@@ -35,6 +39,8 @@ internal static class Program
             Run("State freshness closes stale course on later activity", StateFreshnessClosesStaleCourseOnLaterActivity);
             Run("Vault sync policy flushes stale partial batch", VaultSyncPolicyFlushesStalePartialBatch);
             Run("Presence long silence can interrupt on high autonomy", PresenceLongSilenceCanInterruptOnHighAutonomy);
+            Run("Presence long silence summary is readable Ukrainian", PresenceLongSilenceSummaryIsReadableUkrainian);
+            Run("Presence long silence with PC away does not interrupt", PresenceLongSilenceWithPcAwayDoesNotInterrupt);
             Run("Internal day shifts phase and writes vault status", InternalDayShiftsPhaseAndWritesVaultStatus);
             Run("Internal day prefers silence at low power night", InternalDayPrefersSilenceAtLowPowerNight);
             Run("Autonomy pipeline gates weak initiative in quiet night", AutonomyPipelineGatesWeakInitiativeInQuietNight);
@@ -63,15 +69,43 @@ internal static class Program
             Run("PC control blocks unsafe shell chain step", PcControlBlocksUnsafeShellChainStep);
             Run("PC control resolves coding workspace scenario", PcControlResolvesCodingWorkspaceScenario);
             Run("PC intent router routes shell chain and scenario", PcIntentRouterRoutesShellChainAndScenario);
+            Run("PC intent router builds shell chain action type", PcIntentRouterBuildsShellChainActionType);
             Run("Resource guardian prompts on browser pressure in gaming", ResourceGuardianPromptsOnBrowserPressureInGaming);
             Run("Resource guardian respects prompt cooldown", ResourceGuardianRespectsPromptCooldown);
             Run("PC control get all context returns snapshot", PcControlGetAllContextReturnsSnapshot);
+            Run("PC context v2 light returns foreground and system", PcContextV2LightReturnsForegroundAndSystem);
+            Run("PC context v2 normal caps visible windows", PcContextV2NormalCapsVisibleWindows);
+            Run("PC context redactor marks sensitive title", PcContextRedactorMarksSensitiveTitle);
+            Run("PC action policy requires confirmation for kill process", PcActionPolicyRequiresConfirmationForKillProcess);
+            Run("PC action policy allows open app", PcActionPolicyAllowsOpenApp);
+            Run("PC action policy requires confirmation for shutdown", PcActionPolicyRequiresConfirmationForShutdown);
+            Run("PC action policy blocks sensitive screenshot and external action", PcActionPolicyBlocksSensitiveScreenshotAndExternalAction);
+            Run("PC action journal writes JSONL", PcActionJournalWritesJsonl);
+            Run("PC rollback service creates file backup manifest", PcRollbackServiceCreatesFileBackupManifest);
+            Run("PC action executor runs allowed open app dry-run", PcActionExecutorRunsAllowedOpenAppDryRun);
+            Run("PC action executor returns confirmation for risky action", PcActionExecutorReturnsConfirmationForRiskyAction);
+            Run("PC action executor logs blocked action", PcActionExecutorLogsBlockedAction);
+            Run("PC intent router executes open app through action executor dry-run", PcIntentRouterExecutesOpenAppThroughActionExecutorDryRun);
+            Run("PC intent router kill process needs confirmation", PcIntentRouterKillProcessNeedsConfirmation);
+            Run("PC intent router blocks severe shell by policy", PcIntentRouterBlocksSevereShellByPolicy);
+            Run("PC intent router full context uses context v2", PcIntentRouterFullContextUsesContextV2);
+            Run("PC action executor confirms exact pending action id", PcActionExecutorConfirmsExactPendingActionId);
+            Run("PC action executor rejects expired pending action", PcActionExecutorRejectsExpiredPendingAction);
+            Run("PC action executor rejects generic yes", PcActionExecutorRejectsGenericYes);
+            Run("PC action executor rejects target-only confirmation", PcActionExecutorRejectsTargetOnlyConfirmation);
+            Run("PC action executor rejects bare confirm action id", PcActionExecutorRejectsBareConfirmActionId);
+            Run("PC action executor cancel prevents later confirmation", PcActionExecutorCancelPreventsLaterConfirmation);
+            Run("PC action executor keeps severe shell blocked after confirmation attempt", PcActionExecutorKeepsSevereShellBlockedAfterConfirmationAttempt);
+            Run("PC intent router blocks unsafe shell chain by policy", PcIntentRouterBlocksUnsafeShellChainByPolicy);
+            Run("PC intent router confirms and cancels action id route", PcIntentRouterConfirmsAndCancelsActionIdRoute);
+            Run("PC action confirmation journal records states", PcActionConfirmationJournalRecordsStates);
             Run("PC control captures screenshot", PcControlCapturesScreenshot);
             Run("LLM vision compacts oversized screenshots", LlmVisionCompactsOversizedScreenshots);
             Run("Vision quality detects unusable denial", VisionQualityDetectsUnusableDenial);
             Run("Vision quality detects generic screenshot reply", VisionQualityDetectsGenericScreenshotReply);
             Run("Image processing enhances screenshot bytes", ImageProcessingEnhancesScreenshotBytes);
             Run("Screen awareness prompt includes foreground metadata", ScreenAwarenessPromptIncludesForegroundMetadata);
+            Run("Screen awareness prompt includes idle time", ScreenAwarenessPromptIncludesIdleTime);
             Run("Screen awareness prompt asks for subtle patterns", ScreenAwarenessPromptAsksForSubtlePatterns);
             Run("Post reply guard repairs vision technical error", PostReplyGuardRepairsVisionTechnicalError);
             Run("Post reply guard protects image only prompt", PostReplyGuardProtectsImageOnlyPrompt);
@@ -435,7 +469,12 @@ internal static class Program
         });
 
         var frame = new KokoPresenceContinuityEngine()
-            .Evaluate(state, ctx.Chat.GetMessages(10), now, autonomyLevel: 3);
+            .Evaluate(
+                state,
+                ctx.Chat.GetMessages(10),
+                now,
+                autonomyLevel: 3,
+                systemInfoOverride: new SystemInfo { IdleTime = TimeSpan.Zero });
 
         AssertTrue(frame.ShouldInterrupt, "overdue course followup should interrupt at high autonomy");
         AssertEqual("overdue_intent", frame.SituationKind, "course should be classified as overdue intent");
@@ -464,11 +503,124 @@ internal static class Program
         });
 
         var frame = new KokoPresenceContinuityEngine()
-            .Evaluate(state, ctx.Chat.GetMessages(10), now, autonomyLevel: 3);
+            .Evaluate(
+                state,
+                ctx.Chat.GetMessages(10),
+                now,
+                autonomyLevel: 3,
+                systemInfoOverride: new SystemInfo { IdleTime = TimeSpan.Zero });
 
         AssertEqual("active_absence", frame.SituationKind, "return-home intent should stay active before the stated time");
         AssertTrue(!frame.ShouldInterrupt, "presence should not interrupt before the stated return-home follow-up");
         AssertTrue(frame.ToneHint.Contains("wait until that time"), "tone should explicitly avoid early nagging");
+    }
+
+    private static void PresenceTreatsActiveScreenIdleInputAsPresent()
+    {
+        var now = new DateTime(2026, 5, 24, 21, 0, 0);
+        var state = new KokoInternalState
+        {
+            LastScreenAwarenessAt = now.AddMinutes(-2),
+            LastScreenAwarenessMode = "media",
+            LastScreenAwarenessActivity = "changed active video playback",
+            LastScreenAwarenessSummary = "YouTube video is playing",
+            LastScreenSituationProgress = "moving"
+        };
+        var messages = new[]
+        {
+            new ChatRepository.ChatMessage { Role = "user", Content = "я відійду від чату", Timestamp = now.AddMinutes(-20) }
+        };
+
+        var frame = new KokoPresenceContinuityEngine().Evaluate(
+            state,
+            messages,
+            now,
+            autonomyLevel: 3,
+            systemInfoOverride: new SystemInfo { IdleTime = TimeSpan.FromMinutes(8) });
+
+        AssertEqual("physically_present", frame.SituationKind, "active media with idle input should mean present, not away");
+        AssertEqual("presence_screen_active_idle_input", frame.Trigger, "screen-active idle should use explicit trigger");
+        AssertTrue(!frame.ShouldInterrupt, "watching/reading should not be interrupted as absence");
+        AssertTrue(frame.ExtraContext.Contains("Screen presence", StringComparison.OrdinalIgnoreCase), "presence prompt should include screen signal");
+    }
+
+    private static void PresenceTreatsUnchangedScreenIdleInputAsAway()
+    {
+        var now = new DateTime(2026, 5, 24, 21, 0, 0);
+        var state = new KokoInternalState
+        {
+            LastScreenAwarenessAt = now.AddMinutes(-3),
+            LastScreenAwarenessMode = "desktop",
+            LastScreenAwarenessActivity = "same idle desktop",
+            LastScreenAwarenessSummary = "Desktop is unchanged",
+            LastScreenSituationProgress = "idle"
+        };
+        var messages = new[]
+        {
+            new ChatRepository.ChatMessage { Role = "user", Content = "я тут", Timestamp = now.AddMinutes(-20) }
+        };
+
+        var frame = new KokoPresenceContinuityEngine().Evaluate(
+            state,
+            messages,
+            now,
+            autonomyLevel: 3,
+            systemInfoOverride: new SystemInfo { IdleTime = TimeSpan.FromMinutes(8) });
+
+        AssertEqual("away", frame.SituationKind, "idle input plus unchanged desktop should mean away");
+        AssertEqual("presence_screen_idle_away", frame.Trigger, "screen-idle away should use explicit trigger");
+        AssertTrue(!frame.ShouldInterrupt, "away state should not nag the user");
+    }
+
+    private static void PresenceTreatsStuckCodingIdleInputAsPresent()
+    {
+        var now = new DateTime(2026, 5, 24, 21, 0, 0);
+        var state = new KokoInternalState
+        {
+            LastScreenAwarenessAt = now.AddMinutes(-4),
+            LastScreenAwarenessMode = "coding",
+            LastScreenAwarenessActivity = "same stuck exception in editor",
+            LastScreenAwarenessSummary = "Visual Studio shows a repeated build exception",
+            LastScreenSituationProgress = "stuck"
+        };
+        var messages = new[]
+        {
+            new ChatRepository.ChatMessage { Role = "user", Content = "я дебажу", Timestamp = now.AddMinutes(-40) }
+        };
+
+        var frame = new KokoPresenceContinuityEngine().Evaluate(
+            state,
+            messages,
+            now,
+            autonomyLevel: 3,
+            systemInfoOverride: new SystemInfo { IdleTime = TimeSpan.FromMinutes(8) });
+
+        AssertEqual("physically_present", frame.SituationKind, "stuck coding screen should mean staring/debugging, not away");
+        AssertEqual("presence_screen_active_idle_input", frame.Trigger, "stuck content should use the screen-active idle trigger");
+        AssertTrue(!frame.ShouldInterrupt, "stuck coding presence should not create a generic silence ping");
+        AssertTrue(frame.SummaryUk.Contains("Ввід неактивний", StringComparison.Ordinal), "summary should be readable Ukrainian");
+    }
+
+    private static void PresenceTreatsActiveInputChatSilenceAsPresent()
+    {
+        var now = new DateTime(2026, 5, 24, 21, 0, 0);
+        var state = new KokoInternalState { LastPresenceInterruptAt = now.AddHours(-9) };
+        var messages = new[]
+        {
+            new ChatRepository.ChatMessage { Role = "user", Content = "я працюю, не чіпай чат", Timestamp = now.AddHours(-2) }
+        };
+
+        var frame = new KokoPresenceContinuityEngine().Evaluate(
+            state,
+            messages,
+            now,
+            autonomyLevel: 3,
+            systemInfoOverride: new SystemInfo { IdleTime = TimeSpan.FromSeconds(20) });
+
+        AssertEqual("physically_present", frame.SituationKind, "recent PC input should override generic long-chat-silence absence");
+        AssertEqual("presence_pc_active_chat_silent", frame.Trigger, "active input silence should use an explicit presence trigger");
+        AssertTrue(!frame.ShouldInterrupt, "active PC use without chat should not produce a generic long-silence ping");
+        AssertTrue(frame.SummaryUk.Contains("ПК активний", StringComparison.Ordinal), "summary should explain active PC presence");
     }
 
     private static void AutonomyBlocksGenericPingDuringActiveIntent()
@@ -693,11 +845,70 @@ internal static class Program
         });
 
         var frame = new KokoPresenceContinuityEngine()
-            .Evaluate(state, ctx.Chat.GetMessages(10), now, autonomyLevel: 3);
+            .Evaluate(
+                state,
+                ctx.Chat.GetMessages(10),
+                now,
+                autonomyLevel: 3,
+                systemInfoOverride: new SystemInfo { IdleTime = TimeSpan.Zero });
 
         AssertTrue(frame.ShouldInterrupt, "long silence should be allowed to interrupt at high autonomy after cooldown");
         AssertEqual("long_silence", frame.SituationKind, "seven hours should be long silence");
         AssertEqual("presence_long_silence", frame.Trigger, "long silence should have a presence trigger");
+    }
+
+    private static void PresenceLongSilenceSummaryIsReadableUkrainian()
+    {
+        var now = new DateTime(2026, 5, 24, 20, 0, 0);
+        var state = new KokoInternalState { LastPresenceInterruptAt = now.AddHours(-9) };
+        var messages = new[]
+        {
+            new ChatRepository.ChatMessage
+            {
+                Role = "user",
+                Content = "відійду",
+                Timestamp = now.AddHours(-7)
+            }
+        };
+
+        var frame = new KokoPresenceContinuityEngine().Evaluate(
+            state,
+            messages,
+            now,
+            autonomyLevel: 3,
+            systemInfoOverride: new SystemInfo { IdleTime = TimeSpan.Zero });
+
+        AssertEqual("long_silence", frame.SituationKind, "seven hours should stay long silence");
+        AssertTrue(frame.SummaryUk.Contains("Довга тиша в чаті:", StringComparison.Ordinal), "long silence summary should be readable Ukrainian");
+        AssertTrue(!frame.SummaryUk.Contains("Р", StringComparison.Ordinal), "long silence summary should not contain mojibake Cyrillic-R artifacts");
+        var mojibakeQuoteMarker = new string(new[] { '\u0432', '\u0402' });
+        AssertTrue(!frame.SummaryUk.Contains(mojibakeQuoteMarker, StringComparison.Ordinal), "long silence summary should not contain mojibake quote artifacts");
+    }
+
+    private static void PresenceLongSilenceWithPcAwayDoesNotInterrupt()
+    {
+        var now = new DateTime(2026, 5, 24, 20, 0, 0);
+        var state = new KokoInternalState { LastPresenceInterruptAt = now.AddHours(-9) };
+        var messages = new[]
+        {
+            new ChatRepository.ChatMessage
+            {
+                Role = "user",
+                Content = "відійду",
+                Timestamp = now.AddHours(-7)
+            }
+        };
+
+        var frame = new KokoPresenceContinuityEngine().Evaluate(
+            state,
+            messages,
+            now,
+            autonomyLevel: 3,
+            systemInfoOverride: new SystemInfo { IdleTime = TimeSpan.FromMinutes(40) });
+
+        AssertEqual("away", frame.SituationKind, "PC idle should override generic long-silence ping");
+        AssertTrue(!frame.ShouldInterrupt, "away state should stay silent even after long chat silence");
+        AssertTrue(frame.SummaryUk.Contains("відійшов від ПК", StringComparison.Ordinal), "away summary should explain the actual presence signal");
     }
 
     private static void InternalDayShiftsPhaseAndWritesVaultStatus()
@@ -1390,6 +1601,17 @@ internal static class Program
         AssertTrue(kill.RequiresConfirmation, "kill request must require confirmation");
     }
 
+    private static void PcIntentRouterBuildsShellChainActionType()
+    {
+        var plan = PcIntentRouter.TryBuildActionPlan("chain: Write-Output one -> Write-Output two");
+
+        AssertTrue(plan != null, "shell chain should build a PC action plan");
+        AssertEqual(PcActionRiskTier.RiskyLocal, plan!.RiskTier, "shell chain stays confirmation-gated risky local");
+        AssertEqual("runShellChain", plan.Actions.Single().ActionType, "shell chain should use the dedicated executor action type");
+        AssertTrue(plan.Actions.Single().Arguments.TryGetValue("command", out var command), "shell chain plan should preserve command argument");
+        AssertTrue((command ?? "").Contains("Write-Output two", StringComparison.OrdinalIgnoreCase), "shell chain command should preserve the full chain");
+    }
+
     private static void ResourceGuardianPromptsOnBrowserPressureInGaming()
     {
         var info = new SystemInfo
@@ -1431,6 +1653,513 @@ internal static class Program
         var rendered = context.ToString();
         AssertTrue(rendered.Contains("PC context snapshot", StringComparison.OrdinalIgnoreCase), "context should render a readable snapshot");
         AssertTrue(rendered.Contains("System:", StringComparison.OrdinalIgnoreCase), "context should include system stats");
+    }
+
+    private static void PcContextV2LightReturnsForegroundAndSystem()
+    {
+        var context = new PcControlService().GetContextV2(PcObservationMode.Light);
+        AssertEqual(PcObservationMode.Light, context.ObservationMode, "light context should preserve observation mode");
+        AssertTrue(context.TakenAt > DateTime.MinValue, "v2 context timestamp should be set");
+        AssertTrue(context.Identity != null, "v2 context should include identity block");
+        AssertTrue(context.Presence != null, "v2 context should include presence block");
+        AssertTrue(context.Resources != null, "v2 context should include resource block");
+        AssertTrue(context.Foreground != null, "v2 context should include foreground block");
+        AssertEqual(0, context.VisibleWindows.Count, "light mode should not enumerate visible windows");
+    }
+
+    private static void PcContextV2NormalCapsVisibleWindows()
+    {
+        var context = new PcControlService().GetContextV2(PcObservationMode.Normal, maxWindows: 7);
+        AssertEqual(PcObservationMode.Normal, context.ObservationMode, "normal context should preserve observation mode");
+        AssertTrue(context.VisibleWindows.Count <= 7, "normal context should cap visible windows");
+        AssertTrue(context.BrowserWindows.Count <= 30, "browser windows should be capped");
+        AssertTrue(context.Workspace != null, "normal context should classify workspace");
+    }
+
+    private static void PcContextRedactorMarksSensitiveTitle()
+    {
+        var foreground = new ForegroundWindowInfo
+        {
+            ProcessName = "chrome",
+            Title = "Bank login - token=abcdef1234567890abcdef1234567890",
+            ClassName = "Chrome_WidgetWin_1"
+        };
+
+        var privacy = PcContextRedactor.AssessPrivacy(foreground, Array.Empty<WindowSummary>());
+        AssertTrue(privacy.IsSensitive, "bank/login/token title should be marked sensitive");
+        AssertTrue(!privacy.ScreenObservationAllowed, "sensitive context should block screen observation");
+
+        var redacted = PcContextRedactor.RedactForeground(foreground);
+        AssertTrue(!redacted.Title.Contains("abcdef", StringComparison.OrdinalIgnoreCase), "redactor should remove long token material");
+        AssertTrue(redacted.Title.Contains("[redacted]", StringComparison.OrdinalIgnoreCase) || redacted.Title.Contains("[id]", StringComparison.OrdinalIgnoreCase), "redactor should mark removed secret material");
+    }
+
+    private static void PcActionPolicyRequiresConfirmationForKillProcess()
+    {
+        var decision = new PcActionPolicyEngine().Evaluate(
+            PcActionPlan.Single("close frozen browser", "KillProcess", "chrome"),
+            new PcContextSnapshotV2());
+
+        AssertEqual(PcPolicyDecisionKind.NeedsConfirmation, decision.Kind, "kill process must require confirmation");
+        AssertEqual(PcActionRiskTier.RiskyLocal, decision.RiskTier, "kill process should be risky local");
+        AssertTrue(decision.ConfirmationRequired, "kill process decision should expose confirmation flag");
+    }
+
+    private static void PcActionPolicyAllowsOpenApp()
+    {
+        var decision = new PcActionPolicyEngine().Evaluate(
+            PcActionPlan.Single("open editor", "OpenApp", "code", PcActionRiskTier.SafeLocal),
+            new PcContextSnapshotV2());
+
+        AssertEqual(PcPolicyDecisionKind.Allowed, decision.Kind, "open app should be allowed as safe local action");
+        AssertEqual(PcActionRiskTier.SafeLocal, decision.RiskTier, "open app should stay safe local");
+        AssertTrue(decision.CanExecute, "allowed safe local action should be executable by future executor");
+    }
+
+    private static void PcActionPolicyRequiresConfirmationForShutdown()
+    {
+        var decision = new PcActionPolicyEngine().Evaluate(
+            PcActionPlan.Single("power off machine", "Shutdown", "", PcActionRiskTier.RiskyLocal),
+            new PcContextSnapshotV2());
+
+        AssertEqual(PcPolicyDecisionKind.NeedsConfirmation, decision.Kind, "shutdown must require confirmation");
+        AssertTrue(decision.RequiredConfirmations.Count > 0, "shutdown should describe required confirmation");
+    }
+
+    private static void PcActionPolicyBlocksSensitiveScreenshotAndExternalAction()
+    {
+        var sensitive = new PcContextSnapshotV2
+        {
+            Privacy = new PcPrivacyContext
+            {
+                IsSensitive = true,
+                ScreenObservationAllowed = false,
+                SensitivityReason = "test sensitive window"
+            }
+        };
+
+        var screenshot = new PcActionPolicyEngine().Evaluate(
+            PcActionPlan.Single("look at password screen", "TakeScreenshot", "", PcActionRiskTier.SafeLocal),
+            sensitive);
+        AssertEqual(PcPolicyDecisionKind.Blocked, screenshot.Kind, "sensitive context should block screenshots");
+
+        var external = new PcActionPolicyEngine().Evaluate(
+            PcActionPlan.Single("send message", "SendMessage", "telegram", PcActionRiskTier.ExternalOrIrreversible),
+            sensitive);
+        AssertEqual(PcPolicyDecisionKind.Blocked, external.Kind, "sensitive context should block external actions");
+    }
+
+    private static void PcActionJournalWritesJsonl()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "KokonoeAssistant.Tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        var journalPath = Path.Combine(dir, "PcActionJournal.jsonl");
+        var plan = PcActionPlan.Single("open editor", "OpenApp", "code", PcActionRiskTier.SafeLocal);
+        var decision = new PcActionPolicyEngine().Evaluate(plan, new PcContextSnapshotV2());
+
+        new PcActionJournal(journalPath).AppendDecision(plan, decision, "dry-run ok");
+
+        AssertTrue(File.Exists(journalPath), "journal should create JSONL file");
+        var line = File.ReadLines(journalPath).Single();
+        var json = JObject.Parse(line);
+        AssertEqual(plan.Id, json["ActionId"]?.ToString(), "journal should persist action id");
+        AssertEqual("Allowed", json["Decision"]?.ToString(), "journal should persist decision");
+        AssertEqual("dry-run ok", json["ResultSummary"]?.ToString(), "journal should persist result summary");
+    }
+
+    private static void PcRollbackServiceCreatesFileBackupManifest()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "KokonoeAssistant.Tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        var file = Path.Combine(dir, "note.txt");
+        File.WriteAllText(file, "rollback content");
+
+        var backupRoot = Path.Combine(dir, ".kokonoe_backups");
+        var result = new PcRollbackService(backupRoot).CreateFileBackup("action-1", file);
+
+        AssertTrue(result.Success, "rollback backup should succeed for an existing file");
+        AssertTrue(File.Exists(result.ManifestPath), "rollback should write manifest");
+        AssertEqual(1, result.Items.Count, "rollback should record one item");
+        AssertTrue(File.Exists(result.Items[0].BackupPath), "backup file should exist");
+        AssertTrue(!string.IsNullOrWhiteSpace(result.Items[0].Sha256), "backup item should include checksum");
+
+        var manifest = File.ReadAllText(result.ManifestPath);
+        AssertTrue(manifest.Contains("note.txt", StringComparison.OrdinalIgnoreCase), "manifest should reference source file");
+    }
+
+    private static void PcActionExecutorRunsAllowedOpenAppDryRun()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "KokonoeAssistant.Tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        var journal = new PcActionJournal(Path.Combine(dir, "journal.jsonl"));
+        var plan = PcActionPlan.Single("open code dry run", "OpenApp", "code", PcActionRiskTier.SafeLocal);
+        plan.Actions[0].Arguments["dryRun"] = "true";
+
+        var result = new PcActionExecutor(journal: journal)
+            .ExecuteAsync(plan, new PcContextSnapshotV2())
+            .GetAwaiter()
+            .GetResult();
+
+        AssertTrue(result.Succeeded, "allowed dry-run open app should succeed");
+        AssertEqual(PcPolicyDecisionKind.Allowed, result.Decision.Kind, "dry-run open app should be allowed");
+        AssertTrue(result.Message.Contains("dry-run open app", StringComparison.OrdinalIgnoreCase), "executor should report dry-run");
+        AssertTrue(File.Exists(journal.JournalPath), "executor should journal allowed action");
+    }
+
+    private static void PcActionExecutorReturnsConfirmationForRiskyAction()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "KokonoeAssistant.Tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        var journal = new PcActionJournal(Path.Combine(dir, "journal.jsonl"));
+        var plan = PcActionPlan.Single("close browser", "KillProcess", "chrome");
+
+        var result = new PcActionExecutor(journal: journal)
+            .ExecuteAsync(plan, new PcContextSnapshotV2())
+            .GetAwaiter()
+            .GetResult();
+
+        AssertTrue(!result.Succeeded, "risky action should not execute");
+        AssertTrue(result.RequiresConfirmation, "risky action should return confirmation-needed result");
+        AssertEqual(PcPolicyDecisionKind.NeedsConfirmation, result.Decision.Kind, "kill process should not pass executor without confirmation");
+        AssertTrue(File.ReadAllText(journal.JournalPath).Contains("NeedsConfirmation", StringComparison.OrdinalIgnoreCase), "confirmation decision should be journaled");
+    }
+
+    private static void PcActionExecutorLogsBlockedAction()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "KokonoeAssistant.Tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        var journal = new PcActionJournal(Path.Combine(dir, "journal.jsonl"));
+        var sensitive = new PcContextSnapshotV2
+        {
+            Privacy = new PcPrivacyContext { IsSensitive = true, ScreenObservationAllowed = false }
+        };
+        var plan = PcActionPlan.Single("screen sensitive window", "TakeScreenshot", "", PcActionRiskTier.SafeLocal);
+
+        var result = new PcActionExecutor(journal: journal)
+            .ExecuteAsync(plan, sensitive)
+            .GetAwaiter()
+            .GetResult();
+
+        AssertTrue(result.Blocked, "blocked policy should stay blocked in executor");
+        AssertTrue(!result.Succeeded, "blocked action should not execute");
+        var log = File.ReadAllText(journal.JournalPath);
+        AssertTrue(log.Contains("Blocked", StringComparison.OrdinalIgnoreCase), "blocked action should be journaled");
+        AssertTrue(log.Contains("Sensitive context", StringComparison.OrdinalIgnoreCase), "blocked journal should include policy reason");
+    }
+
+    private static void PcIntentRouterExecutesOpenAppThroughActionExecutorDryRun()
+    {
+        var result = PcIntentRouter.TryExecuteAsync("open code dry-run", new PcControlService())
+            .GetAwaiter()
+            .GetResult();
+
+        AssertTrue(result.Handled, "open app should be handled");
+        AssertEqual(PcIntentAction.OpenApp, result.Action, "open app action should be preserved");
+        AssertTrue(!result.RequiresConfirmation, "dry-run open app should not require confirmation");
+        AssertTrue(result.Reply.Contains("dry-run open app", StringComparison.OrdinalIgnoreCase), "open app route should return executor dry-run output");
+    }
+
+    private static void PcIntentRouterKillProcessNeedsConfirmation()
+    {
+        var result = PcIntentRouter.TryExecuteAsync("kill chrome", new PcControlService())
+            .GetAwaiter()
+            .GetResult();
+
+        AssertTrue(result.Handled, "kill process should be handled");
+        AssertEqual(PcIntentAction.KillProcess, result.Action, "kill action should be preserved");
+        AssertTrue(result.RequiresConfirmation, "kill process must require confirmation");
+        AssertTrue(result.Reply.Contains("requires confirmation", StringComparison.OrdinalIgnoreCase), "kill process should not execute directly");
+    }
+
+    private static void PcIntentRouterBlocksSevereShellByPolicy()
+    {
+        var result = PcIntentRouter.TryExecuteAsync("ps: Remove-Item -Recurse C:\\temp", new PcControlService())
+            .GetAwaiter()
+            .GetResult();
+
+        AssertTrue(result.Handled, "shell command should be handled");
+        AssertEqual(PcIntentAction.RunPowerShell, result.Action, "shell action should be preserved");
+        AssertTrue(!result.RequiresConfirmation, "blocked severe shell should not ask for confirmation");
+        AssertTrue(result.Reply.Contains("blocked by policy", StringComparison.OrdinalIgnoreCase), "severe shell should be blocked by policy");
+    }
+
+    private static void PcIntentRouterFullContextUsesContextV2()
+    {
+        var result = PcIntentRouter.TryExecuteAsync("what is new on my pc?", new PcControlService())
+            .GetAwaiter()
+            .GetResult();
+
+        AssertTrue(result.Handled, "full context should be handled");
+        AssertEqual(PcIntentAction.FullContextScan, result.Action, "full context action should be preserved");
+        AssertTrue(result.Reply.Contains("PC context v2", StringComparison.OrdinalIgnoreCase), "full context scan should use GetContextV2 output");
+    }
+
+    private static void PcActionExecutorConfirmsExactPendingActionId()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "KokonoeAssistant.Tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        var journal = new PcActionJournal(Path.Combine(dir, "journal.jsonl"));
+        var store = new PcPendingActionStore(Path.Combine(dir, "pending.jsonl"));
+        var executor = new PcActionExecutor(journal: journal, pending: store);
+        var plan = PcActionPlan.Single("close browser dry run", "KillProcess", "chrome", PcActionRiskTier.RiskyLocal);
+        plan.Actions[0].Arguments["dryRun"] = "true";
+
+        var first = executor.ExecuteAsync(plan, new PcContextSnapshotV2()).GetAwaiter().GetResult();
+
+        AssertTrue(first.RequiresConfirmation, "kill process should first produce a pending confirmation");
+        AssertTrue(!first.Succeeded, "kill process must not execute before confirmation");
+        AssertEqual(1, store.Count, "pending store should retain one action");
+        AssertTrue(first.Message.Contains("pc:", StringComparison.OrdinalIgnoreCase), "pending reply should include action id");
+
+        var id = first.PendingActionId;
+        var confirmed = executor
+            .ConfirmAndExecuteAsync(id, $"так, виконай pc:{id} kill chrome", new PcContextSnapshotV2())
+            .GetAwaiter()
+            .GetResult();
+
+        AssertTrue(confirmed.Succeeded, "exact action-id confirmation should execute confirmed dry-run");
+        AssertTrue(!confirmed.RequiresConfirmation, "confirmed action should not require a second confirmation");
+        AssertTrue(confirmed.Message.Contains("dry-run kill process", StringComparison.OrdinalIgnoreCase), "confirmed dry-run should be reported");
+        AssertEqual(0, store.Count, "confirmed action should be removed from pending store");
+        AssertTrue(File.ReadAllText(journal.JournalPath).Contains("Confirmed", StringComparison.OrdinalIgnoreCase), "confirmed state should be journaled");
+    }
+
+    private static void PcActionExecutorRejectsExpiredPendingAction()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "KokonoeAssistant.Tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        var now = DateTime.UtcNow;
+        var journal = new PcActionJournal(Path.Combine(dir, "journal.jsonl"));
+        var store = new PcPendingActionStore(Path.Combine(dir, "pending.jsonl"), clock: () => now);
+        var executor = new PcActionExecutor(journal: journal, pending: store);
+        var plan = PcActionPlan.Single("close browser dry run", "KillProcess", "chrome", PcActionRiskTier.RiskyLocal);
+        plan.Actions[0].Arguments["dryRun"] = "true";
+
+        var first = executor.ExecuteAsync(plan, new PcContextSnapshotV2()).GetAwaiter().GetResult();
+        now = now.AddMinutes(6);
+        var expired = executor
+            .ConfirmAndExecuteAsync(first.PendingActionId, $"confirm pc:{first.PendingActionId} kill chrome", new PcContextSnapshotV2())
+            .GetAwaiter()
+            .GetResult();
+
+        AssertTrue(expired.Blocked, "expired pending action should be blocked");
+        AssertTrue(!expired.Succeeded, "expired pending action must not execute");
+        AssertTrue(expired.Message.Contains("expired", StringComparison.OrdinalIgnoreCase), "expired action should report expiry");
+        AssertEqual(0, store.Count, "expired action should be removed from pending store");
+        AssertTrue(File.ReadAllText(store.StorePath).Contains("Expired", StringComparison.OrdinalIgnoreCase), "pending store should record expired state");
+        AssertTrue(File.ReadAllText(journal.JournalPath).Contains("Expired", StringComparison.OrdinalIgnoreCase), "action journal should record expired state");
+    }
+
+    private static void PcActionExecutorRejectsGenericYes()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "KokonoeAssistant.Tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        var journal = new PcActionJournal(Path.Combine(dir, "journal.jsonl"));
+        var store = new PcPendingActionStore(Path.Combine(dir, "pending.jsonl"));
+        var executor = new PcActionExecutor(journal: journal, pending: store);
+        var plan = PcActionPlan.Single("close browser dry run", "KillProcess", "chrome", PcActionRiskTier.RiskyLocal);
+        plan.Actions[0].Arguments["dryRun"] = "true";
+
+        var first = executor.ExecuteAsync(plan, new PcContextSnapshotV2()).GetAwaiter().GetResult();
+        var rejected = executor
+            .ConfirmAndExecuteAsync(first.PendingActionId, "yes", new PcContextSnapshotV2())
+            .GetAwaiter()
+            .GetResult();
+
+        AssertTrue(rejected.Blocked, "generic yes must not confirm a risky action");
+        AssertTrue(!rejected.Succeeded, "generic yes must not execute");
+        AssertEqual(1, store.Count, "rejected confirmation should leave the action pending until explicit confirmation or expiry");
+        AssertTrue(File.ReadAllText(journal.JournalPath).Contains("Rejected", StringComparison.OrdinalIgnoreCase), "rejected state should be journaled");
+    }
+
+    private static void PcActionExecutorRejectsTargetOnlyConfirmation()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "KokonoeAssistant.Tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        var journal = new PcActionJournal(Path.Combine(dir, "journal.jsonl"));
+        var store = new PcPendingActionStore(Path.Combine(dir, "pending.jsonl"));
+        var executor = new PcActionExecutor(journal: journal, pending: store);
+        var plan = PcActionPlan.Single("close browser dry run", "KillProcess", "chrome", PcActionRiskTier.RiskyLocal);
+        plan.Actions[0].Arguments["dryRun"] = "true";
+
+        var first = executor.ExecuteAsync(plan, new PcContextSnapshotV2()).GetAwaiter().GetResult();
+        var rejected = executor
+            .ConfirmAndExecuteAsync(first.PendingActionId, $"pc:{first.PendingActionId} chrome", new PcContextSnapshotV2())
+            .GetAwaiter()
+            .GetResult();
+
+        AssertTrue(rejected.Blocked, "target-only text with action id must not execute a risky action");
+        AssertTrue(!rejected.Succeeded, "target-only confirmation must not execute");
+        AssertEqual(1, store.Count, "target-only rejection should leave pending action available for an explicit confirmation");
+        AssertTrue(File.ReadAllText(journal.JournalPath).Contains("Rejected", StringComparison.OrdinalIgnoreCase), "target-only rejection should be journaled");
+    }
+
+    private static void PcActionExecutorRejectsBareConfirmActionId()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "KokonoeAssistant.Tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        var journal = new PcActionJournal(Path.Combine(dir, "journal.jsonl"));
+        var store = new PcPendingActionStore(Path.Combine(dir, "pending.jsonl"));
+        var executor = new PcActionExecutor(journal: journal, pending: store);
+        var plan = PcActionPlan.Single("close browser dry run", "KillProcess", "chrome", PcActionRiskTier.RiskyLocal);
+        plan.Actions[0].Arguments["dryRun"] = "true";
+
+        var first = executor.ExecuteAsync(plan, new PcContextSnapshotV2()).GetAwaiter().GetResult();
+        var rejected = executor
+            .ConfirmAndExecuteAsync(first.PendingActionId, $"confirm pc:{first.PendingActionId}", new PcContextSnapshotV2())
+            .GetAwaiter()
+            .GetResult();
+
+        AssertTrue(rejected.Blocked, "bare confirm plus action id must not execute without the action intent");
+        AssertTrue(!rejected.Succeeded, "bare confirm action id must not execute");
+        AssertEqual(1, store.Count, "bare-confirm rejection should leave pending action available for an explicit confirmation");
+        AssertTrue(File.ReadAllText(journal.JournalPath).Contains("Rejected", StringComparison.OrdinalIgnoreCase), "bare-confirm rejection should be journaled");
+    }
+
+    private static void PcActionExecutorCancelPreventsLaterConfirmation()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "KokonoeAssistant.Tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        var journal = new PcActionJournal(Path.Combine(dir, "journal.jsonl"));
+        var store = new PcPendingActionStore(Path.Combine(dir, "pending.jsonl"));
+        var executor = new PcActionExecutor(journal: journal, pending: store);
+        var plan = PcActionPlan.Single("close browser dry run", "KillProcess", "chrome", PcActionRiskTier.RiskyLocal);
+        plan.Actions[0].Arguments["dryRun"] = "true";
+
+        var first = executor.ExecuteAsync(plan, new PcContextSnapshotV2()).GetAwaiter().GetResult();
+        var cancelled = executor.CancelPendingActionAsync(first.PendingActionId, "test cancel").GetAwaiter().GetResult();
+        var afterCancel = executor
+            .ConfirmAndExecuteAsync(first.PendingActionId, $"confirm pc:{first.PendingActionId} kill chrome", new PcContextSnapshotV2())
+            .GetAwaiter()
+            .GetResult();
+
+        AssertTrue(cancelled.Succeeded, "cancel should succeed for a pending action");
+        AssertEqual(0, store.Count, "cancelled action should be removed from pending store");
+        AssertTrue(afterCancel.Blocked, "cancelled action must not be executable later");
+        AssertTrue(afterCancel.Message.Contains("No pending", StringComparison.OrdinalIgnoreCase), "cancelled action should not masquerade as still pending");
+        AssertTrue(File.ReadAllText(store.StorePath).Contains("Cancelled", StringComparison.OrdinalIgnoreCase), "pending store should record cancelled state");
+    }
+
+    private static void PcActionExecutorKeepsSevereShellBlockedAfterConfirmationAttempt()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "KokonoeAssistant.Tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        var journal = new PcActionJournal(Path.Combine(dir, "journal.jsonl"));
+        var store = new PcPendingActionStore(Path.Combine(dir, "pending.jsonl"));
+        var executor = new PcActionExecutor(journal: journal, pending: store);
+        var plan = PcActionPlan.Single("delete temp recursively", "shell", "Remove-Item -Recurse C:\\temp", PcActionRiskTier.RiskyLocal);
+        plan.Actions[0].Arguments["command"] = "Remove-Item -Recurse C:\\temp";
+
+        var first = executor.ExecuteAsync(plan, new PcContextSnapshotV2()).GetAwaiter().GetResult();
+        var confirmationAttempt = executor
+            .ConfirmAndExecuteAsync(plan.Id, $"confirm pc:{plan.Id} shell", new PcContextSnapshotV2())
+            .GetAwaiter()
+            .GetResult();
+
+        AssertTrue(first.Blocked, "severe shell should be blocked immediately");
+        AssertTrue(!first.RequiresConfirmation, "blocked severe shell should not create confirmation prompt");
+        AssertEqual(0, store.Count, "blocked severe shell should not be saved as pending");
+        AssertTrue(confirmationAttempt.Blocked, "confirmation attempt should not resurrect blocked shell");
+        AssertTrue(confirmationAttempt.Message.Contains("No pending", StringComparison.OrdinalIgnoreCase), "blocked shell should have no pending action");
+    }
+
+    private static void PcIntentRouterBlocksUnsafeShellChainByPolicy()
+    {
+        var result = PcIntentRouter.TryExecuteAsync(
+                "chain: Write-Output safe -> Remove-Item -Recurse C:\\temp -> Write-Output after",
+                new PcControlService())
+            .GetAwaiter()
+            .GetResult();
+
+        AssertTrue(result.Handled, "unsafe shell chain should still be routed through SystemControl");
+        AssertEqual(PcIntentAction.RunShellChain, result.Action, "unsafe chain should preserve shell-chain action");
+        AssertTrue(!result.RequiresConfirmation, "blocked unsafe chain should not create a pending confirmation");
+        AssertTrue(result.Reply.Contains("blocked by policy", StringComparison.OrdinalIgnoreCase), "unsafe chain should be blocked before executor confirmation");
+        AssertTrue(result.Reply.Contains("Remove-Item", StringComparison.OrdinalIgnoreCase), "policy reason should mention the unsafe step");
+    }
+
+    private static void PcIntentRouterConfirmsAndCancelsActionIdRoute()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "KokonoeAssistant.Tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        var journal = new PcActionJournal(Path.Combine(dir, "journal.jsonl"));
+        var store = new PcPendingActionStore(Path.Combine(dir, "pending.jsonl"));
+        var executor = new PcActionExecutor(journal: journal, pending: store);
+        var pc = new PcControlService();
+
+        var first = PcIntentRouter.TryExecuteAsync("kill chrome dry-run", pc, executor: executor)
+            .GetAwaiter()
+            .GetResult();
+        var id = ExtractPcActionId(first.Reply);
+        AssertTrue(first.RequiresConfirmation, "router kill route should require confirmation");
+        AssertTrue(!string.IsNullOrWhiteSpace(id), "router confirmation reply should expose pc action id");
+
+        var generic = PcIntentRouter.TryExecuteAsync("yes", pc, executor: executor)
+            .GetAwaiter()
+            .GetResult();
+        AssertTrue(!generic.Handled, "generic yes without pc action id must not be handled as PC confirmation");
+
+        var confirmed = PcIntentRouter.TryExecuteAsync($"так, виконай pc:{id} kill chrome", pc, executor: executor)
+            .GetAwaiter()
+            .GetResult();
+        AssertTrue(confirmed.Handled, "router should handle explicit pc action confirmation");
+        AssertEqual(PcIntentAction.ConfirmPendingAction, confirmed.Action, "router should classify confirmation action");
+        AssertTrue(confirmed.Reply.Contains("dry-run kill process", StringComparison.OrdinalIgnoreCase), "router confirmation should execute dry-run through executor");
+
+        var second = PcIntentRouter.TryExecuteAsync("kill chrome dry-run", pc, executor: executor)
+            .GetAwaiter()
+            .GetResult();
+        var cancelId = ExtractPcActionId(second.Reply);
+        var cancelled = PcIntentRouter.TryExecuteAsync($"скасуй pc:{cancelId}", pc, executor: executor)
+            .GetAwaiter()
+            .GetResult();
+
+        AssertTrue(cancelled.Handled, "router should handle explicit pc action cancel");
+        AssertEqual(PcIntentAction.CancelPendingAction, cancelled.Action, "router should classify cancel action");
+        AssertTrue(cancelled.Reply.Contains("cancelled", StringComparison.OrdinalIgnoreCase), "cancel route should report cancellation");
+    }
+
+    private static void PcActionConfirmationJournalRecordsStates()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "KokonoeAssistant.Tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        var now = DateTime.UtcNow;
+        var journal = new PcActionJournal(Path.Combine(dir, "journal.jsonl"));
+        var store = new PcPendingActionStore(Path.Combine(dir, "pending.jsonl"), clock: () => now);
+        var executor = new PcActionExecutor(journal: journal, pending: store);
+
+        var plan = PcActionPlan.Single("close browser dry run", "KillProcess", "chrome", PcActionRiskTier.RiskyLocal);
+        plan.Actions[0].Arguments["dryRun"] = "true";
+        var first = executor.ExecuteAsync(plan, new PcContextSnapshotV2()).GetAwaiter().GetResult();
+        _ = executor.ConfirmAndExecuteAsync(first.PendingActionId, "yes", new PcContextSnapshotV2()).GetAwaiter().GetResult();
+        _ = executor.ConfirmAndExecuteAsync(first.PendingActionId, $"confirm pc:{first.PendingActionId} kill chrome", new PcContextSnapshotV2()).GetAwaiter().GetResult();
+
+        var expiringPlan = PcActionPlan.Single("close editor dry run", "KillProcess", "code", PcActionRiskTier.RiskyLocal);
+        expiringPlan.Actions[0].Arguments["dryRun"] = "true";
+        var expiring = executor.ExecuteAsync(expiringPlan, new PcContextSnapshotV2()).GetAwaiter().GetResult();
+        now = now.AddMinutes(6);
+        _ = executor.ConfirmAndExecuteAsync(expiring.PendingActionId, $"confirm pc:{expiring.PendingActionId} kill code", new PcContextSnapshotV2()).GetAwaiter().GetResult();
+
+        var journalText = File.ReadAllText(journal.JournalPath);
+        var pendingText = File.ReadAllText(store.StorePath);
+        foreach (var status in new[] { "Pending", "Rejected", "Confirmed", "Expired" })
+        {
+            AssertTrue(journalText.Contains(status, StringComparison.OrdinalIgnoreCase), $"action journal should contain {status}");
+            AssertTrue(pendingText.Contains(status, StringComparison.OrdinalIgnoreCase), $"pending store should contain {status}");
+        }
+    }
+
+    private static string ExtractPcActionId(string text)
+    {
+        var marker = "pc:";
+        var idx = text.IndexOf(marker, StringComparison.OrdinalIgnoreCase);
+        if (idx < 0)
+            return "";
+        var start = idx + marker.Length;
+        var end = start;
+        while (end < text.Length && (char.IsLetterOrDigit(text[end]) || text[end] == '-' || text[end] == '_'))
+            end++;
+        return text[start..end];
     }
 
     private static void PcControlCapturesScreenshot()
@@ -3706,7 +4435,8 @@ Persistent Obsidian context is now a core project requirement.
             AssertEqual(KokoAgentTaskStatus.Completed, finalTask.Status, "system-control task should complete");
             var systemStep = finalTask.Steps.FirstOrDefault(s => s.Kind == KokoAgentStepKind.SystemControl);
             AssertTrue(systemStep != null, "system-control result should exist");
-            AssertTrue(systemStep!.Result.Contains("koko-system-ok", StringComparison.OrdinalIgnoreCase), "PowerShell output should be captured");
+            AssertTrue(systemStep!.Result.Contains("PcActionExecutor", StringComparison.OrdinalIgnoreCase), "system control should route through PcActionExecutor");
+            AssertTrue(systemStep.Result.Contains("NeedsConfirmation", StringComparison.OrdinalIgnoreCase), "PowerShell should require confirmation instead of executing");
             service.Stop();
         }
         finally
@@ -4075,6 +4805,24 @@ Persistent Obsidian context is now a core project requirement.
 
         AssertTrue(prompt.Contains("Foreground window metadata", StringComparison.OrdinalIgnoreCase), "prompt should expose foreground metadata");
         AssertTrue(prompt.Contains("Program.cs - Visual Studio Code", StringComparison.OrdinalIgnoreCase), "prompt should include foreground title");
+    }
+
+    private static void ScreenAwarenessPromptIncludesIdleTime()
+    {
+        var service = new KokoScreenAwarenessService();
+        var prompt = service.BuildVisionPrompt(
+            new ActivityAnalyzer.ActivityState
+            {
+                ActiveWindowTitle = "YouTube",
+                TimeSinceLastChange = TimeSpan.FromMinutes(3),
+                PixelDifferencePercentage = 5.0
+            },
+            "",
+            "",
+            new DateTime(2026, 5, 24, 21, 0, 0),
+            idleTime: TimeSpan.FromMinutes(8.4));
+
+        AssertTrue(prompt.Contains("Input idle time: 8.4 minutes", StringComparison.OrdinalIgnoreCase), "vision prompt should include idle input duration");
     }
 
     private static void ScreenAwarenessPromptAsksForSubtlePatterns()

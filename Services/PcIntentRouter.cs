@@ -29,7 +29,9 @@ namespace KokonoeAssistant.Services
         WorkspaceScenario,
         FocusWindow,
         ArrangeWindows,
-        FullContextScan
+        FullContextScan,
+        ConfirmPendingAction,
+        CancelPendingAction
     }
 
     public sealed class PcIntentParseResult
@@ -76,6 +78,10 @@ namespace KokonoeAssistant.Services
             @"(?:гучн(?:ість|ость)|volume|звук)\D{0,12}(\d{1,3})",
             RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
+        private static readonly Regex PendingActionIdRegex = new(
+            @"\bpc:([a-zA-Z0-9_-]{6,64})\b",
+            RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
         private static readonly Regex KillRegex = new(
             @"(?:kill|прибий|заверши|закрий|вбий)\s+(?:процес\s+)?(.+)$",
             RegexOptions.IgnoreCase | RegexOptions.Compiled);
@@ -99,6 +105,10 @@ namespace KokonoeAssistant.Services
 
             var original = text.Trim();
             var lower = original.ToLowerInvariant();
+
+            var pending = TryParsePendingActionCommand(original);
+            if (pending.Handled)
+                return pending;
 
             if (KokoScreenIntent.IsManualScreenScan(original))
                 return NoMatch();
@@ -236,125 +246,180 @@ namespace KokonoeAssistant.Services
             return NoMatch();
         }
 
+        public static PcActionPlan? TryBuildActionPlan(string? text)
+        {
+            return TryBuildActionPlan(text, out _);
+        }
+
+        private static PcActionPlan? TryBuildActionPlan(string? text, out PcIntentParseResult parsed)
+        {
+            var normalized = NormalizeSystemControlText(text);
+            parsed = Parse(normalized);
+            if (!parsed.Handled)
+                return null;
+
+            var plan = BuildActionPlan(parsed, normalized);
+            if (plan != null)
+            {
+                plan.Intent = string.IsNullOrWhiteSpace(normalized) ? parsed.Action.ToString() : normalized;
+                plan.UserFacingSummaryUk = BuildPlanSummary(parsed, plan);
+            }
+
+            return plan;
+        }
+
+        private static PcActionPlan? BuildActionPlan(PcIntentParseResult parsed, string originalText)
+        {
+            PcActionPlan Plan(string actionType, string target, PcActionRiskTier risk)
+            {
+                var plan = PcActionPlan.Single(parsed.Action.ToString(), actionType, target, risk);
+                plan.RequiresConfirmation = risk >= PcActionRiskTier.RiskyLocal || parsed.RequiresConfirmation;
+                return plan;
+            }
+
+            switch (parsed.Action)
+            {
+                case PcIntentAction.SystemInfo:
+                    return Plan("systemInfo", "", PcActionRiskTier.Observe);
+                case PcIntentAction.FullContextScan:
+                    return Plan("getContextV2", "Normal", PcActionRiskTier.Observe);
+                case PcIntentAction.ConfirmPendingAction:
+                case PcIntentAction.CancelPendingAction:
+                    return null;
+                case PcIntentAction.Processes:
+                    return Plan("processes", "", PcActionRiskTier.Observe);
+                case PcIntentAction.VolumeUp:
+                    return Plan("volumeUp", "", PcActionRiskTier.SafeLocal);
+                case PcIntentAction.VolumeDown:
+                    return Plan("volumeDown", "", PcActionRiskTier.SafeLocal);
+                case PcIntentAction.VolumeMute:
+                    return Plan("volumeMute", "", PcActionRiskTier.SafeLocal);
+                case PcIntentAction.VolumeSet:
+                    return Plan("volumeSet", (parsed.Number ?? 0).ToString(), PcActionRiskTier.SafeLocal);
+                case PcIntentAction.OpenApp:
+                {
+                    var target = IsDryRunRequested(originalText) ? StripDryRunMarker(parsed.Argument) : parsed.Argument;
+                    var plan = Plan("openApp", target, PcActionRiskTier.SafeLocal);
+                    if (IsDryRunRequested(originalText))
+                        plan.Actions[0].Arguments["dryRun"] = "true";
+                    return plan;
+                }
+                case PcIntentAction.WorkspaceScenario:
+                {
+                    var plan = Plan("runWorkspaceScenario", parsed.Argument, PcActionRiskTier.SafeLocal);
+                    plan.Actions[0].Arguments["dryRun"] = ShouldExecuteWorkspaceScenario(originalText) ? "false" : "true";
+                    return plan;
+                }
+                case PcIntentAction.FocusWindow:
+                    return Plan("focusWindow", parsed.Argument, PcActionRiskTier.SafeLocal);
+                case PcIntentAction.ArrangeWindows:
+                    return Plan("arrangeWindows", parsed.Argument, PcActionRiskTier.SafeLocal);
+                case PcIntentAction.KillProcess:
+                {
+                    var target = IsDryRunRequested(originalText) ? StripDryRunMarker(parsed.Argument) : parsed.Argument;
+                    var plan = Plan("killProcess", target, PcActionRiskTier.RiskyLocal);
+                    if (IsDryRunRequested(originalText))
+                        plan.Actions[0].Arguments["dryRun"] = "true";
+                    if (!string.IsNullOrWhiteSpace(target))
+                        plan.AffectedProcesses.Add(target);
+                    return plan;
+                }
+                case PcIntentAction.LockScreen:
+                    return Plan("lockScreen", "", PcActionRiskTier.RiskyLocal);
+                case PcIntentAction.Sleep:
+                    return Plan("sleep", "", PcActionRiskTier.RiskyLocal);
+                case PcIntentAction.MonitorOff:
+                    return Plan("monitorOff", "", PcActionRiskTier.RiskyLocal);
+                case PcIntentAction.AbortShutdown:
+                    return Plan("abortShutdown", "", PcActionRiskTier.RiskyLocal);
+                case PcIntentAction.Shutdown:
+                    return Plan("shutdown", "", PcActionRiskTier.ExternalOrIrreversible);
+                case PcIntentAction.Restart:
+                    return Plan("restart", "", PcActionRiskTier.ExternalOrIrreversible);
+                case PcIntentAction.RunPowerShell:
+                {
+                    var plan = Plan("shell", parsed.Argument, PcActionRiskTier.RiskyLocal);
+                    plan.Actions[0].Arguments["command"] = parsed.Argument;
+                    return plan;
+                }
+                case PcIntentAction.RunShellChain:
+                {
+                    var plan = Plan("runShellChain", parsed.Argument, PcActionRiskTier.RiskyLocal);
+                    plan.Actions[0].Arguments["command"] = parsed.Argument;
+                    return plan;
+                }
+            }
+
+            return null;
+        }
+
         public static async Task<PcIntentExecutionResult> TryExecuteAsync(
             string? text,
             PcControlService pc,
-            CancellationToken ct = default)
+            CancellationToken ct = default,
+            PcActionExecutor? executor = null)
         {
-            var parsed = Parse(text);
-            if (!parsed.Handled)
-                return new PcIntentExecutionResult { Handled = false };
-
-            if (parsed.RequiresConfirmation)
+            var normalized = NormalizeSystemControlText(text);
+            var pendingCommand = TryParsePendingActionCommand(normalized);
+            if (pendingCommand.Handled)
             {
-                return new PcIntentExecutionResult
+                try
                 {
-                    Handled = true,
-                    Action = parsed.Action,
-                    RequiresConfirmation = true,
-                    Reply = parsed.ConfirmationText
-                };
+                    ct.ThrowIfCancellationRequested();
+                    executor ??= new PcActionExecutor(pc: pc);
+                    var pendingResult = pendingCommand.Action == PcIntentAction.CancelPendingAction
+                        ? await executor.CancelPendingActionAsync(pendingCommand.Argument, "cancelled from live route").ConfigureAwait(false)
+                        : await executor.ConfirmAndExecuteAsync(
+                            pendingCommand.Argument,
+                            normalized,
+                            pc.GetContextV2(PcObservationMode.Light),
+                            ct).ConfigureAwait(false);
+
+                    return new PcIntentExecutionResult
+                    {
+                        Handled = true,
+                        Action = pendingCommand.Action,
+                        RequiresConfirmation = false,
+                        Reply = FormatExecutionResult(pendingResult)
+                    };
+                }
+                catch (OperationCanceledException)
+                {
+                    return Done(pendingCommand.Action, "PC action cancelled.");
+                }
+                catch (Exception ex)
+                {
+                    return Done(pendingCommand.Action, "PC confirmation failed: " + ex.Message);
+                }
             }
+
+            var routedPlan = TryBuildActionPlan(text, out var routedParsed);
+            if (routedPlan == null || !routedParsed.Handled)
+                return new PcIntentExecutionResult { Handled = false };
 
             try
             {
                 ct.ThrowIfCancellationRequested();
-                switch (parsed.Action)
+                executor ??= new PcActionExecutor(pc: pc);
+                var routedResult = await executor.ExecuteAsync(routedPlan, pc.GetContextV2(PcObservationMode.Light), ct)
+                    .ConfigureAwait(false);
+                return new PcIntentExecutionResult
                 {
-                    case PcIntentAction.SystemInfo:
-                        return Done(parsed.Action, FormatSystemInfo(pc.GetSystemInfo()));
-
-                    case PcIntentAction.FullContextScan:
-                        return Done(parsed.Action, FormatAllContext(pc.GetAllContext()));
-
-                    case PcIntentAction.Processes:
-                        return Done(parsed.Action, "Топ процесів по RAM:\n" + pc.GetTopProcesses());
-
-                    case PcIntentAction.VolumeUp:
-                        pc.VolumeUp();
-                        return Done(parsed.Action, $"Гучність: {pc.GetVolume()}%.");
-
-                    case PcIntentAction.VolumeDown:
-                        pc.VolumeDown();
-                        return Done(parsed.Action, $"Гучність: {pc.GetVolume()}%.");
-
-                    case PcIntentAction.VolumeMute:
-                        pc.VolumeMute();
-                        return Done(parsed.Action, "Звук вимкнула.");
-
-                    case PcIntentAction.VolumeSet:
-                        pc.SetVolume(parsed.Number ?? 0);
-                        return Done(parsed.Action, $"Гучність: {pc.GetVolume()}%.");
-
-                    case PcIntentAction.OpenApp:
-                    {
-                        var (ok, msg) = pc.OpenApp(parsed.Argument);
-                        return Done(parsed.Action, ok ? msg : "Не відкрила: " + msg);
-                    }
-
-                    case PcIntentAction.KillProcess:
-                    {
-                        var (ok, msg) = pc.KillProcess(parsed.Argument);
-                        return Done(parsed.Action, ok ? msg : "Не завершила: " + msg);
-                    }
-
-                    case PcIntentAction.LockScreen:
-                        pc.LockScreen();
-                        return Done(parsed.Action, "ПК заблоковано.");
-
-                    case PcIntentAction.Sleep:
-                        pc.Sleep();
-                        return Done(parsed.Action, "Відправила ПК у сон.");
-
-                    case PcIntentAction.MonitorOff:
-                        pc.TurnOffMonitor();
-                        return Done(parsed.Action, "Монітор вимкнула.");
-
-                    case PcIntentAction.AbortShutdown:
-                        pc.AbortShutdown();
-                        return Done(parsed.Action, "Скасувала заплановане вимкнення/рестарт.");
-
-                    case PcIntentAction.RunPowerShell:
-                        if (PcCommandSafety.IsBlocked(parsed.Argument, out var reason))
-                            return Done(parsed.Action, "Команду заблоковано: " + reason);
-                        var output = await pc.RunCommandAsync(parsed.Argument, enforceSafety: true);
-                        return Done(parsed.Action, "PowerShell:\n" + output);
-
-                    case PcIntentAction.RunShellChain:
-                    {
-                        var chain = await pc.RunCommandChainAsync(parsed.Argument, ct: ct);
-                        return Done(parsed.Action, FormatShellChain(chain));
-                    }
-
-                    case PcIntentAction.WorkspaceScenario:
-                    {
-                        var scenario = pc.RunWorkspaceScenario(parsed.Argument);
-                        return Done(parsed.Action, scenario.ToString());
-                    }
-
-                    case PcIntentAction.FocusWindow:
-                    {
-                        var focused = pc.FocusWindow(parsed.Argument);
-                        return Done(parsed.Action, focused.Message);
-                    }
-
-                    case PcIntentAction.ArrangeWindows:
-                    {
-                        var arranged = pc.ArrangeWorkspaceWindows(parsed.Argument);
-                        return Done(parsed.Action, arranged.Message);
-                    }
-                }
+                    Handled = true,
+                    Action = routedParsed.Action,
+                    RequiresConfirmation = routedResult.RequiresConfirmation,
+                    Reply = FormatExecutionResult(routedResult)
+                };
             }
             catch (OperationCanceledException)
             {
-                return Done(parsed.Action, "Команду скасовано.");
+                return Done(routedParsed.Action, "PC action cancelled.");
             }
             catch (Exception ex)
             {
-                return Done(parsed.Action, "PC-команда впала: " + ex.Message);
+                return Done(routedParsed.Action, "PC action failed: " + ex.Message);
             }
 
-            return new PcIntentExecutionResult { Handled = false };
         }
 
         private static PcIntentExecutionResult Done(PcIntentAction action, string reply)
@@ -364,6 +429,35 @@ namespace KokonoeAssistant.Services
                 Action = action,
                 Reply = reply
             };
+
+        public static string FormatExecutionResult(PcActionExecutionResult result)
+        {
+            if (result.Blocked)
+                return "PC action blocked by policy: " + result.Decision.Reason;
+
+            if (result.RequiresConfirmation)
+            {
+                var confirmations = result.Decision.RequiredConfirmations.Count == 0
+                    ? result.Decision.Reason
+                    : string.Join("; ", result.Decision.RequiredConfirmations);
+                var id = string.IsNullOrWhiteSpace(result.PendingActionId) ? result.ActionId : result.PendingActionId;
+                var suffix = string.IsNullOrWhiteSpace(id) ? "" : $" Action id: pc:{id}.";
+                return string.IsNullOrWhiteSpace(result.Message)
+                    ? "PC action requires confirmation: " + confirmations + suffix
+                    : result.Message;
+            }
+
+            if (!string.IsNullOrWhiteSpace(result.Message))
+                return result.Message;
+
+            return result.Succeeded ? "PC action completed." : "PC action did not complete.";
+        }
+
+        private static string BuildPlanSummary(PcIntentParseResult parsed, PcActionPlan plan)
+        {
+            var step = plan.Actions.FirstOrDefault();
+            return $"{parsed.Action}: {step?.ActionType} {step?.Target}".Trim();
+        }
 
         public static string FormatSystemInfo(SystemInfo info)
         {
@@ -436,6 +530,42 @@ namespace KokonoeAssistant.Services
             return sb.ToString().Trim();
         }
 
+        private static PcIntentParseResult TryParsePendingActionCommand(string? text)
+        {
+            if (string.IsNullOrWhiteSpace(text))
+                return NoMatch();
+
+            var match = PendingActionIdRegex.Match(text);
+            if (!match.Success)
+                return NoMatch();
+
+            var lower = text.ToLowerInvariant();
+            var id = match.Groups[1].Value.Trim();
+            if (ContainsAny(lower, "скасуй", "відміни", "cancel", "abort"))
+            {
+                return new PcIntentParseResult
+                {
+                    Handled = true,
+                    Action = PcIntentAction.CancelPendingAction,
+                    Argument = id,
+                    ConfirmationText = text
+                };
+            }
+
+            if (ContainsAny(lower, "підтверджую", "підтверд", "так, виконай", "виконай", "запусти", "confirm", "execute", "run", "do it"))
+            {
+                return new PcIntentParseResult
+                {
+                    Handled = true,
+                    Action = PcIntentAction.ConfirmPendingAction,
+                    Argument = id,
+                    ConfirmationText = text
+                };
+            }
+
+            return NoMatch();
+        }
+
         private static bool LooksLikeWorkspaceScenario(string lower)
             => ContainsAny(lower,
                 "підготуй все для кодингу", "підготуй для кодингу", "для кодингу",
@@ -469,6 +599,34 @@ namespace KokonoeAssistant.Services
             if (string.IsNullOrWhiteSpace(text)) return "";
             var clean = text.Replace("\r", " ").Replace("\n", " ").Trim();
             return clean.Length <= max ? clean : clean[..Math.Max(0, max - 3)] + "...";
+        }
+
+        private static string NormalizeSystemControlText(string? text)
+        {
+            var clean = (text ?? "").Trim();
+            clean = Regex.Replace(clean, @"^\s*(?:system\s*control|systemcontrol|pc\s*control|os\s*control)\s*[:\-]\s*", "", RegexOptions.IgnoreCase);
+            return clean.Trim();
+        }
+
+        private static bool IsDryRunRequested(string text)
+            => ContainsAny(text.ToLowerInvariant(), "dry-run", "dry run", "preview", "simulate", "without executing", "без виконання", "не запускай", "тільки план");
+
+        private static string StripDryRunMarker(string text)
+        {
+            var cleaned = Regex.Replace(
+                text ?? "",
+                @"\b(?:dry-run|dry\s+run|preview|simulate|without\s+executing|без\s+виконання|не\s+запускай|тільки\s+план)\b",
+                "",
+                RegexOptions.IgnoreCase);
+            return CleanTarget(cleaned);
+        }
+
+        private static bool ShouldExecuteWorkspaceScenario(string text)
+        {
+            var lower = text.ToLowerInvariant();
+            if (IsDryRunRequested(text))
+                return false;
+            return ContainsAny(lower, "execute", "run it", "actually", "for real", "виконай", "запусти реально", "реально запусти", "без dry-run");
         }
 
         private static PcIntentParseResult Match(PcIntentAction action)

@@ -2389,6 +2389,15 @@ tags: [kokonoe, live-core, diagnostics]
             return new PcIntentExecutionResult { Handled = false };
         }
 
+        private static async Task<string> ExecuteLivePcActionPlanAsync(PcActionPlan plan, CancellationToken ct)
+        {
+            var pc = ServiceContainer.PcControl;
+            var result = await new PcActionExecutor(pc: pc)
+                .ExecuteAsync(plan, pc.GetContextV2(PcObservationMode.Light), ct)
+                .ConfigureAwait(false);
+            return PcIntentRouter.FormatExecutionResult(result);
+        }
+
         private bool TryStartObservationAgentTask(string userText, out string reply)
         {
             reply = "";
@@ -7527,21 +7536,30 @@ tags: [kokonoe, dashboard, live]
                 if (awaiting == TgAwaitingMode.Command)
                 {
                     await bot.SendMessage(chatId, "⏳ Виконую...", cancellationToken: ct);
-                    var cmdOutput = await ServiceContainer.PcControl.RunCommandAsync(text, enforceSafety: true);
-                    await bot.SendMessage(chatId, $"PowerShell:\n{cmdOutput}", cancellationToken: ct);
+                    var plan = PcActionPlan.Single("Telegram shell command", "shell", text, PcActionRiskTier.RiskyLocal);
+                    plan.Actions[0].Arguments["command"] = text;
+                    var replyText = await ExecuteLivePcActionPlanAsync(plan, ct);
+                    await bot.SendMessage(chatId, replyText, cancellationToken: ct);
                     return;
                 }
 
                 if (awaiting == TgAwaitingMode.Open)
                 {
-                    var (openOk, openMsg) = ServiceContainer.PcControl.OpenApp(text);
+                    var plan = PcActionPlan.Single("Telegram open app", "openApp", text, PcActionRiskTier.SafeLocal);
+                    var replyText = await ExecuteLivePcActionPlanAsync(plan, ct);
+                    var openOk = !replyText.Contains("blocked", StringComparison.OrdinalIgnoreCase);
+                    var openMsg = replyText;
                     await bot.SendMessage(chatId, openOk ? $"✅ {openMsg}" : $"❌ {openMsg}", cancellationToken: ct);
                     return;
                 }
 
                 if (awaiting == TgAwaitingMode.Kill)
                 {
-                    var (killOk, killMsg) = ServiceContainer.PcControl.KillProcess(text);
+                    var plan = PcActionPlan.Single("Telegram kill process", "killProcess", text, PcActionRiskTier.RiskyLocal);
+                    plan.AffectedProcesses.Add(text);
+                    var replyText = await ExecuteLivePcActionPlanAsync(plan, ct);
+                    var killOk = false;
+                    var killMsg = replyText;
                     await bot.SendMessage(chatId, killOk ? $"✅ {killMsg}" : $"❌ {killMsg}", cancellationToken: ct);
                     return;
                 }
@@ -7724,18 +7742,13 @@ tags: [kokonoe, dashboard, live]
                                         await TgSendVolumeMenu(bot, chatId, ct);       break;
                 case "pc_vol_mute":     ServiceContainer.PcControl.VolumeMute();
                                         await bot.SendMessage(chatId, "🔇 Тиша.", cancellationToken: ct); break;
-                case "pc_lock":         ServiceContainer.PcControl.LockScreen();
-                                        await bot.SendMessage(chatId, "🔒 Заблоковано.", cancellationToken: ct); break;
-                case "pc_sleep":        await bot.SendMessage(chatId, "💤 Засинаю...", cancellationToken: ct);
-                                        ServiceContainer.PcControl.Sleep();            break;
-                case "pc_mon_off":      ServiceContainer.PcControl.TurnOffMonitor();
-                                        await bot.SendMessage(chatId, "🖥 Монітор вимкнено.", cancellationToken: ct); break;
+                case "pc_lock":         await bot.SendMessage(chatId, await ExecuteLivePcActionPlanAsync(PcActionPlan.Single("Telegram lock screen", "lockScreen", "", PcActionRiskTier.RiskyLocal), ct), cancellationToken: ct); break;
+                case "pc_sleep":        await bot.SendMessage(chatId, await ExecuteLivePcActionPlanAsync(PcActionPlan.Single("Telegram sleep", "sleep", "", PcActionRiskTier.RiskyLocal), ct), cancellationToken: ct); break;
+                case "pc_mon_off":      await bot.SendMessage(chatId, await ExecuteLivePcActionPlanAsync(PcActionPlan.Single("Telegram monitor off", "monitorOff", "", PcActionRiskTier.RiskyLocal), ct), cancellationToken: ct); break;
                 case "pc_shutdown_ask": await TgConfirmAction(bot, chatId, "Справді вимкнути ПК?", "pc_shutdown_ok", ct); break;
                 case "pc_restart_ask":  await TgConfirmAction(bot, chatId, "Справді перезавантажити?", "pc_restart_ok", ct); break;
-                case "pc_shutdown_ok":  await bot.SendMessage(chatId, "⛔ Вимикаю через 10 секунд.", cancellationToken: ct);
-                                        ServiceContainer.PcControl.Shutdown(10);       break;
-                case "pc_restart_ok":   await bot.SendMessage(chatId, "🔄 Рестарт через 10 секунд.", cancellationToken: ct);
-                                        ServiceContainer.PcControl.Restart(10);        break;
+                case "pc_shutdown_ok":  await bot.SendMessage(chatId, await ExecuteLivePcActionPlanAsync(PcActionPlan.Single("Telegram shutdown", "shutdown", "", PcActionRiskTier.ExternalOrIrreversible), ct), cancellationToken: ct); break;
+                case "pc_restart_ok":   await bot.SendMessage(chatId, await ExecuteLivePcActionPlanAsync(PcActionPlan.Single("Telegram restart", "restart", "", PcActionRiskTier.ExternalOrIrreversible), ct), cancellationToken: ct); break;
                 case "pc_cmd":
                     SetTgAwaiting(chatId, TgAwaitingMode.Command);
                     await bot.SendMessage(chatId, "PowerShell-команда. Без руйнівних фокусів: видалення, форматування, shutdown/restart через цей шлях блокуються.", cancellationToken: ct);

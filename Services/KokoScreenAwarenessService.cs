@@ -1,4 +1,5 @@
 using System;
+using System.Globalization;
 using System.Linq;
 using System.Text;
 using Newtonsoft.Json.Linq;
@@ -54,16 +55,19 @@ namespace KokonoeAssistant.Services
             string lastSummary,
             string lastComment,
             DateTime now,
-            ForegroundWindowInfo? foreground = null)
+            ForegroundWindowInfo? foreground = null,
+            TimeSpan idleTime = default)
         {
             var window = string.IsNullOrWhiteSpace(activity.ActiveWindowTitle)
                 ? "невідоме вікно"
                 : activity.ActiveWindowTitle;
             var foregroundLine = foreground?.ToString() ?? "unavailable";
+            var idleMinutes = idleTime.TotalMinutes.ToString("F1", CultureInfo.InvariantCulture);
 
             return $$"""
 Foreground window metadata: {{foregroundLine}}
 Goal: find subtle patterns and help the user improve efficiency, focus, debugging, or gameplay. Do not hide behind "not important" when there is a useful pattern.
+Input idle time: {{idleMinutes}} minutes
 Ти Kokonoe. Подивись на скрін екрана користувача і зроби короткий screen-awareness аналіз.
 
 Поточний час: {{now:dd.MM.yyyy HH:mm}}
@@ -71,6 +75,7 @@ Goal: find subtle patterns and help the user improve efficiency, focus, debuggin
 Активність за пікселями: {{(activity.IsActive ? "активний екран" : "майже без змін")}}
 Зміна пікселів: {{activity.PixelDifferencePercentage:F1}}%
 Минуло від помітної зміни: {{(int)activity.TimeSinceLastChange.TotalMinutes}} хв
+Час бездіяльності (вводу): {{(int)idleTime.TotalMinutes}} хв
 Попередній screen-summary: {{NullDash(lastSummary)}}
 Останній screen-comment: {{NullDash(lastComment)}}
 

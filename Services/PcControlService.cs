@@ -54,6 +54,16 @@ namespace KokonoeAssistant.Services
         [DllImport("user32.dll")]
         private static extern bool IsWindowVisible(IntPtr hWnd);
 
+        [DllImport("user32.dll")]
+        private static extern bool GetLastInputInfo(ref LASTINPUTINFO plii);
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct LASTINPUTINFO
+        {
+            public uint cbSize;
+            public uint dwTime;
+        }
+
         private delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
 
         [DllImport("winmm.dll")]
@@ -157,6 +167,7 @@ namespace KokonoeAssistant.Services
 
             // Uptime
             info.Uptime = TimeSpan.FromMilliseconds(Environment.TickCount64);
+            info.IdleTime = GetIdleTime();
 
             // RAM
             var gcInfo = GC.GetGCMemoryInfo();
@@ -202,6 +213,21 @@ namespace KokonoeAssistant.Services
             waveOutGetVolume(IntPtr.Zero, out uint vol);
             var left = (vol & 0xFFFF);
             return (int)(left * 100 / 0xFFFF);
+        }
+
+        /// <summary>Повертає час бездіяльності користувача (idle time).</summary>
+        public TimeSpan GetIdleTime()
+        {
+            var lii = new LASTINPUTINFO();
+            lii.cbSize = (uint)Marshal.SizeOf(lii);
+            if (GetLastInputInfo(ref lii))
+            {
+                // Використовуємо (uint)Environment.TickCount для коректної обробки переповнення (wrap-around) кожні 49.7 днів
+                uint currentTick = (uint)Environment.TickCount;
+                uint idleTicks = currentTick - lii.dwTime;
+                return TimeSpan.FromMilliseconds(idleTicks);
+            }
+            return TimeSpan.Zero;
         }
 
         public void SetVolume(int percent)
@@ -302,6 +328,98 @@ namespace KokonoeAssistant.Services
                 snapshot.Errors.Add("windows: " + ex.Message);
             }
 
+            return snapshot;
+        }
+
+        public PcContextSnapshotV2 GetContextV2(PcObservationMode mode, int maxWindows = 40)
+        {
+            var snapshot = new PcContextSnapshotV2
+            {
+                TakenAt = DateTime.Now,
+                ObservationMode = mode
+            };
+
+            SystemInfo? system = null;
+            try
+            {
+                system = GetSystemInfo();
+                snapshot.Identity = new PcIdentityContext
+                {
+                    MachineName = system.MachineName,
+                    UserName = PcContextRedactor.RedactText(system.UserName),
+                    OsVersion = system.OsVersion,
+                    Uptime = system.Uptime
+                };
+                snapshot.Presence = new PcPresenceContext
+                {
+                    IdleTime = system.IdleTime
+                };
+                snapshot.Resources = new PcResourceContext
+                {
+                    CpuPercent = system.CpuPercent,
+                    RamTotalGb = system.RamTotalGb,
+                    RamUsedGb = system.RamUsedGb,
+                    VolumePercent = system.VolumePercent,
+                    Drives = system.Drives
+                        .Take(12)
+                        .Select(d => new DriveInfo_ { Name = PcContextRedactor.RedactText(d.Name), FreeGb = d.FreeGb, TotalGb = d.TotalGb })
+                        .ToList(),
+                    TopProcesses = system.TopProcesses
+                        .Take(8)
+                        .Select(p => new ProcessResourceInfo
+                        {
+                            ProcessName = PcContextRedactor.RedactText(p.ProcessName),
+                            ProcessId = p.ProcessId,
+                            MemoryMb = p.MemoryMb,
+                            CpuPercent = p.CpuPercent
+                        })
+                        .ToList()
+                };
+            }
+            catch (Exception ex)
+            {
+                snapshot.Errors.Add("system: " + ex.Message);
+            }
+
+            var rawForeground = new ForegroundWindowInfo();
+            try
+            {
+                rawForeground = GetForegroundWindow();
+                snapshot.Foreground = PcContextRedactor.RedactForeground(rawForeground);
+            }
+            catch (Exception ex)
+            {
+                snapshot.Errors.Add("foreground: " + ex.Message);
+            }
+
+            var rawWindows = new List<WindowSummary>();
+            if (mode >= PcObservationMode.Normal)
+            {
+                try
+                {
+                    rawWindows = ListVisibleWindows(Math.Clamp(maxWindows, 5, 100));
+                    snapshot.VisibleWindows = rawWindows
+                        .Select(PcContextRedactor.RedactWindow)
+                        .Take(Math.Clamp(maxWindows, 5, 100))
+                        .ToList();
+                    snapshot.BrowserWindows = rawWindows
+                        .Where(IsBrowserWindow)
+                        .Take(30)
+                        .Select(PcContextRedactor.RedactWindow)
+                        .ToList();
+                }
+                catch (Exception ex)
+                {
+                    snapshot.Errors.Add("windows: " + ex.Message);
+                }
+            }
+
+            snapshot.Privacy = PcContextRedactor.AssessPrivacy(rawForeground, rawWindows);
+            snapshot.Privacy.ScreenObservationAllowed = mode == PcObservationMode.Deep && !snapshot.Privacy.IsSensitive;
+            if (mode == PcObservationMode.Deep && !snapshot.Privacy.ScreenObservationAllowed && string.IsNullOrWhiteSpace(snapshot.Privacy.SensitivityReason))
+                snapshot.Privacy.SensitivityReason = "deep screen awareness blocked by privacy policy";
+
+            snapshot.Workspace = PcContextRedactor.ClassifyWorkspace(snapshot.Foreground, snapshot.VisibleWindows);
             return snapshot;
         }
 
@@ -896,6 +1014,7 @@ namespace KokonoeAssistant.Services
     public class SystemInfo
     {
         public TimeSpan Uptime        { get; set; }
+        public TimeSpan IdleTime      { get; set; }
         public double   RamTotalGb    { get; set; }
         public double   RamUsedGb     { get; set; }
         public double   CpuPercent    { get; set; }
@@ -974,7 +1093,7 @@ namespace KokonoeAssistant.Services
             var sb = new StringBuilder();
             sb.AppendLine($"PC context snapshot: {TakenAt:yyyy-MM-dd HH:mm:ss}");
             sb.AppendLine("Active window: " + Foreground);
-            sb.AppendLine($"System: CPU {System.CpuPercent:F1}% | RAM {System.RamUsedGb:F1}/{System.RamTotalGb:F1} GB | volume {System.VolumePercent}%");
+            sb.AppendLine($"System: CPU {System.CpuPercent:F1}% | RAM {System.RamUsedGb:F1}/{System.RamTotalGb:F1} GB | volume {System.VolumePercent}% | idle {System.IdleTime.TotalMinutes:F1}m");
             if (System.TopProcesses.Count > 0)
                 sb.AppendLine("Top processes: " + string.Join(", ", System.TopProcesses.Take(5).Select(p => $"{p.ProcessName} {p.MemoryMb:F0}MB/{p.CpuPercent:F1}%")));
 
