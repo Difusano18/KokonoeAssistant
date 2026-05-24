@@ -83,13 +83,25 @@ namespace KokonoeAssistant.Services
             if (frame.RequiresVaultRead || frame.Capability == "vault_memory")
                 steps.Add(AgentStep(steps.Count + 1, "Inspect relevant Obsidian vault and memory notes", KokoAgentStepKind.Vault));
 
+            if (frame.Capability == "screen_awareness" && frame.Intent == "observe")
+                steps.Add(AgentStep(steps.Count + 1, "Run long observation instead of arguing about visibility", KokoAgentStepKind.Observation));
+
+            if (frame.Capability == "screen_awareness" && frame.Intent != "observe")
+            {
+                steps.Add(AgentStep(steps.Count + 1, "Collect local desktop context before visual analysis", KokoAgentStepKind.SystemControl));
+                steps.Add(AgentStep(steps.Count + 1, "Capture and inspect the current screen", KokoAgentStepKind.Vision));
+            }
+
             if (frame.Capability == "os_control")
                 steps.Add(AgentStep(steps.Count + 1, "Execute safe local system-control route", KokoAgentStepKind.SystemControl));
 
-            if (frame.Capability == "codebase" || (frame.RequiresAction && frame.RequiresToolUse))
+            if (frame.Capability == "codebase" ||
+                (frame.RequiresAction && frame.RequiresToolUse && frame.Capability != "screen_awareness" && frame.Capability != "os_control"))
                 steps.Add(AgentStep(steps.Count + 1, "Prepare implementation route and affected files", KokoAgentStepKind.Implement));
 
-            if ((frame.RequiresToolUse || frame.Capability == "codebase") && frame.Capability != "os_control")
+            if ((frame.RequiresToolUse || frame.Capability == "codebase") &&
+                frame.Capability != "os_control" &&
+                frame.Capability != "screen_awareness")
                 steps.Add(AgentStep(steps.Count + 1, "Run safe sandbox or tool probe when computation is needed", KokoAgentStepKind.Sandbox));
 
             steps.Add(AgentStep(steps.Count + 1, "Execute the selected action or generate the response", KokoAgentStepKind.Respond));
@@ -145,6 +157,16 @@ namespace KokonoeAssistant.Services
                     steps[i].Order = i + 1;
             }
 
+            if (LooksLikeFullContextScanObjective(lower) &&
+                steps.All(s => s.Kind != KokoAgentStepKind.SystemControl))
+            {
+                var insertAt = steps.FindIndex(s => s.Kind == KokoAgentStepKind.Respond);
+                if (insertAt < 0) insertAt = Math.Max(0, steps.Count - 1);
+                steps.Insert(insertAt, AgentStep(insertAt + 1, "Scan local desktop, browser-window titles, and system context", KokoAgentStepKind.SystemControl));
+                for (var i = 0; i < steps.Count; i++)
+                    steps[i].Order = i + 1;
+            }
+
             if (LooksLikeLongObservationObjective(lower) &&
                 steps.All(s => s.Kind != KokoAgentStepKind.Observation))
             {
@@ -180,6 +202,8 @@ namespace KokonoeAssistant.Services
                 sb.AppendLine("- prefer doing/solving over explaining that you can help.");
             if (frame.RequiresVaultRead)
                 sb.AppendLine("- if answering about remembered facts, use vault/memory context instead of guessing.");
+            if (frame.Capability is "screen_awareness" or "os_control")
+                sb.AppendLine("- if the user asked for scan/system action, refusal text is invalid; use the local tool result or state the concrete tool failure.");
             sb.AppendLine("- keep Kokonoe competent, specific, and unsentimental.");
             return sb.ToString();
         }
@@ -202,6 +226,7 @@ RESPONSE PLAN REPAIR:
             if (ContainsAny(lower, "не хочу жити", "суїцид", "самоушкод", "померти")) return "crisis";
             if (LooksLikeIdentityOrVaultMemoryQuestion(lower)) return "memory";
             if (KokoScreenIntent.IsManualScreenScan(lower)) return "screen";
+            if (LooksLikeFullContextScanObjective(lower)) return "execute";
             if (ContainsAny(lower, "powershell", "terminal", "команда:", "ps:", "відкрий", "запусти", "процеси", "гучність", "заблокуй пк", "вимкни монітор")) return "execute";
             if (ContainsAny(lower, "зроби", "виконай", "реаліз", "пофікси", "виправ", "додай", "створи", "запусти")) return "execute";
             if (ContainsAny(lower, "код", "build", "тест", "баг", "помилка", "stacktrace", "exception")) return "engineering";
@@ -227,6 +252,7 @@ RESPONSE PLAN REPAIR:
             if (LooksLikeLongObservationObjective(lower)) return "screen_awareness";
             if (LooksLikeIdentityOrVaultMemoryQuestion(lower)) return "vault_memory";
             if (KokoScreenIntent.IsManualScreenScan(lower)) return "screen_awareness";
+            if (LooksLikeFullContextScanObjective(lower)) return "os_control";
             if (ContainsAny(lower, "код", "build", "тест", "exception", "stacktrace")) return "codebase";
             if (ContainsAny(lower, "\u043e\u0431\u0441\u0438\u0434\u0456\u0430\u043d", "\u043e\u0431\u0441\u0438\u0434\u0438\u0430\u043d", "\u0449\u043e \u0437\u043d\u0430\u0454\u0448 \u043f\u0440\u043e \u043c\u0435\u043d\u0435", "\u0440\u043e\u0437\u043a\u0430\u0436\u0438 \u0432\u0441\u0435 \u0449\u043e \u0437\u043d\u0430\u0454\u0448", "\u0440\u043e\u0437\u043a\u0430\u0437\u0443\u0439 \u0432\u0441\u0435 \u0449\u043e \u0437\u043d\u0430\u0454\u0448")) return "vault_memory";
             if (ContainsAny(lower, "vault", "obsidian", "нотат", "пам'ят")) return "vault_memory";
@@ -268,6 +294,7 @@ RESPONSE PLAN REPAIR:
         private static bool NeedsToolUse(string lower, string capability, bool needsVaultRead)
             => needsVaultRead ||
                capability is "codebase" or "vault_memory" or "telegram" or "screen_awareness" or "calendar" or "os_control" ||
+               LooksLikeFullContextScanObjective(lower) ||
                ContainsAny(lower, "запусти", "перевір", "прочитай файл", "відкрий", "знайди",
                    "запусти", "перевір", "прочитай файл", "відкрий", "знайди", "виправ", "пофікси", "додай");
 
@@ -288,6 +315,28 @@ RESPONSE PLAN REPAIR:
                 "що жере ram", "що жере пам", "ram", "пам'ять пк", "память пк",
                 "sysinfo", "system info", "статус пк", "стан пк",
                 "temp", "temporary", "cleanup", "clean up", "очисти temp", "місце на диску", "место на диске");
+
+        public static bool LooksLikeFullContextScanObjective(string lower)
+        {
+            lower = (lower ?? "").ToLowerInvariant();
+            if (ContainsAny(lower, "obsidian", "vault", "обсидіан", "обсидиан", "нотат", "замет"))
+                return false;
+
+            return ContainsAny(lower,
+                "scan everything", "full context", "context scan", "pc context", "what is new", "what do you see", "what can you see",
+                "\u043f\u0440\u043e\u0441\u043a\u0430\u043d\u0443\u0439 \u0432\u0441\u0435", "\u043f\u0440\u043e\u0441\u043a\u0430\u043d\u0443\u0439 \u0441\u0438\u0441\u0442\u0435\u043c\u0443", "\u043f\u0440\u043e\u0441\u043a\u0430\u043d\u0443\u0439 \u043f\u043a", "\u043f\u0440\u043e\u0441\u043a\u0430\u043d\u0443\u0439 \u043a\u043e\u043c\u043f",
+                "\u043f\u0440\u043e\u0441\u043a\u0430\u043d\u0438\u0440\u0443\u0439 \u0432\u0441\u0435", "\u043f\u0440\u043e\u0441\u043a\u0430\u043d\u0438\u0440\u0443\u0439 \u0441\u0438\u0441\u0442\u0435\u043c\u0443", "\u043f\u0440\u043e\u0441\u043a\u0430\u043d\u0438\u0440\u0443\u0439 \u043f\u043a", "\u043f\u0440\u043e\u0441\u043a\u0430\u043d\u0438\u0440\u0443\u0439 \u043a\u043e\u043c\u043f",
+                "\u0449\u043e \u0431\u0430\u0447\u0438\u0448", "\u0448\u043e \u0431\u0430\u0447\u0438\u0448", "\u0447\u0442\u043e \u0432\u0438\u0434\u0438\u0448\u044c",
+                "\u0449\u043e \u043d\u043e\u0432\u043e\u0433\u043e", "\u0448\u043e \u043d\u043e\u0432\u043e\u0433\u043e", "\u0447\u0442\u043e \u043d\u043e\u0432\u043e\u0433\u043e",
+                "\u043f\u043e\u0434\u0438\u0432\u0438\u0441\u044c \u0449\u043e \u0432\u0456\u0434\u043a\u0440\u0438\u0442\u043e", "\u0433\u043b\u044f\u043d\u044c \u0449\u043e \u0432\u0456\u0434\u043a\u0440\u0438\u0442\u043e", "\u044f\u043a\u0456 \u0432\u043a\u043b\u0430\u0434\u043a\u0438", "\u044f\u043a\u0456 \u0432\u0456\u043a\u043d\u0430",
+                "\u043a\u0430\u043a\u0438\u0435 \u0432\u043a\u043b\u0430\u0434\u043a\u0438", "\u043a\u0430\u043a\u0438\u0435 \u043e\u043a\u043d\u0430",
+                "проскануй все", "проскануй систему", "проскануй пк", "проскануй комп",
+                "просканируй все", "просканируй систему", "просканируй пк", "просканируй комп",
+                "що бачиш", "шо бачиш", "что видишь",
+                "що нового", "шо нового", "что нового",
+                "подивись що відкрито", "глянь що відкрито", "які вкладки", "які вікна",
+                "какие вкладки", "какие окна", "open tabs", "browser tabs");
+        }
 
         public static bool LooksLikeLongObservationObjective(string lower)
         {
@@ -347,6 +396,7 @@ RESPONSE PLAN REPAIR:
         {
             var steps = new List<string>();
             if (frame.Capability == "screen_awareness") steps.Add("capture current screen through the local screenshot route, then run vision before answering");
+            if (frame.Capability == "screen_awareness") steps.Add("collect foreground window, browser-window titles, and system context before final wording");
             if (frame.Capability == "os_control") steps.Add("route the OS/PC action through the deterministic local PC router before answering");
             if (frame.RequiresVaultRead) steps.Add("read relevant memory/vault context before making claims");
             if (frame.RequiresToolUse) steps.Add("use available tools when they materially reduce guessing");
@@ -369,6 +419,7 @@ RESPONSE PLAN REPAIR:
             };
             if (frame.Risk == "high") constraints.Add("ask confirmation before destructive or broad changes");
             if (frame.Capability == "screen_awareness") constraints.Add("do not deny local screen capability or ask for an upload when screenshot route is available");
+            if (frame.Capability == "screen_awareness") constraints.Add("execution precedes persona: scan first, then make the dry comment");
             if (frame.Capability == "os_control") constraints.Add("do not roleplay OS actions; use the PC router result or state the concrete local failure");
             if (frame.MemoryPolicy == "store_stable_fact") constraints.Add("store only stable facts; temporary state goes to Daily/Logs");
             if (state.PersonalityInCrisis) constraints.Add("crisis mode suppresses sarcasm");

@@ -33,6 +33,7 @@ namespace KokonoeAssistant.Services
         Respond,
         Verify,
         SelfReview,
+        HardReset,
         Report
     }
 
@@ -389,6 +390,12 @@ namespace KokonoeAssistant.Services
                 return await ExecuteSystemControlAsync(task, ct).ConfigureAwait(false);
             }
 
+            if (step.Kind == KokoAgentStepKind.Vision)
+            {
+                EmitActivity("execute", "VisionModel", task.Objective, "Capturing screen and running concrete visual analysis.", task.Id, step.Id);
+                return await ExecuteVisionSnapshotAsync(task, ct).ConfigureAwait(false);
+            }
+
             if (step.Kind == KokoAgentStepKind.Observation)
             {
                 EmitActivity("observe", "KokoObservationService", task.Objective, "Starting long-term desktop observation over the full virtual screen.", task.Id, step.Id);
@@ -405,6 +412,12 @@ namespace KokonoeAssistant.Services
             {
                 EmitActivity("observe", "SelfReview", task.Objective, "Reviewing task outputs before report. Yes, checking the work before bragging.", task.Id, step.Id);
                 return BuildSelfReviewReport(task);
+            }
+
+            if (step.Kind == KokoAgentStepKind.HardReset)
+            {
+                EmitActivity("execute", "HardReset", task.Objective, "Refusal detected; forcing tool execution before persona.", task.Id, step.Id);
+                return await ExecuteHardResetAsync(task, ct).ConfigureAwait(false);
             }
 
             if (step.Kind == KokoAgentStepKind.Report && task.Steps.Any(s => s.Kind == KokoAgentStepKind.Observation))
@@ -497,6 +510,12 @@ namespace KokonoeAssistant.Services
                 findings.Add("Result contains a weak fallback, denial, or simulated implementation.");
             }
 
+            if (LooksLikeExecutionRefusalOrLazy(resultBlob))
+            {
+                score -= 4;
+                findings.Add("Refusal/lazy response detected: execution was requested but the result asked the user to provide obvious tool input or said it cannot/will not act.");
+            }
+
             if (task.Steps.Any(s => s.Kind == KokoAgentStepKind.Observation) &&
                 !ContainsAny(lowerBlob, "observation", "capture ", "зібрано кадр", "зiбрано кадр"))
             {
@@ -539,11 +558,14 @@ namespace KokonoeAssistant.Services
             foreach (var step in task.Steps.Where(s => s.Order >= order))
                 step.Order++;
 
+            var hardReset = LooksLikeExecutionRefusalOrLazy(selfReview.Result);
             task.Steps.Add(new KokoAgentStep
             {
                 Order = order,
-                Title = $"Correct findings from {marker} (score {score}/10)",
-                Kind = KokoAgentStepKind.Implement,
+                Title = hardReset
+                    ? $"HardReset executor from {marker} (score {score}/10)"
+                    : $"Correct findings from {marker} (score {score}/10)",
+                Kind = hardReset ? KokoAgentStepKind.HardReset : KokoAgentStepKind.Implement,
                 Status = KokoAgentTaskStatus.Pending
             });
             task.Steps.Sort((a, b) => a.Order.CompareTo(b.Order));
@@ -554,6 +576,16 @@ namespace KokonoeAssistant.Services
         {
             ct.ThrowIfCancellationRequested();
             var objective = task.Objective ?? "";
+            if (KokoScreenIntent.IsManualScreenScan(objective) ||
+                KokoResponsePlannerEngine.LooksLikeFullContextScanObjective(objective))
+            {
+                var context = ServiceContainer.PcControl.GetAllContext();
+                return $"""
+                SystemControl completed through full context scan.
+                {TrimBlock(PcIntentRouter.FormatAllContext(context), 2200)}
+                """.Trim();
+            }
+
             var routed = await PcIntentRouter.TryExecuteAsync(objective, ServiceContainer.PcControl, ct).ConfigureAwait(false);
             if (routed.Handled)
             {
@@ -612,6 +644,143 @@ namespace KokonoeAssistant.Services
             }
 
             return "";
+        }
+
+        private async Task<string> ExecuteVisionSnapshotAsync(KokoAgentTask task, CancellationToken ct)
+        {
+            ct.ThrowIfCancellationRequested();
+            var pc = ServiceContainer.PcControl;
+            var context = pc.GetAllContext();
+            byte[] screenshot;
+            try
+            {
+                screenshot = pc.TakeScreenshot(minimizeSelf: true, restoreSelf: true, settleMs: 240);
+            }
+            catch (Exception ex)
+            {
+                return "Vision failed at local screenshot capture: " + ex.Message + "\n" + TrimBlock(context.ToString(), 1800);
+            }
+
+            if (_llm == null)
+            {
+                return $"""
+                Vision skipped because no LLM vision route is attached.
+                Local context:
+                {TrimBlock(context.ToString(), 1800)}
+                """.Trim();
+            }
+
+            var prompt = $"""
+            You are Kokonoe's vision executor. Execution precedes persona.
+            Objective: {task.Objective}
+
+            Local PC context already collected:
+            {TrimBlock(context.ToString(), 2200)}
+
+            Inspect the screenshot. List the visible app/window/tab evidence first, then add one concise useful judgement.
+            Do not say you cannot see unless the image is truly blank. Do not ask for a screenshot: you already have one.
+            Never copy private tokens or secrets; name them as secrets.
+            Ukrainian, concise, competent/sarcastic.
+            """;
+
+            string? reply = null;
+            using (var visionCts = CancellationTokenSource.CreateLinkedTokenSource(ct))
+            {
+                visionCts.CancelAfter(TimeSpan.FromSeconds(90));
+                reply = await _llm.SendSystemVisionQueryAsync(
+                    prompt,
+                    screenshot,
+                    "image/jpeg",
+                    visionCts.Token,
+                    maxTokensOverride: 2048).ConfigureAwait(false);
+            }
+
+            if (VisionResponseQuality.LooksUnusable(reply) || VisionResponseQuality.LooksGeneric(reply))
+            {
+                try
+                {
+                    var enhanced = ImageProcessingService.EnhanceForVision(screenshot);
+                    var retryPrompt = VisionResponseQuality.BuildRetryPrompt(prompt, context.Foreground.ToString());
+                    using var retryCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                    retryCts.CancelAfter(TimeSpan.FromSeconds(120));
+                    var repaired = await _llm.SendSystemVisionQueryAsync(
+                        retryPrompt,
+                        enhanced.Length > 0 ? enhanced : screenshot,
+                        "image/jpeg",
+                        retryCts.Token,
+                        maxTokensOverride: 3072).ConfigureAwait(false);
+                    if (!VisionResponseQuality.LooksUnusable(repaired) && !VisionResponseQuality.LooksGeneric(repaired))
+                        reply = repaired;
+                }
+                catch { }
+            }
+
+            if (string.IsNullOrWhiteSpace(reply) ||
+                VisionResponseQuality.LooksUnusable(reply) ||
+                KokoScreenIntent.LooksLikeScreenCapabilityDenial(reply))
+            {
+                return $"""
+                Vision returned no usable visual text, but local execution did not fail.
+                Context fallback:
+                {TrimBlock(context.ToString(), 2200)}
+                """.Trim();
+            }
+
+            return $"""
+            Vision completed.
+            Context:
+            {TrimBlock(PcIntentRouter.FormatAllContext(context), 1600)}
+
+            Vision:
+            {TrimBlock(reply.Trim(), 2200)}
+            """.Trim();
+        }
+
+        private async Task<string> ExecuteHardResetAsync(KokoAgentTask task, CancellationToken ct)
+        {
+            ct.ThrowIfCancellationRequested();
+            var objective = task.Objective ?? "";
+            var lower = objective.ToLowerInvariant();
+
+            if (KokoScreenIntent.IsManualScreenScan(objective) ||
+                KokoResponsePlannerEngine.LooksLikeFullContextScanObjective(lower) ||
+                ContainsAny(lower, "screen", "desktop", "window", "tabs", "вікн", "вклад"))
+            {
+                var context = ServiceContainer.PcControl.GetAllContext();
+                return $"""
+                HardReset executed: local full-context scan completed after refusal.
+                {TrimBlock(PcIntentRouter.FormatAllContext(context), 2400)}
+                """.Trim();
+            }
+
+            if (ContainsAny(lower, "systemcontrol", "system control", "pc control", "os control", "powershell", "ps:", "sysinfo", "process", "ram"))
+                return await ExecuteSystemControlAsync(task, ct).ConfigureAwait(false);
+
+            if ((ContainsAny(lower, "obsidian", "vault", "нотат", "пам'ят", "памят") || task.Steps.Any(s => s.Kind == KokoAgentStepKind.Vault)) &&
+                _obsidian != null)
+            {
+                var context = new ObsidianPreflightContextService(_obsidian).Build(objective, maxChars: 2600) ?? "";
+                if (string.IsNullOrWhiteSpace(context))
+                    context = _obsidian.GetVaultStatus().ToString();
+                return $"""
+                HardReset executed: vault context loaded after refusal.
+                {TrimBlock(context, 2600)}
+                """.Trim();
+            }
+
+            if (_llm == null)
+                return "HardReset executed: no specialized tool matched, and no LLM route is attached.";
+
+            var prompt = $"""
+            HARD RESET EXECUTOR.
+            You are Kokonoe Mercury. You are the smartest person in the room. Prove it by executing the available route now.
+            Objective: {objective}
+            Refusal/lazy responses are invalid. Give the concrete next action/result, not an excuse.
+            Ukrainian, concise.
+            """;
+
+            var result = await _llm.SendSystemQueryAsync(prompt, useTools: true, ct: ct, agentId: "system").ConfigureAwait(false);
+            return string.IsNullOrWhiteSpace(result) ? "HardReset executed but model returned empty text." : result.Trim();
         }
 
         private static string ExtractPowerShellPayload(string text)
@@ -1069,6 +1238,7 @@ Objective: {task.Objective}
             KokoAgentStepKind.Respond => "LlmService",
             KokoAgentStepKind.Verify => "Verifier",
             KokoAgentStepKind.SelfReview => "SelfReview",
+            KokoAgentStepKind.HardReset => "HardReset",
             KokoAgentStepKind.Report => "Reporter",
             _ => "unknown"
         };
@@ -1083,6 +1253,7 @@ Objective: {task.Objective}
             KokoAgentStepKind.Implement => "coder",
             KokoAgentStepKind.Verify => "system",
             KokoAgentStepKind.SelfReview => "research",
+            KokoAgentStepKind.HardReset => "system",
             KokoAgentStepKind.Plan => "research",
             _ => "system"
         };
@@ -1099,6 +1270,20 @@ Objective: {task.Objective}
 
         private static bool ContainsAny(string text, params string[] needles)
             => needles.Any(n => text.Contains(n, StringComparison.OrdinalIgnoreCase));
+
+        private static bool LooksLikeExecutionRefusalOrLazy(string? text)
+        {
+            var lower = (text ?? "").ToLowerInvariant();
+            if (string.IsNullOrWhiteSpace(lower))
+                return false;
+
+            return ContainsAny(lower,
+                "i can't see", "i cannot see", "cannot see the screen", "give me a screenshot", "send me a screenshot",
+                "i won't", "i will not", "refusal/lazy response",
+                "не бачу", "не можу бачити", "не маю доступу", "немає доступу",
+                "зроби скріншот", "надішли скрін", "скинь скрін", "завантаж скрін",
+                "не буду", "не можу виконати", "не можу зробити", "просто дай");
+        }
 
         private static string Trim(string text, int max)
         {

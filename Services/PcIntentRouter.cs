@@ -28,7 +28,8 @@ namespace KokonoeAssistant.Services
         RunShellChain,
         WorkspaceScenario,
         FocusWindow,
-        ArrangeWindows
+        ArrangeWindows,
+        FullContextScan
     }
 
     public sealed class PcIntentParseResult
@@ -101,6 +102,9 @@ namespace KokonoeAssistant.Services
 
             if (KokoScreenIntent.IsManualScreenScan(original))
                 return NoMatch();
+
+            if (LooksLikeFullContextScan(lower))
+                return Match(PcIntentAction.FullContextScan);
 
             var chain = ShellChainRegex.Match(original);
             if (chain.Success)
@@ -260,6 +264,9 @@ namespace KokonoeAssistant.Services
                     case PcIntentAction.SystemInfo:
                         return Done(parsed.Action, FormatSystemInfo(pc.GetSystemInfo()));
 
+                    case PcIntentAction.FullContextScan:
+                        return Done(parsed.Action, FormatAllContext(pc.GetAllContext()));
+
                     case PcIntentAction.Processes:
                         return Done(parsed.Action, "Топ процесів по RAM:\n" + pc.GetTopProcesses());
 
@@ -379,6 +386,41 @@ namespace KokonoeAssistant.Services
             return sb.ToString().Trim();
         }
 
+        public static string FormatAllContext(PcContextSnapshot context)
+        {
+            var sb = new StringBuilder();
+            sb.AppendLine("Повний PC-контекст зібрано.");
+            sb.AppendLine($"Активне вікно: {context.Foreground}");
+            sb.AppendLine($"Система: CPU {context.System.CpuPercent:F1}% | RAM {context.System.RamUsedGb:F1}/{context.System.RamTotalGb:F1} GB | звук {context.System.VolumePercent}%");
+
+            if (context.BrowserWindows.Count > 0)
+            {
+                sb.AppendLine("Браузерні вікна/заголовки:");
+                foreach (var window in context.BrowserWindows.Take(10))
+                    sb.AppendLine("- " + TrimLine(window.ToString(), 180));
+            }
+            else
+            {
+                sb.AppendLine("Браузерні вікна: не виявлено відкритих top-level browser windows.");
+            }
+
+            if (context.VisibleWindows.Count > 0)
+            {
+                sb.AppendLine("Видимі вікна:");
+                foreach (var window in context.VisibleWindows.Take(10))
+                    sb.AppendLine("- " + TrimLine(window.ToString(), 180));
+            }
+
+            if (context.System.TopProcesses.Count > 0)
+                sb.AppendLine("Навантаження: " + string.Join(", ", context.System.TopProcesses.Take(5).Select(p => $"{p.ProcessName} {p.MemoryMb:F0}MB/{p.CpuPercent:F1}%")));
+
+            if (context.Errors.Count > 0)
+                sb.AppendLine("Попередження збору: " + string.Join("; ", context.Errors));
+
+            sb.AppendLine("Висновок: локальний context-scan виконано; якщо треба буквальний OCR/картинка екрана, наступний крок - screenshot+vision.");
+            return sb.ToString().Trim();
+        }
+
         private static string FormatShellChain(ShellCommandChainResult chain)
         {
             var sb = new StringBuilder();
@@ -400,6 +442,27 @@ namespace KokonoeAssistant.Services
                 "prepare coding", "coding workspace", "workspace for coding",
                 "підготуй робоче місце", "підготуй workspace", "режим кодингу",
                 "gaming workspace", "режим гри", "режим ігри");
+
+        private static bool LooksLikeFullContextScan(string lower)
+        {
+            if (ContainsAny(lower, "obsidian", "vault", "обсидіан", "обсидиан", "нотат", "замет"))
+                return false;
+
+            return ContainsAny(lower,
+                "scan everything", "full context", "context scan", "pc context", "what is new", "what do you see", "what can you see",
+                "\u043f\u0440\u043e\u0441\u043a\u0430\u043d\u0443\u0439 \u0432\u0441\u0435", "\u043f\u0440\u043e\u0441\u043a\u0430\u043d\u0443\u0439 \u0441\u0438\u0441\u0442\u0435\u043c\u0443", "\u043f\u0440\u043e\u0441\u043a\u0430\u043d\u0443\u0439 \u043f\u043a", "\u043f\u0440\u043e\u0441\u043a\u0430\u043d\u0443\u0439 \u043a\u043e\u043c\u043f",
+                "\u043f\u0440\u043e\u0441\u043a\u0430\u043d\u0438\u0440\u0443\u0439 \u0432\u0441\u0435", "\u043f\u0440\u043e\u0441\u043a\u0430\u043d\u0438\u0440\u0443\u0439 \u0441\u0438\u0441\u0442\u0435\u043c\u0443", "\u043f\u0440\u043e\u0441\u043a\u0430\u043d\u0438\u0440\u0443\u0439 \u043f\u043a", "\u043f\u0440\u043e\u0441\u043a\u0430\u043d\u0438\u0440\u0443\u0439 \u043a\u043e\u043c\u043f",
+                "\u0449\u043e \u0431\u0430\u0447\u0438\u0448", "\u0448\u043e \u0431\u0430\u0447\u0438\u0448", "\u0447\u0442\u043e \u0432\u0438\u0434\u0438\u0448\u044c",
+                "\u0449\u043e \u043d\u043e\u0432\u043e\u0433\u043e", "\u0448\u043e \u043d\u043e\u0432\u043e\u0433\u043e", "\u0447\u0442\u043e \u043d\u043e\u0432\u043e\u0433\u043e",
+                "\u043f\u043e\u0434\u0438\u0432\u0438\u0441\u044c \u0449\u043e \u0432\u0456\u0434\u043a\u0440\u0438\u0442\u043e", "\u0433\u043b\u044f\u043d\u044c \u0449\u043e \u0432\u0456\u0434\u043a\u0440\u0438\u0442\u043e", "\u044f\u043a\u0456 \u0432\u043a\u043b\u0430\u0434\u043a\u0438", "\u044f\u043a\u0456 \u0432\u0456\u043a\u043d\u0430",
+                "\u043a\u0430\u043a\u0438\u0435 \u0432\u043a\u043b\u0430\u0434\u043a\u0438", "\u043a\u0430\u043a\u0438\u0435 \u043e\u043a\u043d\u0430",
+                "проскануй все", "проскануй систему", "проскануй пк", "проскануй комп",
+                "просканируй все", "просканируй систему", "просканируй пк", "просканируй комп",
+                "що бачиш", "шо бачиш", "что видишь",
+                "що нового", "шо нового", "что нового",
+                "подивись що відкрито", "глянь що відкрито", "які вкладки", "які вікна",
+                "какие вкладки", "какие окна", "open tabs", "browser tabs");
+        }
 
         private static string TrimLine(string? text, int max)
         {

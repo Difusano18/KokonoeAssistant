@@ -2589,7 +2589,8 @@ tags: [kokonoe, live-core, diagnostics]
 
             var screenshot = await Task.Run(() => ServiceContainer.PcControl.TakeScreenshot(), ct);
             var foreground = ServiceContainer.PcControl.GetForegroundWindow();
-            var prompt = BuildScreenScanPrompt(userText, foreground);
+            var pcContext = ServiceContainer.PcControl.GetAllContext();
+            var prompt = BuildScreenScanPrompt(userText, foreground, pcContext);
             string? reply;
             using (var visionCts = CancellationTokenSource.CreateLinkedTokenSource(ct))
             {
@@ -2620,7 +2621,7 @@ tags: [kokonoe, live-core, diagnostics]
             if (string.IsNullOrWhiteSpace(reply))
             {
                 _lastManualScreenScanFailures++;
-                reply = await BuildScreenScanFallbackReplyAsync(screenshot, _lastManualScreenScanFailures, userText, ct);
+                reply = await BuildScreenScanFallbackReplyAsync(screenshot, _lastManualScreenScanFailures, userText, ct, pcContext);
             }
             else
             {
@@ -2651,13 +2652,17 @@ tags: [kokonoe, live-core, diagnostics]
             byte[] screenshot,
             int failureCount,
             string userText,
-            CancellationToken ct)
+            CancellationToken ct,
+            PcContextSnapshot? pcContext = null)
         {
             var diag = _llm.GetDiagnosticsSnapshot();
             var activity = new ActivityAnalyzer().AnalyzeScreenshot(screenshot);
             var window = string.IsNullOrWhiteSpace(activity.ActiveWindowTitle)
                 ? "активне вікно не визначилось"
                 : activity.ActiveWindowTitle.Trim();
+            var contextBlock = pcContext == null
+                ? ""
+                : "\n- Повний PC-контекст:\n" + PcIntentRouter.FormatAllContext(pcContext);
             var status = diag.LastStatusCode.HasValue ? diag.LastStatusCode.Value.ToString() : "no-status";
             var fallback = string.IsNullOrWhiteSpace(diag.LastFallback) ? "vision_empty" : diag.LastFallback;
             var repeat = failureCount > 1
@@ -2673,6 +2678,7 @@ tags: [kokonoe, live-core, diagnostics]
 - Активне вікно з локальної ОС: {window}
 - Візуальний аналізатор не дав опису: status={status}, route={fallback}, provider={diag.Provider}, model={diag.Model}
 - Повторів у цій серії: {failureCount}
+{contextBlock}
 
 Правила:
 - Не вигадуй, що саме видно на скріншоті.
@@ -2700,11 +2706,19 @@ tags: [kokonoe, live-core, diagnostics]
                 // Last-resort text below is deliberately factual; no fake image reading.
             }
 
-            return $"Скріншот зроблено, але опис зображення не повернувся. З локальних даних бачу тільки активне вікно: {window}. {repeat}";
+            var contextTail = pcContext == null
+                ? ""
+                : " " + TrimOpsLine(PcIntentRouter.FormatAllContext(pcContext), 420);
+            return $"Скріншот зроблено, але опис зображення не повернувся. З локальних даних бачу активне вікно: {window}.{contextTail} {repeat}";
         }
 
-        private static string BuildScreenScanPrompt(string userText, ForegroundWindowInfo? foreground = null) => $"""
+        private static string BuildScreenScanPrompt(
+            string userText,
+            ForegroundWindowInfo? foreground = null,
+            PcContextSnapshot? pcContext = null) => $"""
 Foreground window: {foreground?.ToString() ?? "-"}
+Full PC context:
+{(pcContext == null ? "-" : PcIntentRouter.FormatAllContext(pcContext))}
 Ти Kokonoe. Користувач прямо попросив просканувати його поточний екран.
 Запит користувача: {userText}
 

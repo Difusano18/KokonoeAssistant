@@ -48,6 +48,14 @@ namespace KokonoeAssistant.Services
         [DllImport("user32.dll", SetLastError = true)]
         private static extern bool MoveWindow(IntPtr hWnd, int x, int y, int width, int height, bool repaint);
 
+        [DllImport("user32.dll")]
+        private static extern bool EnumWindows(EnumWindowsProc enumProc, IntPtr lParam);
+
+        [DllImport("user32.dll")]
+        private static extern bool IsWindowVisible(IntPtr hWnd);
+
+        private delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
+
         [DllImport("winmm.dll")]
         private static extern int waveOutSetVolume(IntPtr hwo, uint dwVolume);
 
@@ -267,6 +275,96 @@ namespace KokonoeAssistant.Services
 
             return info;
         }
+
+        public PcContextSnapshot GetAllContext(int maxWindows = 40)
+        {
+            var snapshot = new PcContextSnapshot
+            {
+                TakenAt = DateTime.Now
+            };
+
+            try { snapshot.Foreground = GetForegroundWindow(); }
+            catch (Exception ex) { snapshot.Errors.Add("foreground: " + ex.Message); }
+
+            try { snapshot.System = GetSystemInfo(); }
+            catch (Exception ex) { snapshot.Errors.Add("system: " + ex.Message); }
+
+            try
+            {
+                snapshot.VisibleWindows = ListVisibleWindows(Math.Clamp(maxWindows, 5, 100));
+                snapshot.BrowserWindows = snapshot.VisibleWindows
+                    .Where(IsBrowserWindow)
+                    .Take(30)
+                    .ToList();
+            }
+            catch (Exception ex)
+            {
+                snapshot.Errors.Add("windows: " + ex.Message);
+            }
+
+            return snapshot;
+        }
+
+        private static List<WindowSummary> ListVisibleWindows(int maxWindows)
+        {
+            var windows = new List<WindowSummary>();
+            EnumWindows((hWnd, _) =>
+            {
+                if (windows.Count >= maxWindows)
+                    return false;
+
+                try
+                {
+                    if (hWnd == IntPtr.Zero || !IsWindowVisible(hWnd))
+                        return true;
+
+                    var titleBuilder = new StringBuilder(512);
+                    GetWindowText(hWnd, titleBuilder, titleBuilder.Capacity);
+                    var title = titleBuilder.ToString().Trim();
+                    if (string.IsNullOrWhiteSpace(title))
+                        return true;
+
+                    var classBuilder = new StringBuilder(256);
+                    GetClassName(hWnd, classBuilder, classBuilder.Capacity);
+
+                    GetWindowThreadProcessId(hWnd, out var pid);
+                    var processName = "";
+                    if (pid > 0)
+                    {
+                        try
+                        {
+                            using var proc = Process.GetProcessById((int)pid);
+                            processName = proc.ProcessName;
+                        }
+                        catch { }
+                    }
+
+                    windows.Add(new WindowSummary
+                    {
+                        Handle = hWnd.ToInt64(),
+                        ProcessId = (int)pid,
+                        ProcessName = processName,
+                        Title = title,
+                        ClassName = classBuilder.ToString().Trim()
+                    });
+                }
+                catch { }
+
+                return true;
+            }, IntPtr.Zero);
+
+            return windows
+                .OrderByDescending(w => IsBrowserWindow(w))
+                .ThenBy(w => w.ProcessName)
+                .ThenBy(w => w.Title)
+                .Take(maxWindows)
+                .ToList();
+        }
+
+        private static bool IsBrowserWindow(WindowSummary window)
+            => ContainsAny(window.ProcessName,
+                "chrome", "msedge", "firefox", "brave", "opera", "vivaldi", "browser")
+               || ContainsAny(window.ClassName, "Chrome_WidgetWin", "MozillaWindowClass");
 
         // ── Apps ─────────────────────────────────────────────────────
 
@@ -844,6 +942,58 @@ namespace KokonoeAssistant.Services
         public int ProcessId { get; set; }
         public double MemoryMb { get; set; }
         public double CpuPercent { get; set; }
+    }
+
+    public class WindowSummary
+    {
+        public long Handle { get; set; }
+        public int ProcessId { get; set; }
+        public string ProcessName { get; set; } = "";
+        public string Title { get; set; } = "";
+        public string ClassName { get; set; } = "";
+
+        public override string ToString()
+        {
+            var proc = string.IsNullOrWhiteSpace(ProcessName) ? "unknown" : ProcessName;
+            var title = string.IsNullOrWhiteSpace(Title) ? "untitled" : Title;
+            return $"{proc}#{ProcessId}: {title}";
+        }
+    }
+
+    public class PcContextSnapshot
+    {
+        public DateTime TakenAt { get; set; } = DateTime.Now;
+        public ForegroundWindowInfo Foreground { get; set; } = new();
+        public SystemInfo System { get; set; } = new();
+        public List<WindowSummary> BrowserWindows { get; set; } = new();
+        public List<WindowSummary> VisibleWindows { get; set; } = new();
+        public List<string> Errors { get; set; } = new();
+
+        public override string ToString()
+        {
+            var sb = new StringBuilder();
+            sb.AppendLine($"PC context snapshot: {TakenAt:yyyy-MM-dd HH:mm:ss}");
+            sb.AppendLine("Active window: " + Foreground);
+            sb.AppendLine($"System: CPU {System.CpuPercent:F1}% | RAM {System.RamUsedGb:F1}/{System.RamTotalGb:F1} GB | volume {System.VolumePercent}%");
+            if (System.TopProcesses.Count > 0)
+                sb.AppendLine("Top processes: " + string.Join(", ", System.TopProcesses.Take(5).Select(p => $"{p.ProcessName} {p.MemoryMb:F0}MB/{p.CpuPercent:F1}%")));
+
+            sb.AppendLine("Browser windows/tabs:");
+            if (BrowserWindows.Count == 0)
+                sb.AppendLine("- none detected");
+            else
+                foreach (var window in BrowserWindows.Take(12))
+                    sb.AppendLine("- " + window);
+
+            sb.AppendLine("Visible windows:");
+            foreach (var window in VisibleWindows.Take(12))
+                sb.AppendLine("- " + window);
+
+            if (Errors.Count > 0)
+                sb.AppendLine("Context errors: " + string.Join("; ", Errors));
+
+            return sb.ToString().Trim();
+        }
     }
 
     public class ShellCommandStepResult

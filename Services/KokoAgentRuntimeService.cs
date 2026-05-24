@@ -207,6 +207,7 @@ namespace KokonoeAssistant.Services
                 KokoAgentStepKind.Respond,
                 KokoAgentStepKind.Verify,
                 KokoAgentStepKind.SelfReview,
+                KokoAgentStepKind.HardReset,
                 KokoAgentStepKind.Report
             };
             var ordered = plan
@@ -378,6 +379,7 @@ namespace KokonoeAssistant.Services
             KokoAgentStepKind.Respond => "LlmService",
             KokoAgentStepKind.Verify => "Verifier",
             KokoAgentStepKind.SelfReview => "SelfReview",
+            KokoAgentStepKind.HardReset => "HardReset",
             KokoAgentStepKind.Report => "ChatUI",
             _ => "unknown"
         };

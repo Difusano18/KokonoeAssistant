@@ -56,6 +56,7 @@ internal static class Program
             Run("Post reply guard rejects dotted garbage", PostReplyGuardRejectsDottedGarbage);
             Run("PC intent router routes safe OS commands", PcIntentRouterRoutesSafeOsCommands);
             Run("PC intent router separates screen and destructive commands", PcIntentRouterSeparatesScreenAndDestructiveCommands);
+            Run("PC intent router routes full context scan", PcIntentRouterRoutesFullContextScan);
             Run("PC control executes safe PowerShell", PcControlExecutesSafePowerShell);
             Run("PC control executes shell chain", PcControlExecutesShellChain);
             Run("PC control stops shell chain on failed step", PcControlStopsShellChainOnFailedStep);
@@ -64,6 +65,7 @@ internal static class Program
             Run("PC intent router routes shell chain and scenario", PcIntentRouterRoutesShellChainAndScenario);
             Run("Resource guardian prompts on browser pressure in gaming", ResourceGuardianPromptsOnBrowserPressureInGaming);
             Run("Resource guardian respects prompt cooldown", ResourceGuardianRespectsPromptCooldown);
+            Run("PC control get all context returns snapshot", PcControlGetAllContextReturnsSnapshot);
             Run("PC control captures screenshot", PcControlCapturesScreenshot);
             Run("LLM vision compacts oversized screenshots", LlmVisionCompactsOversizedScreenshots);
             Run("Vision quality detects unusable denial", VisionQualityDetectsUnusableDenial);
@@ -158,11 +160,14 @@ internal static class Program
             Run("Agent task service imports Obsidian backlog", AgentTaskServiceImportsObsidianBacklog);
             Run("Response planner adds insight extraction", ResponsePlannerAddsInsightExtraction);
             Run("Response planner adds system control", ResponsePlannerAddsSystemControl);
+            Run("Response planner routes generic scan to system control", ResponsePlannerRoutesGenericScanToSystemControl);
+            Run("Response planner adds vision for screen scan", ResponsePlannerAddsVisionForScreenScan);
             Run("Response planner adds long observation", ResponsePlannerAddsLongObservation);
             Run("Response planner detects gameplay observation", ResponsePlannerDetectsGameplayObservation);
             Run("Agent task service executes system control", AgentTaskServiceExecutesSystemControl);
             Run("Response planner adds self review", ResponsePlannerAddsSelfReview);
             Run("Agent task service inserts correction after weak self review", AgentTaskServiceInsertsCorrectionAfterWeakSelfReview);
+            Run("Agent task service inserts hard reset after lazy self review", AgentTaskServiceInsertsHardResetAfterLazySelfReview);
             Run("Agent task service executes background vault insight", AgentTaskServiceExecutesBackgroundVaultInsight);
             Run("Obsidian consolidates notes non destructively", ObsidianConsolidatesNotesNonDestructively);
             Run("Predictive screen warmup loads Obsidian context", PredictiveScreenWarmupLoadsObsidianContext);
@@ -1301,6 +1306,20 @@ internal static class Program
         AssertTrue(!PcCommandSafety.IsBlocked("Write-Output koko-ok", out _), "safe shell probe should be allowed");
     }
 
+    private static void PcIntentRouterRoutesFullContextScan()
+    {
+        var scan = PcIntentRouter.Parse("what is new on my pc?");
+        AssertTrue(scan.Handled, "generic context scan should be handled before chat");
+        AssertEqual(PcIntentAction.FullContextScan, scan.Action, "full context action");
+
+        var uaScan = PcIntentRouter.Parse("\u0449\u043e \u043d\u043e\u0432\u043e\u0433\u043e?");
+        AssertTrue(uaScan.Handled, "Ukrainian context scan should be handled before chat");
+        AssertEqual(PcIntentAction.FullContextScan, uaScan.Action, "Ukrainian full context action");
+
+        var screen = PcIntentRouter.Parse("what is on my screen?");
+        AssertTrue(!screen.Handled, "literal screen questions should stay on screenshot+vision route");
+    }
+
     private static void PcControlExecutesSafePowerShell()
     {
         var output = new PcControlService()
@@ -1400,6 +1419,18 @@ internal static class Program
         };
         var decision = KokoResourceGuardianService.Evaluate(info, "game", now, now.AddMinutes(-5));
         AssertTrue(!decision.ShouldPrompt, "resource guardian should respect prompt cooldown");
+    }
+
+    private static void PcControlGetAllContextReturnsSnapshot()
+    {
+        var context = new PcControlService().GetAllContext(maxWindows: 10);
+        AssertTrue(context.TakenAt > DateTime.MinValue, "context timestamp should be set");
+        AssertTrue(context.System != null, "system info should be present");
+        AssertTrue(context.VisibleWindows != null, "visible window list should be present");
+
+        var rendered = context.ToString();
+        AssertTrue(rendered.Contains("PC context snapshot", StringComparison.OrdinalIgnoreCase), "context should render a readable snapshot");
+        AssertTrue(rendered.Contains("System:", StringComparison.OrdinalIgnoreCase), "context should include system stats");
     }
 
     private static void PcControlCapturesScreenshot()
@@ -3596,6 +3627,40 @@ Persistent Obsidian context is now a core project requirement.
             "system-control should run before response/report");
     }
 
+    private static void ResponsePlannerRoutesGenericScanToSystemControl()
+    {
+        var frame = new KokoResponsePlannerEngine().Build(
+            "\u0449\u043e \u043d\u043e\u0432\u043e\u0433\u043e?",
+            new KokoInternalState(),
+            new KokoCognitionEngine(Path.GetTempPath()),
+            new DateTime(2026, 5, 24, 12, 0, 0));
+
+        AssertEqual("execute", frame.Intent, "generic scan should be an executable intent");
+        AssertEqual("os_control", frame.Capability, "generic scan should use PC context capability");
+        AssertTrue(frame.RequiresToolUse, "generic scan should require tool use");
+
+        var steps = KokoResponsePlannerEngine.BuildAgentStepsForObjective("\u0449\u043e \u043d\u043e\u0432\u043e\u0433\u043e?");
+        AssertTrue(steps.Any(s => s.Kind == KokoAgentStepKind.SystemControl), "generic scan should plan system control");
+    }
+
+    private static void ResponsePlannerAddsVisionForScreenScan()
+    {
+        var frame = new KokoResponsePlannerEngine().Build(
+            "what is on my screen?",
+            new KokoInternalState(),
+            new KokoCognitionEngine(Path.GetTempPath()),
+            new DateTime(2026, 5, 24, 12, 0, 0));
+
+        AssertEqual("screen_awareness", frame.Capability, "literal screen scan should use screen awareness");
+
+        var steps = new KokoResponsePlannerEngine().BuildAgentSteps(frame);
+        AssertTrue(steps.Any(s => s.Kind == KokoAgentStepKind.SystemControl), "screen scan should collect local context first");
+        AssertTrue(steps.Any(s => s.Kind == KokoAgentStepKind.Vision), "screen scan should include vision");
+        AssertTrue(steps.First(s => s.Kind == KokoAgentStepKind.SystemControl).Order <
+                   steps.First(s => s.Kind == KokoAgentStepKind.Vision).Order,
+            "system context should precede vision");
+    }
+
     private static void ResponsePlannerAddsLongObservation()
     {
         var steps = KokoResponsePlannerEngine.BuildAgentStepsForObjective(
@@ -3717,6 +3782,68 @@ Persistent Obsidian context is now a core project requirement.
                 "self-review score below 7 should insert an Implement correction step");
             AssertTrue(finalTask.Steps.First(s => s.Kind == KokoAgentStepKind.SelfReview).Result.Contains("needs_correction"),
                 "self-review should mark weak task as needing correction");
+            service.Stop();
+        }
+        finally
+        {
+            try { Directory.Delete(dir, recursive: true); } catch { }
+        }
+    }
+
+    private static void AgentTaskServiceInsertsHardResetAfterLazySelfReview()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "KokonoeAssistant.Tests", Guid.NewGuid().ToString("N"));
+        var data = Path.Combine(dir, "data");
+        Directory.CreateDirectory(data);
+        try
+        {
+            var task = new KokoAgentTask
+            {
+                Objective = "lazy refusal correction fixture",
+                Priority = 5,
+                Steps = new()
+                {
+                    new KokoAgentStep
+                    {
+                        Order = 1,
+                        Kind = KokoAgentStepKind.Analyze,
+                        Status = KokoAgentTaskStatus.Completed,
+                        Result = "I cannot see the screen. Give me a screenshot."
+                    },
+                    new KokoAgentStep
+                    {
+                        Order = 2,
+                        Kind = KokoAgentStepKind.SelfReview,
+                        Status = KokoAgentTaskStatus.Pending,
+                        Title = "Review lazy fixture"
+                    },
+                    new KokoAgentStep
+                    {
+                        Order = 3,
+                        Kind = KokoAgentStepKind.Report,
+                        Status = KokoAgentTaskStatus.Pending,
+                        Title = "Report"
+                    }
+                }
+            };
+            File.WriteAllText(Path.Combine(data, "agent-tasks.json"), JsonConvert.SerializeObject(new[] { task }, Formatting.Indented));
+
+            var service = new KokoAgentTaskService(data) { AutoStartOnAdd = false };
+            service.Start();
+            var completed = System.Threading.SpinWait.SpinUntil(() =>
+            {
+                var current = service.GetSnapshot().Tasks.First(t => t.Id == task.Id);
+                return current.Status == KokoAgentTaskStatus.Completed || current.Status == KokoAgentTaskStatus.Failed;
+            }, TimeSpan.FromSeconds(8));
+
+            var finalTask = service.GetSnapshot().Tasks.First(t => t.Id == task.Id);
+            AssertTrue(completed, "lazy self-review fixture should finish");
+            AssertEqual(KokoAgentTaskStatus.Completed, finalTask.Status, "task should complete after hard reset");
+            AssertTrue(finalTask.Steps.Any(s => s.Title.Contains("self-review:", StringComparison.OrdinalIgnoreCase) &&
+                                                s.Kind == KokoAgentStepKind.HardReset),
+                "lazy refusal should insert a HardReset step, not another scripted response");
+            AssertTrue(finalTask.Steps.First(s => s.Kind == KokoAgentStepKind.SelfReview).Result.Contains("refusal/lazy", StringComparison.OrdinalIgnoreCase),
+                "self-review should name refusal/lazy failure");
             service.Stop();
         }
         finally
