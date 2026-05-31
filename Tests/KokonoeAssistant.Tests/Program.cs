@@ -58,6 +58,7 @@ internal static class Program
             Run("Post reply guard rejects screen capability denial", PostReplyGuardRejectsScreenCapabilityDenial);
             Run("Post reply guard protects short affection", PostReplyGuardProtectsShortAffection);
             Run("Post reply guard protects short greeting", PostReplyGuardProtectsShortGreeting);
+            Run("Post reply guard blocks overbuilt greeting", PostReplyGuardBlocksOverbuiltGreeting);
             Run("Post reply guard blocks repeated fallback loop", PostReplyGuardBlocksRepeatedFallbackLoop);
             Run("Post reply guard rejects dotted garbage", PostReplyGuardRejectsDottedGarbage);
             Run("PC intent router routes safe OS commands", PcIntentRouterRoutesSafeOsCommands);
@@ -129,6 +130,9 @@ internal static class Program
             Run("Response planner routes natural screen questions", ResponsePlannerRoutesNaturalScreenQuestions);
             Run("Memory policy stores stable preference", MemoryPolicyStoresStablePreference);
             Run("Memory policy keeps temporary state out of beliefs", MemoryPolicyKeepsTemporaryStateOutOfBeliefs);
+            Run("Memory policy computes salience", MemoryPolicyComputesSalience);
+            Run("Memory policy reinforces duplicate fact", MemoryPolicyReinforcesDuplicateFact);
+            Run("Memory recall uses hybrid scoring", MemoryRecallUsesHybridScoring);
             Run("Continuity reinforces repeated belief", ContinuityReinforcesRepeatedBelief);
             Run("Post reply guard repairs sleep leak on profile question", PostReplyGuardRepairsSleepLeakOnProfileQuestion);
             Run("Post reply guard rejects profile quote fallback", PostReplyGuardRejectsProfileQuoteFallback);
@@ -160,6 +164,9 @@ internal static class Program
             Run("Startup greeting sanitizes dry return line", StartupGreetingSanitizesDryReturnLine);
             Run("Startup greeting ignores low signal topic", StartupGreetingIgnoresLowSignalTopic);
             Run("Startup greeting reacts to quick return", StartupGreetingReactsToQuickReturn);
+            Run("Startup greeting classifies clean goodbye", StartupGreetingClassifiesCleanGoodbye);
+            Run("Startup greeting classifies abrupt exit", StartupGreetingClassifiesAbruptExit);
+            Run("Startup greeting classifies conflict residue", StartupGreetingClassifiesConflictResidue);
             Run("Startup greeting prompt uses mood and absence", StartupGreetingPromptUsesMoodAndAbsence);
             Run("Startup greeting sanitizes therapy meta", StartupGreetingSanitizesTherapyMeta);
             Run("Startup greeting fallback does not quote raw latest user text", StartupGreetingFallbackDoesNotQuoteRawLatestUserText);
@@ -1423,9 +1430,33 @@ internal static class Program
         var result = new KokoPostReplyGuard().Evaluate("привіт", badReply, state, messages, timeline, now);
 
         AssertTrue(!result.Passed, "guard should reject topic-tail fallback for a greeting");
-        AssertTrue(result.ShouldRepair, "short greeting should be repaired through the model");
-        AssertTrue(string.IsNullOrWhiteSpace(result.HardReplacement), "short greeting should not get a canned direct reply");
+        AssertTrue(!result.ShouldRepair, "short greeting should use the deterministic short fallback instead of another model monologue");
+        AssertEqual("Привіт. Кажи, що робимо.", result.HardReplacement, "short greeting should be forced to a short live reply");
         AssertTrue(result.Violations.Any(v => v.Contains("привітання")), "violation should mention greeting");
+    }
+
+    private static void PostReplyGuardBlocksOverbuiltGreeting()
+    {
+        var now = new DateTime(2026, 5, 27, 21, 37, 0);
+        var state = new KokoInternalState();
+        var badReply = """
+Привіт.
+
+Я бачу, ти вирішив повернутися до спілкування. Твій графік сну та пробудження нагадує випадкову генерацію чисел, але я все ще тут.
+
+То що, ми нарешті перейдемо від режиму "сон-ніяння-сон" до чогось продуктивнішого, чи ти просто зайшов перевірити, чи я ще не видалила твій профіль за низьку ефективність?
+""";
+        var messages = new[]
+        {
+            new ChatRepository.ChatMessage { Role = "user", Content = "Привіт", Timestamp = now }
+        };
+        var timeline = new KokoConversationTimelineEngine().Build(messages, state, now, "Привіт");
+
+        var result = new KokoPostReplyGuard().Evaluate("Привіт", badReply, state, messages, timeline, now);
+
+        AssertTrue(!result.Passed, "guard should reject overbuilt sleep/profile monologue for a greeting");
+        AssertTrue(result.Violations.Any(v => v.Contains("overbuilt", StringComparison.OrdinalIgnoreCase) || v.Contains("привітання")), "violation should name the greeting failure");
+        AssertEqual("Привіт. Кажи, що робимо.", result.HardReplacement, "overbuilt greeting should collapse to a short reply");
     }
 
     private static void PostReplyGuardBlocksRepeatedFallbackLoop()
@@ -2677,6 +2708,53 @@ internal static class Program
         AssertTrue(!continuity.Beliefs.Any(), "continuity beliefs should stay empty for temporary state");
     }
 
+    private static void MemoryPolicyComputesSalience()
+    {
+        var decision = new KokoMemoryWritePolicyEngine().Evaluate(
+            "запам'ятай: важливо, я віддаю перевагу коротким технічним відповідям",
+            new DateTime(2026, 5, 14, 17, 6, 0));
+
+        AssertEqual("store_stable", decision.Action, "explicit memory request should be stable");
+        AssertTrue(decision.Salience >= 0.8, "explicit important memory should receive high salience");
+        AssertTrue(decision.Candidates.All(c => c.Salience > 0), "candidates should carry salience");
+        AssertTrue(decision.PromptBlock.Contains("salience:"), "prompt should expose salience");
+    }
+
+    private static void MemoryPolicyReinforcesDuplicateFact()
+    {
+        using var ctx = TestContext.Create();
+        var existing = ctx.Memory.LearnFactBlocking(
+            "я віддаю перевагу коротким технічним відповідям",
+            "stable_fact",
+            0.7f);
+
+        var decision = new KokoMemoryWritePolicyEngine()
+            .EvaluateAsync(
+                "запам'ятай: я віддаю перевагу коротким технічним відповідям",
+                new DateTime(2026, 5, 14, 17, 7, 0),
+                ctx.Memory)
+            .GetAwaiter()
+            .GetResult();
+
+        var reinforced = ctx.Memory.Facts.First(f => f.Id == existing.Id);
+        AssertEqual("reinforce_existing", decision.Action, "duplicate memory should reinforce instead of storing");
+        AssertTrue(decision.IsDuplicate, "decision should mark duplicate");
+        AssertEqual(existing.Id, decision.DuplicateFactId, "duplicate fact id should be surfaced");
+        AssertTrue(reinforced.ConfirmCount >= 2, "duplicate should increase confirmation count");
+    }
+
+    private static void MemoryRecallUsesHybridScoring()
+    {
+        using var ctx = TestContext.Create();
+        ctx.Memory.LearnFactBlocking("User prefers terse architecture notes", "preference", 0.8f, new[] { "architecture" });
+        ctx.Memory.LearnFactBlocking("User likes unrelated music trivia", "preference", 0.2f, new[] { "music" });
+
+        var recalled = ctx.Memory.RecallAsync("architecture", 1).GetAwaiter().GetResult();
+
+        AssertEqual(1, recalled.Count, "recall should return one best fact");
+        AssertTrue(recalled[0].Content.Contains("architecture", StringComparison.OrdinalIgnoreCase), "hybrid recall should rank keyword and importance match first");
+    }
+
     private static void ContinuityReinforcesRepeatedBelief()
     {
         using var ctx = TestContext.Create();
@@ -3473,6 +3551,55 @@ internal static class Program
         AssertTrue(frame.PromptBlock.Contains(frame.ReturnModeUk) || frame.PromptBlock.Contains("STARTUP GREETING CONTEXT"), "startup prompt should include return mode");
         AssertTrue(frame.PromptBlock.Contains("жив"), "startup prompt should demand a live generated reply");
         AssertTrue(!string.IsNullOrWhiteSpace(frame.AbsenceReadUk), "startup frame should infer absence context");
+    }
+
+    private static void StartupGreetingClassifiesCleanGoodbye()
+    {
+        var now = new DateTime(2026, 5, 31, 14, 0, 0);
+        var messages = new[]
+        {
+            new ChatRepository.ChatMessage { Role = "user", Content = "Добре, до завтра", Timestamp = now.AddHours(-5) }
+        };
+
+        var service = new KokoStartupGreetingService();
+        var frame = service.BuildFrame(messages, now);
+        var fallback = service.BuildFallback(frame);
+
+        AssertEqual("clean_goodbye", frame.DepartureKind, "clean goodbye should be classified");
+        AssertTrue(fallback.Contains("нормально закрив розмову"), "greeting should not invent drama after a clean goodbye");
+    }
+
+    private static void StartupGreetingClassifiesAbruptExit()
+    {
+        var now = new DateTime(2026, 5, 31, 14, 0, 0);
+        var messages = new[]
+        {
+            new ChatRepository.ChatMessage { Role = "user", Content = "перевір потім цей модуль пам'яті", Timestamp = now.AddHours(-3) }
+        };
+
+        var service = new KokoStartupGreetingService();
+        var frame = service.BuildFrame(messages, now);
+        var fallback = service.BuildFallback(frame);
+
+        AssertEqual("abrupt_exit", frame.DepartureKind, "unfinished user turn should be treated as abrupt exit");
+        AssertTrue(fallback.Contains("обірвався") || fallback.Contains("зник"), "greeting should mention the interrupted continuity");
+    }
+
+    private static void StartupGreetingClassifiesConflictResidue()
+    {
+        var now = new DateTime(2026, 5, 31, 14, 0, 0);
+        var messages = new[]
+        {
+            new ChatRepository.ChatMessage { Role = "user", Content = "ти мене обідила і дістала", Timestamp = now.AddHours(-2) }
+        };
+
+        var service = new KokoStartupGreetingService();
+        var frame = service.BuildFrame(messages, now);
+        var fallback = service.BuildFallback(frame);
+
+        AssertEqual("conflict_or_hurt", frame.DepartureKind, "hurt/conflict tail should be classified");
+        AssertTrue(frame.EmotionalResidueUk.Contains("конфлікту") || frame.EmotionalResidueUk.Contains("образи"), "emotional residue should be explicit");
+        AssertTrue(fallback.Contains("криво") || fallback.Contains("помітила"), "greeting should acknowledge residue without theatrical apology");
     }
 
     private static void StartupGreetingSanitizesTherapyMeta()

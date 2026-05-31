@@ -787,8 +787,7 @@ tags: [kokonoe, live-core, diagnostics]
                 SetLoadingProgress(20, "завантаження чату...");
                 LoadChatHistory();
 
-                SetLoadingProgress(35, "vault...");
-                LoadVaultSidebar();
+                SetLoadingProgress(35, "vault ui skipped...");
 
                 SetLoadingProgress(50, "календар...");
                 LoadCalendarTab();
@@ -1057,7 +1056,6 @@ tags: [kokonoe, live-core, diagnostics]
 
             // Reset tab styles
             TabBtnChat.Style     = (Style)FindResource("BtnTab");
-            TabBtnVault.Style    = (Style)FindResource("BtnTab");
             TabBtnHealth.Style   = (Style)FindResource("BtnTab");
             TabBtnTools.Style    = (Style)FindResource("BtnTab");
             TabBtnTelegram.Style = (Style)FindResource("BtnTab");
@@ -1075,13 +1073,6 @@ tags: [kokonoe, live-core, diagnostics]
                     TabBtnChat.Style = active;
                     _activeTab = "Chat";
                     ScrollToBottom();
-                    break;
-                case "TabBtnVault":
-                    VaultTab.Visibility = Visibility.Visible;
-                    TabBtnVault.Style = active;
-                    _activeTab = "Vault";
-                    RefreshNotesList();
-                    UpdateMemoryOpsPanel();
                     break;
                 case "TabBtnHealth":
                     HealthTab.Visibility = Visibility.Visible;
@@ -1130,7 +1121,7 @@ tags: [kokonoe, live-core, diagnostics]
                     break;
             }
 
-            RightPanel.Visibility = (_activeTab == "Chat" || _activeTab == "Tools") ? Visibility.Visible : Visibility.Collapsed;
+            RightPanel.Visibility = _activeTab == "Tools" ? Visibility.Visible : Visibility.Collapsed;
             UpdateAdaptiveShellLayout();
             if (RightPanel.Visibility == Visibility.Visible)
                 RefreshRightOpsPanel();
@@ -1142,7 +1133,7 @@ tags: [kokonoe, live-core, diagnostics]
         {
             if (RightPanel == null || BodyGrid == null) return;
 
-            var canShowRightPanel = _activeTab == "Chat" || _activeTab == "Tools";
+            var canShowRightPanel = _activeTab == "Tools";
             if (!canShowRightPanel)
             {
                 RightPanel.Visibility = Visibility.Collapsed;
@@ -4042,7 +4033,9 @@ tags: []
                 {
                     Background = (System.Windows.Media.SolidColorBrush)System.Windows.Application.Current.Resources["AccentUserBubble"],
                     CornerRadius = new CornerRadius(18, 6, 18, 18),
-                    Padding = new Thickness(16, 11, 16, 11)
+                    Padding = new Thickness(16, 11, 16, 11),
+                    BorderBrush = (System.Windows.Media.SolidColorBrush)System.Windows.Application.Current.Resources["AccentBgBorder2"],
+                    BorderThickness = new Thickness(1)
                 };
                 bubble.Effect = new System.Windows.Media.Effects.DropShadowEffect
                 {
@@ -4138,7 +4131,7 @@ tags: []
                 outer.Children.Add(header);
 
                 // Emotion-based border color
-                var emotionBorder = "#143020";
+                var emotionBorder = "#22D3EE66";
                 if (!isError)
                 {
                     try
@@ -4146,12 +4139,12 @@ tags: []
                         var emo = ServiceContainer.EmotionEngine.Current.ToString();
                         emotionBorder = emo switch
                         {
-                            "Warm" or "Tender"        => "#2D4A3A",
-                            "Playful"                  => "#1A3A4A",
-                            "Irritated" or "Distant"   => "#3A1A1A",
-                            "Protective" or "Concerned" => "#2A3A1A",
-                            "Melancholy"               => "#1E1E3A",
-                            _                          => "#143020"
+                            "Warm" or "Tender"         => "#F48FB166",
+                            "Playful"                  => "#A78BFA66",
+                            "Irritated" or "Distant"   => "#FB718566",
+                            "Protective" or "Concerned" => "#FBBF2466",
+                            "Melancholy"               => "#64748B66",
+                            _                          => "#22D3EE66"
                         };
                     }
                     catch { }
@@ -4160,10 +4153,12 @@ tags: []
                 // Bubble
                 var bubble = new Border
                 {
-                    Background = MakeBrush(isError ? "#1A0808" : "#081408"),
+                    Background = isError
+                        ? MakeBrush("#1A0808")
+                        : (System.Windows.Media.SolidColorBrush)System.Windows.Application.Current.Resources["AccentAsstBubble"],
                     CornerRadius = new CornerRadius(6, 18, 18, 18),
                     Padding = new Thickness(16, 12, 16, 12),
-                    BorderBrush = MakeBrush(isError ? "#3A1010" : emotionBorder),
+                    BorderBrush = MakeBrush(isError ? "#FB718566" : emotionBorder),
                     BorderThickness = new Thickness(1)
                 };
 
@@ -4175,10 +4170,12 @@ tags: []
                 var accent = new Border
                 {
                     Width = 3,
-                    Background = MakeBrush(isError ? "#CC3333" : "#00E676"),
+                    Background = isError
+                        ? MakeBrush("#FB7185")
+                        : (System.Windows.Media.SolidColorBrush)System.Windows.Application.Current.Resources["AccentBase"],
                     CornerRadius = new CornerRadius(2),
                     Margin = new Thickness(0, 2, 14, 2),
-                    Opacity = 0.6
+                    Opacity = 0.75
                 };
                 Grid.SetColumn(accent, 0);
 
@@ -4186,7 +4183,9 @@ tags: []
                 {
                     Text = vm.Content,
                     TextWrapping = TextWrapping.Wrap,
-                    Foreground = MakeBrush(isError ? "#FF6666" : "#B8E8C8"),
+                    Foreground = isError
+                        ? MakeBrush("#FB7185")
+                        : (System.Windows.Media.SolidColorBrush)System.Windows.Application.Current.Resources["AccentTextLight"],
                     FontSize = 13,
                     LineHeight = 21,
                     FontFamily = new System.Windows.Media.FontFamily("Segoe UI")
@@ -4441,7 +4440,7 @@ tags: []
                     KokoEmotionEngine.EmotionState.Tender     => "#F48FB1",
                     KokoEmotionEngine.EmotionState.Focused    => "#FFF176",
                     KokoEmotionEngine.EmotionState.Distant    => "#78909C",
-                    _                                         => "#00E676",
+                    _                                         => "#22D3EE",
                 };
                 var color = (System.Windows.Media.Color)
                     System.Windows.Media.ColorConverter.ConvertFromString(hex);
@@ -9002,7 +9001,7 @@ tags: [kokonoe, dashboard, live]
             if (int.TryParse(SP_ProactiveLevel.Text.Trim(), out var proactiveLevel))
                 s.ProactiveAutonomyLevel = Math.Clamp(proactiveLevel, 0, 3);
             s.MinimizeToTray     = SP_Tray.IsChecked == true;
-            s.MatrixColor        = string.IsNullOrWhiteSpace(SP_AccentColor.Text) ? "#00E676" : SP_AccentColor.Text.Trim();
+            s.MatrixColor        = string.IsNullOrWhiteSpace(SP_AccentColor.Text) ? "#22D3EE" : SP_AccentColor.Text.Trim();
 
             if (long.TryParse(SP_TgChatId.Text.Trim(), out var cid)) s.TelegramChatId = cid;
 

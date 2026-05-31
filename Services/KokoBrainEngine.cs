@@ -326,7 +326,8 @@ namespace KokonoeAssistant.Services
             StateEngine?      stateEngine     = null,
             GoalService?      goals           = null,
             HabitService?     habits          = null,
-            ContextAnalyzer?  contextAnalyzer = null)
+            ContextAnalyzer?  contextAnalyzer = null,
+            KokoEmbeddingService? embeddings  = null)
         {
             _llm             = llm;
             _health          = health;
@@ -343,7 +344,7 @@ namespace KokonoeAssistant.Services
             _state = LoadState();
 
             // Ініціалізація нових двигунів
-            Memory    = new KokoMemoryEngine(dataDir, enhanced);
+            Memory    = new KokoMemoryEngine(dataDir, enhanced, embeddings);
             Emotion   = new KokoEmotionEngine(dataDir);
             Patterns  = new KokoPatternEngine(dataDir);
             Scheduler = new KokoSchedulerEngine(dataDir);
@@ -2671,8 +2672,8 @@ namespace KokonoeAssistant.Services
 
         private void ExtractAndRememberFacts(string userMsg)
         {
-            var policy = MemoryWritePolicy.Evaluate(userMsg, DateTime.Now);
-            if (policy.Action is "ignore" or "daily_log" or "review")
+            var policy = MemoryWritePolicy.EvaluateAsync(userMsg, DateTime.Now, Memory, Emotion).GetAwaiter().GetResult();
+            if (policy.Action is "ignore" or "daily_log" or "review" or "reinforce_existing")
                 return;
 
             // Прості евристики для вилучення фактів без LLM
@@ -2742,7 +2743,7 @@ namespace KokonoeAssistant.Services
 
         private KokoMemoryWriteDecision RecordMemoryPolicyAndContinuity(string userText, DateTime now)
         {
-            var decision = MemoryWritePolicy.Evaluate(userText, now);
+            var decision = MemoryWritePolicy.EvaluateAsync(userText, now, Memory, Emotion).GetAwaiter().GetResult();
             _state.LastMemoryPolicyDecision = decision.TraceLine;
             _state.LastMemoryPolicyAt = now;
             _state.MemoryPolicyLog.Add(decision.TraceLine);

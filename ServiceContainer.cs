@@ -254,7 +254,7 @@ namespace KokonoeAssistant
 
         public static KokoMemoryEngine KokoMemory
         {
-            get { lock (_lock) { return _kokoMemory ??= new KokoMemoryEngine(Path.Combine(_vault ?? AppDomain.CurrentDomain.BaseDirectory, "kokonoe-data"), EnhancedMemory); } }
+            get { lock (_lock) { return _kokoMemory ??= new KokoMemoryEngine(Path.Combine(_vault ?? AppDomain.CurrentDomain.BaseDirectory, "kokonoe-data"), EnhancedMemory, EmbeddingService); } }
         }
 
         public static KokoHeartEngine Heart
@@ -304,7 +304,8 @@ namespace KokonoeAssistant
                             enhanced:    EnhancedMemory,
                             stateEngine: StateEngine,
                             goals:       GoalService,
-                            habits:      HabitService);
+                            habits:      HabitService,
+                            embeddings:  EmbeddingService);
                         // Wire brain's internal engines to LlmService
                         LlmService.Emotion    = _brain.Emotion;
                         LlmService.Memory     = _brain.Memory;

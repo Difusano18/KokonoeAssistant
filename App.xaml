@@ -5,60 +5,86 @@
     <Application.Resources>
         <ResourceDictionary>
 
-        <!-- ═══ SURFACES ═══════════════════════════════════════════ -->
-        <Color  x:Key="C_Bg0">#07090D</Color>
-        <Color  x:Key="C_Bg1">#0B0E14</Color>
-        <Color  x:Key="C_Bg2">#0F131B</Color>
-        <Color  x:Key="C_Bg3">#141923</Color>
-        <Color  x:Key="C_Bg4">#1B212D</Color>
+        <!-- ═══ FUTURISTIC SURFACES ═════════════════════════════════ -->
+        <Color  x:Key="C_Bg0">#050713</Color>
+        <Color  x:Key="C_Bg1">#080B16</Color>
+        <Color  x:Key="C_Bg2">#0C1324</Color>
+        <Color  x:Key="C_Bg3">#111A2D</Color>
+        <Color  x:Key="C_Bg4">#17243A</Color>
 
-        <SolidColorBrush x:Key="AccentBgMain"      Color="#07090D"/>
-        <SolidColorBrush x:Key="AccentBgBase"      Color="#0B0E14"/>
-        <SolidColorBrush x:Key="AccentBgPanel"     Color="#0F131B"/>
-        <SolidColorBrush x:Key="AccentBgCard"      Color="#141923"/>
-        <SolidColorBrush x:Key="AccentBgHover"     Color="#1B212D"/>
-        <SolidColorBrush x:Key="AccentBgDarker"    Color="#0B0E14"/>
-        <SolidColorBrush x:Key="AccentBgInput"     Color="#00000066"/>
+        <SolidColorBrush x:Key="AccentBgMain"      Color="#050713"/>
+        <SolidColorBrush x:Key="AccentBgBase"      Color="#080B16"/>
+        <SolidColorBrush x:Key="AccentBgPanel"     Color="#0C1324"/>
+        <SolidColorBrush x:Key="AccentBgCard"      Color="#111A2D"/>
+        <SolidColorBrush x:Key="AccentBgHover"     Color="#17243A"/>
+        <SolidColorBrush x:Key="AccentBgDarker"    Color="#060916"/>
+        <SolidColorBrush x:Key="AccentBgInput"     Color="#A0081020"/>
+        <SolidColorBrush x:Key="AccentBgSystem"    Color="#99111A2D"/>
+
+        <LinearGradientBrush x:Key="KokoWindowBackground" StartPoint="0,0" EndPoint="1,1">
+            <GradientStop Color="#F2050713" Offset="0"/>
+            <GradientStop Color="#F20A1020" Offset="0.58"/>
+            <GradientStop Color="#F2070715" Offset="1"/>
+        </LinearGradientBrush>
+        <LinearGradientBrush x:Key="KokoHeaderBrush" StartPoint="0,0" EndPoint="1,0">
+            <GradientStop Color="#F0080B16" Offset="0"/>
+            <GradientStop Color="#E90D1830" Offset="0.55"/>
+            <GradientStop Color="#F0080B16" Offset="1"/>
+        </LinearGradientBrush>
+        <LinearGradientBrush x:Key="KokoSidebarBrush" StartPoint="0,0" EndPoint="0,1">
+            <GradientStop Color="#E9090D1A" Offset="0"/>
+            <GradientStop Color="#D8060A14" Offset="1"/>
+        </LinearGradientBrush>
+        <SolidColorBrush x:Key="KokoFooterBrush" Color="#EA080B16"/>
+        <SolidColorBrush x:Key="KokoInputPanelBrush" Color="#B00A1020"/>
+        <SolidColorBrush x:Key="KokoCardBrush" Color="#A0111A2D"/>
 
         <!-- Glass panel (semi-transparent card) -->
-        <SolidColorBrush x:Key="AccentGlass"       Color="#0F131B" Opacity="0.9"/>
+        <SolidColorBrush x:Key="AccentGlass"       Color="#111A2D" Opacity="0.86"/>
 
         <!-- ═══ BORDERS / LINES ════════════════════════════════════ -->
-        <SolidColorBrush x:Key="AccentBgBorder"    Color="#FFFFFF0A"/>  <!-- line-1 -->
-        <SolidColorBrush x:Key="AccentBgBorder2"   Color="#FFFFFF14"/>  <!-- line-2 rgba(255,255,255,0.08) -->
-        <SolidColorBrush x:Key="AccentAsstBorder"  Color="#6D5DFB66"/>  <!-- line-3 kira violet -->
-        <SolidColorBrush x:Key="AccentAmberLine"   Color="#FFB02066"/>  <!-- line-amber rgba(255,176,32,0.4) -->
+        <SolidColorBrush x:Key="AccentBgBorder"    Color="#22D3EE18"/>
+        <SolidColorBrush x:Key="AccentBgBorder1"   Color="#22D3EE24"/>
+        <SolidColorBrush x:Key="AccentBgBorder2"   Color="#A78BFA30"/>
+        <SolidColorBrush x:Key="AccentAsstBorder"  Color="#22D3EE66"/>
+        <SolidColorBrush x:Key="AccentAmberLine"   Color="#FBBF2466"/>
 
-        <!-- ═══ AMBER ACCENT ════════════════════════════════════════ -->
-        <Color  x:Key="C_Amber">#FFB020</Color>
-        <Color  x:Key="C_AmberHi">#FFC94A</Color>
-        <Color  x:Key="C_AmberLo">#D18A00</Color>
+        <!-- ═══ CYAN / VIOLET ACCENTS ═══════════════════════════════ -->
+        <Color  x:Key="C_Amber">#FBBF24</Color>
+        <Color  x:Key="C_AmberHi">#FDE68A</Color>
+        <Color  x:Key="C_AmberLo">#D97706</Color>
 
-        <SolidColorBrush x:Key="AccentBase"        Color="#8B5CF6"/>
-        <Color           x:Key="AccentBaseColor"    >#8B5CF6</Color>
+        <SolidColorBrush x:Key="AccentBase"        Color="#22D3EE"/>
+        <Color           x:Key="AccentBaseColor"    >#22D3EE</Color>
         <SolidColorBrush x:Key="AccentPrimary"     Color="#A78BFA"/>
-        <SolidColorBrush x:Key="AccentDark"        Color="#6D5DFB"/>
+        <SolidColorBrush x:Key="AccentDark"        Color="#7C3AED"/>
         <SolidColorBrush x:Key="AccentPale"        Color="#C4B5FD"/>
-        <SolidColorBrush x:Key="AccentText"        Color="#C9C4DD"/>
-        <SolidColorBrush x:Key="AccentTextLight"   Color="#F2EEFF"/>
-        <SolidColorBrush x:Key="AccentVeryLight"   Color="#F7F2FF"/>
-        <SolidColorBrush x:Key="AccentMuted"       Color="#8E88A8"/>
-        <SolidColorBrush x:Key="AccentDim"         Color="#605A75"/>
-        <SolidColorBrush x:Key="AccentNavBg"       Color="#8B5CF61F"/> <!-- violet-soft -->
+        <SolidColorBrush x:Key="AccentText"        Color="#C9D7EA"/>
+        <SolidColorBrush x:Key="AccentTextLight"   Color="#F4F8FF"/>
+        <SolidColorBrush x:Key="AccentVeryLight"   Color="#FFFFFF"/>
+        <SolidColorBrush x:Key="AccentMuted"       Color="#8FA3BE"/>
+        <SolidColorBrush x:Key="AccentDim"         Color="#58657A"/>
+        <SolidColorBrush x:Key="AccentNavBg"       Color="#A78BFA22"/>
+        <SolidColorBrush x:Key="AccentUserBubble"  Color="#5B2E91"/>
+        <SolidColorBrush x:Key="AccentUserShadow"  Color="#7C3AED"/>
+        <SolidColorBrush x:Key="AccentAsstBubble"  Color="#B0061424"/>
+        <SolidColorBrush x:Key="AccentAsstTime"    Color="#6F829A"/>
+        <SolidColorBrush x:Key="AccentScrollThm"   Color="#22D3EE55"/>
+        <SolidColorBrush x:Key="AccentListHovBg"   Color="#22D3EE12"/>
 
         <!-- ═══ STATUS COLORS ═══════════════════════════════════════ -->
-        <SolidColorBrush x:Key="Brush_Ok"          Color="#7FD49A"/>
-        <SolidColorBrush x:Key="Brush_Err"         Color="#E26565"/>
-        <SolidColorBrush x:Key="Brush_Info"        Color="#8AA9FF"/>
-        <SolidColorBrush x:Key="Brush_Warn"        Color="#FFB020"/>
+        <SolidColorBrush x:Key="Brush_Ok"          Color="#5EEAD4"/>
+        <SolidColorBrush x:Key="Brush_Err"         Color="#FB7185"/>
+        <SolidColorBrush x:Key="Brush_Info"        Color="#38BDF8"/>
+        <SolidColorBrush x:Key="Brush_Warn"        Color="#FBBF24"/>
 
         <!-- Legacy compatibility aliases (code-behind references) -->
         <SolidColorBrush x:Key="Brush_030B05"      Color="#1A0F00"/>
-        <SolidColorBrush x:Key="Brush_8AC8A0"      Color="#C8C4B6"/>
+        <SolidColorBrush x:Key="Brush_8AC8A0"      Color="#C9D7EA"/>
         <SolidColorBrush x:Key="Brush_1A3020"      Color="#585548"/>
         <SolidColorBrush x:Key="Brush_2A4232"      Color="#8A8678"/>
         <SolidColorBrush x:Key="Brush_163025"      Color="#FFB02040"/>
-        <SolidColorBrush x:Key="Brush_142018"      Color="#1B212D"/>
+        <SolidColorBrush x:Key="Brush_142018"      Color="#58657A"/>
         <SolidColorBrush x:Key="Brush_2A4030"      Color="#3A382F"/>
         <SolidColorBrush x:Key="Brush_071209"      Color="#10111D"/>
         <SolidColorBrush x:Key="Brush_0A1A0D"      Color="#141923"/>
@@ -69,9 +95,7 @@
         <SolidColorBrush x:Key="Brush_2A0808"      Color="#2A0A0A"/>
         <SolidColorBrush x:Key="Brush_FF5555"      Color="#E26565"/>
         <SolidColorBrush x:Key="Brush_2A4832"      Color="#585548"/>
-        <SolidColorBrush x:Key="AccentScrollThm"   Color="#FFB02020"/>
-        <SolidColorBrush x:Key="AccentListHovBg"   Color="#FFFFFF08"/>
-        <SolidColorBrush x:Key="AccentBgBorder1"   Color="#FFFFFF0A"/>
+        <SolidColorBrush x:Key="Brush_2A5038"      Color="#A8C3D8"/>
         <SolidColorBrush x:Key="Brush_3A2020"      Color="#8A8678"/>
         <SolidColorBrush x:Key="Brush_102818"      Color="#FFB0201F"/>
         <SolidColorBrush x:Key="Brush_050D07"      Color="#090A13"/>
@@ -109,13 +133,13 @@
         <Style x:Key="BtnPrimary" TargetType="Button">
             <Setter Property="Background">
                 <Setter.Value>
-                    <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
-                        <GradientStop Color="#FFB020" Offset="0"/>
-                        <GradientStop Color="#D18A00" Offset="1"/>
+                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                        <GradientStop Color="#22D3EE" Offset="0"/>
+                        <GradientStop Color="#8B5CF6" Offset="1"/>
                     </LinearGradientBrush>
                 </Setter.Value>
             </Setter>
-            <Setter Property="Foreground"      Value="#1A0F00"/>
+            <Setter Property="Foreground"      Value="#F8FBFF"/>
             <Setter Property="BorderThickness" Value="0"/>
             <Setter Property="FontSize"        Value="12"/>
             <Setter Property="FontWeight"      Value="SemiBold"/>
@@ -124,9 +148,9 @@
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
                         <Border x:Name="bd" Background="{TemplateBinding Background}"
-                                CornerRadius="6" Padding="{TemplateBinding Padding}">
+                                CornerRadius="9" Padding="{TemplateBinding Padding}">
                             <Border.Effect>
-                                <DropShadowEffect Color="#FFB020" BlurRadius="12" ShadowDepth="0" Opacity="0"/>
+                                <DropShadowEffect Color="#22D3EE" BlurRadius="16" ShadowDepth="0" Opacity="0.18"/>
                             </Border.Effect>
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
@@ -134,7 +158,7 @@
                             <Trigger Property="IsMouseOver" Value="True">
                                 <Setter TargetName="bd" Property="Effect">
                                     <Setter.Value>
-                                        <DropShadowEffect Color="#FFB020" BlurRadius="16" ShadowDepth="0" Opacity="0.4"/>
+                                        <DropShadowEffect Color="#22D3EE" BlurRadius="24" ShadowDepth="0" Opacity="0.45"/>
                                     </Setter.Value>
                                 </Setter>
                             </Trigger>
@@ -165,7 +189,7 @@
                                 Background="{TemplateBinding Background}"
                                 BorderBrush="{TemplateBinding BorderBrush}"
                                 BorderThickness="{TemplateBinding BorderThickness}"
-                                CornerRadius="6" Padding="{TemplateBinding Padding}">
+                                CornerRadius="9" Padding="{TemplateBinding Padding}">
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
                         <ControlTemplate.Triggers>
@@ -190,20 +214,21 @@
             <Setter Property="BorderThickness" Value="0"/>
             <Setter Property="Cursor"          Value="Hand"/>
             <Setter Property="HorizontalContentAlignment" Value="Left"/>
-            <Setter Property="Height"          Value="38"/>
+            <Setter Property="Height"          Value="42"/>
             <Setter Property="Padding"         Value="0"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
                         <Border x:Name="bd" Background="{TemplateBinding Background}"
-                                CornerRadius="8" Margin="0,2"
+                                CornerRadius="10" Margin="0,2"
                                 BorderBrush="Transparent" BorderThickness="1">
                             <ContentPresenter HorizontalAlignment="Left" VerticalAlignment="Center"
-                                              Margin="12,0,0,0"/>
+                                               Margin="12,0,0,0"/>
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="bd" Property="Background" Value="#FFFFFF08"/>
+                                <Setter TargetName="bd" Property="Background" Value="#22D3EE10"/>
+                                <Setter TargetName="bd" Property="BorderBrush" Value="{DynamicResource AccentBgBorder1}"/>
                                 <Setter Property="Foreground" Value="{DynamicResource AccentTextLight}"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
@@ -213,35 +238,34 @@
         </Style>
 
         <Style x:Key="BtnNavActive" TargetType="Button">
-            <Setter Property="Foreground"      Value="{DynamicResource AccentPrimary}"/>
+            <Setter Property="Foreground"      Value="{DynamicResource AccentTextLight}"/>
             <Setter Property="BorderThickness" Value="0"/>
             <Setter Property="Cursor"          Value="Hand"/>
             <Setter Property="HorizontalContentAlignment" Value="Left"/>
-            <Setter Property="Height"          Value="38"/>
+            <Setter Property="Height"          Value="42"/>
             <Setter Property="Padding"         Value="0"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
                         <Grid>
-                            <Border x:Name="bd" CornerRadius="8" Margin="0,2"
+                            <Border x:Name="bd" CornerRadius="10" Margin="0,2"
                                     BorderBrush="{DynamicResource AccentAsstBorder}" BorderThickness="1">
                                 <Border.Background>
-                                    <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
-                                        <GradientStop Color="#FFB0201F" Offset="0"/>
-                                        <GradientStop Color="#FFB0200D" Offset="1"/>
+                                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                        <GradientStop Color="#22D3EE22" Offset="0"/>
+                                        <GradientStop Color="#A78BFA24" Offset="1"/>
                                     </LinearGradientBrush>
                                 </Border.Background>
                                 <Border.Effect>
-                                    <DropShadowEffect Color="#FFB020" BlurRadius="16" ShadowDepth="0" Opacity="0.08"/>
+                                    <DropShadowEffect Color="#22D3EE" BlurRadius="18" ShadowDepth="0" Opacity="0.16"/>
                                 </Border.Effect>
                                 <ContentPresenter HorizontalAlignment="Left" VerticalAlignment="Center"
-                                                  Margin="16,0,0,0"/>
+                                                   Margin="16,0,0,0"/>
                             </Border>
-                            <!-- Left amber indicator strip -->
                             <Rectangle Width="2" HorizontalAlignment="Left" RadiusX="2" RadiusY="2"
                                        Fill="{DynamicResource AccentBase}" Margin="0,8,0,8">
                                 <Rectangle.Effect>
-                                    <DropShadowEffect Color="#FFB020" BlurRadius="8" ShadowDepth="0" Opacity="0.8"/>
+                                    <DropShadowEffect Color="#22D3EE" BlurRadius="10" ShadowDepth="0" Opacity="0.8"/>
                                 </Rectangle.Effect>
                             </Rectangle>
                         </Grid>
@@ -266,12 +290,12 @@
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
-                        <Border x:Name="bd" Background="{TemplateBinding Background}" CornerRadius="4">
+                        <Border x:Name="bd" Background="{TemplateBinding Background}" CornerRadius="8">
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="bd" Property="Background" Value="#FFFFFF0D"/>
+                                <Setter TargetName="bd" Property="Background" Value="#22D3EE12"/>
                                 <Setter Property="Foreground" Value="{DynamicResource AccentTextLight}"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
@@ -297,12 +321,20 @@
                                 Background="{TemplateBinding Background}"
                                 BorderBrush="{TemplateBinding BorderBrush}"
                                 BorderThickness="{TemplateBinding BorderThickness}"
-                                CornerRadius="6">
+                                CornerRadius="10">
+                            <Border.Effect>
+                                <DropShadowEffect Color="#22D3EE" BlurRadius="10" ShadowDepth="0" Opacity="0"/>
+                            </Border.Effect>
                             <ScrollViewer x:Name="PART_ContentHost" Margin="{TemplateBinding Padding}"/>
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsFocused" Value="True">
                                 <Setter TargetName="bd" Property="BorderBrush" Value="{DynamicResource AccentBase}"/>
+                                <Setter TargetName="bd" Property="Effect">
+                                    <Setter.Value>
+                                        <DropShadowEffect Color="#22D3EE" BlurRadius="16" ShadowDepth="0" Opacity="0.22"/>
+                                    </Setter.Value>
+                                </Setter>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>

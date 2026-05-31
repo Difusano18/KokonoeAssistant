@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Threading.Tasks;
 
 namespace KokonoeAssistant.Services
 {
@@ -11,6 +12,9 @@ namespace KokonoeAssistant.Services
         public string Kind { get; set; } = "noise";
         public string Target { get; set; } = "none";
         public double Confidence { get; set; }
+        public double Salience { get; set; }
+        public string? DuplicateFactId { get; set; }
+        public double DuplicateScore { get; set; }
         public string ReasonUk { get; set; } = "";
     }
 
@@ -19,6 +23,9 @@ namespace KokonoeAssistant.Services
         public string Action { get; set; } = "ignore";
         public string ReasonUk { get; set; } = "";
         public string Risk { get; set; } = "low";
+        public double Salience { get; set; }
+        public bool IsDuplicate { get; set; }
+        public string? DuplicateFactId { get; set; }
         public List<KokoMemoryCandidate> Candidates { get; set; } = new();
         public string TraceLine { get; set; } = "";
         public string PromptBlock { get; set; } = "";
@@ -81,7 +88,67 @@ namespace KokonoeAssistant.Services
 
             decision.Risk = decision.Action is "store_stable" ? "medium" :
                 decision.Action is "review" or "task_queue" ? "low" : "none";
+            ApplySalience(decision, userText, now);
             decision.TraceLine = $"[{now:HH:mm}] memory={decision.Action}; candidates={decision.Candidates.Count}; reason={decision.ReasonUk}";
+            decision.PromptBlock = BuildPromptBlock(decision);
+            return decision;
+        }
+
+        public async Task<KokoMemoryWriteDecision> EvaluateAsync(
+            string? userText,
+            DateTime now,
+            KokoMemoryEngine? memory,
+            KokoEmotionEngine? emotion = null)
+        {
+            var decision = Evaluate(userText, now);
+            if (memory == null || decision.Candidates.Count == 0)
+                return decision;
+
+            var topFacts = memory.GetTopFacts(8);
+            var semanticBoost = 0.0;
+            if (!string.IsNullOrWhiteSpace(userText))
+            {
+                var relevant = await memory.RecallAsync(userText, 3);
+                semanticBoost = relevant.Count == 0
+                    ? 0.0
+                    : Math.Min(0.18, relevant.Max(f => f.Importance) * 0.12 + relevant.Count * 0.02);
+            }
+
+            var moodBoost = emotion?.Current == KokoEmotionEngine.EmotionState.Anxious ||
+                            emotion?.Current == KokoEmotionEngine.EmotionState.Irritated
+                ? 0.06
+                : 0.0;
+
+            foreach (var candidate in decision.Candidates)
+            {
+                candidate.Salience = Clamp01(candidate.Salience + semanticBoost + moodBoost);
+                var duplicate = await memory.FindSimilarFactAsync(candidate.Text, candidate.Kind, minScore: 0.90f);
+                if (duplicate != null)
+                {
+                    var duplicateValue = duplicate.Value;
+                    candidate.DuplicateFactId = duplicateValue.Fact.Id;
+                    candidate.DuplicateScore = duplicateValue.Score;
+                    decision.IsDuplicate = true;
+                    decision.DuplicateFactId ??= duplicateValue.Fact.Id;
+
+                    memory.ReinforceFact(duplicateValue.Fact.Id, (float)Math.Max(0.02, candidate.Salience * 0.08), candidate.Confidence);
+                    decision.Action = "reinforce_existing";
+                    decision.ReasonUk = "схожа пам'ять уже існує; підсилюю наявний факт замість дубля";
+                    decision.Risk = "low";
+                }
+            }
+
+            if (!decision.IsDuplicate && decision.Action == "ignore" && topFacts.Count > 0 && decision.Salience >= 0.55)
+            {
+                decision.Action = "review";
+                decision.Risk = "low";
+                decision.ReasonUk = "сигнал не стабільний, але пов'язаний з важливою пам'яттю; відкласти на review";
+            }
+
+            decision.Salience = decision.Candidates.Count > 0
+                ? decision.Candidates.Max(c => c.Salience)
+                : Clamp01(decision.Salience + semanticBoost + moodBoost);
+            decision.TraceLine = $"[{now:HH:mm}] memory={decision.Action}; salience={decision.Salience:F2}; duplicate={decision.IsDuplicate}; candidates={decision.Candidates.Count}; reason={decision.ReasonUk}";
             decision.PromptBlock = BuildPromptBlock(decision);
             return decision;
         }
@@ -109,12 +176,15 @@ namespace KokonoeAssistant.Services
             sb.AppendLine("MEMORY WRITE POLICY");
             sb.AppendLine($"action: {decision.Action}");
             sb.AppendLine($"risk: {decision.Risk}");
+            sb.AppendLine($"salience: {decision.Salience:F2}");
+            if (decision.IsDuplicate)
+                sb.AppendLine($"duplicate_fact_id: {decision.DuplicateFactId}");
             sb.AppendLine($"reason: {decision.ReasonUk}");
             if (decision.Candidates.Count > 0)
             {
                 sb.AppendLine("candidates:");
                 foreach (var c in decision.Candidates)
-                    sb.AppendLine($"- kind={c.Kind}; target={c.Target}; confidence={c.Confidence:F2}; text={c.Text}");
+                    sb.AppendLine($"- kind={c.Kind}; target={c.Target}; confidence={c.Confidence:F2}; salience={c.Salience:F2}; duplicate={c.DuplicateFactId ?? "none"}; text={c.Text}");
             }
             sb.AppendLine("rules:");
             sb.AppendLine("- stable facts/preferences/goals may become beliefs;");
@@ -124,14 +194,42 @@ namespace KokonoeAssistant.Services
         }
 
         private static KokoMemoryCandidate BuildCandidate(string text, string kind, string target, double confidence, string reason)
-            => new()
+        {
+            var salience = kind switch
+            {
+                "stable_fact" => 0.82,
+                "preference" => 0.74,
+                "goal" => 0.76,
+                "task" => 0.68,
+                "temporary_state" => 0.44,
+                "uncertain" => 0.38,
+                _ => 0.20
+            };
+
+            return new()
             {
                 Text = text.Trim(),
                 Kind = kind,
                 Target = target,
                 Confidence = confidence,
+                Salience = salience,
                 ReasonUk = reason
             };
+        }
+
+        private static void ApplySalience(KokoMemoryWriteDecision decision, string userText, DateTime now)
+        {
+            var lower = userText.ToLowerInvariant();
+            var explicitBoost = LooksExplicitMemory(lower) ? 0.14 : 0.0;
+            var intentBoost = LooksTask(lower) || TryExtractGoal(userText, out _) ? 0.08 : 0.0;
+            var emotionBoost = ContainsAny(lower, "важливо", "болить", "страшно", "ненавиджу", "люблю", "important", "urgent") ? 0.08 : 0.0;
+            var recencyBoost = now > DateTime.MinValue ? 0.02 : 0.0;
+            foreach (var candidate in decision.Candidates)
+                candidate.Salience = Clamp01(candidate.Salience + explicitBoost + intentBoost + emotionBoost + recencyBoost);
+            decision.Salience = decision.Candidates.Count > 0 ? decision.Candidates.Max(c => c.Salience) : 0;
+        }
+
+        private static double Clamp01(double value) => Math.Max(0.0, Math.Min(1.0, value));
 
         private static bool IsNoise(string lower)
             => lower.Length < 4 ||

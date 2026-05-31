@@ -54,7 +54,7 @@
             </Setter>
         </Style>
 
-        <!-- Button/Input/Nav styles → App.xaml (amber theme) -->
+        <!-- Button/Input/Nav styles live in App.xaml -->
 
         <!-- ─── LISTBOX ───────────────────────────────────────── -->
         <Style x:Key="CleanListBox" TargetType="ListBox">
@@ -88,8 +88,8 @@
         </Style>
 
         <Style x:Key="KokoGlassPanel" TargetType="Border">
-            <Setter Property="Background" Value="#B0081109"/>
-            <Setter Property="BorderBrush" Value="#244A6F4D"/>
+            <Setter Property="Background" Value="{DynamicResource KokoCardBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource AccentBgBorder2}"/>
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="CornerRadius" Value="12"/>
             <Setter Property="Padding" Value="14"/>
@@ -146,9 +146,9 @@
     </Window.Resources>
 
     <!-- ════════════ ROOT ════════════════ -->
-    <Border Background="#F0060710"
-            BorderBrush="#24A78BFA" BorderThickness="1"
-            CornerRadius="14" Margin="8"
+    <Border Background="{DynamicResource KokoWindowBackground}"
+            BorderBrush="{DynamicResource AccentBgBorder2}" BorderThickness="1"
+            CornerRadius="16" Margin="8"
             ClipToBounds="True">
 
         <Grid x:Name="RootGrid">
@@ -161,7 +161,7 @@
             <controls:NeuralParticleBackground Grid.RowSpan="3" Opacity="0.22" IsAnimated="False"/>
 
             <!-- ══════════════ TITLE BAR ══════════════ -->
-            <Border Grid.Row="0" Background="#E9070812"
+            <Border Grid.Row="0" Background="{DynamicResource KokoHeaderBrush}"
                     BorderBrush="{DynamicResource AccentBgBorder1}" BorderThickness="0,0,0,1"
                     MouseLeftButtonDown="TitleBar_MouseDown">
                 <Grid>
@@ -177,7 +177,7 @@
                         <Ellipse x:Name="EmotionDot" Width="7" Height="7" Margin="0,0,9,0"
                                  VerticalAlignment="Center" Fill="{DynamicResource AccentBase}">
                             <Ellipse.Effect>
-                                <DropShadowEffect Color="#FFB020" BlurRadius="8" ShadowDepth="0" Opacity="0.9"/>
+                                <DropShadowEffect Color="#22D3EE" BlurRadius="10" ShadowDepth="0" Opacity="0.85"/>
                             </Ellipse.Effect>
                         </Ellipse>
                         <TextBlock Text="KOKONOE" FontSize="12" FontWeight="Bold"
@@ -194,10 +194,10 @@
                     <!-- Window controls -->
                     <StackPanel Grid.Column="2" Orientation="Horizontal"
                                 VerticalAlignment="Center" Margin="0,0,8,0">
-                        <Button x:Name="ExportChatBtn" Content="💾" Style="{StaticResource ChromeBtn}"
+                        <Button x:Name="ExportChatBtn" Content="▣" Style="{StaticResource ChromeBtn}"
                                 Click="ExportChat_Click" ToolTip="Зберегти чат"
                                 shell:WindowChrome.IsHitTestVisibleInChrome="True"/>
-                        <Button x:Name="ClearChatBtn" Content="🗑" Style="{StaticResource ChromeBtn}"
+                        <Button x:Name="ClearChatBtn" Content="⌫" Style="{StaticResource ChromeBtn}"
                                 Click="ClearChat_Click" ToolTip="Очистити чат"
                                 shell:WindowChrome.IsHitTestVisibleInChrome="True"/>
                         <Button Content="⚙" Style="{StaticResource ChromeBtn}"
@@ -239,13 +239,13 @@
             <!-- ══════════════ BODY ══════════════ -->
             <Grid x:Name="BodyGrid" Grid.Row="1" SizeChanged="BodyGrid_SizeChanged">
                 <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="200"/>
+                    <ColumnDefinition Width="214"/>
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
 
                 <!-- ─── LEFT NAV ─────────────────────────────────── -->
-                <Border Grid.Column="0" Background="#D90B0C18"
+                <Border Grid.Column="0" Background="{DynamicResource KokoSidebarBrush}"
                         BorderBrush="{DynamicResource AccentBgBorder2}" BorderThickness="0,0,1,0">
                     <Grid>
                         <Grid.RowDefinitions>
@@ -255,7 +255,7 @@
                         </Grid.RowDefinitions>
 
                         <!-- Sidebar header -->
-                        <Border Grid.Row="0" Padding="16,12,16,8"
+                        <Border Grid.Row="0" Padding="18,14,18,10"
                                 BorderBrush="{DynamicResource AccentBgBorder2}" BorderThickness="0,0,0,1">
                             <TextBlock Text="WORKSPACE" FontSize="9" FontFamily="Consolas"
                                        Foreground="{DynamicResource AccentDim}"/>
@@ -263,27 +263,25 @@
 
                         <!-- Nav items -->
                         <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Hidden">
-                          <StackPanel Margin="8,6,8,0">
+                          <StackPanel Margin="10,8,10,0">
 
                             <Button x:Name="TabBtnChat" Style="{StaticResource BtnNavActive}" Click="Tab_Click">
                                 <StackPanel Orientation="Horizontal">
-                                    <TextBlock Text="💬" FontSize="13" VerticalAlignment="Center" Width="18"/>
+                                    <TextBlock Text="◌" FontSize="14" VerticalAlignment="Center" Width="18"/>
                                     <TextBlock Text="Chat" FontSize="11" VerticalAlignment="Center"
                                                FontFamily="Segoe UI Variable, Segoe UI" Margin="8,0,0,0"/>
                                 </StackPanel>
                             </Button>
 
-                            <Button x:Name="TabBtnVault" Style="{StaticResource BtnNav}" Click="Tab_Click">
+                            <Button x:Name="TabBtnVault" Style="{StaticResource BtnNav}" Click="Tab_Click" Visibility="Collapsed" IsEnabled="False">
                                 <StackPanel Orientation="Horizontal">
-                                    <TextBlock Text="📁" FontSize="13" VerticalAlignment="Center" Width="18"/>
-                                    <TextBlock Text="Vault" FontSize="11" VerticalAlignment="Center"
-                                               FontFamily="Segoe UI Variable, Segoe UI" Margin="8,0,0,0"/>
+                                    <TextBlock Text="▣" FontSize="13" VerticalAlignment="Center" Width="18"/>
                                 </StackPanel>
                             </Button>
 
                             <Button x:Name="TabBtnHealth" Style="{StaticResource BtnNav}" Click="Tab_Click">
                                 <StackPanel Orientation="Horizontal">
-                                    <TextBlock Text="📅" FontSize="13" VerticalAlignment="Center" Width="18"/>
+                                    <TextBlock Text="▦" FontSize="13" VerticalAlignment="Center" Width="18"/>
                                     <TextBlock Text="Calendar" FontSize="11" VerticalAlignment="Center"
                                                FontFamily="Segoe UI Variable, Segoe UI" Margin="8,0,0,0"/>
                                 </StackPanel>
@@ -299,7 +297,7 @@
 
                             <Button x:Name="TabBtnMemory" Style="{StaticResource BtnNav}" Click="Tab_Click">
                                 <StackPanel Orientation="Horizontal">
-                                    <TextBlock Text="🧠" FontSize="13" VerticalAlignment="Center" Width="18"/>
+                                    <TextBlock Text="◇" FontSize="13" VerticalAlignment="Center" Width="18"/>
                                         <TextBlock Text="Пам'ять" FontSize="11" VerticalAlignment="Center"
                                                FontFamily="Segoe UI Variable, Segoe UI" Margin="8,0,0,0"/>
                                 </StackPanel>
@@ -316,7 +314,7 @@
 
                             <Button x:Name="TabBtnVoice" Style="{StaticResource BtnNav}" Click="Tab_Click">
                                 <StackPanel Orientation="Horizontal">
-                                    <TextBlock Text="🎤" FontSize="13" VerticalAlignment="Center" Width="18"/>
+                                    <TextBlock Text="◉" FontSize="13" VerticalAlignment="Center" Width="18"/>
                                     <TextBlock Text="Voice" FontSize="11" VerticalAlignment="Center"
                                                FontFamily="Segoe UI Variable, Segoe UI" Margin="8,0,0,0"/>
                                 </StackPanel>
@@ -382,7 +380,7 @@
 
                         <!-- Sidebar footer -->
                         <Border Grid.Row="2" BorderBrush="{DynamicResource AccentBgBorder2}" BorderThickness="0,1,0,0"
-                                Padding="16,8,16,10">
+                                Padding="18,10,18,12">
                             <StackPanel>
                                 <Grid>
                                     <TextBlock Text="RAM" FontSize="8" FontFamily="Consolas" Foreground="{DynamicResource AccentDim}"/>
@@ -416,9 +414,9 @@
                         </Grid.RowDefinitions>
 
                         <!-- Live state strip -->
-                        <Border Grid.Row="0" Background="{DynamicResource Brush_050D07}"
+                        <Border Grid.Row="0" Background="{DynamicResource KokoHeaderBrush}"
                                 BorderBrush="{DynamicResource AccentBgBorder2}" BorderThickness="0,0,0,1"
-                                Padding="16,6">
+                                Padding="18,8">
                             <Grid>
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="1.15*"/>
@@ -532,7 +530,7 @@
                         </ScrollViewer>
 
                         <!-- Input panel -->
-                        <Border Grid.Row="2" Background="{DynamicResource AccentBgDarker}"
+                        <Border Grid.Row="2" Background="{DynamicResource KokoFooterBrush}"
                                 BorderBrush="{DynamicResource AccentBgBorder2}" BorderThickness="0,1,0,0"
                                 Padding="18,12,18,16">
                             <StackPanel>
@@ -563,13 +561,13 @@
                                 </Border>
 
                                 <!-- Input container (glass card) -->
-                                <Border Background="{DynamicResource Brush_071209}" CornerRadius="14"
-                                        BorderBrush="{DynamicResource AccentAsstBorder}" BorderThickness="1">
+                                <Border Background="{DynamicResource KokoInputPanelBrush}" CornerRadius="16"
+                                        BorderBrush="{DynamicResource AccentBgBorder2}" BorderThickness="1">
                                     <Border.Style>
                                         <Style TargetType="Border">
                                             <Style.Triggers>
                                                 <DataTrigger Binding="{Binding IsFocused, ElementName=InputBox}" Value="True">
-                                                    <Setter Property="BorderBrush" Value="{DynamicResource AccentPrimary}"/>
+                                                    <Setter Property="BorderBrush" Value="{DynamicResource AccentBase}"/>
                                                 </DataTrigger>
                                             </Style.Triggers>
                                         </Style>
@@ -583,7 +581,7 @@
                                         <TextBox x:Name="InputBox" Grid.Row="0"
                                                  Background="Transparent" Foreground="{DynamicResource AccentTextLight}"
                                                  CaretBrush="{DynamicResource AccentBase}" BorderThickness="0"
-                                                 FontSize="13" FontFamily="Segoe UI"
+                                                 FontSize="13" FontFamily="Segoe UI Variable, Segoe UI"
                                                  MinHeight="52" MaxHeight="160"
                                                  Padding="16,14,16,4"
                                                  TextWrapping="Wrap" AcceptsReturn="False"
@@ -608,12 +606,12 @@
                                                     <Button x:Name="RecordBtn" ToolTip="Голос (Whisper)"
                                                             Style="{StaticResource BtnGhost}"
                                                             Padding="6,4" Margin="0,0,3,0" Click="Record_Click">
-                                                        <TextBlock Text="🎤" FontSize="13"/>
+                                                        <TextBlock Text="REC" FontSize="10" FontFamily="Consolas"/>
                                                     </Button>
                                                     <Button ToolTip="Прикріпити фото (Ctrl+V / Drop)"
                                                             Style="{StaticResource BtnGhost}"
                                                             Padding="6,4" Margin="0,0,3,0" Click="AttachImage_Click">
-                                                        <TextBlock Text="🖼" FontSize="13"/>
+                                                        <TextBlock Text="IMG" FontSize="10" FontFamily="Consolas"/>
                                                     </Button>
                                                 </StackPanel>
 
@@ -621,7 +619,7 @@
                                                             HorizontalAlignment="Right"
                                                             VerticalAlignment="Center">
                                                     <TextBlock Text="Enter — send  ·  Shift+Enter — newline"
-                                                               Foreground="{DynamicResource Brush_142018}" FontSize="10"
+                                                               Foreground="{DynamicResource AccentDim}" FontSize="10"
                                                                VerticalAlignment="Center" Margin="0,0,10,0"/>
                                                     <Button x:Name="SendBtn" Style="{StaticResource BtnPrimary}"
                                                             Padding="16,7" Click="Send_Click">
@@ -1944,7 +1942,7 @@
                                             <TextBlock Text="person" Foreground="#FF2D75" FontSize="9" FontFamily="Consolas" Margin="0,0,18,0"/>
                                             <TextBlock Text="project" Foreground="#29B6F6" FontSize="9" FontFamily="Consolas" Margin="0,0,18,0"/>
                                             <TextBlock Text="world / lore" Foreground="#00BFA5" FontSize="9" FontFamily="Consolas" Margin="0,0,18,0"/>
-                                            <TextBlock Text="ideas" Foreground="#00E676" FontSize="9" FontFamily="Consolas" Margin="0,0,18,0"/>
+                                            <TextBlock Text="ideas" Foreground="{DynamicResource AccentBase}" FontSize="9" FontFamily="Consolas" Margin="0,0,18,0"/>
                                             <TextBlock Text="system" Foreground="#B0B0C0" FontSize="9" FontFamily="Consolas"/>
                                         </StackPanel>
                                     </Border>
@@ -2476,14 +2474,14 @@
                 </Grid>
 
                 <!-- ─── RIGHT PANEL (Col 2) — Dashboard only ───────── -->
-                <Grid Grid.Column="2" x:Name="RightPanel" Width="330" HorizontalAlignment="Right">
+                <Grid Grid.Column="2" x:Name="RightPanel" Width="350" HorizontalAlignment="Right" Visibility="Collapsed">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="*"/>
                         <RowDefinition Height="220"/>
                     </Grid.RowDefinitions>
 
                     <!-- Internal Monologue -->
-                    <Border Grid.Row="0" Background="{DynamicResource AccentBgDarker}"
+                    <Border Grid.Row="0" Background="{DynamicResource KokoSidebarBrush}"
                             BorderBrush="{DynamicResource AccentBgBorder2}" BorderThickness="1,0,0,0">
                         <Grid>
                             <Grid.RowDefinitions>
@@ -2502,7 +2500,7 @@
                                         <Ellipse Width="5" Height="5" Fill="{DynamicResource AccentBase}"
                                                  VerticalAlignment="Center" Margin="0,0,4,0">
                                             <Ellipse.Effect>
-                                                <DropShadowEffect Color="#FFB020" BlurRadius="6" ShadowDepth="0" Opacity="0.8"/>
+                                                <DropShadowEffect Color="#22D3EE" BlurRadius="8" ShadowDepth="0" Opacity="0.8"/>
                                             </Ellipse.Effect>
                                         </Ellipse>
                                         <TextBlock Text="LIVE" FontSize="7" FontFamily="Consolas"
@@ -2532,7 +2530,7 @@
                                             <TextBlock x:Name="RightVaultSyncText" Text="sync --" FontSize="9" Foreground="{DynamicResource AccentText}" TextWrapping="Wrap"/>
                                         </StackPanel>
                                     </UniformGrid>
-                                    <Border Background="{DynamicResource AccentBgPanel}"
+                                    <Border Background="{DynamicResource KokoCardBrush}"
                                             BorderBrush="{DynamicResource AccentBgBorder2}"
                                             BorderThickness="1" CornerRadius="10"
                                             Padding="9,7" Margin="0,0,0,8">
@@ -2610,7 +2608,7 @@
                                                 <TextBlock Text="{Binding}" Foreground="{DynamicResource AccentBase}"
                                                            FontSize="8" TextWrapping="Wrap" Margin="0,0,0,3">
                                                     <TextBlock.Effect>
-                                                        <DropShadowEffect Color="#FFB020" ShadowDepth="0" BlurRadius="4" Opacity="0.3"/>
+                                                        <DropShadowEffect Color="#22D3EE" ShadowDepth="0" BlurRadius="5" Opacity="0.28"/>
                                                     </TextBlock.Effect>
                                                 </TextBlock>
                                             </DataTemplate>
@@ -2654,7 +2652,7 @@
                     </Border>
 
                     <!-- Operator Console Panel -->
-                    <Border Grid.Row="1" Background="{DynamicResource AccentBgDarker}"
+                    <Border Grid.Row="1" Background="{DynamicResource KokoSidebarBrush}"
                             BorderBrush="{DynamicResource AccentBgBorder2}" BorderThickness="1,1,0,0">
                         <Grid>
                             <Grid.RowDefinitions>
@@ -2681,8 +2679,9 @@
                                 <Button Content="Sync"      Style="{StaticResource BtnGhost}" Padding="7,3" Margin="2" Click="McpSyncNotes_Click"/>
                             </WrapPanel>
 
-                            <Border Grid.Row="2" Background="{DynamicResource AccentBgPanel}"
-                                    Margin="10,0,10,10" CornerRadius="4" Padding="8">
+                            <Border Grid.Row="2" Background="{DynamicResource KokoCardBrush}"
+                                    BorderBrush="{DynamicResource AccentBgBorder2}" BorderThickness="1"
+                                    Margin="10,0,10,10" CornerRadius="8" Padding="8">
                                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                                     <TextBlock x:Name="McpOutput" Foreground="{DynamicResource AccentMuted}"
                                                FontSize="9" FontFamily="Consolas" TextWrapping="Wrap"/>
@@ -2837,7 +2836,7 @@
 
         <!-- ══════════════ SETTINGS PANEL (inline overlay) ══════════════ -->
         <Grid x:Name="SettingsOverlay" Grid.RowSpan="3" Visibility="Collapsed"
-              Background="#B2000000">
+              Background="#C8050713">
             <Grid.RenderTransform>
                 <TranslateTransform x:Name="SettingsTranslate" X="0"/>
             </Grid.RenderTransform>
@@ -2845,8 +2844,8 @@
             <!-- Panel itself — slides in from right -->
             <Border x:Name="SettingsPanel"
                     HorizontalAlignment="Right" Width="480"
-                    Background="#0E0E14"
-                    BorderBrush="#2A2A35" BorderThickness="1,0,0,0">
+                    Background="{DynamicResource KokoSidebarBrush}"
+                    BorderBrush="{DynamicResource AccentBgBorder2}" BorderThickness="1,0,0,0">
                 <Border.RenderTransform>
                     <TranslateTransform x:Name="SettingsPanelTranslate" X="480"/>
                 </Border.RenderTransform>
@@ -2859,8 +2858,8 @@
                     </Grid.RowDefinitions>
 
                     <!-- Header -->
-                    <Border Grid.Row="0" Background="#0A0A12"
-                            BorderBrush="#1A1A22" BorderThickness="0,0,0,1">
+                    <Border Grid.Row="0" Background="{DynamicResource KokoHeaderBrush}"
+                            BorderBrush="{DynamicResource AccentBgBorder2}" BorderThickness="0,0,0,1">
                         <Grid Margin="12,0">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto"/>
@@ -2870,12 +2869,12 @@
                             <Button Grid.Column="0" Content="← Back"
                                     FontFamily="Segoe UI Variable, Segoe UI" FontSize="12"
                                     Background="Transparent" BorderThickness="0"
-                                    Foreground="#6B6B80"
+                                    Foreground="{DynamicResource AccentMuted}"
                                     Padding="4,0" Cursor="Hand"
                                     Click="CloseSettings_Click"/>
                             <TextBlock Grid.Column="1" Text="Settings"
                                        FontFamily="Segoe UI Variable, Segoe UI" FontSize="14" FontWeight="SemiBold"
-                                       Foreground="#E0E0EE"
+                                       Foreground="{DynamicResource AccentTextLight}"
                                        HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Grid>
                     </Border>
@@ -3142,12 +3141,12 @@
                                 <TextBox x:Name="SP_AccentColor" Style="{StaticResource SettingInput}"/>
                                 <Border Grid.Column="1" x:Name="SP_ColorPreview"
                                         Width="34" Height="34" Margin="6,0,0,0"
-                                        CornerRadius="4" Background="#00E676"
+                                        CornerRadius="4" Background="#22D3EE"
                                         Cursor="Hand" MouseLeftButtonDown="SP_ColorPreview_Click"/>
                             </Grid>
                             <!-- Swatches -->
                             <WrapPanel Margin="0,0,0,6">
-                                <Border Width="28" Height="28" CornerRadius="14" Margin="3" Background="#00E676" Cursor="Hand" MouseLeftButtonDown="SP_Swatch_Click" Tag="#00E676"/>
+                                <Border Width="28" Height="28" CornerRadius="14" Margin="3" Background="#22D3EE" Cursor="Hand" MouseLeftButtonDown="SP_Swatch_Click" Tag="#22D3EE"/>
                                 <Border Width="28" Height="28" CornerRadius="14" Margin="3" Background="#00BCD4" Cursor="Hand" MouseLeftButtonDown="SP_Swatch_Click" Tag="#00BCD4"/>
                                 <Border Width="28" Height="28" CornerRadius="14" Margin="3" Background="#E040FB" Cursor="Hand" MouseLeftButtonDown="SP_Swatch_Click" Tag="#E040FB"/>
                                 <Border Width="28" Height="28" CornerRadius="14" Margin="3" Background="#FF5252" Cursor="Hand" MouseLeftButtonDown="SP_Swatch_Click" Tag="#FF5252"/>
@@ -3160,12 +3159,12 @@
                     </ScrollViewer>
 
                     <!-- Save button -->
-                    <Border Grid.Row="2" Background="#0A0A12"
-                            BorderBrush="#1A1A22" BorderThickness="0,1,0,0"
+                    <Border Grid.Row="2" Background="{DynamicResource KokoFooterBrush}"
+                            BorderBrush="{DynamicResource AccentBgBorder2}" BorderThickness="0,1,0,0"
                             Padding="20,12">
                         <Button Content="Save settings" Click="SP_Save_Click"
-                                Background="{DynamicResource AccentBase}"
-                                Foreground="White" FontFamily="Segoe UI Variable, Segoe UI"
+                                Style="{StaticResource BtnPrimary}"
+                                FontFamily="Segoe UI Variable, Segoe UI"
                                 FontSize="13" FontWeight="SemiBold"
                                 BorderThickness="0" Height="40"
                                 Cursor="Hand"/>
@@ -3175,12 +3174,12 @@
             <Border x:Name="KokoNoticeBorder" Grid.RowSpan="3"
                     Width="360" HorizontalAlignment="Right" VerticalAlignment="Top"
                     Margin="0,52,22,0" Padding="14,12"
-                    Background="#F00B1A12" BorderBrush="{DynamicResource AccentBase}"
-                    BorderThickness="1" CornerRadius="6"
+                    Background="#E90A1020" BorderBrush="{DynamicResource AccentBase}"
+                    BorderThickness="1" CornerRadius="10"
                     Visibility="Collapsed" Opacity="0"
                     Panel.ZIndex="999">
                 <Border.Effect>
-                    <DropShadowEffect Color="#00E676" ShadowDepth="0" BlurRadius="14" Opacity="0.35"/>
+                    <DropShadowEffect Color="#22D3EE" ShadowDepth="0" BlurRadius="20" Opacity="0.35"/>
                 </Border.Effect>
                 <StackPanel>
                     <TextBlock x:Name="KokoNoticeTitle" Text="Kokonoe"

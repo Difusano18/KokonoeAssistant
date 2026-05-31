@@ -161,6 +161,8 @@ namespace KokonoeAssistant.Services
                 violations.Add("відповідь на коротке уточнення продовжує стару зламану репліку");
             if (shortGreeting && LooksLikeBadGreetingReply(replyLower))
                 violations.Add("коротке привітання помилково перетворено на тему для добивання");
+            if (shortGreeting && LooksLikeOverbuiltGreetingReply(reply))
+                violations.Add("short greeting got an overbuilt scripted monologue instead of a live short reply");
             if (staleMetaFallback)
                 violations.Add("відповідь продовжує службовий fallback замість останнього повідомлення користувача");
             if (LooksLikeUserEchoClarificationFallback(replyLower))
@@ -201,6 +203,11 @@ namespace KokonoeAssistant.Services
             string userText,
             IReadOnlyList<string> violations)
         {
+            if (IsShortGreeting((userText ?? "").ToLowerInvariant()) &&
+                violations.Any(v => v.Contains("greeting", StringComparison.OrdinalIgnoreCase) ||
+                                    v.Contains("привіт", StringComparison.OrdinalIgnoreCase)))
+                return "Привіт. Кажи, що робимо.";
+
             return null;
         }
 
@@ -802,7 +809,27 @@ Timeline:
             => ContainsAny(replyLower, "щойно сказала", "зафіксувала", "твій випад", "короткий замик", "припини це");
 
         private static bool LooksLikeBadGreetingReply(string replyLower)
-            => ContainsAny(replyLower, "тема «привіт", "тема \"привіт", "тема привіт", "добиваємо", "ще не відпустила", "знову відкрив");
+            => ContainsAny(replyLower,
+                "тема «привіт", "тема \"привіт", "тема привіт", "добиваємо", "ще не відпустила", "знову відкрив",
+                "графік сну", "графік сон", "сон-н", "сон няння", "прокинувся", "пробудження", "профіль за низьку ефективність",
+                "випадкову генерацію чисел", "повернутися до спілкування", "режим користувача", "хронометраж");
+
+        private static bool LooksLikeOverbuiltGreetingReply(string reply)
+        {
+            var text = (reply ?? "").Trim();
+            if (text.Length > 180) return true;
+            var lower = text.ToLowerInvariant();
+            if (text.Count(c => c == '\n') >= 2) return true;
+            return ContainsAny(lower,
+                "я бачу, ти вирішив",
+                "твій графік",
+                "сон та пробудження",
+                "режим \"сон",
+                "низьку ефективність",
+                "випадкову генерацію",
+                "переходимо до чогось продуктивнішого",
+                "перевірити, чи я ще");
+        }
 
         private static bool LooksLikeStaleMetaFallback(string replyLower)
             => ContainsAny(replyLower,

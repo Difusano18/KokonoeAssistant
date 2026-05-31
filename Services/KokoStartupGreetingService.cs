@@ -17,6 +17,8 @@ namespace KokonoeAssistant.Services
         public string PresenceContext { get; set; } = "";
         public string AbsenceReadUk { get; set; } = "";
         public string ReturnModeUk { get; set; } = "";
+        public string DepartureKind { get; set; } = "unknown";
+        public string EmotionalResidueUk { get; set; } = "";
         public string PromptBlock { get; set; } = "";
     }
 
@@ -37,7 +39,9 @@ namespace KokonoeAssistant.Services
                 LastConcreteTopic = InferTopic(recent),
                 RecentSessionBlock = BuildRecentSessionBlock(recent),
                 AbsenceReadUk = InferAbsenceRead(gap, now.Hour, recent),
-                ReturnModeUk = InferReturnMode(gap)
+                ReturnModeUk = InferReturnMode(gap),
+                DepartureKind = InferDepartureKind(recent, gap),
+                EmotionalResidueUk = InferEmotionalResidue(recent)
             };
             frame.PromptBlock = BuildPromptBlock(frame, now);
             return frame;
@@ -56,6 +60,9 @@ namespace KokonoeAssistant.Services
 
         public string BuildFallback(KokoStartupGreetingFrame frame)
         {
+            if (frame.DepartureKind.Length >= 0)
+                return BuildContextualFallback(frame);
+
             var topic = DescribeTopic(frame.LastConcreteTopic);
             var quick = frame.GapMinutes.HasValue && frame.GapMinutes.Value < 10;
             var shortGap = frame.GapMinutes.HasValue && frame.GapMinutes.Value < 60;
@@ -134,6 +141,74 @@ namespace KokonoeAssistant.Services
             return "останню задачу";
         }
 
+        private static string BuildContextualFallback(KokoStartupGreetingFrame frame)
+        {
+            var topic = DescribeTopic(frame.LastConcreteTopic);
+            var hasTopic = !string.IsNullOrWhiteSpace(frame.LastConcreteTopic);
+            var quick = frame.GapMinutes.HasValue && frame.GapMinutes.Value < 10;
+            var longGap = frame.GapMinutes.HasValue && frame.GapMinutes.Value >= 240;
+            var veryLongGap = frame.GapMinutes.HasValue && frame.GapMinutes.Value >= 1440;
+
+            return frame.DepartureKind switch
+            {
+                "clean_goodbye" => hasTopic && !veryLongGap
+                    ? $"Привіт. Минулого разу ти нормально закрив розмову; контекст про {topic} ще тримаю, якщо він не протух."
+                    : "Привіт. Минулого разу ти нормально закрив розмову, тож без драматичного розслідування. Що робимо?",
+                "sleep_goodbye" => longGap
+                    ? "Привіт. Сон був за планом, отже стару команду спати не тягну назад. Кажи, що зараз актуально."
+                    : "Привіт. Ти сам закрився на сон, так що я не буду робити з цього детектив. Продовжуємо?",
+                "conflict_or_hurt" => hasTopic
+                    ? $"Привіт. Минулого разу розмова закінчилась криво; я не розігрую образу, але контекст про {topic} враховую."
+                    : "Привіт. Минулого разу розмова закінчилась криво; я не розігрую трагедію, але помітила. Кажи, що треба.",
+                "abrupt_exit" => hasTopic
+                    ? $"Привіт. Ти обірвався без нормального закриття; останній корисний хвіст був про {topic}. Піднімаємо його чи нову задачу?"
+                    : "Привіт. Ти зник без нормального закриття. Не смертельно, просто не вдавай, що це була стратегія.",
+                "quick_return" => hasTopic
+                    ? $"Привіт. Швидко повернувся; контекст про {topic} ще тут. Що робимо?"
+                    : "Привіт. Швидко повернувся. Добре, без фанфар: що робимо?",
+                _ when quick => "Привіт. Ти майже не зникав. Кажи коротко, що треба.",
+                _ when hasTopic && longGap => $"Привіт. Пауза була {frame.GapTextUk}; останній робочий контекст - {topic}. Він ще живий?",
+                _ when hasTopic => $"Привіт. Контекст про {topic} ще на столі. Продовжуємо чи міняємо ціль?",
+                _ => "Привіт. Я на місці. Кажи, що робимо."
+            };
+        }
+
+        private static string InferDepartureKind(IReadOnlyList<ChatRepository.ChatMessage> recent, double? gap)
+        {
+            if (!gap.HasValue) return "first_run";
+            if (gap.Value < 10) return "quick_return";
+
+            var last = recent.LastOrDefault();
+            var lastUser = recent.LastOrDefault(m => m.Role == "user");
+            var lastText = (last?.Content ?? "").ToLowerInvariant();
+            var lastUserText = (lastUser?.Content ?? "").ToLowerInvariant();
+            var tail = string.Join("\n", recent.TakeLast(4).Select(m => (m.Content ?? "").ToLowerInvariant()));
+
+            if (LooksLikeConflictOrHurt(tail)) return "conflict_or_hurt";
+            if (LooksLikeSleepClose(lastUserText) || LooksLikeSleepClose(lastText)) return "sleep_goodbye";
+            if (LooksLikeCleanGoodbye(lastUserText) || LooksLikeCleanGoodbye(lastText)) return "clean_goodbye";
+            if (last?.Role == "user" && gap.Value >= 30) return "abrupt_exit";
+            return "ordinary_pause";
+        }
+
+        private static string InferEmotionalResidue(IReadOnlyList<ChatRepository.ChatMessage> recent)
+        {
+            var tail = string.Join("\n", recent.TakeLast(5).Select(m => (m.Content ?? "").ToLowerInvariant()));
+            if (LooksLikeConflictOrHurt(tail)) return "є слід конфлікту або образи; не робити вигляд, що все стерто";
+            if (ContainsAny(tail, "дякую", "спасибі", "добре", "окей", "ясно")) return "нейтрально або нормально закрито";
+            if (ContainsAny(tail, "люблю", "обій", "сумував", "скучив")) return "теплий слід; можна м'якше, без сиропу";
+            return "";
+        }
+
+        private static bool LooksLikeCleanGoodbye(string lower)
+            => ContainsAny(lower, "бувай", "пока", "до зустрічі", "до завтра", "побачимось", "на добраніч", "добраніч", "goodbye", "bye", "see you");
+
+        private static bool LooksLikeSleepClose(string lower)
+            => ContainsAny(lower, "спати", "спать", "я спати", "піду спати", "пішов спати", "лягаю", "сон", "добраніч", "на добраніч");
+
+        private static bool LooksLikeConflictOrHurt(string lower)
+            => ContainsAny(lower, "образ", "обідив", "обидив", "злий", "зла", "пішла ти", "іди нах", "нахуй", "заткнись", "бісиш", "дістала", "ненавиджу", "не хочу з тобою", "відвали", "тупа", "тупий");
+
         public string Sanitize(string? reply, KokoStartupGreetingFrame frame)
         {
             var text = (reply ?? "").Trim().Trim('"');
@@ -188,7 +263,9 @@ namespace KokonoeAssistant.Services
             return $"""
 STARTUP GREETING CONTEXT
 Режим повернення: {frame.ReturnModeUk}
+Класифікація виходу: {frame.DepartureKind}
 Інтерпретація паузи: {frame.AbsenceReadUk}
+Емоційний слід: {NullDash(frame.EmotionalResidueUk)}
 Настрій/стан Kokonoe: {NullDash(frame.MoodContext)}
 Presence/continuity: {NullDash(frame.PresenceContext)}
 Директива генерації: напиши свіжу LLM-репліку саме під цей вхід, не копію fallback. Вибери один живий кут: тривалість паузи, час доби, її настрій або останню конкретну тему. Без психологічного мета-театру, без "через екран", без вигаданих прихованих страхів, без сервісного звіту.

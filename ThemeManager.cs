@@ -103,19 +103,38 @@ namespace KokonoeAssistant
                     SetB("Brush_" + hex, finalColor);
                 }
 
-                // Stable Kira-like shell colors. Keep the app from turning into random RGB soup
-                // when old green/red resource aliases are remapped by MatrixColor.
-                SetB("AccentBgMain",      System.Windows.Media.Color.FromRgb(5, 6, 12));
-                SetB("AccentBgDarker",    System.Windows.Media.Color.FromRgb(9, 10, 19));
-                SetB("AccentBgPanel",     System.Windows.Media.Color.FromRgb(14, 16, 29));
-                SetB("AccentBgCard",      System.Windows.Media.Color.FromRgb(18, 20, 36));
-                SetB("AccentBgBorder1",   System.Windows.Media.Color.FromArgb(24, 167, 139, 250));
-                SetB("AccentBgBorder2",   System.Windows.Media.Color.FromArgb(34, 167, 139, 250));
-                SetB("AccentAsstBorder",  System.Windows.Media.Color.FromArgb(72, 139, 92, 246));
-                SetB("AccentAsstBubble",  System.Windows.Media.Color.FromRgb(5, 17, 9));
-                SetB("AccentUserBubble",  System.Windows.Media.Color.FromRgb(75, 31, 122));
-                SetB("AccentNavBg",       System.Windows.Media.Color.FromArgb(35, 139, 92, 246));
-                SetB("AccentListHovBg",   System.Windows.Media.Color.FromArgb(18, 255, 255, 255));
+                // Stable premium shell colors. Keep the app coherent even if legacy settings
+                // still contain the old green matrix accent.
+                var cyan = System.Windows.Media.Color.FromRgb(34, 211, 238);
+                var violet = System.Windows.Media.Color.FromRgb(167, 139, 250);
+                SetB("AccentBase",        cyan);
+                SetB("AccentPrimary",     violet);
+                SetB("AccentDark",        System.Windows.Media.Color.FromRgb(124, 58, 237));
+                SetB("AccentPale",        System.Windows.Media.Color.FromRgb(196, 181, 253));
+                SetB("AccentText",        System.Windows.Media.Color.FromRgb(201, 215, 234));
+                SetB("AccentTextLight",   System.Windows.Media.Color.FromRgb(244, 248, 255));
+                SetB("AccentVeryLight",   System.Windows.Media.Color.FromRgb(255, 255, 255));
+                SetB("AccentMuted",       System.Windows.Media.Color.FromRgb(143, 163, 190));
+                SetB("AccentDim",         System.Windows.Media.Color.FromRgb(88, 101, 122));
+                SetB("AccentBgMain",      System.Windows.Media.Color.FromRgb(5, 7, 19));
+                SetB("AccentBgBase",      System.Windows.Media.Color.FromRgb(8, 11, 22));
+                SetB("AccentBgDarker",    System.Windows.Media.Color.FromRgb(6, 9, 22));
+                SetB("AccentBgPanel",     System.Windows.Media.Color.FromRgb(12, 19, 36));
+                SetB("AccentBgCard",      System.Windows.Media.Color.FromRgb(17, 26, 45));
+                SetB("AccentBgHover",     System.Windows.Media.Color.FromRgb(23, 36, 58));
+                SetB("AccentBgInput",     System.Windows.Media.Color.FromArgb(176, 8, 16, 32));
+                SetB("AccentBgSystem",    System.Windows.Media.Color.FromArgb(153, 17, 26, 45));
+                SetB("AccentBgBorder1",   System.Windows.Media.Color.FromArgb(36, 34, 211, 238));
+                SetB("AccentBgBorder2",   System.Windows.Media.Color.FromArgb(48, 167, 139, 250));
+                SetB("AccentAsstBorder",  System.Windows.Media.Color.FromArgb(102, 34, 211, 238));
+                SetB("AccentAsstBubble",  System.Windows.Media.Color.FromArgb(176, 6, 20, 36));
+                SetB("AccentAsstTime",    System.Windows.Media.Color.FromRgb(111, 130, 154));
+                SetB("AccentUserBubble",  System.Windows.Media.Color.FromRgb(91, 46, 145));
+                SetB("AccentUserShadow",  System.Windows.Media.Color.FromRgb(124, 58, 237));
+                SetB("AccentNavBg",       System.Windows.Media.Color.FromArgb(34, 167, 139, 250));
+                SetB("AccentScrollThm",   System.Windows.Media.Color.FromArgb(85, 34, 211, 238));
+                SetB("AccentListHovBg",   System.Windows.Media.Color.FromArgb(18, 34, 211, 238));
+                System.Windows.Application.Current.Resources["AccentBaseColor"] = cyan;
             }
             catch { }
         }

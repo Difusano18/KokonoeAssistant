@@ -90,9 +90,7 @@ namespace KokonoeAssistant.Services
             lock (_lock)
             {
                 // Шукаємо схожий факт (щоб не дублювати)
-                var existing = _facts.FirstOrDefault(f =>
-                    f.Content.Equals(content, StringComparison.OrdinalIgnoreCase) ||
-                    (f.Category == category && Similarity(f.Content, content) > 0.8f));
+                var existing = FindBestDuplicateLocked(content, category, vec, 0.82f)?.Fact;
 
                 if (existing != null)
                 {
@@ -150,18 +148,25 @@ namespace KokonoeAssistant.Services
 
             lock (_lock)
             {
+                var q = query.ToLower();
                 if (queryVec != null)
                 {
                     return _facts
-                        .Select(f => (f, score: f.Vector != null ? KokoEmbeddingService.CosineSimilarity(queryVec, f.Vector) : 0f))
-                        .Where(x => x.score > 0.5f)
+                        .Select(f => (f, score: ScoreFact(query, q, queryVec, f)))
+                        .Where(x => x.score > 0.35f)
                         .OrderByDescending(x => x.score)
+                        .ThenByDescending(x => x.f.Importance)
                         .Take(max)
-                        .Select(x => x.f)
+                        .Select(x =>
+                        {
+                            x.f.LastSeen = DateTime.Now;
+                            x.f.ConfirmCount = Math.Min(int.MaxValue - 1, x.f.ConfirmCount + 1);
+                            x.f.Importance = Math.Min(1f, x.f.Importance + 0.01f);
+                            return x.f;
+                        })
                         .ToList();
                 }
 
-                var q = query.ToLower();
                 return _facts
                     .Where(f => f.Content.ToLower().Contains(q) ||
                                 f.Tags.Any(t => t.ToLower().Contains(q)) ||
@@ -170,6 +175,34 @@ namespace KokonoeAssistant.Services
                     .ThenByDescending(f => f.ConfirmCount)
                     .Take(max)
                     .ToList();
+            }
+        }
+
+        public async Task<(MemoryFact Fact, float Score)?> FindSimilarFactAsync(string content, string category = "general", float minScore = 0.90f)
+        {
+            float[]? vec = null;
+            if (_embeddings != null && _embeddings.IsAvailable)
+                vec = await _embeddings.GetEmbeddingAsync(content);
+
+            lock (_lock)
+            {
+                return FindBestDuplicateLocked(content, category, vec, minScore);
+            }
+        }
+
+        public bool ReinforceFact(string factId, float importanceBoost = 0.05f, double confidence = 1.0)
+        {
+            lock (_lock)
+            {
+                var fact = _facts.FirstOrDefault(f => f.Id == factId);
+                if (fact == null) return false;
+
+                fact.ConfirmCount++;
+                fact.LastSeen = DateTime.Now;
+                var confidenceBoost = (float)Math.Max(0.0, Math.Min(0.04, confidence * 0.04));
+                fact.Importance = Math.Min(1f, fact.Importance + Math.Max(0f, importanceBoost) + confidenceBoost);
+                Save();
+                return true;
             }
         }
 
@@ -400,11 +433,12 @@ namespace KokonoeAssistant.Services
                 if (string.IsNullOrWhiteSpace(query))
                     return (new(), new());
 
+                var q = query.ToLowerInvariant();
                 if (queryVec != null)
                 {
                     var scoredFactsVec = _facts
-                        .Select(f => (f, score: f.Vector != null ? KokoEmbeddingService.CosineSimilarity(queryVec, f.Vector) : 0f))
-                        .Where(x => x.score > 0.6f)
+                        .Select(f => (f, score: ScoreFact(query, q, queryVec, f)))
+                        .Where(x => x.score > 0.35f)
                         .OrderByDescending(x => x.score)
                         .Take(maxFacts)
                         .Select(x => x.f)
@@ -627,6 +661,41 @@ namespace KokonoeAssistant.Services
             var intersection = wordsA.Intersect(wordsB).Count();
             var union = wordsA.Union(wordsB).Count();
             return union == 0 ? 0f : (float)intersection / union;
+        }
+
+        private (MemoryFact Fact, float Score)? FindBestDuplicateLocked(string content, string category, float[]? vector, float minScore)
+        {
+            var best = _facts
+                .Select(f =>
+                {
+                    var lexical = f.Content.Equals(content, StringComparison.OrdinalIgnoreCase)
+                        ? 1f
+                        : Similarity(f.Content, content);
+                    var semantic = vector != null && f.Vector != null
+                        ? KokoEmbeddingService.CosineSimilarity(vector, f.Vector)
+                        : 0f;
+                    var categoryBoost = f.Category.Equals(category, StringComparison.OrdinalIgnoreCase) ? 0.06f : 0f;
+                    var score = Math.Min(1f, Math.Max(lexical, semantic) + categoryBoost);
+                    return (Fact: f, Score: score);
+                })
+                .OrderByDescending(x => x.Score)
+                .FirstOrDefault();
+
+            return best.Fact != null && best.Score >= minScore ? best : null;
+        }
+
+        private static float ScoreFact(string rawQuery, string lowerQuery, float[]? queryVec, MemoryFact fact)
+        {
+            var keyword = fact.Content.ToLowerInvariant().Contains(lowerQuery) ||
+                          fact.Tags.Any(t => t.Contains(lowerQuery, StringComparison.OrdinalIgnoreCase)) ||
+                          fact.Category.Contains(lowerQuery, StringComparison.OrdinalIgnoreCase)
+                ? 0.45f
+                : Similarity(rawQuery, fact.Content) * 0.55f;
+            var vector = queryVec != null && fact.Vector != null
+                ? KokoEmbeddingService.CosineSimilarity(queryVec, fact.Vector)
+                : 0f;
+            var authority = Math.Min(0.20f, fact.Importance * 0.12f + Math.Min(fact.ConfirmCount, 5) * 0.016f);
+            return Math.Max(keyword, vector) + authority;
         }
 
         private static List<string> ExtractKeywords(string text)
