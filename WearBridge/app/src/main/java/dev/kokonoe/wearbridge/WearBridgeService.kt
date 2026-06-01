@@ -91,7 +91,16 @@ class WearBridgeService : Service(), SensorEventListener {
                     semanticLocation = settings.semanticLocation,
                     batteryPercent = batteryPercent
                 )
-                val result = sender.send(sample)
+                val statusResult = sender.status()
+                val result = if (statusResult.ok) {
+                    sender.send(sample)
+                } else {
+                    BridgeSendResult(
+                        ok = false,
+                        httpCode = statusResult.httpCode,
+                        error = "PC bridge status failed: ${statusResult.error.ifBlank { "unreachable" }}"
+                    )
+                }
                 BridgeRuntimeStatus.save(
                     this@WearBridgeService,
                     BridgeRuntimeStatus(

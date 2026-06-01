@@ -82,6 +82,11 @@ class MainActivity : Activity() {
         })
 
         layout.addView(Button(this).apply {
+            text = "Auto Find PC"
+            setOnClickListener { findPcBridge() }
+        })
+
+        layout.addView(Button(this).apply {
             text = "Test PC"
             setOnClickListener {
                 saveSettings()
@@ -94,7 +99,7 @@ class MainActivity : Activity() {
             setOnClickListener {
                 saveSettings()
                 startAfterPermissions = true
-                if (requestPermissionsIfNeeded()) startBridge()
+                if (requestPermissionsIfNeeded()) startBridgeAfterTest()
             }
         })
 
@@ -148,6 +153,38 @@ class MainActivity : Activity() {
         }
     }
 
+    private fun findPcBridge() {
+        statusText.text = "Scanning Wi-Fi..."
+        scope.launch {
+            val result = withContext(Dispatchers.IO) { BridgeDiscovery().find() }
+            if (result.ok) {
+                urlInput.setText(result.baseUrl)
+                saveSettings()
+                BridgeRuntimeStatus.save(
+                    this@MainActivity,
+                    BridgeRuntimeStatus(
+                        running = BridgeRuntimeStatus.load(this@MainActivity).running,
+                        lastOk = true,
+                        lastHttpCode = 200,
+                        lastError = "Found PC bridge: ${result.baseUrl}"
+                    )
+                )
+                toast("Found ${result.baseUrl}")
+            } else {
+                BridgeRuntimeStatus.save(
+                    this@MainActivity,
+                    BridgeRuntimeStatus(
+                        running = BridgeRuntimeStatus.load(this@MainActivity).running,
+                        lastOk = false,
+                        lastError = result.error
+                    )
+                )
+                toast("Not found")
+            }
+            refreshStatus()
+        }
+    }
+
     private fun testBridge() {
         statusText.text = "Testing..."
         scope.launch {
@@ -165,6 +202,32 @@ class MainActivity : Activity() {
             )
             refreshStatus()
             toast(if (result.ok) "PC bridge reachable" else "Test failed: ${result.error}")
+        }
+    }
+
+    private fun startBridgeAfterTest() {
+        statusText.text = "Testing before start..."
+        scope.launch {
+            val result = withContext(Dispatchers.IO) {
+                BridgeSender(BridgeSettings.load(this@MainActivity)).status()
+            }
+
+            if (result.ok) {
+                startBridge()
+                toast("Bridge started")
+            } else {
+                BridgeRuntimeStatus.save(
+                    this@MainActivity,
+                    BridgeRuntimeStatus(
+                        running = false,
+                        lastOk = false,
+                        lastHttpCode = result.httpCode,
+                        lastError = "Start blocked: ${result.error.ifBlank { "PC bridge not reachable" }}"
+                    )
+                )
+                refreshStatus()
+                toast("PC bridge not reachable")
+            }
         }
     }
 
@@ -186,7 +249,7 @@ class MainActivity : Activity() {
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         if (requestCode == 7 && startAfterPermissions && grantResults.all { it == PackageManager.PERMISSION_GRANTED }) {
-            startBridge()
+            startBridgeAfterTest()
         } else if (requestCode == 7) {
             toast("Permissions denied")
         }
