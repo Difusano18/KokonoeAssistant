@@ -4,14 +4,20 @@ import android.Manifest
 import android.app.Activity
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.Color
+import android.graphics.Typeface
+import android.graphics.drawable.GradientDrawable
+import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.text.InputType
+import android.view.View
 import android.widget.Button
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ScrollView
+import android.widget.Switch
 import android.widget.TextView
 import android.widget.Toast
 import androidx.core.app.ActivityCompat
@@ -21,21 +27,27 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
 class MainActivity : Activity() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private val handler = Handler(Looper.getMainLooper())
     private var startAfterPermissions = false
+
     private lateinit var urlInput: EditText
     private lateinit var tokenInput: EditText
     private lateinit var locationInput: EditText
-    private lateinit var statusText: TextView
+    private lateinit var autoStartSwitch: Switch
+    private lateinit var heroStatusText: TextView
+    private lateinit var bpmText: TextView
+    private lateinit var motionText: TextView
+    private lateinit var sendText: TextView
+    private lateinit var errorText: TextView
+    private lateinit var detailsText: TextView
 
     private val refreshRunnable = object : Runnable {
         override fun run() {
             refreshStatus()
-            handler.postDelayed(this, 2000)
+            handler.postDelayed(this, 2_000)
         }
     }
 
@@ -55,215 +67,330 @@ class MainActivity : Activity() {
 
     private fun buildUi() {
         val settings = BridgeSettings.load(this)
-        val layout = LinearLayout(this).apply {
+        val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(18, 18, 18, 18)
+            setPadding(dp(16), dp(16), dp(16), dp(16))
+            setBackgroundColor(Color.rgb(5, 8, 18))
         }
 
-        layout.addView(TextView(this).apply {
-            text = "Kokonoe Wear Bridge"
-            textSize = 18f
+        root.addView(TextView(this).apply {
+            text = "Kokonoe Bridge"
+            textSize = 20f
+            typeface = Typeface.DEFAULT_BOLD
+            setTextColor(Color.rgb(245, 248, 255))
+        })
+        root.addView(TextView(this).apply {
+            text = "watch telemetry -> desktop runtime"
+            textSize = 11f
+            setTextColor(Color.rgb(120, 136, 170))
         })
 
+        heroStatusText = TextView(this).apply {
+            textSize = 13f
+            typeface = Typeface.DEFAULT_BOLD
+            setPadding(dp(12), dp(10), dp(12), dp(10))
+        }
+        root.addView(heroStatusText, margin(top = 12, bottom = 10))
+
+        val telemetryCard = card("Telemetry")
+        val metricRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        bpmText = metric("Heart", "--")
+        motionText = metric("Motion", "--")
+        metricRow.addView(bpmText, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        metricRow.addView(space(8))
+        metricRow.addView(motionText, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        telemetryCard.addView(metricRow)
+        sendText = bodyText().apply { setPadding(0, dp(8), 0, 0) }
+        telemetryCard.addView(sendText)
+        root.addView(telemetryCard, margin(bottom = 10))
+
+        val connectionCard = card("Connection")
         urlInput = edit("PC bridge URL", settings.desktopBaseUrl, InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI)
         tokenInput = edit("Bridge token", settings.bridgeToken, InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD)
         locationInput = edit("Semantic location", settings.semanticLocation, InputType.TYPE_CLASS_TEXT)
-
-        layout.addView(urlInput)
-        layout.addView(tokenInput)
-        layout.addView(locationInput)
-
-        layout.addView(Button(this).apply {
-            text = "Save"
-            setOnClickListener {
-                saveSettings()
-                toast("Saved")
-            }
-        })
-
-        layout.addView(Button(this).apply {
-            text = "Auto Find PC"
-            setOnClickListener { findPcBridge() }
-        })
-
-        layout.addView(Button(this).apply {
-            text = "Test PC"
-            setOnClickListener {
-                saveSettings()
-                testBridge()
-            }
-        })
-
-        layout.addView(Button(this).apply {
-            text = "Start"
-            setOnClickListener {
-                saveSettings()
-                startAfterPermissions = true
-                if (requestPermissionsIfNeeded()) startBridgeAfterTest()
-            }
-        })
-
-        layout.addView(Button(this).apply {
-            text = "Stop"
-            setOnClickListener {
-                stopService(Intent(this@MainActivity, WearBridgeService::class.java))
-                refreshStatus()
-            }
-        })
-
-        statusText = TextView(this).apply {
+        autoStartSwitch = Switch(this).apply {
+            text = "Auto start after reboot"
             textSize = 12f
-            setPadding(0, 12, 0, 0)
+            setTextColor(Color.rgb(220, 230, 255))
+            isChecked = settings.autoStart
+            setPadding(0, dp(6), 0, 0)
+            setOnCheckedChangeListener { _, _ ->
+                saveSettings()
+                toast("Auto start saved")
+            }
         }
-        layout.addView(statusText)
+        connectionCard.addView(urlInput)
+        connectionCard.addView(tokenInput)
+        connectionCard.addView(locationInput)
+        connectionCard.addView(autoStartSwitch)
+        root.addView(connectionCard, margin(bottom = 10))
 
-        setContentView(ScrollView(this).apply { addView(layout) })
+        val controlsCard = card("Controls")
+        val row1 = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        row1.addView(button("Auto Find") { findPcBridge() }, LinearLayout.LayoutParams(0, dp(44), 1f))
+        row1.addView(space(8))
+        row1.addView(button("Test") {
+            saveSettings()
+            testBridge()
+        }, LinearLayout.LayoutParams(0, dp(44), 1f))
+        controlsCard.addView(row1)
+        val row2 = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            setPadding(0, dp(8), 0, 0)
+        }
+        row2.addView(button("Start") {
+            saveSettings()
+            startAfterPermissions = true
+            if (requestPermissionsIfNeeded()) startBridgeAfterTest()
+        }, LinearLayout.LayoutParams(0, dp(44), 1f))
+        row2.addView(space(8))
+        row2.addView(button("Stop") {
+            stopService(Intent(this@MainActivity, WearBridgeService::class.java))
+            refreshStatus()
+        }, LinearLayout.LayoutParams(0, dp(44), 1f))
+        controlsCard.addView(row2)
+        root.addView(controlsCard, margin(bottom = 10))
+
+        val diagnosticsCard = card("Diagnostics")
+        errorText = bodyText().apply { setTextColor(Color.rgb(255, 170, 120)) }
+        detailsText = TextView(this).apply {
+            textSize = 10f
+            setTextColor(Color.rgb(130, 145, 180))
+            setPadding(0, dp(8), 0, 0)
+        }
+        diagnosticsCard.addView(errorText)
+        diagnosticsCard.addView(detailsText)
+        root.addView(diagnosticsCard)
+
+        setContentView(ScrollView(this).apply { addView(root) })
     }
 
-    private fun edit(hint: String, value: String, inputTypeValue: Int): EditText =
-        EditText(this).apply {
-            this.hint = hint
-            this.setText(value)
-            this.inputType = inputTypeValue
-            setSingleLine(true)
-        }
-
     private fun saveSettings() {
+        val current = BridgeSettings.load(this)
+        val defaults = BridgeConfig()
         BridgeSettings.save(
             this,
             BridgeSettings(
-                desktopBaseUrl = urlInput.text.toString().trim(),
-                bridgeToken = tokenInput.text.toString().trim(),
-                semanticLocation = locationInput.text.toString().trim()
+                desktopBaseUrl = urlInput.text.toString().trim().ifBlank { defaults.desktopBaseUrl },
+                bridgeToken = tokenInput.text.toString().trim().ifBlank { defaults.bridgeToken },
+                deviceId = current.deviceId,
+                semanticLocation = locationInput.text.toString().trim().ifBlank { "unknown" },
+                autoStart = autoStartSwitch.isChecked
             )
         )
     }
 
     private fun refreshStatus() {
-        val status = BridgeRuntimeStatus.load(this)
         val settings = BridgeSettings.load(this)
-        statusText.text = buildString {
-            appendLine("URL: ${settings.desktopBaseUrl}")
-            appendLine("Service: ${if (status.running) "running" else "stopped"}")
-            appendLine("Last send: ${status.lastSendAt.ifBlank { "-" }}")
-            appendLine("Result: ${if (status.lastOk) "OK" else "FAIL"} HTTP ${status.lastHttpCode}")
-            appendLine("Heart: ${status.lastHeartRate.ifBlank { "-" }}")
-            appendLine("Motion: ${status.lastMotion.ifBlank { "-" }}")
-            appendLine("Error: ${status.lastError.ifBlank { "-" }}")
+        val status = BridgeRuntimeStatus.load(this)
+        val hasError = status.lastError.isNotBlank()
+        val live = status.running && status.lastOk && !hasError
+
+        val statusText = when {
+            live -> "LIVE - desktop accepts samples"
+            status.running && hasError -> "RUNNING - attention required"
+            status.running -> "RUNNING - waiting for first sample"
+            else -> "STOPPED - ready to start"
         }
+        heroStatusText.text = statusText
+        heroStatusText.setTextColor(if (live) Color.rgb(75, 255, 190) else Color.rgb(255, 214, 110))
+        heroStatusText.background = rounded(if (live) Color.rgb(12, 42, 36) else Color.rgb(45, 34, 16), Color.rgb(55, 70, 110), 18)
+
+        bpmText.text = "Heart\n${status.lastHeartRate.ifBlank { "--" }}"
+        motionText.text = "Motion\n${if (status.lastMotion.isNotBlank()) status.lastMotion else "--"}"
+        sendText.text = "Last send: ${if (status.lastSendAt.isNotBlank()) status.lastSendAt else "never"}  |  HTTP ${if (status.lastHttpCode > 0) status.lastHttpCode else "--"}"
+        errorText.text = if (hasError) status.lastError else "No current bridge error."
+
+        val defaults = BridgeConfig()
+        val tokenState = when {
+            settings.bridgeToken == defaults.bridgeToken && settings.bridgeToken.contains("PASTE") -> "placeholder"
+            settings.bridgeToken.length >= 6 -> "set ...${settings.bridgeToken.takeLast(4)}"
+            else -> "missing"
+        }
+        detailsText.text =
+            "URL: ${settings.desktopBaseUrl}\n" +
+                "Token: $tokenState\n" +
+                "Location: ${settings.semanticLocation}\n" +
+                "Auto start: ${if (settings.autoStart) "on" else "off"}"
     }
 
     private fun findPcBridge() {
-        statusText.text = "Scanning Wi-Fi..."
+        toast("Scanning local Wi-Fi")
         scope.launch {
-            val result = withContext(Dispatchers.IO) { BridgeDiscovery().find() }
-            if (result.ok) {
-                urlInput.setText(result.baseUrl)
-                saveSettings()
-                BridgeRuntimeStatus.save(
-                    this@MainActivity,
-                    BridgeRuntimeStatus(
-                        running = BridgeRuntimeStatus.load(this@MainActivity).running,
-                        lastOk = true,
-                        lastHttpCode = 200,
-                        lastError = "Found PC bridge: ${result.baseUrl}"
-                    )
-                )
-                toast("Found ${result.baseUrl}")
-            } else {
-                BridgeRuntimeStatus.save(
-                    this@MainActivity,
-                    BridgeRuntimeStatus(
-                        running = BridgeRuntimeStatus.load(this@MainActivity).running,
-                        lastOk = false,
-                        lastError = result.error
-                    )
-                )
-                toast("Not found")
+            val result = BridgeDiscovery().find()
+            if (!result.ok) {
+                toast(result.error.ifBlank { "PC bridge not found" })
+                refreshStatus()
+                return@launch
             }
-            refreshStatus()
+            urlInput.setText(result.baseUrl)
+            saveSettings()
+            toast("Found ${result.baseUrl}")
+            testBridge()
         }
     }
 
     private fun testBridge() {
-        statusText.text = "Testing..."
+        toast("Testing bridge")
         scope.launch {
-            val result = withContext(Dispatchers.IO) {
-                BridgeSender(BridgeSettings.load(this@MainActivity)).status()
-            }
+            val result = BridgeSender(BridgeSettings.load(this@MainActivity)).status()
             BridgeRuntimeStatus.save(
                 this@MainActivity,
-                BridgeRuntimeStatus(
-                    running = BridgeRuntimeStatus.load(this@MainActivity).running,
+                BridgeRuntimeStatus.load(this@MainActivity).copy(
                     lastOk = result.ok,
                     lastHttpCode = result.httpCode,
-                    lastError = result.error.ifBlank { if (result.ok) "PC bridge reachable" else "test failed" }
+                    lastError = result.error ?: ""
                 )
             )
+            toast(if (result.ok) "Desktop bridge OK" else "Bridge failed: ${result.error ?: result.httpCode}")
             refreshStatus()
-            toast(if (result.ok) "PC bridge reachable" else "Test failed: ${result.error}")
         }
     }
 
     private fun startBridgeAfterTest() {
-        statusText.text = "Testing before start..."
         scope.launch {
-            val result = withContext(Dispatchers.IO) {
-                BridgeSender(BridgeSettings.load(this@MainActivity)).status()
-            }
-
-            if (result.ok) {
-                startBridge()
-                toast("Bridge started")
-            } else {
-                BridgeRuntimeStatus.save(
-                    this@MainActivity,
-                    BridgeRuntimeStatus(
-                        running = false,
-                        lastOk = false,
-                        lastHttpCode = result.httpCode,
-                        lastError = "Start blocked: ${result.error.ifBlank { "PC bridge not reachable" }}"
-                    )
-                )
+            val result = BridgeSender(BridgeSettings.load(this@MainActivity)).status()
+            BridgeRuntimeStatus.save(
+                this@MainActivity,
+                BridgeRuntimeStatus.load(this@MainActivity).copy(lastOk = result.ok, lastHttpCode = result.httpCode, lastError = result.error ?: "")
+            )
+            if (!result.ok) {
+                toast("Fix bridge first: ${result.error ?: result.httpCode}")
                 refreshStatus()
-                toast("PC bridge not reachable")
+                return@launch
             }
-        }
-    }
-
-    private fun requestPermissionsIfNeeded(): Boolean {
-        val permissions = arrayOf(
-            Manifest.permission.BODY_SENSORS,
-            Manifest.permission.ACTIVITY_RECOGNITION,
-            Manifest.permission.POST_NOTIFICATIONS
-        ).filter { checkSelfPermission(it) != PackageManager.PERMISSION_GRANTED }
-
-        if (permissions.isNotEmpty()) {
-            ActivityCompat.requestPermissions(this, permissions.toTypedArray(), 7)
-            return false
-        }
-
-        return true
-    }
-
-    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (requestCode == 7 && startAfterPermissions && grantResults.all { it == PackageManager.PERMISSION_GRANTED }) {
-            startBridgeAfterTest()
-        } else if (requestCode == 7) {
-            toast("Permissions denied")
+            startBridge()
         }
     }
 
     private fun startBridge() {
-        ContextCompat.startForegroundService(
-            this,
-            Intent(this, WearBridgeService::class.java)
-        )
+        ContextCompat.startForegroundService(this, Intent(this, WearBridgeService::class.java))
+        BridgeRuntimeStatus.save(this, BridgeRuntimeStatus.load(this).copy(running = true, lastError = ""))
+        toast("Bridge started")
         refreshStatus()
     }
 
-    private fun toast(text: String) {
-        Toast.makeText(this, text, Toast.LENGTH_SHORT).show()
+    private fun requestPermissionsIfNeeded(): Boolean {
+        val permissions = mutableListOf(
+            Manifest.permission.BODY_SENSORS,
+            Manifest.permission.ACTIVITY_RECOGNITION
+        )
+        if (Build.VERSION.SDK_INT >= 33) {
+            permissions.add(Manifest.permission.POST_NOTIFICATIONS)
+        }
+        val missing = permissions.filter {
+            ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
+        }
+        if (missing.isEmpty()) return true
+        ActivityCompat.requestPermissions(this, missing.toTypedArray(), PERMISSIONS_REQUEST)
+        return false
+    }
+
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode != PERMISSIONS_REQUEST) return
+        val granted = grantResults.isNotEmpty() && grantResults.all { it == PackageManager.PERMISSION_GRANTED }
+        if (!granted) {
+            toast("Sensor permission denied")
+            startAfterPermissions = false
+            return
+        }
+        if (startAfterPermissions) {
+            startAfterPermissions = false
+            startBridgeAfterTest()
+        }
+    }
+
+    private fun card(title: String): LinearLayout {
+        return LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(14), dp(12), dp(14), dp(12))
+            background = rounded(Color.rgb(16, 25, 45), Color.rgb(40, 52, 92), 12)
+            addView(sectionLabel(title))
+        }
+    }
+
+    private fun sectionLabel(textValue: String): TextView {
+        return TextView(this).apply {
+            text = textValue.uppercase()
+            textSize = 10f
+            typeface = Typeface.DEFAULT_BOLD
+            setTextColor(Color.rgb(255, 80, 120))
+            setPadding(0, 0, 0, dp(8))
+        }
+    }
+
+    private fun metric(label: String, value: String): TextView {
+        return TextView(this).apply {
+            text = "$label\n$value"
+            textSize = 18f
+            typeface = Typeface.DEFAULT_BOLD
+            setTextColor(Color.rgb(70, 216, 255))
+            setPadding(dp(10), dp(8), dp(10), dp(8))
+            background = rounded(Color.rgb(9, 15, 30), Color.rgb(35, 45, 82), 10)
+        }
+    }
+
+    private fun edit(hintValue: String, value: String, inputTypeValue: Int): EditText {
+        return EditText(this).apply {
+            hint = hintValue
+            setText(value)
+            setSingleLine(true)
+            textSize = 12f
+            inputType = inputTypeValue
+            setTextColor(Color.rgb(235, 242, 255))
+            setHintTextColor(Color.rgb(100, 116, 150))
+            background = rounded(Color.rgb(8, 13, 28), Color.rgb(45, 57, 100), 10)
+            setPadding(dp(10), 0, dp(10), 0)
+            layoutParams = margin(top = 4, bottom = 6).apply { height = dp(42) }
+        }
+    }
+
+    private fun button(label: String, action: () -> Unit): Button {
+        return Button(this).apply {
+            text = label
+            textSize = 12f
+            isAllCaps = false
+            setTextColor(Color.rgb(235, 245, 255))
+            background = rounded(Color.rgb(72, 45, 132), Color.rgb(114, 77, 210), 18)
+            setOnClickListener { action() }
+        }
+    }
+
+    private fun bodyText(): TextView {
+        return TextView(this).apply {
+            textSize = 11f
+            setTextColor(Color.rgb(170, 184, 215))
+        }
+    }
+
+    private fun space(widthDp: Int): View {
+        return View(this).apply {
+            layoutParams = LinearLayout.LayoutParams(dp(widthDp), 1)
+        }
+    }
+
+    private fun margin(top: Int = 0, bottom: Int = 0): LinearLayout.LayoutParams {
+        return LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+            setMargins(0, dp(top), 0, dp(bottom))
+        }
+    }
+
+    private fun rounded(fill: Int, stroke: Int, radiusDp: Int): GradientDrawable {
+        return GradientDrawable().apply {
+            setColor(fill)
+            cornerRadius = dp(radiusDp).toFloat()
+            setStroke(dp(1), stroke)
+        }
+    }
+
+    private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
+
+    private fun toast(message: String) {
+        Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
+    }
+
+    companion object {
+        private const val PERMISSIONS_REQUEST = 43
     }
 }
