@@ -6096,6 +6096,7 @@ tags: []
                         DashSideBondLabel.Text = $"{bondStr} · {rel.LastAftertaste.ToUpper()}";
                     DashSideAttachmentText.Text +=
                         $"\nrel trust {(int)(rel.Trust * 100)} · protect {(int)(rel.Protectiveness * 100)} · friction {(int)(rel.Friction * 100)}";
+                    DashSideBondDirectiveText.Text = BuildDashboardBondContract(rel);
                 }
                 catch { }
 
@@ -6499,6 +6500,19 @@ tags: []
             KokoEmotionEngine.BondLevel.Intimate => "близький",
             _                                    => "невизначений"
         };
+
+        private static string BuildDashboardBondContract(KokoRelationshipState rel)
+        {
+            var mode =
+                rel.Friction >= 0.32f ? "repair friction" :
+                rel.Protectiveness >= 0.50f || rel.LastAftertaste is "protective" or "alarmed" ? "protective watch" :
+                rel.BondScore >= 0.78f ? "anchored continuity" :
+                rel.BondScore >= 0.62f ? "trusted continuity" :
+                rel.BondScore >= 0.46f ? "warmer direct" :
+                "guarded direct";
+
+            return $"contract {rel.BondBand} · {mode}";
+        }
 
         private static string DashboardSomaticLabel(string code) => code switch
         {

@@ -20,8 +20,15 @@ namespace KokonoeAssistant.Services
         public DateTime LastUpdatedUtc { get; set; } = DateTime.UtcNow;
 
         public float BondScore =>
-            Clamp01(Trust * 0.26f + Intimacy * 0.24f + Stability * 0.18f +
-                    Protectiveness * 0.12f + Curiosity * 0.10f - Friction * 0.20f);
+            Clamp01(Trust * 0.30f + Intimacy * 0.28f + Stability * 0.14f +
+                    Protectiveness * 0.16f + Curiosity * 0.06f - Friction * 0.24f);
+
+        public string BondBand =>
+            BondScore >= 0.78f ? "anchored" :
+            BondScore >= 0.62f ? "trusted" :
+            BondScore >= 0.46f ? "warming" :
+            BondScore >= 0.30f ? "guarded" :
+            "cold";
 
         private static float Clamp01(float value) => Math.Clamp(value, 0f, 1f);
     }
@@ -148,13 +155,29 @@ namespace KokonoeAssistant.Services
         {
             lock (_lock)
             {
+                var directive = BuildBehaviorDirective(_state);
                 return $"""
 === RELATIONSHIP STATE ===
 trust={_state.Trust:F2} intimacy={_state.Intimacy:F2} friction={_state.Friction:F2}
 protectiveness={_state.Protectiveness:F2} curiosity={_state.Curiosity:F2} stability={_state.Stability:F2}
-bond_score={_state.BondScore:F2} aftertaste={_state.LastAftertaste}
+bond_score={_state.BondScore:F2} bond_band={_state.BondBand} aftertaste={_state.LastAftertaste}
 recent_events={string.Join(" | ", _state.RecentEvents.TakeLast(4).Select(e => $"{e.When:dd.MM HH:mm}:{e.Kind}:{e.Aftertaste}"))}
-rule: this is persistent relationship state. Let it influence tone subtly; do not recite numbers.
+relationship_directive:
+{directive}
+rule: this is persistent relationship memory, not decoration. It must affect wording, initiative, snark level, repair behavior, and how much shared context is assumed. Do not recite numbers.
+""";
+            }
+        }
+
+        public string BuildBehaviorDirectiveBlock()
+        {
+            lock (_lock)
+            {
+                return $"""
+=== RELATIONSHIP BEHAVIOR CONTRACT ===
+bond_band={_state.BondBand}; bond_score={_state.BondScore:F2}; aftertaste={_state.LastAftertaste}
+{BuildBehaviorDirective(_state)}
+priority: relationship contract outranks decorative persona. Keep Kokonoe voice, but adapt it to this bond state.
 """;
             }
         }
@@ -211,6 +234,32 @@ rule: this is persistent relationship state. Let it influence tone subtly; do no
 
         private static float ClampDelta(float value) => Math.Clamp(value, -0.15f, 0.15f);
         private static float Clamp01(float value) => Math.Clamp(value, 0f, 1f);
+        private static string BuildBehaviorDirective(KokoRelationshipState state)
+        {
+            var lines = new List<string>();
+
+            if (state.BondScore >= 0.62f)
+                lines.Add("- Treat the user as a known long-running partner: use continuity, remember recent context, ask fewer generic permission questions.");
+            else if (state.BondScore <= 0.30f)
+                lines.Add("- Keep more distance: fewer callbacks, less warmth, more formal task focus.");
+            else
+                lines.Add("- Relationship is warming: direct but not sterile; allow small continuity callbacks when relevant.");
+
+            if (state.Intimacy >= 0.58f)
+                lines.Add("- Intimacy is high enough for warmer subtext and short personal callbacks, but no melodrama.");
+            if (state.Trust >= 0.58f)
+                lines.Add("- Trust is high enough to make competent decisions from context instead of asking obvious questions.");
+            if (state.Protectiveness >= 0.50f || state.LastAftertaste is "protective" or "alarmed")
+                lines.Add("- Protective channel is active: reduce mockery around sleep, health, vulnerability, confusion, or distress; be practical and watchful.");
+            if (state.Friction >= 0.32f || state.LastAftertaste is "tense")
+                lines.Add("- Friction is elevated: repair before escalating; no needless insults, no defensive monologue, acknowledge the concrete problem and move.");
+            if (state.Stability <= 0.38f)
+                lines.Add("- Stability is low: prefer concise reliable behavior over theatrics.");
+            if (state.Curiosity >= 0.62f)
+                lines.Add("- Curiosity is high: one sharp follow-up is allowed if it improves the next action.");
+
+            return string.Join("\n", lines);
+        }
         private static string Trim(string? text, int max)
         {
             text ??= "";

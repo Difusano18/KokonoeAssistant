@@ -1267,6 +1267,7 @@ namespace KokonoeAssistant.Services
 
                 sb.AppendLine(RuntimeState.BuildPromptBlock(_state, Emotion, _health, _chatRepo, bpm, baseline));
                 sb.AppendLine(Relationship.BuildPromptBlock());
+                sb.AppendLine(Relationship.BuildBehaviorDirectiveBlock());
                 var somatic = GetSomaticSnapshot();
                 sb.AppendLine(Somatic.BuildPromptBlock(somatic));
                 sb.AppendLine(SelfRegulator.BuildPromptBlock(GetSelfRegulationFrame(somatic)));
