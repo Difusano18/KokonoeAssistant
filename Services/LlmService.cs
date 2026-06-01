@@ -408,6 +408,12 @@ namespace KokonoeAssistant.Services
             sb.AppendLine("- Vision and PC context: inspect attached images, local screenshots, foreground window, browser-window titles, visible windows, CPU/RAM, and top processes when the host provides them.");
             sb.AppendLine("- Full desktop context scan: active window, browser-window titles, visible windows, CPU/RAM, volume, and top processes. Use it for 'scan everything', 'what do you see', and 'what is new' style requests.");
             sb.AppendLine("Use real tool/context results for factual claims. If a tool or data source is unavailable, say that plainly and continue with the best non-tool answer.");
+            try
+            {
+                sb.AppendLine();
+                sb.AppendLine(ServiceContainer.Capabilities.BuildPromptBlock());
+            }
+            catch { }
             sb.Append(BuildCriticalThinkingPrompt());
             sb.AppendLine();
             sb.AppendLine("=== RUNTIME ===");

@@ -41,6 +41,7 @@ namespace KokonoeAssistant
         private static KokoAgentTaskService?   _agentTasks;
         private static KokoAgentRuntimeService? _agentRuntime;
         private static KokoFileSystemToolService? _fileTools;
+        private static KokoCapabilityManifestService? _capabilities;
 
         public static void Initialize(string vaultPath)
         {
@@ -220,6 +221,11 @@ namespace KokonoeAssistant
             }
         }
 
+        public static KokoCapabilityManifestService Capabilities
+        {
+            get { lock (_lock) { return _capabilities ??= new KokoCapabilityManifestService(); } }
+        }
+
         public static HealthService HealthService
         {
             get { lock (_lock) { return _health ??= new HealthService(_vault ?? throw new InvalidOperationException("Not initialized")); } }
@@ -375,6 +381,7 @@ namespace KokonoeAssistant
                     _agentTasks?.Stop(); _agentTasks = null;
                     _agentRuntime = null;
                     _fileTools = null;
+                    _capabilities = null;
                 }
                 catch { }
             }

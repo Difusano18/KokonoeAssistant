@@ -21,6 +21,7 @@ internal static class Program
             Run("Wearable telemetry infers likely sleep", WearableTelemetryInfersLikelySleep);
             Run("Heart engine prefers fresh wearable bpm", HeartEnginePrefersFreshWearableBpm);
             Run("Wearable bridge ingests authorized sample", WearableBridgeIngestsAuthorizedSample);
+            Run("Capability manifest advertises runtime routes", CapabilityManifestAdvertisesRuntimeRoutes);
             Run("Self regulation clamps pulse spike", SelfRegulationClampsPulseSpike);
             Run("Self regulation protects vulnerable tone", SelfRegulationProtectsVulnerableTone);
             Run("Initiative respects low-power silence", InitiativeRespectsLowPowerSilence);
@@ -400,6 +401,18 @@ internal static class Program
             AssertTrue(Math.Abs((state.SpO2Percent ?? 0) - 97) < 0.1, "bridge should ingest SpO2 extension field");
         }
         finally { TryDeleteDir(dir); }
+    }
+
+    private static void CapabilityManifestAdvertisesRuntimeRoutes()
+    {
+        var manifest = new KokoCapabilityManifestService().BuildPromptBlock();
+
+        AssertTrue(manifest.Contains("RUNTIME CAPABILITY MANIFEST"), "manifest should have a stable heading");
+        AssertTrue(manifest.Contains("Obsidian/Vault"), "manifest should advertise vault routes");
+        AssertTrue(manifest.Contains("Screen/Vision"), "manifest should advertise screen and vision routes");
+        AssertTrue(manifest.Contains("PC control"), "manifest should advertise local PC control");
+        AssertTrue(manifest.Contains("Wearable telemetry"), "manifest should advertise wearable telemetry");
+        AssertTrue(manifest.Contains("never claim a capability is absent"), "manifest should block helpless stock replies");
     }
 
     private static void SelfRegulationClampsPulseSpike()

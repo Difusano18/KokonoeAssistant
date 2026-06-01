@@ -5442,6 +5442,7 @@ namespace KokonoeAssistant.Services
                 LlmLastLatencyMs = llmDiag.LastLatencyMs,
                 LlmConsecutiveFailures = llmDiag.ConsecutiveFailures,
                 ScenarioHealth = $"{scenarioPassed}/{scenarioResults.Count} базові сценарії пройдено",
+                Capabilities = ServiceContainer.Capabilities.BuildStatusLine(),
                 PendingVaultExchangeCount = _state.PendingVaultExchangeCount,
                 LastVaultSyncAt = _state.LastAutoVaultSyncAt,
                 ActiveIntentCount = _state.ShortTermIntents.Count(i => !i.ResolvedAt.HasValue),

@@ -39,6 +39,7 @@ namespace KokonoeAssistant.Services
         public long LlmLastLatencyMs { get; set; }
         public int LlmConsecutiveFailures { get; set; }
         public string ScenarioHealth { get; set; } = "";
+        public string Capabilities { get; set; } = "";
         public int PendingVaultExchangeCount { get; set; }
         public DateTime LastVaultSyncAt { get; set; } = DateTime.MinValue;
         public int ActiveIntentCount { get; set; }
