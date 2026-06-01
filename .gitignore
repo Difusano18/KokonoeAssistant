@@ -1,6 +1,12 @@
 # Build artifacts
 bin/
 obj/
+WearBridge/.android-sdk/
+WearBridge/.tools/
+WearBridge/.gradle/
+WearBridge/app/build/
+WearBridge/build/
+WearBridge/local.properties
 publish/
 
 # Logs
