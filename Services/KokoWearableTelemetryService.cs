@@ -16,12 +16,16 @@ namespace KokonoeAssistant.Services
         public double? HeartRateBpm { get; set; }
         public double? IbiMs { get; set; }
         public double? HrvRmssdMs { get; set; }
+        public double? SpO2Percent { get; set; }
         public double? Latitude { get; set; }
         public double? Longitude { get; set; }
         public double? LocationAccuracyM { get; set; }
+        public string SemanticLocation { get; set; } = "";
         public double? Motion { get; set; }
         public bool? OnWrist { get; set; }
         public string Activity { get; set; } = "";
+        public double? BatteryPercent { get; set; }
+        public bool? Charging { get; set; }
         public string Note { get; set; } = "";
     }
 
@@ -33,11 +37,15 @@ namespace KokonoeAssistant.Services
         public double BaselineBpm { get; set; }
         public double BpmDelta => CurrentBpm > 0 && BaselineBpm > 0 ? CurrentBpm - BaselineBpm : 0;
         public double? HrvRmssdMs { get; set; }
+        public double? SpO2Percent { get; set; }
         public double? Latitude { get; set; }
         public double? Longitude { get; set; }
+        public string SemanticLocation { get; set; } = "";
         public double? Motion { get; set; }
         public bool OnWrist { get; set; }
         public string Activity { get; set; } = "";
+        public double? BatteryPercent { get; set; }
+        public bool? Charging { get; set; }
         public string PresenceState { get; set; } = "unknown";
         public string SleepState { get; set; } = "unknown";
         public double SleepConfidence { get; set; }
@@ -83,6 +91,8 @@ namespace KokonoeAssistant.Services
             sample.DeviceId = string.IsNullOrWhiteSpace(sample.DeviceId) ? "unknown" : sample.DeviceId.Trim();
             sample.Source = string.IsNullOrWhiteSpace(sample.Source) ? "wearable" : sample.Source.Trim();
             if (sample.HeartRateBpm is <= 25 or >= 230) sample.HeartRateBpm = null;
+            if (sample.SpO2Percent is <= 50 or > 100) sample.SpO2Percent = null;
+            if (sample.BatteryPercent is < 0 or > 100) sample.BatteryPercent = null;
 
             lock (_lock)
             {
@@ -111,7 +121,8 @@ device={NullDash(state.DeviceId)} on_wrist={state.OnWrist}
 heart={state.CurrentBpm:F0} bpm baseline={state.BaselineBpm:F0} delta={state.BpmDelta:+0;-0;0}
 sleep={state.SleepState} confidence={state.SleepConfidence:F2}
 presence={state.PresenceState} activity={NullDash(state.Activity)}
-location={(state.Latitude.HasValue && state.Longitude.HasValue ? $"{state.Latitude.Value.ToString("F5", CultureInfo.InvariantCulture)},{state.Longitude.Value.ToString("F5", CultureInfo.InvariantCulture)}" : "-")}
+location={(state.Latitude.HasValue && state.Longitude.HasValue ? $"{state.Latitude.Value.ToString("F5", CultureInfo.InvariantCulture)},{state.Longitude.Value.ToString("F5", CultureInfo.InvariantCulture)}" : "-")} semantic_location={NullDash(state.SemanticLocation)}
+spo2={(state.SpO2Percent.HasValue ? $"{state.SpO2Percent.Value:F0}%" : "-")} battery={(state.BatteryPercent.HasValue ? $"{state.BatteryPercent.Value:F0}%" : "-")}
 summary={state.Summary}
 rule: wearable telemetry is context, not a medical diagnosis. Use it to reduce dumb follow-ups and detect likely sleep/return states.
 """;
@@ -124,8 +135,12 @@ rule: wearable telemetry is context, not a medical diagnosis. Use it to reduce d
             _state.DeviceId = sample.DeviceId;
             _state.OnWrist = sample.OnWrist ?? _state.OnWrist;
             _state.Activity = string.IsNullOrWhiteSpace(sample.Activity) ? _state.Activity : sample.Activity.Trim();
+            _state.SemanticLocation = string.IsNullOrWhiteSpace(sample.SemanticLocation) ? _state.SemanticLocation : sample.SemanticLocation.Trim();
             _state.Motion = sample.Motion ?? _state.Motion;
             _state.HrvRmssdMs = sample.HrvRmssdMs ?? _state.HrvRmssdMs;
+            _state.SpO2Percent = sample.SpO2Percent ?? _state.SpO2Percent;
+            _state.BatteryPercent = sample.BatteryPercent ?? _state.BatteryPercent;
+            _state.Charging = sample.Charging ?? _state.Charging;
 
             if (sample.Latitude.HasValue && sample.Longitude.HasValue)
             {

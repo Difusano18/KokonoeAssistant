@@ -36,6 +36,7 @@ namespace KokonoeAssistant
         private static KokoPredictorService?   _predictor;
         private static KokoHeartEngine?        _heart;
         private static KokoWearableTelemetryService? _wearable;
+        private static KokoWearableBridgeService? _wearableBridge;
         private static OllamaKeyPoolService?   _ollamaPool;
         private static KokoAgentTaskService?   _agentTasks;
         private static KokoAgentRuntimeService? _agentRuntime;
@@ -44,6 +45,7 @@ namespace KokonoeAssistant
         public static void Initialize(string vaultPath)
         {
             lock (_lock) { _vault = vaultPath; }
+            try { _ = WearableBridge; } catch { }
         }
 
         public static bool IsInitialized
@@ -287,6 +289,23 @@ namespace KokonoeAssistant
             }
         }
 
+        public static KokoWearableBridgeService WearableBridge
+        {
+            get
+            {
+                lock (_lock)
+                {
+                    if (_wearableBridge == null)
+                    {
+                        var dir = Path.Combine(_vault ?? AppDomain.CurrentDomain.BaseDirectory, "kokonoe-data");
+                        _wearableBridge = new KokoWearableBridgeService(WearableTelemetry, dir);
+                        _wearableBridge.Start();
+                    }
+                    return _wearableBridge;
+                }
+            }
+        }
+
         public static KokoPatternEngine KokoPatterns
         {
             get { lock (_lock) { return _kokoPatterns ??= new KokoPatternEngine(Path.Combine(_vault ?? AppDomain.CurrentDomain.BaseDirectory, "kokonoe-data")); } }
@@ -352,6 +371,7 @@ namespace KokonoeAssistant
                     _tgUser?.Dispose(); _tgUser = null;
                     _brain?.Dispose(); _brain = null;
                     _heart?.Dispose(); _heart = null;
+                    _wearableBridge?.Dispose(); _wearableBridge = null;
                     _agentTasks?.Stop(); _agentTasks = null;
                     _agentRuntime = null;
                     _fileTools = null;

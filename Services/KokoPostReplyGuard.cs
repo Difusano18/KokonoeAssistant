@@ -56,6 +56,10 @@ namespace KokonoeAssistant.Services
                 violations.Add("short apology was punished instead of acknowledged briefly");
             if (LooksLikeUserSetsInsultBoundary(userLower) && LooksLikeInsultBoundaryEscalation(replyLower))
                 violations.Add("user boundary about not being stupid was escalated into an insult challenge");
+            if (LooksLikePulseQuestion(userLower) && LooksLikePulseDataDeflection(replyLower))
+                violations.Add("pulse question was deflected instead of answering from wearable telemetry or saying no fresh data");
+            if (LooksLikePulseQuestion(userLower) && LooksLikeHostilePulseReply(replyLower))
+                violations.Add("pulse question was answered with hostile intelligence/biology scolding instead of telemetry status");
             if (LooksLikePunitiveNetworkThreat(userLower, replyLower))
                 violations.Add("reply invented a punitive network-control threat instead of answering the chat boundary");
 
@@ -297,11 +301,31 @@ Timeline:
                 rules.Add("- Obsidian exploration must return concrete note paths/previews now. Do not answer with 'scanning', 'I'll look', or any fake async progress unless a real background job exists.");
             if (violations.Any(v => v.Contains("source mechanics", StringComparison.OrdinalIgnoreCase)))
                 rules.Add("- Synthesize memory naturally. Say 'I remember...' or state the fact directly; do not name note files, Vault, or Obsidian unless the user asks for sources.");
+            if (violations.Any(v => v.Contains("pulse question", StringComparison.OrdinalIgnoreCase)))
+                rules.Add("- User asked for pulse. Use wearable/heart telemetry if present; if no fresh wearable sample exists, say 'свіжих даних з годинника ще нема' and point to bridge/watch setup. Do not joke about biology, no pulse, intelligence, or buttons.");
 
             return rules.Count == 0
                 ? ""
                 : "SITUATION-SPECIFIC FIX:\n" + string.Join("\n", rules);
         }
+
+        private static bool LooksLikePulseQuestion(string userLower)
+            => ContainsAny(userLower,
+                "який в мене пульс", "який у мене пульс", "мій пульс", "мой пульс",
+                "какой у меня пульс", "покажи пульс", "серцебит", "heart rate", "bpm");
+
+        private static bool LooksLikePulseDataDeflection(string replyLower)
+            => ContainsAny(replyLower,
+                "немає пульсу", "нет пульса", "не біологічна істота", "не биологическая",
+                "не відчуваю твого серця", "не чувствую твое сердце", "через монітор",
+                "подивись на екран свого", "посмотри на экран", "знайти кнопку", "кнопку «пульс»",
+                "навчився ним користуватися", "научился им пользоваться");
+
+        private static bool LooksLikeHostilePulseReply(string replyLower)
+            => ContainsAny(replyLower,
+                "статус «не тупий»", "статус не тупий", "статус «не тупой»", "статус не тупой",
+                "якщо ти не можеш знайти", "если ты не можешь найти",
+                "я що, говорю занадто складно", "говорю занадто складно", "говорю слишком сложно");
 
         private static bool LooksLikeTransportError(string reply)
         {

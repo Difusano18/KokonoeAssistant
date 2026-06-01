@@ -20,6 +20,7 @@ internal static class Program
             Run("Somatic tired from low charge", SomaticTiredFromLowCharge);
             Run("Wearable telemetry infers likely sleep", WearableTelemetryInfersLikelySleep);
             Run("Heart engine prefers fresh wearable bpm", HeartEnginePrefersFreshWearableBpm);
+            Run("Wearable bridge ingests authorized sample", WearableBridgeIngestsAuthorizedSample);
             Run("Self regulation clamps pulse spike", SelfRegulationClampsPulseSpike);
             Run("Self regulation protects vulnerable tone", SelfRegulationProtectsVulnerableTone);
             Run("Initiative respects low-power silence", InitiativeRespectsLowPowerSilence);
@@ -120,6 +121,7 @@ internal static class Program
             Run("Post reply guard blocks follow-up after conversation close", PostReplyGuardBlocksFollowupAfterConversationClose);
             Run("Post reply guard protects short apology", PostReplyGuardProtectsShortApology);
             Run("Post reply guard deescalates tone boundary", PostReplyGuardDeescalatesToneBoundary);
+            Run("Post reply guard grounds pulse questions", PostReplyGuardGroundsPulseQuestions);
             Run("Post reply guard blocks therapy meta tone", PostReplyGuardBlocksTherapyMetaTone);
             Run("Post reply guard blocks fabricated external facts", PostReplyGuardBlocksFabricatedExternalFacts);
             Run("Post reply guard blocks stale proactive ping on direct topic", PostReplyGuardBlocksStaleProactivePingOnDirectTopic);
@@ -354,6 +356,48 @@ internal static class Program
             System.Threading.Thread.Sleep(2500);
 
             AssertTrue(Math.Abs(heart.CurrentBpm - 92) < 25, "fresh wearable bpm should pull heart engine toward the real sensor value");
+        }
+        finally { TryDeleteDir(dir); }
+    }
+
+    private static void WearableBridgeIngestsAuthorizedSample()
+    {
+        var dir = TempDir();
+        var port = 19000 + Random.Shared.Next(1000);
+        try
+        {
+            var telemetry = new KokoWearableTelemetryService(dir);
+            using var bridge = new KokoWearableBridgeService(telemetry, dir, port);
+            bridge.Start();
+            AssertTrue(bridge.IsRunning, $"bridge should start; error={bridge.LastError}");
+
+            using var client = new System.Net.Http.HttpClient();
+            client.DefaultRequestHeaders.Add("X-Koko-Bridge-Token", bridge.Token);
+            var sample = new KokoWearableSample
+            {
+                TimestampUtc = DateTime.UtcNow,
+                DeviceId = "galaxy-watch-8-lte",
+                Source = "wear-os-bridge",
+                HeartRateBpm = 78,
+                Motion = 0.12,
+                OnWrist = true,
+                Activity = "walking",
+                SemanticLocation = "outside",
+                SpO2Percent = 97,
+                BatteryPercent = 84
+            };
+            var json = JsonConvert.SerializeObject(sample);
+            var response = client.PostAsync(
+                    $"http://localhost:{port}/api/wearable/v1/sample",
+                    new System.Net.Http.StringContent(json, System.Text.Encoding.UTF8, "application/json"))
+                .GetAwaiter().GetResult();
+
+            AssertTrue(response.IsSuccessStatusCode, $"bridge POST should succeed: {(int)response.StatusCode}");
+            var state = telemetry.State;
+            AssertEqual("galaxy-watch-8-lte", state.DeviceId, "bridge should ingest device id");
+            AssertEqual("outside", state.SemanticLocation, "bridge should ingest semantic location");
+            AssertTrue(Math.Abs(state.CurrentBpm - 78) < 0.1, "bridge should ingest heart rate");
+            AssertTrue(Math.Abs((state.SpO2Percent ?? 0) - 97) < 0.1, "bridge should ingest SpO2 extension field");
         }
         finally { TryDeleteDir(dir); }
     }
@@ -2522,6 +2566,33 @@ internal static class Program
         AssertTrue(result.ShouldRepair, "tone-boundary escalation should be repaired through the model");
         AssertTrue(result.Violations.Any(v => v.Contains("insult challenge")), "violation should name the insult escalation");
         AssertTrue(string.IsNullOrWhiteSpace(result.HardReplacement), "tone-boundary repair should not collapse into a canned line");
+    }
+
+    private static void PostReplyGuardGroundsPulseQuestions()
+    {
+        var now = new DateTime(2026, 6, 1, 23, 35, 0);
+        var state = new KokoInternalState();
+        var userText = "який в мене пульс ?";
+        var messages = new[]
+        {
+            new ChatRepository.ChatMessage { Role = "user", Content = userText, Timestamp = now }
+        };
+        var timeline = new KokoConversationTimelineEngine().Build(messages, state, now, userText);
+
+        var noPulseReply = "У тебе немає пульсу, бо ти — не біологічна істота, а мій інтелектуальний співрозмовник. " +
+            "Якщо б ти був годинником із сенсором, я б уже давно зламала його інтеграцію.";
+        var noPulseResult = new KokoPostReplyGuard().Evaluate(userText, noPulseReply, state, messages, timeline, now);
+        AssertTrue(!noPulseResult.Passed, "guard should reject fake no-pulse biology joke on pulse question");
+        AssertTrue(noPulseResult.Violations.Any(v => v.Contains("pulse question")), "violation should name pulse grounding");
+        AssertTrue(noPulseResult.RepairInstruction.Contains("wearable") || noPulseResult.RepairInstruction.Contains("годин"),
+            "repair should point to wearable telemetry or no fresh watch data");
+
+        var hostileReply = "Що, знову? Я не відчуваю твого серця через монітор. " +
+            "Якщо ти не можеш знайти кнопку «Пульс», то мені варто переглянути твій статус «не тупий».";
+        var hostileResult = new KokoPostReplyGuard().Evaluate(userText, hostileReply, state, messages, timeline, now);
+        AssertTrue(!hostileResult.Passed, "guard should reject hostile pulse answer");
+        AssertTrue(hostileResult.Violations.Any(v => v.Contains("hostile") || v.Contains("pulse question")),
+            "violation should name hostile telemetry failure");
     }
 
     private static void PostReplyGuardBlocksTherapyMetaTone()
