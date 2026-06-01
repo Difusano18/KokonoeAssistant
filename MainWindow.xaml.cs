@@ -1427,7 +1427,7 @@ tags: [kokonoe, live-core, diagnostics]
 
         private void UpdatePulseTab()
         {
-            StartEcgAnimation();
+            StopEcgAnimation();
             UpdatePulseTabNumbers();
         }
 
@@ -1435,6 +1435,41 @@ tags: [kokonoe, live-core, diagnostics]
         {
             try
             {
+                if (DateTime.UtcNow.Ticks >= 0)
+                {
+                    var pulseHeart = ServiceContainer.Heart;
+                    var wearable = ServiceContainer.WearableTelemetry.State;
+                    var fresh = wearable.IsFresh(DateTime.UtcNow);
+                    var lastLocal = wearable.LastSampleUtc > DateTime.MinValue
+                        ? wearable.LastSampleUtc.ToLocalTime().ToString("HH:mm:ss")
+                        : "--";
+                    var wearableCur = pulseHeart?.CurrentBpm ?? 0;
+
+                    PulseTabBpmBig.Text = wearableCur > 0 ? $"{wearableCur:0}" : "--";
+                    PulseTabCurText.Text = wearableCur > 0 ? $"{wearableCur:0.0}" : "--";
+                    PulseTabBaseText.Text = lastLocal;
+                    PulseTabHrvText.Text = string.IsNullOrWhiteSpace(wearable.DeviceId) ? "watch" : wearable.DeviceId;
+                    PulseTabMinMaxText.Text = fresh ? wearable.SleepState : "stale";
+                    PulseTabStateLabel.Text = fresh ? $"{wearable.SleepState} · {wearable.PresenceState}" : "NO FRESH WATCH DATA";
+                    PulseSideBpmText.Text = wearableCur > 0 ? $"{wearableCur:0}" : "--";
+                    PulseSideStateText.Text = fresh ? $"last {lastLocal} · {wearable.PresenceState}" : "waiting for Galaxy Watch sample";
+
+                    PulseVitalLog.ItemsSource = new[]
+                    {
+                        new { TimeStr = "pulse", BpmStr = wearableCur > 0 ? $"{wearableCur:0} bpm" : "--" },
+                        new { TimeStr = "last measured", BpmStr = lastLocal },
+                        new { TimeStr = "freshness", BpmStr = fresh ? "fresh" : "stale" },
+                        new { TimeStr = "device", BpmStr = string.IsNullOrWhiteSpace(wearable.DeviceId) ? "--" : wearable.DeviceId },
+                        new { TimeStr = "sleep", BpmStr = wearable.SleepState },
+                        new { TimeStr = "confidence", BpmStr = $"{wearable.SleepConfidence:P0}" },
+                        new { TimeStr = "on wrist", BpmStr = wearable.OnWrist ? "yes" : "unknown/no" },
+                        new { TimeStr = "location", BpmStr = wearable.Latitude.HasValue && wearable.Longitude.HasValue ? "available" : "--" },
+                    }.ToList();
+
+                    UpdatePulseSidePanels(wearableCur);
+                    return;
+                }
+
                 var heart = ServiceContainer.Heart;
                 if (heart == null) return;
                 var cur = heart.CurrentBpm;
@@ -1486,6 +1521,30 @@ tags: [kokonoe, live-core, diagnostics]
         {
             try
             {
+                if (DateTime.UtcNow.Ticks >= 0)
+                {
+                    var wearable = ServiceContainer.WearableTelemetry.State;
+                    var fresh = wearable.IsFresh(DateTime.UtcNow);
+                    PulseMoodMainText.Text = fresh ? "WATCH ONLINE" : "WATCH WAITING";
+                    PulseMoodDetailText.Text = fresh ? wearable.Summary : "no fresh sensor packet yet";
+                    PulseMoodBar.Value = Math.Clamp(wearable.SleepConfidence * 100, 0, 100);
+                    PulseSystemStatusText.Text = fresh
+                        ? $"watch sample {wearable.LastSampleUtc.ToLocalTime():HH:mm:ss} · {wearable.SleepState}"
+                        : "waiting for Galaxy Watch bridge";
+
+                    var wearableNow = DateTime.Now;
+                    var wearableEventBrushHot = new SolidColorBrush(MediaColor.FromRgb(0xFF, 0x4D, 0x6D));
+                    var wearableEventBrushOk = new SolidColorBrush(MediaColor.FromRgb(0x00, 0xE6, 0x76));
+                    var wearableEventBrushWarn = new SolidColorBrush(MediaColor.FromRgb(0xFF, 0xB0, 0x20));
+                    PulseRecentEvents.ItemsSource = new[]
+                    {
+                        new { Time = wearableNow.ToString("HH:mm:ss"), Text = fresh ? "watch telemetry fresh" : "watch telemetry stale", Brush = fresh ? wearableEventBrushOk : wearableEventBrushWarn },
+                        new { Time = wearable.LastSampleUtc > DateTime.MinValue ? wearable.LastSampleUtc.ToLocalTime().ToString("HH:mm:ss") : "--", Text = $"last pulse sample: {(currentBpm > 0 ? $"{currentBpm:0} bpm" : "--")}", Brush = currentBpm > 0 ? wearableEventBrushOk : wearableEventBrushWarn },
+                        new { Time = wearableNow.ToString("HH:mm:ss"), Text = $"sleep state: {wearable.SleepState}", Brush = wearable.SleepConfidence >= 0.72 ? wearableEventBrushHot : wearableEventBrushOk },
+                    };
+                    return;
+                }
+
                 var brain = ServiceContainer.BrainEngine;
                 var emotion = brain.Emotion;
                 var state = brain.State;

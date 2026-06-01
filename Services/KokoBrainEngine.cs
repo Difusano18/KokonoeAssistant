@@ -767,7 +767,7 @@ namespace KokonoeAssistant.Services
             }
             catch (Exception ex)
             {
-                LogError($"TG send ({category}): {ex.Message}");
+                LogTelegramDeliveryFailure($"send ({category}): {ex.Message}");
                 return false;
             }
         }
@@ -1029,6 +1029,7 @@ namespace KokonoeAssistant.Services
                 sb.AppendLine(presence.ExtraContext);
                 sb.AppendLine(dayFrame.PromptBlock);
                 sb.AppendLine(Somatic.BuildPromptBlock(somatic));
+                sb.AppendLine(ServiceContainer.WearableTelemetry.BuildPromptBlock(now.ToUniversalTime()));
             }
             catch { }
 
@@ -4916,7 +4917,7 @@ namespace KokonoeAssistant.Services
 
             if (!sent)
             {
-                LogError($"TG FAILED: {msg[..Math.Min(60, msg.Length)]}");
+                LogTelegramDeliveryFailure($"night_check failed: {msg[..Math.Min(60, msg.Length)]}");
                 return;
             }
 
@@ -5398,6 +5399,7 @@ namespace KokonoeAssistant.Services
             var scenarioResults = Scenarios.RunCoreChecks(now, autonomyLevel);
             var scenarioPassed = scenarioResults.Count(r => r.Passed);
             var timeline = Timeline.Build(_chatRepo.GetMessages(60), _state, now, userText);
+            var wearable = ServiceContainer.WearableTelemetry.State;
 
             return new KokoTelemetrySnapshot
             {
@@ -5407,6 +5409,9 @@ namespace KokonoeAssistant.Services
                 MoodScore = _state.MoodScore,
                 Mood = _state.PersonalityDailyMood,
                 Somatic = $"{somatic.State} / strain {somatic.Strain:F2} / calm {somatic.Calm:F2}",
+                Wearable = wearable.IsFresh(now.ToUniversalTime())
+                    ? $"{wearable.SleepState} / {wearable.CurrentBpm:F0} bpm / {wearable.PresenceState}"
+                    : "stale",
                 SelfRegulation = $"{selfReg.Reaction} -> {selfReg.Regulation} / control {selfReg.Control:F2}",
                 Presence = presence.SummaryUk,
                 InternalDay = internalDay.SummaryUk,
@@ -5600,6 +5605,9 @@ namespace KokonoeAssistant.Services
             System.Diagnostics.Debug.WriteLine($"[Brain ERROR] {msg}");
             var _h9 = OnNewMessage; _h9?.Invoke("system", $"⚠️ {msg}");
         }
+
+        private static void LogTelegramDeliveryFailure(string msg) =>
+            System.Diagnostics.Debug.WriteLine($"[Brain TG] {msg}");
 
         // =================================================================
         // TOOLS WINDOW API - ?????? ?? ??????????? ????? ??? ????????

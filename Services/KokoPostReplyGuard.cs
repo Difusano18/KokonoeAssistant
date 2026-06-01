@@ -54,6 +54,8 @@ namespace KokonoeAssistant.Services
                 violations.Add("conversation-close boundary was ignored by follow-up pressure");
             if (KokoConversationBoundary.LooksLikeShortApology(userText) && LooksLikeApologyScold(replyLower))
                 violations.Add("short apology was punished instead of acknowledged briefly");
+            if (LooksLikeUserSetsInsultBoundary(userLower) && LooksLikeInsultBoundaryEscalation(replyLower))
+                violations.Add("user boundary about not being stupid was escalated into an insult challenge");
             if (LooksLikePunitiveNetworkThreat(userLower, replyLower))
                 violations.Add("reply invented a punitive network-control threat instead of answering the chat boundary");
 
@@ -162,7 +164,7 @@ namespace KokonoeAssistant.Services
             if (shortGreeting && LooksLikeBadGreetingReply(replyLower))
                 violations.Add("коротке привітання помилково перетворено на тему для добивання");
             if (shortGreeting && LooksLikeOverbuiltGreetingReply(reply))
-                violations.Add("short greeting got an overbuilt scripted monologue instead of a live short reply");
+                violations.Add("overbuilt greeting reply should be repaired, not collapsed to a canned line");
             if (staleMetaFallback)
                 violations.Add("відповідь продовжує службовий fallback замість останнього повідомлення користувача");
             if (LooksLikeUserEchoClarificationFallback(replyLower))
@@ -561,6 +563,18 @@ Timeline:
                 "перестати бути розсіяним",
                 "почати говорити по справі");
 
+        private static bool LooksLikeUserSetsInsultBoundary(string userLower)
+            => ContainsAny(userLower,
+                "не тупий", "не тупа", "я не туп", "я знаю, я не туп",
+                "не буркай", "не ображ", "без образ", "не називай мене",
+                "не считай меня туп", "я не тупой", "я не тупая");
+
+        private static bool LooksLikeInsultBoundaryEscalation(string replyLower)
+            => ContainsAny(replyLower,
+                "доведи", "докажи", "демонструй результат", "продемонструй результат",
+                "максимально туп", "не-туп", "нетуп", "сміховисна спроба", "смешная попытка",
+                "витратив час", "потратил время", "робить щось максимально тупе", "робиш щось максимально тупе");
+
         private static bool LooksGeneric(string userText, string reply)
         {
             var lower = reply.ToLowerInvariant();
@@ -793,11 +807,6 @@ Timeline:
         private static bool IsShortGreeting(string userLower)
         {
             var normalized = NormalizeCompact(userLower);
-            if (userLower.Length <= 24 && ContainsAny(userLower,
-                    "\u043f\u0440\u0438\u0432\u0456\u0442", "\u043f\u0440\u0438\u0432\u0435\u0442", "\u0445\u0430\u0439", "\u0439\u043e", "\u0434\u0430\u0440\u043e\u0432\u0430", "\u0437\u0434\u043e\u0440\u043e\u0432", "\u043a\u0443",
-                    "прив", "хай", "йо", "дар", "здор", "ку"))
-                return true;
-
             return normalized is "\u043f\u0440\u0438\u0432\u0456\u0442" or "\u043f\u0440\u0438\u0432\u0435\u0442" or "\u0445\u0430\u0439" or "\u0439\u043e" or "\u0434\u0430\u0440\u043e\u0432\u0430" or "\u0437\u0434\u043e\u0440\u043e\u0432" or "\u043a\u0443"
                 or "привіт" or "привет" or "хай" or "йо" or "дарова" or "здоров" or "ку";
         }

@@ -11,6 +11,7 @@ namespace KokonoeAssistant.Services
     public sealed class KokoHeartEngine : IDisposable
     {
         private readonly KokoEmotionEngine _emotion;
+        private readonly KokoWearableTelemetryService? _wearable;
         private readonly string _statePath;
         private readonly Random _rng = new();
 
@@ -33,9 +34,10 @@ namespace KokonoeAssistant.Services
         public event Action<double>? Beat;
         public event Action<double>? BpmChanged;
 
-        public KokoHeartEngine(KokoEmotionEngine emotion, string dataDir)
+        public KokoHeartEngine(KokoEmotionEngine emotion, string dataDir, KokoWearableTelemetryService? wearable = null)
         {
             _emotion = emotion;
+            _wearable = wearable;
             Directory.CreateDirectory(dataDir);
             _statePath = Path.Combine(dataDir, "koko-heart.json");
         }
@@ -94,6 +96,9 @@ namespace KokonoeAssistant.Services
 
         private void OnStateTick()
         {
+            if (TryApplyWearableHeartRate())
+                return;
+
             double padA         = _emotion.Data.PadA;
             double intensity    = _emotion.Data.Intensity;
             double acuteStress  = _emotion.Stress.AcuteStress;
@@ -114,6 +119,28 @@ namespace KokonoeAssistant.Services
                 _lastReportedBpm = displayBpm;
                 BpmChanged?.Invoke(displayBpm);
             }
+        }
+
+        private bool TryApplyWearableHeartRate()
+        {
+            if (_wearable == null) return false;
+
+            var wearable = _wearable.State;
+            if (!wearable.IsFresh(DateTime.UtcNow) || wearable.CurrentBpm <= 0)
+                return false;
+
+            _currentBpm += (wearable.CurrentBpm - _currentBpm) * 0.35;
+            if (wearable.BaselineBpm > 0)
+                _state.BaselineBpm += (wearable.BaselineBpm - _state.BaselineBpm) * 0.08;
+
+            var displayBpm = _currentBpm + HeartMath.Respiratory(DateTime.UtcNow) * 0.35;
+            if (Math.Abs(displayBpm - _lastReportedBpm) > 0.5)
+            {
+                _lastReportedBpm = displayBpm;
+                BpmChanged?.Invoke(displayBpm);
+            }
+
+            return true;
         }
 
         private void OnBeatTick(object? _unused)

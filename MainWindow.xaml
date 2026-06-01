@@ -1975,7 +1975,7 @@
                           SizeChanged="PulseTab_SizeChanged">
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="220"/>
+                            <RowDefinition Height="0"/>
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="*"/>
                         </Grid.RowDefinitions>
@@ -1985,7 +1985,7 @@
                                 BorderBrush="{DynamicResource AccentBgBorder2}" BorderThickness="0,0,0,1" Padding="20,12">
                             <Grid>
                                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                    <TextBlock Text="// CARDIAC TELEMETRY" FontSize="12" FontFamily="Consolas" FontWeight="Bold"
+                                    <TextBlock Text="// WEARABLE TELEMETRY" FontSize="12" FontFamily="Consolas" FontWeight="Bold"
                                                Foreground="#FF4D6D" VerticalAlignment="Center"/>
                                     <TextBlock Text=" · CARDIAC · NEURAL · INTERFACE" FontSize="9" FontFamily="Consolas"
                                                Foreground="{DynamicResource AccentDim}" VerticalAlignment="Center" Margin="8,0,0,0"/>
@@ -2009,7 +2009,7 @@
                         </Border>
 
                         <!-- ECG Canvas -->
-                        <Border Grid.Row="1" Background="{DynamicResource AccentBgPanel}"
+                        <Border Grid.Row="1" Visibility="Collapsed" Background="{DynamicResource AccentBgPanel}"
                                 BorderBrush="{DynamicResource AccentBgBorder2}" BorderThickness="1" CornerRadius="8"
                                 Padding="20,10" Margin="20,12,20,0">
                             <Grid>
@@ -2072,13 +2072,13 @@
                         <!-- Telemetry workspace -->
                         <Grid Grid.Row="3" Margin="20,12,20,12">
                             <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="220"/>
-                                <ColumnDefinition Width="12"/>
                                 <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="12"/>
-                                <ColumnDefinition Width="330"/>
-                                <ColumnDefinition Width="12"/>
-                                <ColumnDefinition Width="300"/>
+                                <ColumnDefinition Width="0"/>
+                                <ColumnDefinition Width="0"/>
+                                <ColumnDefinition Width="0"/>
+                                <ColumnDefinition Width="0"/>
+                                <ColumnDefinition Width="0"/>
+                                <ColumnDefinition Width="0"/>
                             </Grid.ColumnDefinitions>
                             <Border Grid.Column="0" Background="{DynamicResource AccentBgCard}"
                                     BorderBrush="{DynamicResource AccentBgBorder2}" BorderThickness="1" CornerRadius="8"

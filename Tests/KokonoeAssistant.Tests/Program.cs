@@ -18,6 +18,8 @@ internal static class Program
         {
             Run("Somatic wired from pulse spike", SomaticWiredFromPulseSpike);
             Run("Somatic tired from low charge", SomaticTiredFromLowCharge);
+            Run("Wearable telemetry infers likely sleep", WearableTelemetryInfersLikelySleep);
+            Run("Heart engine prefers fresh wearable bpm", HeartEnginePrefersFreshWearableBpm);
             Run("Self regulation clamps pulse spike", SelfRegulationClampsPulseSpike);
             Run("Self regulation protects vulnerable tone", SelfRegulationProtectsVulnerableTone);
             Run("Initiative respects low-power silence", InitiativeRespectsLowPowerSilence);
@@ -117,6 +119,7 @@ internal static class Program
             Run("Post reply guard blocks assistant-owned reminder schedule", PostReplyGuardBlocksAssistantOwnedReminderSchedule);
             Run("Post reply guard blocks follow-up after conversation close", PostReplyGuardBlocksFollowupAfterConversationClose);
             Run("Post reply guard protects short apology", PostReplyGuardProtectsShortApology);
+            Run("Post reply guard deescalates tone boundary", PostReplyGuardDeescalatesToneBoundary);
             Run("Post reply guard blocks therapy meta tone", PostReplyGuardBlocksTherapyMetaTone);
             Run("Post reply guard blocks fabricated external facts", PostReplyGuardBlocksFabricatedExternalFacts);
             Run("Post reply guard blocks stale proactive ping on direct topic", PostReplyGuardBlocksStaleProactivePingOnDirectTopic);
@@ -298,6 +301,61 @@ internal static class Program
 
         AssertEqual("tired", somatic.State, "low BPM and night should be tired");
         AssertTrue(somatic.IsLow, "low-charge state should expose IsLow");
+    }
+
+    private static void WearableTelemetryInfersLikelySleep()
+    {
+        var dir = TempDir();
+        try
+        {
+            var service = new KokoWearableTelemetryService(dir);
+            var start = new DateTime(2026, 6, 1, 1, 10, 0, DateTimeKind.Utc);
+
+            for (var i = 0; i < 8; i++)
+            {
+                service.Ingest(new KokoWearableSample
+                {
+                    TimestampUtc = start.AddMinutes(i * 2),
+                    DeviceId = "galaxy-watch-8-lte",
+                    HeartRateBpm = 55 - (i % 2),
+                    HrvRmssdMs = 42,
+                    Motion = 0.03,
+                    OnWrist = true,
+                    Activity = "rest"
+                });
+            }
+
+            var state = service.State;
+            AssertEqual("probably_asleep", state.SleepState, "night, low motion, on-wrist and low bpm should infer likely sleep");
+            AssertTrue(state.SleepConfidence >= 0.72, "sleep confidence should be high");
+            AssertTrue(service.BuildPromptBlock(start).Contains("WEARABLE TELEMETRY"), "prompt block should expose wearable context");
+        }
+        finally { TryDeleteDir(dir); }
+    }
+
+    private static void HeartEnginePrefersFreshWearableBpm()
+    {
+        var dir = TempDir();
+        try
+        {
+            var wearable = new KokoWearableTelemetryService(dir);
+            wearable.Ingest(new KokoWearableSample
+            {
+                TimestampUtc = DateTime.UtcNow,
+                DeviceId = "galaxy-watch-8-lte",
+                HeartRateBpm = 92,
+                Motion = 0.4,
+                OnWrist = true
+            });
+
+            var emotion = new KokoEmotionEngine(dir);
+            using var heart = new KokoHeartEngine(emotion, dir, wearable);
+            heart.Start();
+            System.Threading.Thread.Sleep(2500);
+
+            AssertTrue(Math.Abs(heart.CurrentBpm - 92) < 25, "fresh wearable bpm should pull heart engine toward the real sensor value");
+        }
+        finally { TryDeleteDir(dir); }
     }
 
     private static void SelfRegulationClampsPulseSpike()
@@ -2442,6 +2500,28 @@ internal static class Program
         AssertTrue(result.Violations.Any(v => v.Contains("apology")), "violation should name apology handling");
         AssertTrue(result.RepairInstruction.Contains("one line") || result.RepairInstruction.Contains("корот"),
             "repair should ask for a short acknowledgement");
+    }
+
+    private static void PostReplyGuardDeescalatesToneBoundary()
+    {
+        var now = new DateTime(2026, 6, 1, 20, 11, 0);
+        var state = new KokoInternalState();
+        var userText = "не буркай .. я знаю, я не тупий";
+        var badReply = "«Не буркай»? Ти що, намагаєшся встановити правила гри в моєму ж діалозі? " +
+            "Щодо твого «я не тупий» — доводити це словами зазвичай намагаються саме ті, хто в цей момент робить щось максимально тупе. " +
+            "Тому просто продемонструй результат.";
+        var messages = new[]
+        {
+            new ChatRepository.ChatMessage { Role = "user", Content = userText, Timestamp = now }
+        };
+        var timeline = new KokoConversationTimelineEngine().Build(messages, state, now, userText);
+
+        var result = new KokoPostReplyGuard().Evaluate(userText, badReply, state, messages, timeline, now);
+
+        AssertTrue(!result.Passed, "guard should reject escalating a tone boundary into an intelligence insult");
+        AssertTrue(result.ShouldRepair, "tone-boundary escalation should be repaired through the model");
+        AssertTrue(result.Violations.Any(v => v.Contains("insult challenge")), "violation should name the insult escalation");
+        AssertTrue(string.IsNullOrWhiteSpace(result.HardReplacement), "tone-boundary repair should not collapse into a canned line");
     }
 
     private static void PostReplyGuardBlocksTherapyMetaTone()
@@ -5147,6 +5227,18 @@ Persistent Obsidian context is now a core project requirement.
     {
         if (!Equals(expected, actual))
             throw new InvalidOperationException($"FAIL: {message}. Expected '{expected}', got '{actual}'.");
+    }
+
+    private static string TempDir()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "KokonoeAssistant.Tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        return dir;
+    }
+
+    private static void TryDeleteDir(string dir)
+    {
+        try { Directory.Delete(dir, recursive: true); } catch { }
     }
 
     private sealed class TestContext : IDisposable

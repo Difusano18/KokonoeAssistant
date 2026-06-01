@@ -10,6 +10,7 @@ namespace KokonoeAssistant.Services
         public float MoodScore { get; set; }
         public string Mood { get; set; } = "";
         public string Somatic { get; set; } = "";
+        public string Wearable { get; set; } = "";
         public string SelfRegulation { get; set; } = "";
         public string Presence { get; set; } = "";
         public string InternalDay { get; set; } = "";

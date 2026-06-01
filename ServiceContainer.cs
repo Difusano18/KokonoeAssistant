@@ -35,6 +35,7 @@ namespace KokonoeAssistant
         private static KokoEmbeddingService?   _embedding;
         private static KokoPredictorService?   _predictor;
         private static KokoHeartEngine?        _heart;
+        private static KokoWearableTelemetryService? _wearable;
         private static OllamaKeyPoolService?   _ollamaPool;
         private static KokoAgentTaskService?   _agentTasks;
         private static KokoAgentRuntimeService? _agentRuntime;
@@ -266,10 +267,22 @@ namespace KokonoeAssistant
                     if (_heart == null)
                     {
                         var dir = Path.Combine(_vault ?? AppDomain.CurrentDomain.BaseDirectory, "kokonoe-data");
-                        _heart = new KokoHeartEngine(EmotionEngine, dir);
+                        _heart = new KokoHeartEngine(EmotionEngine, dir, WearableTelemetry);
                         _heart.Start();
                     }
                     return _heart;
+                }
+            }
+        }
+
+        public static KokoWearableTelemetryService WearableTelemetry
+        {
+            get
+            {
+                lock (_lock)
+                {
+                    var dir = Path.Combine(_vault ?? AppDomain.CurrentDomain.BaseDirectory, "kokonoe-data");
+                    return _wearable ??= new KokoWearableTelemetryService(dir);
                 }
             }
         }
