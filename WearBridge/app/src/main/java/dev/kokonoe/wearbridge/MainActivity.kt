@@ -12,6 +12,8 @@ import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 
 class MainActivity : Activity() {
+    private var startAfterPermissions = false
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -30,11 +32,8 @@ class MainActivity : Activity() {
         val start = Button(this).apply {
             text = "Start"
             setOnClickListener {
-                requestPermissionsIfNeeded()
-                ContextCompat.startForegroundService(
-                    this@MainActivity,
-                    Intent(this@MainActivity, WearBridgeService::class.java)
-                )
+                startAfterPermissions = true
+                if (requestPermissionsIfNeeded()) startBridge()
             }
         }
         val stop = Button(this).apply {
@@ -51,7 +50,7 @@ class MainActivity : Activity() {
         requestPermissionsIfNeeded()
     }
 
-    private fun requestPermissionsIfNeeded() {
+    private fun requestPermissionsIfNeeded(): Boolean {
         val permissions = arrayOf(
             Manifest.permission.BODY_SENSORS,
             Manifest.permission.ACTIVITY_RECOGNITION,
@@ -60,6 +59,23 @@ class MainActivity : Activity() {
 
         if (permissions.isNotEmpty()) {
             ActivityCompat.requestPermissions(this, permissions.toTypedArray(), 7)
+            return false
         }
+
+        return true
+    }
+
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == 7 && startAfterPermissions && grantResults.all { it == PackageManager.PERMISSION_GRANTED }) {
+            startBridge()
+        }
+    }
+
+    private fun startBridge() {
+        ContextCompat.startForegroundService(
+            this,
+            Intent(this, WearBridgeService::class.java)
+        )
     }
 }

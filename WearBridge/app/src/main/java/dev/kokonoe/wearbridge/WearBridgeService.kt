@@ -52,22 +52,26 @@ class WearBridgeService : Service(), SensorEventListener {
 
     private fun startHeartRate() {
         scope.launch {
-            val client = HealthServices.getClient(this@WearBridgeService).measureClient
-            client.registerMeasureCallback(DataType.HEART_RATE_BPM, object : MeasureCallback {
-                override fun onAvailabilityChanged(dataType: DeltaDataType<*, *>, availability: Availability) = Unit
+            runCatching {
+                val client = HealthServices.getClient(this@WearBridgeService).measureClient
+                client.registerMeasureCallback(DataType.HEART_RATE_BPM, object : MeasureCallback {
+                    override fun onAvailabilityChanged(dataType: DeltaDataType<*, *>, availability: Availability) = Unit
 
-                override fun onDataReceived(data: DataPointContainer) {
-                    val points = data.getData(DataType.HEART_RATE_BPM)
-                    latestHeartRate = points.lastOrNull()?.value
-                }
-            })
+                    override fun onDataReceived(data: DataPointContainer) {
+                        val points = data.getData(DataType.HEART_RATE_BPM)
+                        latestHeartRate = points.lastOrNull()?.value
+                    }
+                })
+            }
         }
     }
 
     private fun startMotion() {
-        val sm = getSystemService(SENSOR_SERVICE) as SensorManager
-        val accelerometer = sm.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
-        sm.registerListener(this, accelerometer, SensorManager.SENSOR_DELAY_NORMAL)
+        runCatching {
+            val sm = getSystemService(SENSOR_SERVICE) as SensorManager
+            val accelerometer = sm.getDefaultSensor(Sensor.TYPE_ACCELEROMETER) ?: return
+            sm.registerListener(this, accelerometer, SensorManager.SENSOR_DELAY_NORMAL)
+        }
     }
 
     private fun startPostingLoop() {
@@ -85,7 +89,7 @@ class WearBridgeService : Service(), SensorEventListener {
                     semanticLocation = config.semanticLocation,
                     batteryPercent = batteryPercent
                 )
-                sender.send(sample)
+                runCatching { sender.send(sample) }
                 delay(10_000)
             }
         }
