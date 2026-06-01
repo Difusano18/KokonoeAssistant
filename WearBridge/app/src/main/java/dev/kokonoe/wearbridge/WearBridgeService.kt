@@ -28,14 +28,13 @@ import kotlin.math.sqrt
 
 class WearBridgeService : Service(), SensorEventListener {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-    private val config = BridgeConfig()
-    private val sender = BridgeSender(config)
     private var latestHeartRate: Double? = null
     private var latestMotion: Double? = null
 
     override fun onCreate() {
         super.onCreate()
         startForeground(42, notification())
+        BridgeRuntimeStatus.save(this, BridgeRuntimeStatus(running = true, lastError = "starting"))
         startMotion()
         startHeartRate()
         startPostingLoop()
@@ -45,6 +44,7 @@ class WearBridgeService : Service(), SensorEventListener {
         scope.cancel()
         val sm = getSystemService(SENSOR_SERVICE) as SensorManager
         sm.unregisterListener(this)
+        BridgeRuntimeStatus.save(this, BridgeRuntimeStatus(running = false, lastError = "stopped"))
         super.onDestroy()
     }
 
@@ -77,19 +77,33 @@ class WearBridgeService : Service(), SensorEventListener {
     private fun startPostingLoop() {
         scope.launch {
             while (true) {
+                val settings = BridgeSettings.load(this@WearBridgeService)
+                val sender = BridgeSender(settings)
                 val battery = getSystemService(BATTERY_SERVICE) as BatteryManager
                 val batteryPercent = battery.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY).toDouble()
                 val sample = WearableSample(
                     timestampUtc = Instant.now().toString(),
-                    deviceId = config.deviceId,
+                    deviceId = settings.deviceId,
                     heartRateBpm = latestHeartRate,
                     motion = latestMotion,
                     onWrist = latestHeartRate != null,
                     activity = "watch_bridge",
-                    semanticLocation = config.semanticLocation,
+                    semanticLocation = settings.semanticLocation,
                     batteryPercent = batteryPercent
                 )
-                runCatching { sender.send(sample) }
+                val result = sender.send(sample)
+                BridgeRuntimeStatus.save(
+                    this@WearBridgeService,
+                    BridgeRuntimeStatus(
+                        running = true,
+                        lastSendAt = Instant.now().toString(),
+                        lastOk = result.ok,
+                        lastHttpCode = result.httpCode,
+                        lastError = result.error,
+                        lastHeartRate = latestHeartRate?.let { "%.0f bpm".format(it) } ?: "no heart sample yet",
+                        lastMotion = latestMotion?.let { "%.3f".format(it) } ?: "no motion sample yet"
+                    )
+                )
                 delay(10_000)
             }
         }
