@@ -21,6 +21,9 @@ internal static class Program
             Run("Wearable telemetry infers likely sleep", WearableTelemetryInfersLikelySleep);
             Run("Heart engine prefers fresh wearable bpm", HeartEnginePrefersFreshWearableBpm);
             Run("Wearable bridge ingests authorized sample", WearableBridgeIngestsAuthorizedSample);
+            Run("Wearable bridge status exposes pairing metadata", WearableBridgeStatusExposesPairingMetadata);
+            Run("Wearable bridge pairs and rejects bad tokens", WearableBridgePairsAndRejectsBadTokens);
+            Run("Wearable bridge keeps stable token and pc id", WearableBridgeKeepsStableTokenAndPcId);
             Run("Capability manifest advertises runtime routes", CapabilityManifestAdvertisesRuntimeRoutes);
             Run("Self regulation clamps pulse spike", SelfRegulationClampsPulseSpike);
             Run("Self regulation protects vulnerable tone", SelfRegulationProtectsVulnerableTone);
@@ -399,6 +402,90 @@ internal static class Program
             AssertEqual("outside", state.SemanticLocation, "bridge should ingest semantic location");
             AssertTrue(Math.Abs(state.CurrentBpm - 78) < 0.1, "bridge should ingest heart rate");
             AssertTrue(Math.Abs((state.SpO2Percent ?? 0) - 97) < 0.1, "bridge should ingest SpO2 extension field");
+        }
+        finally { TryDeleteDir(dir); }
+    }
+
+    private static void WearableBridgeStatusExposesPairingMetadata()
+    {
+        var dir = TempDir();
+        var port = 20000 + Random.Shared.Next(1000);
+        try
+        {
+            var telemetry = new KokoWearableTelemetryService(dir);
+            using var bridge = new KokoWearableBridgeService(telemetry, dir, port);
+            bridge.Start();
+            AssertTrue(bridge.IsRunning, $"bridge should start; error={bridge.LastError}");
+
+            using var client = new System.Net.Http.HttpClient();
+            var response = client.GetAsync($"http://localhost:{port}/api/wearable/v1/status")
+                .GetAwaiter().GetResult();
+            AssertTrue(response.IsSuccessStatusCode, $"status should succeed: {(int)response.StatusCode}");
+
+            var json = JObject.Parse(response.Content.ReadAsStringAsync().GetAwaiter().GetResult());
+            AssertEqual("kokonoe-wearable-v1", json["bridge"]?.ToString(), "status should expose bridge marker");
+            AssertEqual(bridge.PcId, json["pcId"]?.ToString(), "status should expose stable pc id");
+            AssertTrue(json["pcName"]?.ToString()?.Length > 0, "status should expose pc name");
+            AssertTrue(json["pairingAvailable"]?.Value<bool>() == true, "status should advertise pairing");
+            AssertTrue(json["urls"] is JArray { Count: > 0 }, "status should expose candidate URLs");
+        }
+        finally { TryDeleteDir(dir); }
+    }
+
+    private static void WearableBridgePairsAndRejectsBadTokens()
+    {
+        var dir = TempDir();
+        var port = 21000 + Random.Shared.Next(1000);
+        try
+        {
+            var telemetry = new KokoWearableTelemetryService(dir);
+            using var bridge = new KokoWearableBridgeService(telemetry, dir, port);
+            bridge.Start();
+            AssertTrue(bridge.IsRunning, $"bridge should start; error={bridge.LastError}");
+
+            using var client = new System.Net.Http.HttpClient();
+            var pairResponse = client.PostAsync(
+                    $"http://localhost:{port}/api/wearable/v1/pair",
+                    new System.Net.Http.StringContent("""{"deviceId":"watch-test"}""", System.Text.Encoding.UTF8, "application/json"))
+                .GetAwaiter().GetResult();
+            AssertTrue(pairResponse.IsSuccessStatusCode, $"pair should succeed: {(int)pairResponse.StatusCode}");
+            var pairJson = JObject.Parse(pairResponse.Content.ReadAsStringAsync().GetAwaiter().GetResult());
+            var token = pairJson["token"]?.ToString() ?? "";
+            AssertEqual(bridge.PcId, pairJson["pcId"]?.ToString(), "pair should bind to this pc id");
+            AssertEqual(bridge.Token, token, "pair should return bridge token");
+
+            var badClient = new System.Net.Http.HttpClient();
+            badClient.DefaultRequestHeaders.Add("X-Koko-Bridge-Token", "bad");
+            var badResponse = badClient.PostAsync(
+                    $"http://localhost:{port}/api/wearable/v1/sample",
+                    new System.Net.Http.StringContent("""{"deviceId":"watch-test","heartRateBpm":77}""", System.Text.Encoding.UTF8, "application/json"))
+                .GetAwaiter().GetResult();
+            AssertEqual(System.Net.HttpStatusCode.Unauthorized, badResponse.StatusCode, "wrong-length token should reject without crashing");
+
+            client.DefaultRequestHeaders.Add("X-Koko-Bridge-Token", token);
+            var goodResponse = client.PostAsync(
+                    $"http://localhost:{port}/api/wearable/v1/sample",
+                    new System.Net.Http.StringContent("""{"deviceId":"watch-test","heartRateBpm":77,"onWrist":true}""", System.Text.Encoding.UTF8, "application/json"))
+                .GetAwaiter().GetResult();
+            AssertTrue(goodResponse.IsSuccessStatusCode, $"paired token should post sample: {(int)goodResponse.StatusCode}");
+            AssertTrue(Math.Abs(telemetry.State.CurrentBpm - 77) < 0.1, "paired token sample should ingest bpm");
+        }
+        finally { TryDeleteDir(dir); }
+    }
+
+    private static void WearableBridgeKeepsStableTokenAndPcId()
+    {
+        var dir = TempDir();
+        try
+        {
+            var telemetry = new KokoWearableTelemetryService(dir);
+            using var bridge1 = new KokoWearableBridgeService(telemetry, dir, 22000 + Random.Shared.Next(1000));
+            var token1 = bridge1.Token;
+            var pcId1 = bridge1.PcId;
+
+            using var bridge2 = new KokoWearableBridgeService(telemetry, dir, 23000 + Random.Shared.Next(1000));
+            AssertEqual(token1, bridge2.Token, "token should persist across bridge instances");
+            AssertEqual(pcId1, bridge2.PcId, "pc id should persist across bridge instances");
         }
         finally { TryDeleteDir(dir); }
     }
