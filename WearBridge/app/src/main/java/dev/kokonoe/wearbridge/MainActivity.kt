@@ -149,6 +149,9 @@ class MainActivity : Activity() {
             refreshStatus()
         }, LinearLayout.LayoutParams(0, dp(44), 1f))
         controlsCard.addView(row2)
+        controlsCard.addView(button("Setup Once") {
+            setupOnce()
+        }, margin(top = 8).apply { height = dp(44) })
         root.addView(controlsCard, margin(bottom = 10))
 
         val diagnosticsCard = card("Diagnostics")
@@ -175,7 +178,8 @@ class MainActivity : Activity() {
                 bridgeToken = tokenInput.text.toString().trim().ifBlank { defaults.bridgeToken },
                 deviceId = current.deviceId,
                 semanticLocation = locationInput.text.toString().trim().ifBlank { "unknown" },
-                autoStart = autoStartSwitch.isChecked
+                autoStart = autoStartSwitch.isChecked,
+                pairedPcId = current.pairedPcId
             )
         )
     }
@@ -210,6 +214,7 @@ class MainActivity : Activity() {
         detailsText.text =
             "URL: ${settings.desktopBaseUrl}\n" +
                 "Token: $tokenState\n" +
+                "PC: ${settings.pairedPcId.ifBlank { "not paired" }}\n" +
                 "Location: ${settings.semanticLocation}\n" +
                 "Auto start: ${if (settings.autoStart) "on" else "off"}"
     }
@@ -217,7 +222,11 @@ class MainActivity : Activity() {
     private fun findPcBridge() {
         toast("Scanning local Wi-Fi")
         scope.launch {
-            val result = BridgeDiscovery().find()
+            val settings = BridgeSettings.load(this@MainActivity)
+            var result = BridgeDiscovery().find(preferredPcId = settings.pairedPcId)
+            if (!result.ok && settings.pairedPcId.isNotBlank()) {
+                result = BridgeDiscovery().find()
+            }
             if (!result.ok) {
                 toast(result.error.ifBlank { "PC bridge not found" })
                 refreshStatus()
@@ -225,8 +234,61 @@ class MainActivity : Activity() {
             }
             urlInput.setText(result.baseUrl)
             saveSettings()
-            toast("Found ${result.baseUrl}")
+            toast("Found ${result.pcName.ifBlank { result.baseUrl }}")
             testBridge()
+        }
+    }
+
+    private fun setupOnce() {
+        toast("Finding and pairing PC")
+        scope.launch {
+            if (!requestPermissionsIfNeeded()) return@launch
+            val current = BridgeSettings.load(this@MainActivity)
+            var found = BridgeDiscovery().find(preferredPcId = current.pairedPcId)
+            if (!found.ok && current.pairedPcId.isNotBlank()) {
+                found = BridgeDiscovery().find()
+            }
+            if (!found.ok) {
+                BridgeRuntimeStatus.save(
+                    this@MainActivity,
+                    BridgeRuntimeStatus.load(this@MainActivity).copy(lastOk = false, lastError = found.error)
+                )
+                toast(found.error.ifBlank { "PC not found" })
+                refreshStatus()
+                return@launch
+            }
+
+            urlInput.setText(found.baseUrl)
+            autoStartSwitch.isChecked = true
+            BridgeSettings.save(
+                this@MainActivity,
+                BridgeSettings.load(this@MainActivity).copy(
+                    desktopBaseUrl = found.baseUrl,
+                    pairedPcId = found.pcId,
+                    autoStart = true,
+                    semanticLocation = locationInput.text.toString().trim().ifBlank { "unknown" }
+                )
+            )
+
+            val pair = BridgeAutoConnector.pairCurrentUrl(this@MainActivity)
+            if (!pair.ok) {
+                BridgeRuntimeStatus.save(
+                    this@MainActivity,
+                    BridgeRuntimeStatus.load(this@MainActivity).copy(lastOk = false, lastHttpCode = pair.httpCode, lastError = pair.error)
+                )
+                toast("Pair failed: ${pair.error.ifBlank { pair.httpCode.toString() }}")
+                refreshStatus()
+                return@launch
+            }
+
+            tokenInput.setText(pair.token)
+            BridgeRuntimeStatus.save(
+                this@MainActivity,
+                BridgeRuntimeStatus.load(this@MainActivity).copy(lastOk = true, lastHttpCode = pair.httpCode, lastError = "")
+            )
+            startBridgeAfterTest()
+            toast("Paired ${pair.pcName.ifBlank { pair.pcId }}")
+            refreshStatus()
         }
     }
 

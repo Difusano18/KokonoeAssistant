@@ -77,8 +77,8 @@ class WearBridgeService : Service(), SensorEventListener {
     private fun startPostingLoop() {
         scope.launch {
             while (true) {
-                val settings = BridgeSettings.load(this@WearBridgeService)
-                val sender = BridgeSender(settings)
+                var settings = BridgeSettings.load(this@WearBridgeService)
+                var sender = BridgeSender(settings)
                 val battery = getSystemService(BATTERY_SERVICE) as BatteryManager
                 val batteryPercent = battery.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY).toDouble()
                 val sample = WearableSample(
@@ -91,7 +91,15 @@ class WearBridgeService : Service(), SensorEventListener {
                     semanticLocation = settings.semanticLocation,
                     batteryPercent = batteryPercent
                 )
-                val statusResult = sender.status()
+                var statusResult = sender.status()
+                if (!statusResult.ok && settings.pairedPcId.isNotBlank()) {
+                    val reconnect = BridgeAutoConnector.reconnectKnownPc(this@WearBridgeService)
+                    if (reconnect.ok) {
+                        settings = BridgeSettings.load(this@WearBridgeService)
+                        sender = BridgeSender(settings)
+                        statusResult = sender.status()
+                    }
+                }
                 val result = if (statusResult.ok) {
                     sender.send(sample)
                 } else {

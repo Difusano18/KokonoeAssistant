@@ -17,6 +17,7 @@ namespace KokonoeAssistant.Services
         private readonly KokoWearableTelemetryService _telemetry;
         private readonly string _dataDir;
         private readonly string _tokenPath;
+        private readonly string _pcIdPath;
         private readonly object _lock = new();
         private HttpListener? _listener;
         private CancellationTokenSource? _cts;
@@ -29,11 +30,14 @@ namespace KokonoeAssistant.Services
             Port = port;
             Directory.CreateDirectory(_dataDir);
             _tokenPath = Path.Combine(_dataDir, "wearable-bridge-token.txt");
+            _pcIdPath = Path.Combine(_dataDir, "wearable-bridge-pc-id.txt");
             Token = LoadOrCreateToken();
+            PcId = LoadOrCreatePcId();
         }
 
         public int Port { get; }
         public string Token { get; }
+        public string PcId { get; }
         public bool IsRunning { get; private set; }
         public string BaseUrl => $"http://localhost:{Port}";
         public string LastError { get; private set; } = "";
@@ -144,9 +148,12 @@ namespace KokonoeAssistant.Services
                     {
                         ok = true,
                         bridge = "kokonoe-wearable-v1",
+                        pcId = PcId,
+                        pcName = Environment.MachineName,
                         running = IsRunning,
                         port = Port,
                         tokenRequired = true,
+                        pairingAvailable = true,
                         wearable = _telemetry.State
                     }).ConfigureAwait(false);
                     return;
@@ -155,6 +162,27 @@ namespace KokonoeAssistant.Services
                 if (req.HttpMethod == "GET" && path.EndsWith("/schema", StringComparison.OrdinalIgnoreCase))
                 {
                     await WriteJsonAsync(res, 200, BuildSchema()).ConfigureAwait(false);
+                    return;
+                }
+
+                if (req.HttpMethod == "POST" && path.EndsWith("/pair", StringComparison.OrdinalIgnoreCase))
+                {
+                    using var reader = new StreamReader(req.InputStream, req.ContentEncoding ?? Encoding.UTF8);
+                    var body = await reader.ReadToEndAsync().ConfigureAwait(false);
+                    var request = string.IsNullOrWhiteSpace(body)
+                        ? new WearablePairRequest()
+                        : JsonConvert.DeserializeObject<WearablePairRequest>(body) ?? new WearablePairRequest();
+
+                    await WriteJsonAsync(res, 200, new
+                    {
+                        ok = true,
+                        bridge = "kokonoe-wearable-v1",
+                        pcId = PcId,
+                        pcName = Environment.MachineName,
+                        token = Token,
+                        pairedDeviceId = string.IsNullOrWhiteSpace(request.DeviceId) ? "unknown" : request.DeviceId.Trim(),
+                        message = "paired"
+                    }).ConfigureAwait(false);
                     return;
                 }
 
@@ -187,9 +215,10 @@ namespace KokonoeAssistant.Services
         {
             var header = req.Headers["X-Koko-Bridge-Token"] ?? "";
             if (string.IsNullOrWhiteSpace(header)) return false;
-            return CryptographicOperations.FixedTimeEquals(
-                Encoding.UTF8.GetBytes(header.Trim()),
-                Encoding.UTF8.GetBytes(Token));
+            var provided = Encoding.UTF8.GetBytes(header.Trim());
+            var expected = Encoding.UTF8.GetBytes(Token);
+            if (provided.Length != expected.Length) return false;
+            return CryptographicOperations.FixedTimeEquals(provided, expected);
         }
 
         private object BuildSchema() => new
@@ -236,6 +265,35 @@ namespace KokonoeAssistant.Services
             {
                 return Guid.NewGuid().ToString("N") + Guid.NewGuid().ToString("N");
             }
+        }
+
+        private string LoadOrCreatePcId()
+        {
+            try
+            {
+                if (File.Exists(_pcIdPath))
+                {
+                    var existing = File.ReadAllText(_pcIdPath).Trim();
+                    if (existing.Length >= 12) return existing;
+                }
+
+                var raw = $"{Environment.MachineName}-{Guid.NewGuid():N}";
+                using var sha = SHA256.Create();
+                var hash = sha.ComputeHash(Encoding.UTF8.GetBytes(raw));
+                var pcId = "pc-" + Convert.ToHexString(hash).ToLowerInvariant()[..16];
+                File.WriteAllText(_pcIdPath, pcId);
+                return pcId;
+            }
+            catch
+            {
+                return "pc-" + Guid.NewGuid().ToString("N")[..16];
+            }
+        }
+
+        private sealed class WearablePairRequest
+        {
+            public string DeviceId { get; set; } = "";
+            public string AppVersion { get; set; } = "";
         }
     }
 }

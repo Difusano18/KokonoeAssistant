@@ -7,7 +7,8 @@ data class BridgeSettings(
     val bridgeToken: String = BridgeConfig().bridgeToken,
     val deviceId: String = BridgeConfig().deviceId,
     val semanticLocation: String = BridgeConfig().semanticLocation,
-    val autoStart: Boolean = false
+    val autoStart: Boolean = false,
+    val pairedPcId: String = ""
 ) {
     companion object {
         private const val PREFS = "kokonoe_bridge_settings"
@@ -20,7 +21,8 @@ data class BridgeSettings(
                 bridgeToken = prefs.getString("bridgeToken", defaults.bridgeToken).orEmpty().ifBlank { defaults.bridgeToken },
                 deviceId = prefs.getString("deviceId", defaults.deviceId).orEmpty().ifBlank { defaults.deviceId },
                 semanticLocation = prefs.getString("semanticLocation", defaults.semanticLocation).orEmpty(),
-                autoStart = prefs.getBoolean("autoStart", false)
+                autoStart = prefs.getBoolean("autoStart", false),
+                pairedPcId = prefs.getString("pairedPcId", "").orEmpty()
             )
         }
 
@@ -32,6 +34,7 @@ data class BridgeSettings(
                 .putString("deviceId", settings.deviceId.trim())
                 .putString("semanticLocation", settings.semanticLocation.trim())
                 .putBoolean("autoStart", settings.autoStart)
+                .putString("pairedPcId", settings.pairedPcId.trim())
                 .apply()
         }
     }

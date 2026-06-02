@@ -7,6 +7,7 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import org.json.JSONObject
 import java.net.NetworkInterface
 import java.util.concurrent.TimeUnit
 
@@ -16,7 +17,7 @@ class BridgeDiscovery {
         .readTimeout(650, TimeUnit.MILLISECONDS)
         .build()
 
-    suspend fun find(port: Int = 8787): BridgeDiscoveryResult = withContext(Dispatchers.IO) {
+    suspend fun find(port: Int = 8787, preferredPcId: String = ""): BridgeDiscoveryResult = withContext(Dispatchers.IO) {
         val prefixes = localPrefixes()
         if (prefixes.isEmpty()) {
             return@withContext BridgeDiscoveryResult(false, error = "No Wi-Fi/LAN IPv4 address found on watch")
@@ -27,17 +28,17 @@ class BridgeDiscovery {
                 (1..254).map { host ->
                     async {
                         val baseUrl = "http://$prefix.$host:$port"
-                        if (probe(baseUrl)) baseUrl else null
+                        probe(baseUrl, preferredPcId)
                     }
                 }
             }
             val found = jobs.awaitAll().filterNotNull().firstOrNull()
-            if (found != null) BridgeDiscoveryResult(true, baseUrl = found)
+            if (found != null) found
             else BridgeDiscoveryResult(false, error = "No Kokonoe bridge found on local /24 subnet")
         }
     }
 
-    private fun probe(baseUrl: String): Boolean {
+    private fun probe(baseUrl: String, preferredPcId: String): BridgeDiscoveryResult? {
         val request = Request.Builder()
             .url("${baseUrl.trimEnd('/')}/api/wearable/v1/status")
             .get()
@@ -45,9 +46,15 @@ class BridgeDiscovery {
 
         return runCatching {
             client.newCall(request).execute().use { response ->
-                response.isSuccessful && (response.body?.string()?.contains("kokonoe-wearable-v1") == true)
+                val body = response.body?.string().orEmpty()
+                if (!response.isSuccessful || !body.contains("kokonoe-wearable-v1")) return@use null
+                val json = runCatching { JSONObject(body) }.getOrNull()
+                val pcId = json?.optString("pcId").orEmpty()
+                val pcName = json?.optString("pcName").orEmpty()
+                if (preferredPcId.isNotBlank() && pcId != preferredPcId) return@use null
+                BridgeDiscoveryResult(true, baseUrl = baseUrl, pcId = pcId, pcName = pcName)
             }
-        }.getOrDefault(false)
+        }.getOrNull()
     }
 
     private fun localPrefixes(): List<String> {
@@ -70,5 +77,7 @@ class BridgeDiscovery {
 data class BridgeDiscoveryResult(
     val ok: Boolean,
     val baseUrl: String = "",
+    val pcId: String = "",
+    val pcName: String = "",
     val error: String = ""
 )
