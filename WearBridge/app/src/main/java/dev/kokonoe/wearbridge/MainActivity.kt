@@ -215,6 +215,8 @@ class MainActivity : Activity() {
             "URL: ${settings.desktopBaseUrl}\n" +
                 "Token: $tokenState\n" +
                 "PC: ${settings.pairedPcId.ifBlank { "not paired" }}\n" +
+                "Phase: ${status.phase.ifBlank { "-" }}\n" +
+                "Reconnects: ${status.reconnectCount}  next: ${status.nextRetryAt.ifBlank { "-" }}\n" +
                 "Location: ${settings.semanticLocation}\n" +
                 "Auto start: ${if (settings.autoStart) "on" else "off"}"
     }
@@ -284,7 +286,16 @@ class MainActivity : Activity() {
             tokenInput.setText(pair.token)
             BridgeRuntimeStatus.save(
                 this@MainActivity,
-                BridgeRuntimeStatus.load(this@MainActivity).copy(lastOk = true, lastHttpCode = pair.httpCode, lastError = "")
+                BridgeRuntimeStatus.load(this@MainActivity).copy(
+                    lastOk = true,
+                    lastHttpCode = pair.httpCode,
+                    lastError = "",
+                    phase = "paired",
+                    pairedPcId = pair.pcId,
+                    pcName = pair.pcName,
+                    reconnectCount = 0,
+                    nextRetryAt = ""
+                )
             )
             startBridgeAfterTest()
             toast("Paired ${pair.pcName.ifBlank { pair.pcId }}")
@@ -301,7 +312,10 @@ class MainActivity : Activity() {
                 BridgeRuntimeStatus.load(this@MainActivity).copy(
                     lastOk = result.ok,
                     lastHttpCode = result.httpCode,
-                    lastError = result.error ?: ""
+                    lastError = result.error ?: "",
+                    phase = if (result.ok) "pc_reachable" else "pc_unreachable",
+                    pairedPcId = BridgeSettings.load(this@MainActivity).pairedPcId,
+                    pcName = result.pcName
                 )
             )
             toast(if (result.ok) "Desktop bridge OK" else "Bridge failed: ${result.error ?: result.httpCode}")
@@ -314,7 +328,14 @@ class MainActivity : Activity() {
             val result = BridgeSender(BridgeSettings.load(this@MainActivity)).status()
             BridgeRuntimeStatus.save(
                 this@MainActivity,
-                BridgeRuntimeStatus.load(this@MainActivity).copy(lastOk = result.ok, lastHttpCode = result.httpCode, lastError = result.error ?: "")
+                BridgeRuntimeStatus.load(this@MainActivity).copy(
+                    lastOk = result.ok,
+                    lastHttpCode = result.httpCode,
+                    lastError = result.error ?: "",
+                    phase = if (result.ok) "pc_reachable" else "pc_unreachable",
+                    pairedPcId = BridgeSettings.load(this@MainActivity).pairedPcId,
+                    pcName = result.pcName
+                )
             )
             if (!result.ok) {
                 toast("Fix bridge first: ${result.error ?: result.httpCode}")
@@ -327,7 +348,7 @@ class MainActivity : Activity() {
 
     private fun startBridge() {
         ContextCompat.startForegroundService(this, Intent(this, WearBridgeService::class.java))
-        BridgeRuntimeStatus.save(this, BridgeRuntimeStatus.load(this).copy(running = true, lastError = ""))
+        BridgeRuntimeStatus.save(this, BridgeRuntimeStatus.load(this).copy(running = true, lastError = "", phase = "starting"))
         toast("Bridge started")
         refreshStatus()
     }

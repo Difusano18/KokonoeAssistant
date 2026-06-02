@@ -30,11 +30,22 @@ class WearBridgeService : Service(), SensorEventListener {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private var latestHeartRate: Double? = null
     private var latestMotion: Double? = null
+    private var reconnectCount = 0
+    private var nextDiscoveryAtMs = 0L
 
     override fun onCreate() {
         super.onCreate()
         startForeground(42, notification())
-        BridgeRuntimeStatus.save(this, BridgeRuntimeStatus(running = true, lastError = "starting"))
+        val settings = BridgeSettings.load(this)
+        BridgeRuntimeStatus.save(
+            this,
+            BridgeRuntimeStatus(
+                running = true,
+                lastError = "starting",
+                phase = if (settings.pairedPcId.isBlank()) "needs_pairing" else "starting",
+                pairedPcId = settings.pairedPcId
+            )
+        )
         startMotion()
         startHeartRate()
         startPostingLoop()
@@ -91,16 +102,31 @@ class WearBridgeService : Service(), SensorEventListener {
                     semanticLocation = settings.semanticLocation,
                     batteryPercent = batteryPercent
                 )
+                var phase = "checking_pc"
                 var statusResult = sender.status()
                 if (!statusResult.ok && settings.pairedPcId.isNotBlank()) {
-                    val reconnect = BridgeAutoConnector.reconnectKnownPc(this@WearBridgeService)
-                    if (reconnect.ok) {
-                        settings = BridgeSettings.load(this@WearBridgeService)
-                        sender = BridgeSender(settings)
-                        statusResult = sender.status()
+                    val nowMs = System.currentTimeMillis()
+                    if (nowMs >= nextDiscoveryAtMs) {
+                        phase = "reconnecting"
+                        reconnectCount += 1
+                        val reconnect = BridgeAutoConnector.reconnectKnownPc(this@WearBridgeService)
+                        if (reconnect.ok) {
+                            settings = BridgeSettings.load(this@WearBridgeService)
+                            sender = BridgeSender(settings)
+                            statusResult = sender.status()
+                            phase = "reconnected"
+                            nextDiscoveryAtMs = 0L
+                        } else {
+                            val backoffMs = reconnectBackoffMs(reconnectCount)
+                            nextDiscoveryAtMs = nowMs + backoffMs
+                            phase = "waiting_retry"
+                        }
+                    } else {
+                        phase = "waiting_retry"
                     }
                 }
                 val result = if (statusResult.ok) {
+                    phase = "sending"
                     sender.send(sample)
                 } else {
                     BridgeSendResult(
@@ -118,7 +144,12 @@ class WearBridgeService : Service(), SensorEventListener {
                         lastHttpCode = result.httpCode,
                         lastError = result.error,
                         lastHeartRate = latestHeartRate?.let { "%.0f bpm".format(it) } ?: "no heart sample yet",
-                        lastMotion = latestMotion?.let { "%.3f".format(it) } ?: "no motion sample yet"
+                        lastMotion = latestMotion?.let { "%.3f".format(it) } ?: "no motion sample yet",
+                        phase = if (result.ok) "live" else phase,
+                        pairedPcId = settings.pairedPcId,
+                        pcName = statusResult.pcName,
+                        reconnectCount = reconnectCount,
+                        nextRetryAt = if (nextDiscoveryAtMs > 0) Instant.ofEpochMilli(nextDiscoveryAtMs).toString() else ""
                     )
                 )
                 delay(10_000)
@@ -135,6 +166,15 @@ class WearBridgeService : Service(), SensorEventListener {
     }
 
     override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) = Unit
+
+    private fun reconnectBackoffMs(count: Int): Long {
+        return when {
+            count <= 0 -> 15_000L
+            count == 1 -> 30_000L
+            count == 2 -> 60_000L
+            else -> 120_000L
+        }
+    }
 
     private fun notification(): Notification {
         val channelId = "kokonoe_wear_bridge"

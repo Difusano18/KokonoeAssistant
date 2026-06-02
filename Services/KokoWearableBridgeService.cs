@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Net;
@@ -150,8 +151,10 @@ namespace KokonoeAssistant.Services
                         bridge = "kokonoe-wearable-v1",
                         pcId = PcId,
                         pcName = Environment.MachineName,
+                        version = "wearable-bridge-pairing-v2",
                         running = IsRunning,
                         port = Port,
+                        urls = GetLanUrls(),
                         tokenRequired = true,
                         pairingAvailable = true,
                         wearable = _telemetry.State
@@ -179,6 +182,8 @@ namespace KokonoeAssistant.Services
                         bridge = "kokonoe-wearable-v1",
                         pcId = PcId,
                         pcName = Environment.MachineName,
+                        version = "wearable-bridge-pairing-v2",
+                        urls = GetLanUrls(),
                         token = Token,
                         pairedDeviceId = string.IsNullOrWhiteSpace(request.DeviceId) ? "unknown" : request.DeviceId.Trim(),
                         message = "paired"
@@ -233,6 +238,23 @@ namespace KokonoeAssistant.Services
                 "motion", "onWrist", "activity", "batteryPercent", "charging", "note"
             }
         };
+
+        private IReadOnlyList<string> GetLanUrls()
+        {
+            var urls = new List<string> { BaseUrl };
+            try
+            {
+                foreach (var address in Dns.GetHostEntry(Dns.GetHostName()).AddressList)
+                {
+                    if (address.AddressFamily != System.Net.Sockets.AddressFamily.InterNetwork) continue;
+                    var ip = address.ToString();
+                    if (ip.StartsWith("127.") || ip.StartsWith("169.254.")) continue;
+                    urls.Add($"http://{ip}:{Port}");
+                }
+            }
+            catch { }
+            return urls;
+        }
 
         private async Task WriteJsonAsync(HttpListenerResponse res, int status, object payload)
         {
