@@ -84,6 +84,9 @@ class MainActivity : Activity() {
             textSize = 11f
             setTextColor(Color.rgb(120, 136, 170))
         })
+        root.addView(button("Setup Once") {
+            setupOnce()
+        }, margin(top = 12, bottom = 8).apply { height = dp(48) })
 
         heroStatusText = TextView(this).apply {
             textSize = 13f
@@ -149,9 +152,6 @@ class MainActivity : Activity() {
             refreshStatus()
         }, LinearLayout.LayoutParams(0, dp(44), 1f))
         controlsCard.addView(row2)
-        controlsCard.addView(button("Setup Once") {
-            setupOnce()
-        }, margin(top = 8).apply { height = dp(44) })
         root.addView(controlsCard, margin(bottom = 10))
 
         val diagnosticsCard = card("Diagnostics")
