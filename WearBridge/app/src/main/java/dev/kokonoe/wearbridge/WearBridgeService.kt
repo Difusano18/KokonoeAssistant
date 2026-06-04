@@ -79,7 +79,6 @@ class WearBridgeService : Service(), SensorEventListener {
             )
             BridgeRuntimeStatus.save(this, runtime)
             updateNotification(runtime)
-            startPostingLoop()
             return
         }
         startMotion()
