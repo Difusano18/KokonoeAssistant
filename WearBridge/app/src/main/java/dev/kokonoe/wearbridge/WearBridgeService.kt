@@ -35,6 +35,7 @@ class WearBridgeService : Service(), SensorEventListener {
     private val tag = "KokonoeWearBridge"
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private var latestHeartRate: Double? = null
+    private var latestHeartSource: String = ""
     private var latestMotion: Double? = null
     private var reconnectCount = 0
     private var nextDiscoveryAtMs = 0L
@@ -102,29 +103,74 @@ class WearBridgeService : Service(), SensorEventListener {
 
                     override fun onDataReceived(data: DataPointContainer) {
                         val points = data.getData(DataType.HEART_RATE_BPM)
-                        latestHeartRate = points.lastOrNull()?.value
-                        val bpm = latestHeartRate
-                        BridgeRuntimeStatus.save(
-                            this@WearBridgeService,
-                            BridgeRuntimeStatus.load(this@WearBridgeService).copy(
-                                lastHeartRate = bpm?.let { "%.0f bpm".format(it) }.orEmpty(),
-                                heartStatus = bpm?.let { "heart sample %.0f bpm".format(it) } ?: "heart callback without bpm"
+                        val bpm = points.lastOrNull()?.value
+                        if (bpm != null) {
+                            updateHeartRate(bpm, "health_services")
+                        } else {
+                            BridgeRuntimeStatus.save(
+                                this@WearBridgeService,
+                                BridgeRuntimeStatus.load(this@WearBridgeService).copy(heartStatus = "health services callback without bpm; waiting for sensor")
                             )
-                        )
+                        }
                     }
                 })
                 BridgeRuntimeStatus.save(
                     this@WearBridgeService,
                     BridgeRuntimeStatus.load(this@WearBridgeService).copy(heartStatus = "heart measure registered")
                 )
+                startHeartRateSensorFallback()
             }.onFailure {
                 BridgeLog.append(this@WearBridgeService, "heart sensor failed: ${it.message}")
                 BridgeRuntimeStatus.save(
                     this@WearBridgeService,
                     BridgeRuntimeStatus.load(this@WearBridgeService).copy(heartStatus = "heart sensor failed: ${it.message ?: it.javaClass.simpleName}")
                 )
+                startHeartRateSensorFallback()
             }
         }
+    }
+
+    private fun startHeartRateSensorFallback() {
+        runCatching {
+            val sm = getSystemService(SENSOR_SERVICE) as SensorManager
+            val heart = sm.getDefaultSensor(Sensor.TYPE_HEART_RATE)
+            if (heart == null) {
+                BridgeLog.append(this, "direct heart sensor unavailable")
+                BridgeRuntimeStatus.save(
+                    this,
+                    BridgeRuntimeStatus.load(this).copy(heartStatus = "health services registered; direct heart sensor unavailable")
+                )
+                return
+            }
+
+            val ok = sm.registerListener(this, heart, SensorManager.SENSOR_DELAY_NORMAL)
+            BridgeLog.append(this, if (ok) "direct heart sensor registered: ${heart.name}" else "direct heart sensor registration failed")
+            BridgeRuntimeStatus.save(
+                this,
+                BridgeRuntimeStatus.load(this).copy(
+                    heartStatus = if (ok) "heart measure registered + direct sensor ${heart.name}" else "heart measure registered; direct sensor registration failed"
+                )
+            )
+        }.onFailure {
+            BridgeLog.append(this, "direct heart sensor failed: ${it.message}")
+            BridgeRuntimeStatus.save(
+                this,
+                BridgeRuntimeStatus.load(this).copy(heartStatus = "direct heart sensor failed: ${it.message ?: it.javaClass.simpleName}")
+            )
+        }
+    }
+
+    private fun updateHeartRate(bpm: Double, source: String) {
+        if (bpm < 25.0 || bpm > 230.0) return
+        latestHeartRate = bpm
+        latestHeartSource = source
+        BridgeRuntimeStatus.save(
+            this,
+            BridgeRuntimeStatus.load(this).copy(
+                lastHeartRate = "%.0f bpm".format(bpm),
+                heartStatus = "heart sample %.0f bpm via %s".format(bpm, source)
+            )
+        )
     }
 
     private fun startMotion() {
@@ -275,11 +321,18 @@ class WearBridgeService : Service(), SensorEventListener {
     }
 
     override fun onSensorChanged(event: SensorEvent) {
-        if (event.sensor.type != Sensor.TYPE_ACCELEROMETER) return
-        val x = event.values.getOrNull(0) ?: 0f
-        val y = event.values.getOrNull(1) ?: 0f
-        val z = event.values.getOrNull(2) ?: 0f
-        latestMotion = sqrt((x * x + y * y + z * z).toDouble()) / 20.0
+        when (event.sensor.type) {
+            Sensor.TYPE_ACCELEROMETER -> {
+                val x = event.values.getOrNull(0) ?: 0f
+                val y = event.values.getOrNull(1) ?: 0f
+                val z = event.values.getOrNull(2) ?: 0f
+                latestMotion = sqrt((x * x + y * y + z * z).toDouble()) / 20.0
+            }
+            Sensor.TYPE_HEART_RATE -> {
+                val bpm = event.values.getOrNull(0)?.toDouble() ?: return
+                updateHeartRate(bpm, "sensor_manager")
+            }
+        }
     }
 
     override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) = Unit
