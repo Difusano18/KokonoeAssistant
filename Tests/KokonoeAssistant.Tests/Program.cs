@@ -2,6 +2,7 @@ using System;
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.IO;
+using System.Threading.Tasks;
 using KokonoeAssistant.Services;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -29,6 +30,7 @@ internal static class Program
             Run("Wearable bridge status exposes pairing metadata", WearableBridgeStatusExposesPairingMetadata);
             Run("Wearable bridge exposes external fallback URLs", WearableBridgeExposesExternalFallbackUrls);
             Run("Wearable bridge diagnostics track traffic", WearableBridgeDiagnosticsTrackTraffic);
+            Run("Wearable bridge emulates dual real-time pulse clients", WearableBridgeEmulatesDualRealtimePulseClients);
             Run("Wearable bridge pairs and rejects bad tokens", WearableBridgePairsAndRejectsBadTokens);
             Run("Wearable bridge keeps stable token and pc id", WearableBridgeKeepsStableTokenAndPcId);
             Run("Capability manifest advertises runtime routes", CapabilityManifestAdvertisesRuntimeRoutes);
@@ -784,6 +786,102 @@ internal static class Program
             AssertEqual("clear_queue", statusJson["diagnostics"]?["lastAckAction"]?.ToString(), "status JSON should expose ack action");
             AssertEqual("LINKED", statusJson["connection"]?["state"]?.ToString(), "status JSON should expose bridge connection state");
             AssertTrue(statusJson["connection"]?["isLinked"]?.Value<bool>() == true, "status JSON should expose linked flag");
+        }
+        finally { TryDeleteDir(dir); }
+    }
+
+    private static void WearableBridgeEmulatesDualRealtimePulseClients()
+    {
+        var dir = TempDir();
+        var port = 21700 + Random.Shared.Next(700);
+        try
+        {
+            var telemetry = new KokoWearableTelemetryService(dir);
+            using var bridge = new KokoWearableBridgeService(telemetry, dir, port);
+            bridge.Start();
+            AssertTrue(bridge.IsRunning, $"bridge should start; error={bridge.LastError}");
+
+            using var pairClient = new System.Net.Http.HttpClient();
+            var pair = pairClient.PostAsync(
+                    $"http://localhost:{port}/api/wearable/v1/pair",
+                    new System.Net.Http.StringContent("""{"deviceId":"em-watch-a"}""", System.Text.Encoding.UTF8, "application/json"))
+                .GetAwaiter().GetResult();
+            AssertTrue(pair.IsSuccessStatusCode, $"pair should succeed: {(int)pair.StatusCode}");
+            var token = JObject.Parse(pair.Content.ReadAsStringAsync().GetAwaiter().GetResult())["token"]?.ToString() ?? "";
+            AssertTrue(!string.IsNullOrWhiteSpace(token), "pair should return a bridge token");
+
+            Task SendPulseTrainAsync(string deviceId, int offset, double[] bpms) => Task.Run(async () =>
+            {
+                using var client = new System.Net.Http.HttpClient();
+                client.DefaultRequestHeaders.Add("X-Koko-Bridge-Token", token);
+                for (var i = 0; i < bpms.Length; i++)
+                {
+                    var sample = new KokoWearableSample
+                    {
+                        SampleId = $"{deviceId}-{offset + i}",
+                        TimestampUtc = DateTime.UtcNow.AddMilliseconds(offset + i),
+                        DeviceId = deviceId,
+                        Source = "emulated-watch-client",
+                        HeartRateBpm = bpms[i],
+                        Motion = 0.14 + i * 0.03,
+                        OnWrist = true,
+                        Activity = "heart_realtime:emulated",
+                        SemanticLocation = "integration-test",
+                        BatteryPercent = 88 - i
+                    };
+                    var response = await client.PostAsync(
+                        $"http://localhost:{port}/api/wearable/v1/sample",
+                        new System.Net.Http.StringContent(JsonConvert.SerializeObject(sample), System.Text.Encoding.UTF8, "application/json"));
+                    if (!response.IsSuccessStatusCode)
+                        throw new InvalidOperationException($"pulse push failed for {deviceId}: {(int)response.StatusCode} {await response.Content.ReadAsStringAsync()}");
+                }
+            });
+
+            Task.WhenAll(
+                    SendPulseTrainAsync("em-watch-a", 100, new[] { 72d, 75d, 92d, 104d, 110d }),
+                    SendPulseTrainAsync("em-watch-b", 200, new[] { 68d, 70d, 88d, 96d, 99d }))
+                .GetAwaiter().GetResult();
+
+            using var finalClient = new System.Net.Http.HttpClient();
+            finalClient.DefaultRequestHeaders.Add("X-Koko-Bridge-Token", token);
+            var finalSample = new KokoWearableSample
+            {
+                SampleId = "em-watch-a-final",
+                TimestampUtc = DateTime.UtcNow.AddSeconds(1),
+                DeviceId = "em-watch-a",
+                Source = "emulated-watch-client",
+                HeartRateBpm = 111,
+                Motion = 0.22,
+                OnWrist = true,
+                Activity = "heart_realtime:emulated",
+                SemanticLocation = "integration-test",
+                BatteryPercent = 82
+            };
+            var finalPush = finalClient.PostAsync(
+                    $"http://localhost:{port}/api/wearable/v1/sample",
+                    new System.Net.Http.StringContent(JsonConvert.SerializeObject(finalSample), System.Text.Encoding.UTF8, "application/json"))
+                .GetAwaiter().GetResult();
+            AssertTrue(finalPush.IsSuccessStatusCode, $"final pulse push should succeed: {(int)finalPush.StatusCode}");
+
+            var status = finalClient.GetAsync($"http://localhost:{port}/api/wearable/v1/status")
+                .GetAwaiter().GetResult();
+            AssertTrue(status.IsSuccessStatusCode, $"status should succeed after pulse train: {(int)status.StatusCode}");
+            var statusJson = JObject.Parse(status.Content.ReadAsStringAsync().GetAwaiter().GetResult());
+
+            AssertEqual(11L, bridge.Diagnostics.TotalSamples, "bridge should count both emulated clients plus final pulse");
+            AssertEqual(11, telemetry.RecentSamples.Count, "telemetry should store every unique emulated pulse sample");
+            AssertEqual("em-watch-a", telemetry.State.DeviceId, "final pulse should make state deterministic");
+            AssertTrue(Math.Abs(telemetry.State.CurrentBpm - 111) < 0.1, "final emulated BPM should become current wearable BPM");
+            AssertTrue(telemetry.State.LiveStressScore > 0, "emulated elevated BPM should produce a non-zero live stress score");
+            AssertEqual("LINKED", statusJson["connection"]?["state"]?.ToString(), "status should report linked connection after real HTTP pushes");
+            AssertTrue(statusJson["diagnostics"]?["totalSamples"]?.Value<long>() == 11, "status JSON should expose real accepted pulse count");
+            AssertTrue(File.Exists(telemetry.LogPath), "telemetry log file should be created");
+
+            var logText = string.Join("\n", telemetry.RecentLogLines(80));
+            AssertTrue(logText.Contains("[WEARABLE] Sample Accepted: BPM=111", StringComparison.OrdinalIgnoreCase), "log should contain final accepted pulse line");
+            AssertTrue(logText.Contains("Device=em-watch-a", StringComparison.OrdinalIgnoreCase), "log should contain first emulated device id");
+            AssertTrue(logText.Contains("Device=em-watch-b", StringComparison.OrdinalIgnoreCase), "log should contain second emulated device id");
+            AssertTrue(logText.Contains("[WEARABLE-BRIDGE] sample accepted", StringComparison.OrdinalIgnoreCase), "bridge operational log should be written to telemetry log");
         }
         finally { TryDeleteDir(dir); }
     }
