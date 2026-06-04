@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Net;
@@ -108,7 +107,7 @@ namespace KokonoeAssistant.Services
                 _lastQueuedCommandId = command.CommandId;
                 _lastQueuedCommandAction = command.Action;
             }
-            Debug.WriteLine($"[WearableBridge] command queued action={command.Action} id={command.CommandId}");
+            LogBridge($"command queued action={command.Action} id={command.CommandId}");
             return command;
         }
 
@@ -185,12 +184,12 @@ namespace KokonoeAssistant.Services
                     LastError = "";
                     _loopTask = Task.Run(() => RunLoopAsync(_cts.Token));
                     TryStartUdpDiscoveryLocked(_cts.Token);
-                    Debug.WriteLine($"[WearableBridge] started tcp on 0.0.0.0:{Port}; udp discovery={(_udp != null ? "on" : "off")}");
+                    LogBridge($"started tcp on 0.0.0.0:{Port}; udp discovery={(_udp != null ? "on" : "off")}");
                 }
                 catch (Exception ex)
                 {
                     LastError = ex.Message;
-                    Debug.WriteLine($"[WearableBridge] tcp bind failed: {ex.Message}");
+                    LogBridge($"tcp bind failed: {ex.Message}");
                     IsRunning = false;
                 }
             }
@@ -210,6 +209,7 @@ namespace KokonoeAssistant.Services
                 _loopTask = null;
                 _udpTask = null;
                 IsRunning = false;
+                LogBridge("stopped");
             }
         }
 
@@ -230,7 +230,7 @@ namespace KokonoeAssistant.Services
                 catch (Exception ex)
                 {
                     LastError = ex.Message;
-                    Debug.WriteLine($"[WearableBridge] loop failed: {ex.Message}");
+                    LogBridge($"loop failed: {ex.Message}");
                 }
             }
         }
@@ -246,7 +246,7 @@ namespace KokonoeAssistant.Services
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"[WearableBridge] udp bind failed: {ex.Message}");
+                LogBridge($"udp bind failed: {ex.Message}");
                 try { _udp?.Close(); } catch { }
                 _udp = null;
             }
@@ -277,7 +277,7 @@ namespace KokonoeAssistant.Services
                     });
                     var bytes = Encoding.UTF8.GetBytes(payload);
                     await _udp.SendAsync(bytes, bytes.Length, packet.RemoteEndPoint).ConfigureAwait(false);
-                    Debug.WriteLine($"[WearableBridge] udp discovery answered {packet.RemoteEndPoint}");
+                    LogBridge($"udp discovery answered {packet.RemoteEndPoint}");
                 }
                 catch (ObjectDisposedException) { break; }
                 catch (OperationCanceledException) { break; }
@@ -285,7 +285,7 @@ namespace KokonoeAssistant.Services
                 catch (Exception ex)
                 {
                     LastError = ex.Message;
-                    Debug.WriteLine($"[WearableBridge] udp discovery failed: {ex.Message}");
+                    LogBridge($"udp discovery failed: {ex.Message}");
                 }
             }
         }
@@ -311,6 +311,7 @@ namespace KokonoeAssistant.Services
                 catch (Exception ex)
                 {
                     LastError = ex.Message;
+                    LogBridge($"tcp client failed: {ex.Message}");
                     try
                     {
                         await WriteJsonAsync(client.GetStream(), 500, new { ok = false, error = "bridge_loop_failed", detail = ex.Message }).ConfigureAwait(false);
@@ -534,7 +535,7 @@ namespace KokonoeAssistant.Services
                 _lastPairedDeviceId = string.IsNullOrWhiteSpace(deviceId) ? "unknown" : deviceId.Trim();
                 RecordRemoteLocked(req);
             }
-            Debug.WriteLine($"[WearableBridge] pair device={deviceId} remote={req.RemoteEndpoint}");
+            LogBridge($"pair device={deviceId} remote={req.RemoteEndpoint}");
         }
 
         private void RecordAuthorized(BridgeHttpRequest req)
@@ -565,7 +566,7 @@ namespace KokonoeAssistant.Services
                 _lastDeliveredCommandAction = command.Action;
                 RecordRemoteLocked(req);
             }
-            Debug.WriteLine($"[WearableBridge] command delivered action={command.Action} id={command.CommandId} attempts={command.DeliveryAttempts}");
+            LogBridge($"command delivered action={command.Action} id={command.CommandId} attempts={command.DeliveryAttempts}");
         }
 
         private void RecordCommandAck(BridgeHttpRequest req, WearableCommandAckRequest ack)
@@ -580,7 +581,7 @@ namespace KokonoeAssistant.Services
                 _lastAckDetail = (ack.Detail ?? "").Trim();
                 RecordRemoteLocked(req);
             }
-            Debug.WriteLine($"[WearableBridge] command ack action={ack.Action} id={ack.CommandId} ok={ack.Ok}");
+            LogBridge($"command ack action={ack.Action} id={ack.CommandId} ok={ack.Ok}");
         }
 
         private static TimeSpan CommandRetryDelay(int attempts)
@@ -633,7 +634,7 @@ namespace KokonoeAssistant.Services
                 _lastAcceptedSampleId = (sample.SampleId ?? "").Trim();
                 RecordRemoteLocked(req);
             }
-            Debug.WriteLine($"[WearableBridge] sample accepted device={sample.DeviceId} bpm={sample.HeartRateBpm:0.#}");
+            LogBridge($"sample accepted device={sample.DeviceId} bpm={sample.HeartRateBpm:0.#}");
         }
 
         private void RecordBatch(BridgeHttpRequest req)
@@ -662,7 +663,12 @@ namespace KokonoeAssistant.Services
                 _totalAuthFailures++;
                 RecordRemoteLocked(req);
             }
-            Debug.WriteLine($"[WearableBridge] auth failed remote={req.RemoteEndpoint}");
+            LogBridge($"auth failed remote={req.RemoteEndpoint}");
+        }
+
+        private void LogBridge(string message)
+        {
+            _telemetry.WriteLog($"[WEARABLE-BRIDGE] {message}");
         }
 
         private void RecordRemoteLocked(BridgeHttpRequest req)

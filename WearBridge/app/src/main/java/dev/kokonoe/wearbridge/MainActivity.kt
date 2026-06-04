@@ -483,6 +483,7 @@ class MainActivity : Activity() {
             ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
         }
         if (missing.isEmpty()) return true
+        toast("Permission Required")
         ActivityCompat.requestPermissions(this, missing.toTypedArray(), PERMISSIONS_REQUEST)
         return false
     }
@@ -509,7 +510,7 @@ class MainActivity : Activity() {
         if (requestCode != PERMISSIONS_REQUEST) return
         val granted = grantResults.isNotEmpty() && grantResults.all { it == PackageManager.PERMISSION_GRANTED }
         if (!granted) {
-            toast("Sensor permission denied")
+            toast("Permission Required")
             startAfterPermissions = false
             return
         }

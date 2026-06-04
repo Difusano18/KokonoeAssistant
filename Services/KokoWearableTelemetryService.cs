@@ -57,6 +57,7 @@ namespace KokonoeAssistant.Services
         public string SleepState { get; set; } = "unknown";
         public double SleepConfidence { get; set; }
         public double StressScore { get; set; }
+        public int LiveStressScore { get; set; }
         public string RecoveryState { get; set; } = "unknown";
         public string SuggestedInitiative { get; set; } = "";
         public string ContextSignal { get; set; } = "";
@@ -75,9 +76,11 @@ namespace KokonoeAssistant.Services
     public sealed class KokoWearableTelemetryService
     {
         private readonly object _lock = new();
+        private readonly object _logLock = new();
         private readonly string _dataDir;
         private readonly string _samplesPath;
         private readonly string _statePath;
+        private readonly string _logPath;
         private readonly Queue<KokoWearableSample> _recent = new();
         private readonly Queue<string> _recentSampleIds = new();
         private readonly HashSet<string> _recentSampleIdSet = new(StringComparer.OrdinalIgnoreCase);
@@ -89,8 +92,12 @@ namespace KokonoeAssistant.Services
             Directory.CreateDirectory(_dataDir);
             _samplesPath = Path.Combine(_dataDir, "wearable-telemetry.jsonl");
             _statePath = Path.Combine(_dataDir, "wearable-state.json");
+            var logDir = Path.Combine(_dataDir, "logs");
+            Directory.CreateDirectory(logDir);
+            _logPath = Path.Combine(logDir, "telemetry.log");
             LoadState();
             LoadRecentSampleIds();
+            WriteLog("[WEARABLE] telemetry service started");
         }
 
         public KokoWearableState State
@@ -101,6 +108,41 @@ namespace KokonoeAssistant.Services
         public IReadOnlyList<KokoWearableSample> RecentSamples
         {
             get { lock (_lock) return _recent.ToArray(); }
+        }
+
+        public string LogPath => _logPath;
+
+        public IReadOnlyList<string> RecentLogLines(int maxLines = 80)
+        {
+            try
+            {
+                if (!File.Exists(_logPath)) return Array.Empty<string>();
+                return File.ReadLines(_logPath)
+                    .Where(line => !string.IsNullOrWhiteSpace(line))
+                    .TakeLast(Math.Clamp(maxLines, 1, 500))
+                    .ToList();
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[Wearable] log read failed: {ex.Message}");
+                return Array.Empty<string>();
+            }
+        }
+
+        public void WriteLog(string message)
+        {
+            if (string.IsNullOrWhiteSpace(message)) return;
+            try
+            {
+                lock (_logLock)
+                {
+                    File.AppendAllText(_logPath, $"{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff} {message.Trim()}{Environment.NewLine}");
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[Wearable] log write failed: {ex.Message}");
+            }
         }
 
         public KokoWearableState Ingest(KokoWearableSample sample)
@@ -116,6 +158,8 @@ namespace KokonoeAssistant.Services
             sample.SampleId = (sample.SampleId ?? "").Trim();
             sample.DeviceId = string.IsNullOrWhiteSpace(sample.DeviceId) ? "unknown" : sample.DeviceId.Trim();
             sample.Source = string.IsNullOrWhiteSpace(sample.Source) ? "wearable" : sample.Source.Trim();
+            if (sample.HeartRateBpm == 0)
+                WriteLog($"[WEARABLE] Sensor returned 0: Device={sample.DeviceId}");
             if (sample.HeartRateBpm is <= 25 or >= 230) sample.HeartRateBpm = null;
             if (sample.SpO2Percent is <= 50 or > 100) sample.SpO2Percent = null;
             if (sample.SkinTemperatureC is < 25 or > 45) sample.SkinTemperatureC = null;
@@ -142,6 +186,7 @@ namespace KokonoeAssistant.Services
                 ApplySample(sample);
                 AppendSample(sample);
                 SaveState();
+                WriteLog($"[WEARABLE] Sample Accepted: BPM={FormatNullable(sample.HeartRateBpm)}, Motion={FormatNullable(sample.Motion)}, Device={sample.DeviceId}");
                 return new KokoWearableIngestResult
                 {
                     State = CloneState(_state),
@@ -164,7 +209,7 @@ freshness={freshness}
 device={NullDash(state.DeviceId)} on_wrist={state.OnWrist}
 heart={state.CurrentBpm:F0} bpm baseline={state.BaselineBpm:F0} delta={state.BpmDelta:+0;-0;0}
 sleep={state.SleepState} confidence={state.SleepConfidence:F2}
-stress={state.StressScore:F2} recovery={state.RecoveryState} initiative={NullDash(state.SuggestedInitiative)}
+stress={state.StressScore:F2} live_stress_score={state.LiveStressScore}/100 recovery={state.RecoveryState} initiative={NullDash(state.SuggestedInitiative)}
 context_signal={NullDash(state.ContextSignal)} context_hint={NullDash(state.ContextHint)}
 presence={state.PresenceState} activity={NullDash(state.Activity)}
 location={(state.Latitude.HasValue && state.Longitude.HasValue ? $"{state.Latitude.Value.ToString("F5", CultureInfo.InvariantCulture)},{state.Longitude.Value.ToString("F5", CultureInfo.InvariantCulture)}" : "-")} semantic_location={NullDash(state.SemanticLocation)}
@@ -234,13 +279,18 @@ rule: wearable telemetry is context, not a medical diagnosis. Use it to reduce d
                 night && lowMotion ? "quiet_night" :
                 "awake";
 
-            var stress = 0d;
-            if (_state.BaselineBpm > 0 && avgBpm >= _state.BaselineBpm + 14) stress += 0.38;
+            var bpmDeviation = _state.BaselineBpm > 0 ? avgBpm - _state.BaselineBpm : 0;
+            var bpmDeviationStress = _state.BaselineBpm > 0
+                ? Math.Clamp((bpmDeviation + 4) / 32.0, 0, 1)
+                : 0;
+            var stress = bpmDeviationStress * 0.34;
+            if (_state.BaselineBpm > 0 && avgBpm >= _state.BaselineBpm + 14) stress += 0.28;
             if ((_state.HrvRmssdMs ?? 999) < 22) stress += 0.24;
             if ((_state.SpO2Percent ?? 100) < 93) stress += 0.16;
             if (avgMotion <= 0.10 && !night && _state.OnWrist) stress += 0.10;
             if ((_state.PpgSignalQuality ?? 1) < 0.45) stress -= 0.12;
             _state.StressScore = Math.Clamp(stress, 0, 1);
+            _state.LiveStressScore = (int)Math.Round(_state.StressScore * 100);
             _state.RecoveryState = _state.SleepConfidence >= 0.6 ? "resting" :
                 _state.StressScore >= 0.62 ? "strained" :
                 (_state.HrvRmssdMs ?? 0) >= 45 && avgBpm <= _state.BaselineBpm + 4 ? "recovered" :
@@ -259,7 +309,7 @@ rule: wearable telemetry is context, not a medical diagnosis. Use it to reduce d
                 "quiet_work" => "likely sedentary focus; concise task-first replies",
                 _ => ""
             };
-            _state.Summary = $"{_state.SleepState}; {_state.RecoveryState}; stress {_state.StressScore:F2}; bpm {avgBpm:F0}; motion {avgMotion:F2}; wrist {onWristRatio:P0}";
+            _state.Summary = $"{_state.SleepState}; {_state.RecoveryState}; live stress {_state.LiveStressScore}/100; bpm {avgBpm:F0}; motion {avgMotion:F2}; wrist {onWristRatio:P0}";
         }
 
         private static string BuildContextSignal(string previousSleep, string currentSleep, double avgMotion, double avgBpm, DateTime local)
@@ -339,5 +389,8 @@ rule: wearable telemetry is context, not a medical diagnosis. Use it to reduce d
             => JsonConvert.DeserializeObject<KokoWearableState>(JsonConvert.SerializeObject(state)) ?? new();
 
         private static string NullDash(string? value) => string.IsNullOrWhiteSpace(value) ? "-" : value.Trim();
+
+        private static string FormatNullable(double? value)
+            => value.HasValue ? value.Value.ToString("0.###", CultureInfo.InvariantCulture) : "--";
     }
 }

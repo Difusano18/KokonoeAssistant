@@ -29,6 +29,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.time.Instant
+import kotlin.math.abs
 import kotlin.math.sqrt
 
 class WearBridgeService : Service(), SensorEventListener {
@@ -41,6 +42,9 @@ class WearBridgeService : Service(), SensorEventListener {
     private var nextDiscoveryAtMs = 0L
     private var wakeLock: PowerManager.WakeLock? = null
     private lateinit var sampleStore: BridgeSampleStore
+    private var lastImmediatePushAtMs = 0L
+    private var lastImmediatePushBpm: Double? = null
+    private val immediatePushThrottleMs = 2_500L
 
     override fun onCreate() {
         super.onCreate()
@@ -63,6 +67,21 @@ class WearBridgeService : Service(), SensorEventListener {
                 logTail = BridgeLog.tail(this)
             )
         )
+        val missing = missingSensorPermissions()
+        if (missing.isNotEmpty()) {
+            val message = "Permission Required: ${missing.joinToString(", ")}"
+            BridgeLog.append(this, message)
+            val runtime = BridgeRuntimeStatus.load(this).copy(
+                lastError = message,
+                phase = "permission_required",
+                heartStatus = message,
+                logTail = BridgeLog.tail(this)
+            )
+            BridgeRuntimeStatus.save(this, runtime)
+            updateNotification(runtime)
+            startPostingLoop()
+            return
+        }
         startMotion()
         startHeartRate()
         startPostingLoop()
@@ -161,7 +180,28 @@ class WearBridgeService : Service(), SensorEventListener {
     }
 
     private fun updateHeartRate(bpm: Double, source: String) {
-        if (bpm < 25.0 || bpm > 230.0) return
+        if (bpm <= 0.0) {
+            BridgeLog.append(this, "Sensor returned 0 via $source")
+            BridgeRuntimeStatus.save(
+                this,
+                BridgeRuntimeStatus.load(this).copy(
+                    heartStatus = "Sensor returned 0 via $source",
+                    logTail = BridgeLog.tail(this)
+                )
+            )
+            return
+        }
+        if (bpm < 25.0 || bpm > 230.0) {
+            BridgeLog.append(this, "invalid heart sample %.1f via %s".format(bpm, source))
+            BridgeRuntimeStatus.save(
+                this,
+                BridgeRuntimeStatus.load(this).copy(
+                    heartStatus = "invalid heart sample %.0f via %s".format(bpm, source),
+                    logTail = BridgeLog.tail(this)
+                )
+            )
+            return
+        }
         latestHeartRate = bpm
         latestHeartSource = source
         BridgeRuntimeStatus.save(
@@ -171,14 +211,34 @@ class WearBridgeService : Service(), SensorEventListener {
                 heartStatus = "heart sample %.0f bpm via %s".format(bpm, source)
             )
         )
+        triggerImmediateHeartPush(bpm, source)
     }
 
     private fun startMotion() {
+        if (checkSelfPermission(Manifest.permission.ACTIVITY_RECOGNITION) != PackageManager.PERMISSION_GRANTED) {
+            BridgeLog.append(this, "motion permission missing")
+            BridgeRuntimeStatus.save(
+                this,
+                BridgeRuntimeStatus.load(this).copy(lastError = "Permission Required: ACTIVITY_RECOGNITION")
+            )
+            return
+        }
         runCatching {
             val sm = getSystemService(SENSOR_SERVICE) as SensorManager
             val accelerometer = sm.getDefaultSensor(Sensor.TYPE_ACCELEROMETER) ?: return
             sm.registerListener(this, accelerometer, SensorManager.SENSOR_DELAY_NORMAL)
         }
+    }
+
+    private fun missingSensorPermissions(): List<String> {
+        val missing = mutableListOf<String>()
+        if (checkSelfPermission(Manifest.permission.BODY_SENSORS) != PackageManager.PERMISSION_GRANTED) {
+            missing.add("BODY_SENSORS")
+        }
+        if (checkSelfPermission(Manifest.permission.ACTIVITY_RECOGNITION) != PackageManager.PERMISSION_GRANTED) {
+            missing.add("ACTIVITY_RECOGNITION")
+        }
+        return missing
     }
 
     private fun startPostingLoop() {
@@ -188,20 +248,7 @@ class WearBridgeService : Service(), SensorEventListener {
                 try {
                     var settings = BridgeSettings.load(this@WearBridgeService)
                     var sender = BridgeSender(settings)
-                    val battery = getSystemService(BATTERY_SERVICE) as BatteryManager
-                    val batteryPercent = battery.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY).toDouble()
-                    val now = Instant.now()
-                    val sample = WearableSample(
-                        sampleId = "${settings.deviceId}-${now.toEpochMilli()}",
-                        timestampUtc = now.toString(),
-                        deviceId = settings.deviceId,
-                        heartRateBpm = latestHeartRate,
-                        motion = latestMotion,
-                        onWrist = latestHeartRate != null,
-                        activity = "watch_bridge",
-                        semanticLocation = settings.semanticLocation,
-                        batteryPercent = batteryPercent
-                    )
+                    val sample = buildSample(settings, "watch_bridge")
                     var phase = "checking_pc"
 
                     if (settings.pairedPcId.isBlank() || settings.bridgeToken == BridgeConfig().bridgeToken) {
@@ -317,6 +364,92 @@ class WearBridgeService : Service(), SensorEventListener {
                     delay(10_000)
                 }
             }
+        }
+    }
+
+    private fun buildSample(settings: BridgeSettings, activity: String): WearableSample {
+        val battery = getSystemService(BATTERY_SERVICE) as BatteryManager
+        val batteryPercent = battery.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY).toDouble()
+        val now = Instant.now()
+        return WearableSample(
+            sampleId = "${settings.deviceId}-${now.toEpochMilli()}",
+            timestampUtc = now.toString(),
+            deviceId = settings.deviceId,
+            heartRateBpm = latestHeartRate,
+            motion = latestMotion,
+            onWrist = latestHeartRate != null,
+            activity = activity,
+            semanticLocation = settings.semanticLocation,
+            batteryPercent = batteryPercent
+        )
+    }
+
+    private fun triggerImmediateHeartPush(bpm: Double, source: String) {
+        val nowMs = System.currentTimeMillis()
+        val previous = lastImmediatePushBpm
+        if (previous != null && abs(previous - bpm) < 0.5) return
+        if (nowMs - lastImmediatePushAtMs < immediatePushThrottleMs) return
+        lastImmediatePushAtMs = nowMs
+        lastImmediatePushBpm = bpm
+        scope.launch {
+            pushImmediateHeartSample(bpm, source)
+        }
+    }
+
+    private suspend fun pushImmediateHeartSample(bpm: Double, source: String) {
+        acquireWakeLock()
+        try {
+            val settings = BridgeSettings.load(this)
+            val defaults = BridgeConfig()
+            if (settings.pairedPcId.isBlank() || settings.bridgeToken.isBlank() || settings.bridgeToken == defaults.bridgeToken) {
+                BridgeLog.append(this, "heart push skipped: watch not paired")
+                return
+            }
+
+            val sender = BridgeSender(settings)
+            val sample = buildSample(settings, "heart_realtime:$source")
+            val result = sender.send(sample)
+            if (result.ok) {
+                handleCommand(sender.nextCommand())
+                BridgeLog.append(this, "heart push accepted %.0f bpm via %s".format(bpm, source))
+            } else {
+                sampleStore.enqueue(sample)
+                BridgeLog.append(this, "heart push failed; queued sample: ${result.error.ifBlank { result.httpCode.toString() }}")
+            }
+
+            val runtime = BridgeRuntimeStatus.load(this).copy(
+                running = true,
+                lastSendAt = Instant.now().toString(),
+                lastOk = result.ok,
+                lastHttpCode = result.httpCode,
+                lastError = result.error,
+                lastHeartRate = "%.0f bpm".format(bpm),
+                heartStatus = "heart sample %.0f bpm via %s".format(bpm, source),
+                lastMotion = latestMotion?.let { "%.3f".format(it) } ?: BridgeRuntimeStatus.load(this).lastMotion,
+                phase = if (result.ok) "live_heart_push" else "heart_push_failed",
+                pairedPcId = settings.pairedPcId,
+                activeBaseUrl = settings.desktopBaseUrl,
+                knownUrlCount = BridgeSettings.candidateUrls(settings).size,
+                lastAttempts = result.attempts,
+                queuedSamples = sampleStore.count(),
+                logTail = BridgeLog.tail(this)
+            )
+            BridgeRuntimeStatus.save(this, runtime)
+            updateNotification(runtime)
+        } catch (ex: Throwable) {
+            Log.e(tag, "heart push failed", ex)
+            BridgeLog.append(this, "heart push failed: ${ex.javaClass.simpleName}: ${ex.message}")
+            val runtime = BridgeRuntimeStatus.load(this).copy(
+                running = true,
+                lastOk = false,
+                lastError = "${ex.javaClass.simpleName}: ${ex.message ?: "heart push failed"}",
+                phase = "heart_push_error",
+                logTail = BridgeLog.tail(this)
+            )
+            BridgeRuntimeStatus.save(this, runtime)
+            updateNotification(runtime)
+        } finally {
+            releaseWakeLock()
         }
     }
 

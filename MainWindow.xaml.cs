@@ -1446,7 +1446,7 @@ tags: [kokonoe, live-core, diagnostics]
                     var lastLocal = wearable.LastSampleUtc > DateTime.MinValue
                         ? wearable.LastSampleUtc.ToLocalTime().ToString("HH:mm:ss")
                         : "--";
-                    var wearableCur = pulseHeart?.CurrentBpm ?? 0;
+                    var wearableCur = wearable.CurrentBpm > 0 ? wearable.CurrentBpm : pulseHeart?.CurrentBpm ?? 0;
 
                     PulseTabBpmBig.Text = wearableCur > 0 ? $"{wearableCur:0}" : "--";
                     PulseTabCurText.Text = wearableCur > 0 ? $"{wearableCur:0.0}" : "--";
@@ -1461,7 +1461,7 @@ tags: [kokonoe, live-core, diagnostics]
                     PulseSideStateText.Text = fresh ? $"last {lastLocal} / {wearable.PresenceState}" : $"watch {FormatBridgeState(connection.State).ToLowerInvariant()}";
                     UpdatePulseBridgeStrip(bridge, diagnostics, connection, wearable, fresh);
 
-                    PulseVitalLog.ItemsSource = new[]
+                    var vitalRows = new List<object>
                     {
                         new { TimeStr = "pulse", BpmStr = wearableCur > 0 ? $"{wearableCur:0} bpm" : "--" },
                         new { TimeStr = "last measured", BpmStr = lastLocal },
@@ -1476,9 +1476,16 @@ tags: [kokonoe, live-core, diagnostics]
                         new { TimeStr = "device", BpmStr = string.IsNullOrWhiteSpace(wearable.DeviceId) ? "--" : wearable.DeviceId },
                         new { TimeStr = "sleep", BpmStr = wearable.SleepState },
                         new { TimeStr = "confidence", BpmStr = $"{wearable.SleepConfidence:P0}" },
+                        new { TimeStr = "stress", BpmStr = $"{wearable.LiveStressScore}/100" },
                         new { TimeStr = "on wrist", BpmStr = wearable.OnWrist ? "yes" : "unknown/no" },
                         new { TimeStr = "location", BpmStr = wearable.Latitude.HasValue && wearable.Longitude.HasValue ? "available" : "--" },
-                    }.ToList();
+                    };
+                    foreach (var line in ServiceContainer.WearableTelemetry.RecentLogLines(8).Reverse())
+                    {
+                        var trimmed = line.Length > 88 ? line[^88..] : line;
+                        vitalRows.Add(new { TimeStr = "exe log", BpmStr = trimmed });
+                    }
+                    PulseVitalLog.ItemsSource = vitalRows;
 
                     UpdatePulseSidePanels(wearableCur);
                     return;
