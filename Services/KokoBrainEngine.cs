@@ -1029,7 +1029,8 @@ namespace KokonoeAssistant.Services
                 sb.AppendLine(presence.ExtraContext);
                 sb.AppendLine(dayFrame.PromptBlock);
                 sb.AppendLine(Somatic.BuildPromptBlock(somatic));
-                sb.AppendLine(ServiceContainer.WearableTelemetry.BuildPromptBlock(now.ToUniversalTime()));
+                if (AppSettings.Load().WearBridgeIncludePromptContext)
+                    sb.AppendLine(ServiceContainer.WearableTelemetry.BuildPromptBlock(now.ToUniversalTime()));
             }
             catch { }
 

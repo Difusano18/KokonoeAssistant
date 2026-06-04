@@ -1977,6 +1977,8 @@
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="0"/>
                             <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
                             <RowDefinition Height="*"/>
                         </Grid.RowDefinitions>
 
@@ -2069,8 +2071,121 @@
                             </Border>
                         </Grid>
 
+                        <!-- Bridge / watch link row -->
+                        <Grid Grid.Row="3" Margin="20,12,20,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="1.2*"/>
+                                <ColumnDefinition Width="1.4*"/>
+                                <ColumnDefinition Width="1.4*"/>
+                                <ColumnDefinition Width="1.6*"/>
+                            </Grid.ColumnDefinitions>
+                            <Border Grid.Column="0" Background="{DynamicResource AccentBgCard}"
+                                    BorderBrush="{DynamicResource AccentBgBorder2}" BorderThickness="1" CornerRadius="8"
+                                    Padding="12,8" Margin="0,0,6,0">
+                                <StackPanel>
+                                    <TextBlock Text="LINK" FontSize="8" FontFamily="Consolas" Foreground="{DynamicResource AccentDim}"/>
+                                    <TextBlock x:Name="PulseBridgeLinkText" Text="WAITING" FontSize="15" FontWeight="Bold"
+                                               FontFamily="Consolas" Foreground="#FFB020" TextWrapping="Wrap"/>
+                                    <TextBlock x:Name="PulseBridgeReasonText" Text="watch/app route unknown" FontSize="9"
+                                               FontFamily="Consolas" Foreground="{DynamicResource AccentDim}" TextWrapping="Wrap"/>
+                                </StackPanel>
+                            </Border>
+                            <Border Grid.Column="1" Background="{DynamicResource AccentBgCard}"
+                                    BorderBrush="{DynamicResource AccentBgBorder2}" BorderThickness="1" CornerRadius="8"
+                                    Padding="12,8" Margin="0,0,6,0">
+                                <StackPanel>
+                                    <TextBlock Text="WATCH APP" FontSize="8" FontFamily="Consolas" Foreground="{DynamicResource AccentDim}"/>
+                                    <TextBlock x:Name="PulseBridgeWatchText" Text="not paired" FontSize="13" FontWeight="Bold"
+                                               FontFamily="Consolas" Foreground="{DynamicResource AccentText}" TextWrapping="Wrap"/>
+                                    <TextBlock x:Name="PulseBridgeWatchDetailText" Text="poll -- · ack --" FontSize="9"
+                                               FontFamily="Consolas" Foreground="{DynamicResource AccentDim}" TextWrapping="Wrap"/>
+                                </StackPanel>
+                            </Border>
+                            <Border Grid.Column="2" Background="{DynamicResource AccentBgCard}"
+                                    BorderBrush="{DynamicResource AccentBgBorder2}" BorderThickness="1" CornerRadius="8"
+                                    Padding="12,8" Margin="0,0,6,0">
+                                <StackPanel>
+                                    <TextBlock Text="DESKTOP BRIDGE" FontSize="8" FontFamily="Consolas" Foreground="{DynamicResource AccentDim}"/>
+                                    <TextBlock x:Name="PulseBridgeDesktopText" Text="server --" FontSize="13" FontWeight="Bold"
+                                               FontFamily="Consolas" Foreground="{DynamicResource AccentText}" TextWrapping="Wrap"/>
+                                    <TextBlock x:Name="PulseBridgeDesktopDetailText" Text="samples 0 · auth 0" FontSize="9"
+                                               FontFamily="Consolas" Foreground="{DynamicResource AccentDim}" TextWrapping="Wrap"/>
+                                </StackPanel>
+                            </Border>
+                            <Border Grid.Column="3" Background="{DynamicResource AccentBgCard}"
+                                    BorderBrush="{DynamicResource AccentBgBorder2}" BorderThickness="1" CornerRadius="8"
+                                    Padding="12,8">
+                                <StackPanel>
+                                    <TextBlock Text="LAST SEEN / ENDPOINT" FontSize="8" FontFamily="Consolas" Foreground="{DynamicResource AccentDim}"/>
+                                    <TextBlock x:Name="PulseBridgeLastSeenText" Text="--" FontSize="13" FontWeight="Bold"
+                                               FontFamily="Consolas" Foreground="{DynamicResource AccentText}" TextWrapping="Wrap"/>
+                                    <TextBlock x:Name="PulseBridgeEndpointText" Text="remote --" FontSize="9"
+                                               FontFamily="Consolas" Foreground="{DynamicResource AccentDim}" TextWrapping="Wrap"/>
+                                </StackPanel>
+                            </Border>
+                        </Grid>
+
+                        <!-- Bridge setup row -->
+                        <Border Grid.Row="4" Background="{DynamicResource AccentBgCard}"
+                                BorderBrush="{DynamicResource AccentBgBorder2}" BorderThickness="1" CornerRadius="8"
+                                Padding="12" Margin="20,12,20,0">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="96"/>
+                                    <ColumnDefinition Width="2*"/>
+                                    <ColumnDefinition Width="1.4*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0" Margin="0,0,8,0">
+                                    <TextBlock Text="PC PORT" FontSize="8" FontFamily="Consolas" Foreground="{DynamicResource AccentDim}"/>
+                                    <TextBox x:Name="PulseBridgePortBox" Text="8787"
+                                             FontSize="12" FontFamily="Consolas" Foreground="{DynamicResource AccentText}"
+                                             Background="{DynamicResource AccentBgPanel}" BorderBrush="{DynamicResource AccentBgBorder2}"
+                                             BorderThickness="1" Padding="6,5"/>
+                                </StackPanel>
+                                <StackPanel Grid.Column="1" Margin="0,0,8,0">
+                                    <TextBlock Text="PC IPS FOR WATCH (one per line)" FontSize="8" FontFamily="Consolas" Foreground="{DynamicResource AccentDim}"/>
+                                    <TextBox x:Name="PulseBridgeUrlsInput" MinHeight="44" AcceptsReturn="True" TextWrapping="Wrap"
+                                             FontSize="11" FontFamily="Consolas" Foreground="{DynamicResource AccentText}"
+                                             Background="{DynamicResource AccentBgPanel}" BorderBrush="{DynamicResource AccentBgBorder2}"
+                                             BorderThickness="1" Padding="6,5"/>
+                                </StackPanel>
+                                <StackPanel Grid.Column="2" Margin="0,0,8,0">
+                                    <TextBlock Text="PAIR LOCK" FontSize="8" FontFamily="Consolas" Foreground="{DynamicResource AccentDim}"/>
+                                    <TextBlock x:Name="PulseBridgePairLockText" Text="pc -- / token --"
+                                               FontSize="11" FontFamily="Consolas" Foreground="{DynamicResource AccentText}"
+                                               TextWrapping="Wrap" Margin="0,3,0,0"/>
+                                    <TextBlock x:Name="PulseBridgeSetupHintText" Text="watch sends to PC; token locks it to this Kokonoe"
+                                               FontSize="9" FontFamily="Consolas" Foreground="{DynamicResource AccentDim}"
+                                               TextWrapping="Wrap" Margin="0,3,0,0"/>
+                                </StackPanel>
+                                <WrapPanel Grid.Column="3" VerticalAlignment="Center">
+                                    <Button Content="Save + Restart" Click="PulseBridgeSaveRestart_Click"
+                                            Background="#1F2937" BorderBrush="#374151" BorderThickness="1"
+                                            Foreground="#E5E7EB" FontFamily="Consolas" FontSize="11"
+                                            Cursor="Hand" Padding="10,6" Margin="0,0,6,6"/>
+                                    <Button Content="Copy Setup" Click="PulseBridgeCopySetup_Click"
+                                            Background="#1F2937" BorderBrush="#374151" BorderThickness="1"
+                                            Foreground="#E5E7EB" FontFamily="Consolas" FontSize="11"
+                                            Cursor="Hand" Padding="10,6" Margin="0,0,6,6"/>
+                                    <Button Content="Fix Firewall" Click="PulseBridgeFixFirewall_Click"
+                                            Background="#1F2937" BorderBrush="#374151" BorderThickness="1"
+                                            Foreground="#E5E7EB" FontFamily="Consolas" FontSize="11"
+                                            Cursor="Hand" Padding="10,6" Margin="0,0,6,6"/>
+                                    <Button Content="Refresh Pair" Click="PulseBridgeRefreshPair_Click"
+                                            Background="#1F2937" BorderBrush="#374151" BorderThickness="1"
+                                            Foreground="#E5E7EB" FontFamily="Consolas" FontSize="11"
+                                            Cursor="Hand" Padding="10,6" Margin="0,0,6,6"/>
+                                    <Button Content="Restart Watch" Click="PulseBridgeRestartWatch_Click"
+                                            Background="#1F2937" BorderBrush="#374151" BorderThickness="1"
+                                            Foreground="#E5E7EB" FontFamily="Consolas" FontSize="11"
+                                            Cursor="Hand" Padding="10,6" Margin="0,0,0,6"/>
+                                </WrapPanel>
+                            </Grid>
+                        </Border>
+
                         <!-- Telemetry workspace -->
-                        <Grid Grid.Row="3" Margin="20,12,20,12">
+                        <Grid Grid.Row="5" Margin="20,12,20,12">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="0"/>

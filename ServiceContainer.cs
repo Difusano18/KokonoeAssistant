@@ -304,11 +304,28 @@ namespace KokonoeAssistant
                     if (_wearableBridge == null)
                     {
                         var dir = Path.Combine(_vault ?? AppDomain.CurrentDomain.BaseDirectory, "kokonoe-data");
-                        _wearableBridge = new KokoWearableBridgeService(WearableTelemetry, dir);
-                        _wearableBridge.Start();
+                        var settings = AppSettings.Load();
+                        _wearableBridge = new KokoWearableBridgeService(
+                            WearableTelemetry,
+                            dir,
+                            settings.WearBridgePort,
+                            settings.WearBridgeExternalUrls.Split(',', ';', '\n', '\r'));
+                        if (settings.WearBridgeEnabled)
+                            _wearableBridge.Start();
                     }
                     return _wearableBridge;
                 }
+            }
+        }
+
+        public static void ReloadWearableBridge()
+        {
+            lock (_lock)
+            {
+                try { _wearableBridge?.Dispose(); } catch { }
+                _wearableBridge = null;
+                if (AppSettings.Load().WearBridgeEnabled)
+                    _ = WearableBridge;
             }
         }
 

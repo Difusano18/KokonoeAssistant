@@ -30,6 +30,7 @@ namespace KokonoeAssistant.Services
         public double BaselineBpm => _state.BaselineBpm;
         public long TotalBeats => _state.TotalBeats;
         public double BpmDelta => _currentBpm - _state.BaselineBpm;
+        public KokoWearableStressFrame WearableStress => EvaluateWearableStress();
 
         public event Action<double>? Beat;
         public event Action<double>? BpmChanged;
@@ -143,6 +144,61 @@ namespace KokonoeAssistant.Services
             return true;
         }
 
+        public KokoWearableStressFrame EvaluateWearableStress(DateTime? nowUtc = null)
+        {
+            if (_wearable == null) return new KokoWearableStressFrame();
+
+            var now = nowUtc ?? DateTime.UtcNow;
+            var state = _wearable.State;
+            var recent = _wearable.RecentSamples
+                .Where(s => now - s.TimestampUtc.ToUniversalTime() <= TimeSpan.FromMinutes(20))
+                .OrderBy(s => s.TimestampUtc)
+                .ToList();
+
+            if (!state.IsFresh(now) || recent.Count == 0)
+                return new KokoWearableStressFrame { State = "stale", PromptHint = "ignore wearable stress until fresh samples return" };
+
+            var bpmValues = recent.Where(s => s.HeartRateBpm.HasValue).Select(s => s.HeartRateBpm!.Value).ToList();
+            var hrvValues = recent.Where(s => s.HrvRmssdMs.HasValue).Select(s => s.HrvRmssdMs!.Value).ToList();
+            var motion = recent.Where(s => s.Motion.HasValue).Select(s => s.Motion!.Value).DefaultIfEmpty(state.Motion ?? 0).Average();
+            var avgBpm = bpmValues.DefaultIfEmpty(state.CurrentBpm).Average();
+            var firstBpm = bpmValues.FirstOrDefault(avgBpm);
+            var lastBpm = bpmValues.LastOrDefault(avgBpm);
+            var trend = lastBpm - firstBpm;
+            var baseline = state.BaselineBpm > 0 ? state.BaselineBpm : _state.BaselineBpm;
+            var hrv = hrvValues.DefaultIfEmpty(state.HrvRmssdMs ?? 0).Average();
+
+            var score = state.StressScore * 0.45;
+            if (baseline > 0 && avgBpm >= baseline + 12) score += 0.22;
+            if (trend >= 8) score += 0.12;
+            if (hrv > 0 && hrv < 24) score += 0.16;
+            if (motion <= 0.10 && state.OnWrist) score += 0.05;
+            if (state.SleepState is "probably_asleep" or "drowsy_or_resting") score -= 0.20;
+            score = Math.Clamp(score, 0, 1);
+
+            var frame = new KokoWearableStressFrame
+            {
+                Score = score,
+                AverageBpm = avgBpm,
+                BpmTrend = trend,
+                HrvRmssdMs = hrv > 0 ? hrv : null,
+                Motion = motion,
+                State = score >= 0.72 ? "high_stress" :
+                    score >= 0.52 ? "strained" :
+                    state.SleepState is "probably_asleep" or "drowsy_or_resting" ? "resting" :
+                    "stable"
+            };
+            frame.PromptHint = frame.State switch
+            {
+                "high_stress" => "suggest a short concrete break only if context allows; reduce teasing and long explanations",
+                "strained" => "keep replies shorter, more concrete, and avoid unnecessary pressure",
+                "resting" => "lower initiative; avoid waking or pestering",
+                _ => "normal tone; no health commentary unless relevant"
+            };
+            frame.Reason = $"avg_bpm={avgBpm:F0}; trend={trend:+0;-0;0}; hrv={(frame.HrvRmssdMs.HasValue ? frame.HrvRmssdMs.Value.ToString("F0") : "-")}; motion={motion:F2}; telemetry_stress={state.StressScore:F2}";
+            return frame;
+        }
+
         private void OnBeatTick(object? _unused)
         {
             if (Interlocked.CompareExchange(ref _inBeat, 1, 0) != 0) return;
@@ -198,5 +254,17 @@ namespace KokonoeAssistant.Services
                 Debug.WriteLine($"[Heart] save failed: {ex}");
             }
         }
+    }
+
+    public sealed class KokoWearableStressFrame
+    {
+        public string State { get; set; } = "unknown";
+        public double Score { get; set; }
+        public double AverageBpm { get; set; }
+        public double BpmTrend { get; set; }
+        public double? HrvRmssdMs { get; set; }
+        public double Motion { get; set; }
+        public string Reason { get; set; } = "";
+        public string PromptHint { get; set; } = "";
     }
 }

@@ -11,8 +11,10 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.os.PowerManager
+import android.net.Uri
+import android.provider.Settings
 import android.text.InputType
-import android.text.method.PasswordTransformationMethod
 import android.view.Gravity
 import android.view.View
 import android.widget.Button
@@ -35,10 +37,13 @@ class MainActivity : Activity() {
     private val handler = Handler(Looper.getMainLooper())
     private var startAfterPermissions = false
 
-    private lateinit var urlInput: EditText
+    private lateinit var pcIp1Input: EditText
+    private lateinit var pcIp2Input: EditText
+    private lateinit var pcPortInput: EditText
     private lateinit var tokenInput: EditText
     private lateinit var locationInput: EditText
     private lateinit var autoStartSwitch: Switch
+    private lateinit var pairingStatusText: TextView
     private lateinit var heroStatusText: TextView
     private lateinit var bpmText: TextView
     private lateinit var motionText: TextView
@@ -88,7 +93,7 @@ class MainActivity : Activity() {
             setTextColor(Color.rgb(120, 136, 170))
             gravity = Gravity.CENTER
         })
-        root.addView(primaryButton("Setup Once") {
+        root.addView(primaryButton("Bind Device") {
             setupOnce()
         }, margin(top = 14, bottom = 10).apply { height = dp(56) })
 
@@ -112,10 +117,18 @@ class MainActivity : Activity() {
         telemetryCard.addView(sendText)
         root.addView(telemetryCard, margin(bottom = 10))
 
-        val connectionCard = card("Pairing")
-        urlInput = edit("PC bridge URL", settings.desktopBaseUrl, InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI)
+        val connectionCard = card("Bind PC")
+        val urls = BridgeSettings.candidateUrls(settings)
+        val port = urls.firstNotNullOfOrNull { runCatching { java.net.URI(it).port.takeIf { p -> p > 0 } }.getOrNull() }
+            ?: runCatching { java.net.URI(settings.desktopBaseUrl).port.takeIf { it > 0 } }.getOrNull()
+            ?: 8787
+        val hosts = urls.mapNotNull { url -> runCatching { java.net.URI(url).host }.getOrNull() }
+            .filter { it.isNotBlank() }
+            .distinct()
+        pcPortInput = edit("Port", port.toString(), InputType.TYPE_CLASS_NUMBER)
+        pcIp1Input = edit("PC IP 1", hosts.getOrNull(0).orEmpty(), InputType.TYPE_CLASS_PHONE)
+        pcIp2Input = edit("PC IP 2", hosts.getOrNull(1).orEmpty(), InputType.TYPE_CLASS_PHONE)
         tokenInput = edit("Bridge token", settings.bridgeToken, InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD)
-        tokenInput.transformationMethod = PasswordTransformationMethod.getInstance()
         locationInput = edit("Semantic location", settings.semanticLocation, InputType.TYPE_CLASS_TEXT)
         autoStartSwitch = Switch(this).apply {
             text = "Auto start after reboot"
@@ -128,15 +141,19 @@ class MainActivity : Activity() {
                 toast("Auto start saved")
             }
         }
-        connectionCard.addView(TextView(this).apply {
-            text = if (settings.pairedPcId.isBlank()) "Not paired yet" else "Paired: ${settings.pairedPcId.takeLast(8)}"
+        pairingStatusText = TextView(this).apply {
+            text = if (settings.pairedPcId.isBlank()) "NOT BOUND YET" else "BOUND TO THIS PC: ${settings.pairedPcId.takeLast(8)}"
             textSize = 13f
             typeface = Typeface.DEFAULT_BOLD
             setTextColor(if (settings.pairedPcId.isBlank()) Color.rgb(255, 214, 110) else Color.rgb(75, 255, 190))
             gravity = Gravity.CENTER
             setPadding(0, dp(2), 0, dp(8))
-        })
-        connectionCard.addView(urlInput)
+        }
+        connectionCard.addView(pairingStatusText)
+        connectionCard.addView(pcPortInput)
+        connectionCard.addView(pcIp1Input)
+        connectionCard.addView(pcIp2Input)
+        connectionCard.addView(tokenInput)
         connectionCard.addView(locationInput)
         connectionCard.addView(autoStartSwitch)
         root.addView(connectionCard, margin(bottom = 10))
@@ -165,6 +182,9 @@ class MainActivity : Activity() {
             refreshStatus()
         }, LinearLayout.LayoutParams(0, dp(48), 1f))
         controlsCard.addView(row2)
+        controlsCard.addView(button("Battery") {
+            requestBatteryOptimizationExemption()
+        }, margin(top = 8).apply { height = dp(46) })
         root.addView(controlsCard, margin(bottom = 10))
 
         val diagnosticsCard = card("Diagnostics")
@@ -184,17 +204,54 @@ class MainActivity : Activity() {
     private fun saveSettings() {
         val current = BridgeSettings.load(this)
         val defaults = BridgeConfig()
+        val port = pcPortInput.text.toString().trim().toIntOrNull()?.coerceIn(1024, 65535) ?: 8787
+        val urls = pcInputUrls(port)
+        val primaryUrl = urls.firstOrNull() ?: defaults.desktopBaseUrl
+        val token = tokenInput.text.toString().trim()
         BridgeSettings.save(
             this,
             BridgeSettings(
-                desktopBaseUrl = urlInput.text.toString().trim().ifBlank { defaults.desktopBaseUrl },
-                bridgeToken = tokenInput.text.toString().trim().ifBlank { defaults.bridgeToken },
+                desktopBaseUrl = primaryUrl,
+                bridgeToken = token,
                 deviceId = current.deviceId,
                 semanticLocation = locationInput.text.toString().trim().ifBlank { "unknown" },
                 autoStart = autoStartSwitch.isChecked,
-                pairedPcId = current.pairedPcId
+                pairedPcId = current.pairedPcId,
+                lastSuccessfulBaseUrl = current.lastSuccessfulBaseUrl,
+                knownBaseUrls = urls.joinToString("\n")
             )
         )
+    }
+
+    private fun pcInputUrls(port: Int): List<String> {
+        return listOf(pcIp1Input.text.toString(), pcIp2Input.text.toString())
+            .map { normalizePcInput(it, port) }
+            .filter { it.isNotBlank() }
+            .distinct()
+    }
+
+    private fun normalizePcInput(value: String, port: Int): String {
+        var text = value.trim().trimEnd('/')
+        if (text.isBlank()) return ""
+        if (!text.startsWith("http://") && !text.startsWith("https://")) {
+            text = "http://$text"
+        }
+        val uri = runCatching { java.net.URI(text) }.getOrNull() ?: return ""
+        val host = uri.host ?: return ""
+        val actualPort = if (uri.port > 0) uri.port else port
+        return "${uri.scheme}://$host:$actualPort"
+    }
+
+    private fun applyUrlToIpInputs(url: String) {
+        val uri = runCatching { java.net.URI(url) }.getOrNull() ?: return
+        val host = uri.host ?: return
+        val port = if (uri.port > 0) uri.port else pcPortInput.text.toString().toIntOrNull() ?: 8787
+        pcPortInput.setText(port.toString())
+        if (pcIp1Input.text.isNullOrBlank() || pcIp1Input.text.toString() == host) {
+            pcIp1Input.setText(host)
+        } else if (pcIp2Input.text.isNullOrBlank() || pcIp2Input.text.toString() == host) {
+            pcIp2Input.setText(host)
+        }
     }
 
     private fun refreshStatus() {
@@ -207,13 +264,16 @@ class MainActivity : Activity() {
             live -> "LIVE - desktop accepts samples"
             status.running && hasError -> "RUNNING - attention required"
             status.running -> "RUNNING - waiting for first sample"
+            settings.pairedPcId.isNotBlank() -> "BOUND - press Start"
             else -> "STOPPED - ready to start"
         }
         heroStatusText.text = statusText
         heroStatusText.setTextColor(if (live) Color.rgb(75, 255, 190) else Color.rgb(255, 214, 110))
         heroStatusText.background = rounded(if (live) Color.rgb(12, 42, 36) else Color.rgb(45, 34, 16), Color.rgb(55, 70, 110), 18)
+        pairingStatusText.text = if (settings.pairedPcId.isBlank()) "NOT BOUND YET" else "BOUND TO THIS PC: ${settings.pairedPcId.takeLast(8)}"
+        pairingStatusText.setTextColor(if (settings.pairedPcId.isBlank()) Color.rgb(255, 214, 110) else Color.rgb(75, 255, 190))
 
-        bpmText.text = "Heart\n${status.lastHeartRate.ifBlank { "--" }}"
+        bpmText.text = "Heart\n${status.lastHeartRate.ifBlank { "--" }}\n${status.heartStatus.ifBlank { "not started" }}"
         motionText.text = "Motion\n${if (status.lastMotion.isNotBlank()) status.lastMotion else "--"}"
         sendText.text = "Last send: ${if (status.lastSendAt.isNotBlank()) status.lastSendAt else "never"}  |  HTTP ${if (status.lastHttpCode > 0) status.lastHttpCode else "--"}"
         errorText.text = if (hasError) status.lastError else "No current bridge error."
@@ -225,29 +285,40 @@ class MainActivity : Activity() {
             else -> "missing"
         }
         detailsText.text =
-            "URL: ${settings.desktopBaseUrl}\n" +
+                "URL: ${settings.desktopBaseUrl}\n" +
+                "Known URLs: ${BridgeSettings.candidateUrls(settings).joinToString(", ").ifBlank { "-" }}\n" +
                 "Token: $tokenState\n" +
                 "PC: ${settings.pairedPcId.ifBlank { "not paired" }}\n" +
+                "Heart sensor: ${status.heartStatus.ifBlank { "not started" }}\n" +
                 "Phase: ${status.phase.ifBlank { "-" }}\n" +
-                "Reconnects: ${status.reconnectCount}  next: ${status.nextRetryAt.ifBlank { "-" }}\n" +
+                "Active URL: ${status.activeBaseUrl.ifBlank { settings.desktopBaseUrl }}\n" +
+                "Known URL count: ${status.knownUrlCount}\n" +
+                "Reconnects: ${status.reconnectCount}  attempts: ${status.lastAttempts}  next: ${status.nextRetryAt.ifBlank { "-" }}\n" +
+                "Queued: ${status.queuedSamples}\n" +
                 "Location: ${settings.semanticLocation}\n" +
-                "Auto start: ${if (settings.autoStart) "on" else "off"}"
+                "Auto start: ${if (settings.autoStart) "on" else "off"}\n" +
+                "Log:\n${status.logTail.ifBlank { "-" }}"
     }
 
     private fun findPcBridge() {
         toast("Scanning local Wi-Fi")
         scope.launch {
             val settings = BridgeSettings.load(this@MainActivity)
-            var result = BridgeDiscovery().find(preferredPcId = settings.pairedPcId)
+            var result = BridgeDiscovery(this@MainActivity).find(
+                preferredPcId = settings.pairedPcId,
+                preferredBaseUrl = settings.lastSuccessfulBaseUrl,
+                candidateBaseUrls = BridgeSettings.candidateUrls(settings),
+                scanSubnet = true
+            )
             if (!result.ok && settings.pairedPcId.isNotBlank()) {
-                result = BridgeDiscovery().find()
+                result = BridgeDiscovery(this@MainActivity).find()
             }
             if (!result.ok) {
                 toast(result.error.ifBlank { "PC bridge not found" })
                 refreshStatus()
                 return@launch
             }
-            urlInput.setText(result.baseUrl)
+            applyUrlToIpInputs(result.baseUrl)
             saveSettings()
             toast("Found ${result.pcName.ifBlank { result.baseUrl }}")
             testBridge()
@@ -258,10 +329,40 @@ class MainActivity : Activity() {
         toast("Finding and pairing PC")
         scope.launch {
             if (!requestPermissionsIfNeeded()) return@launch
+            saveSettings()
+            val directPair = BridgeAutoConnector.pairCurrentUrl(this@MainActivity)
+            if (directPair.ok) {
+                tokenInput.setText(directPair.token)
+                pairingStatusText.text = "BOUND TO THIS PC: ${directPair.pcId.takeLast(8)}"
+                pairingStatusText.setTextColor(Color.rgb(75, 255, 190))
+                BridgeRuntimeStatus.save(
+                    this@MainActivity,
+                    BridgeRuntimeStatus.load(this@MainActivity).copy(
+                        lastOk = true,
+                        lastHttpCode = directPair.httpCode,
+                        lastError = "",
+                        phase = "paired_direct",
+                        pairedPcId = directPair.pcId,
+                        pcName = directPair.pcName,
+                        activeBaseUrl = BridgeSettings.load(this@MainActivity).desktopBaseUrl,
+                        knownUrlCount = BridgeSettings.candidateUrls(BridgeSettings.load(this@MainActivity)).size
+                    )
+                )
+                startBridgeAfterTest()
+                toast("Paired ${directPair.pcName.ifBlank { directPair.pcId }}")
+                refreshStatus()
+                return@launch
+            }
+
             val current = BridgeSettings.load(this@MainActivity)
-            var found = BridgeDiscovery().find(preferredPcId = current.pairedPcId)
+            var found = BridgeDiscovery(this@MainActivity).find(
+                preferredPcId = current.pairedPcId,
+                preferredBaseUrl = current.lastSuccessfulBaseUrl,
+                candidateBaseUrls = BridgeSettings.candidateUrls(current),
+                scanSubnet = true
+            )
             if (!found.ok && current.pairedPcId.isNotBlank()) {
-                found = BridgeDiscovery().find()
+                found = BridgeDiscovery(this@MainActivity).find()
             }
             if (!found.ok) {
                 BridgeRuntimeStatus.save(
@@ -273,13 +374,15 @@ class MainActivity : Activity() {
                 return@launch
             }
 
-            urlInput.setText(found.baseUrl)
+            applyUrlToIpInputs(found.baseUrl)
             autoStartSwitch.isChecked = true
             BridgeSettings.save(
                 this@MainActivity,
                 BridgeSettings.load(this@MainActivity).copy(
                     desktopBaseUrl = found.baseUrl,
                     pairedPcId = found.pcId,
+                    lastSuccessfulBaseUrl = found.baseUrl,
+                    knownBaseUrls = BridgeSettings.mergeKnownUrls(BridgeSettings.load(this@MainActivity), found.baseUrl),
                     autoStart = true,
                     semanticLocation = locationInput.text.toString().trim().ifBlank { "unknown" }
                 )
@@ -310,6 +413,8 @@ class MainActivity : Activity() {
                     nextRetryAt = ""
                 )
             )
+            pairingStatusText.text = "BOUND TO THIS PC: ${pair.pcId.takeLast(8)}"
+            pairingStatusText.setTextColor(Color.rgb(75, 255, 190))
             startBridgeAfterTest()
             toast("Paired ${pair.pcName.ifBlank { pair.pcId }}")
             refreshStatus()
@@ -380,6 +485,23 @@ class MainActivity : Activity() {
         if (missing.isEmpty()) return true
         ActivityCompat.requestPermissions(this, missing.toTypedArray(), PERMISSIONS_REQUEST)
         return false
+    }
+
+    private fun requestBatteryOptimizationExemption() {
+        val pm = getSystemService(POWER_SERVICE) as PowerManager
+        if (pm.isIgnoringBatteryOptimizations(packageName)) {
+            toast("Battery optimization already disabled")
+            return
+        }
+        runCatching {
+            startActivity(
+                Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+                    data = Uri.parse("package:$packageName")
+                }
+            )
+        }.onFailure {
+            startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
+        }
     }
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {

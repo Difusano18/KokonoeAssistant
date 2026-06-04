@@ -1,5 +1,9 @@
 using System.Windows;
 using System.Windows.Input;
+using System.Linq;
+using System.Windows.Threading;
+using KokonoeAssistant.Services;
+using Newtonsoft.Json;
 using WpfApp = System.Windows.Application;
 
 namespace KokonoeAssistant
@@ -7,6 +11,7 @@ namespace KokonoeAssistant
     public partial class SettingsWindow : Window
     {
         private readonly AppSettings _settings;
+        private readonly DispatcherTimer _wearBridgeTimer;
 
         public SettingsWindow(AppSettings settings)
         {
@@ -14,6 +19,10 @@ namespace KokonoeAssistant
             InitializeComponent();
             _settings = settings;
             LoadToUI();
+            _wearBridgeTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
+            _wearBridgeTimer.Tick += (_, _) => RefreshWearBridgeUi();
+            _wearBridgeTimer.Start();
+            RefreshWearBridgeUi();
         }
 
         private void LoadToUI()
@@ -41,6 +50,10 @@ namespace KokonoeAssistant
             TgApiHashBox.Text       = _settings.TgApiHash;
             TgPhoneBox.Text         = _settings.TgPhone;
             TgDmOnlyBox.IsChecked   = _settings.TgDmOnly;
+            WearBridgeEnabledBox.IsChecked = _settings.WearBridgeEnabled;
+            WearBridgePromptBox.IsChecked = _settings.WearBridgeIncludePromptContext;
+            WearBridgePortBox.Text = _settings.WearBridgePort.ToString();
+            WearBridgeExternalUrlsBox.Text = _settings.WearBridgeExternalUrls;
             SpontBox.IsChecked     = _settings.SpontaneousEnabled;
             SpontIntervalBox.Text   = _settings.SpontaneousIntervalMins.ToString();
             ProactiveLevelBox.Text  = _settings.ProactiveAutonomyLevel.ToString();
@@ -137,6 +150,11 @@ namespace KokonoeAssistant
                 _settings.SpontaneousIntervalMins = Math.Clamp(spontMins, 10, 240);
             if (int.TryParse(ProactiveLevelBox.Text.Trim(), out var proactiveLevel))
                 _settings.ProactiveAutonomyLevel = Math.Clamp(proactiveLevel, 0, 3);
+            _settings.WearBridgeEnabled = WearBridgeEnabledBox.IsChecked == true;
+            _settings.WearBridgeIncludePromptContext = WearBridgePromptBox.IsChecked == true;
+            if (int.TryParse(WearBridgePortBox.Text.Trim(), out var wearPort))
+                _settings.WearBridgePort = Math.Clamp(wearPort, 1024, 65535);
+            _settings.WearBridgeExternalUrls = WearBridgeExternalUrlsBox.Text.Trim();
             _settings.MinimizeToTray     = TrayBox.IsChecked == true;
             _settings.VoiceInputEnabled  = VoiceBox.IsChecked == true;
             _settings.TtsEnabled         = TtsBox.IsChecked == true;
@@ -151,6 +169,7 @@ namespace KokonoeAssistant
 
             // Reload LLM settings to apply provider change
             ServiceContainer.LlmService?.ReloadSettings();
+            ServiceContainer.ReloadWearableBridge();
 
             DialogResult = true;
             Close();
@@ -158,6 +177,140 @@ namespace KokonoeAssistant
 
         private void Cancel_Click(object s, RoutedEventArgs e) => Close();
         private void Close_Click(object s, RoutedEventArgs e)  => Close();
+
+        protected override void OnClosed(EventArgs e)
+        {
+            _wearBridgeTimer.Stop();
+            base.OnClosed(e);
+        }
+
+        private void RefreshWearBridgeUi()
+        {
+            try
+            {
+                var bridge = ServiceContainer.WearableBridge;
+                var telemetry = ServiceContainer.WearableTelemetry.State;
+                var diagnostics = bridge.Diagnostics;
+                var connection = bridge.GetConnectionSnapshot(telemetry);
+
+                WearBridgeLinkText.Text = FormatBridgeState(connection.State);
+                WearBridgeLinkText.Foreground = BrushForWearBridgeState(connection.State);
+
+                WearBridgeStatusText.Text =
+                    $"Status: {(bridge.IsRunning ? "running" : "stopped")} | PC {bridge.PcId} | port {bridge.Port} | pending {diagnostics.PendingCommands}";
+                WearBridgeServerText.Text =
+                    $"Base {bridge.BaseUrl}; LAN URLs {bridge.LanUrls.Count}; fallback URLs {bridge.ExternalUrls.Count}; last status {FormatUtc(diagnostics.LastStatusAtUtc)}";
+                WearBridgeLinkDetailText.Text =
+                    $"paired {(connection.IsPaired ? diagnostics.LastPairedDeviceId : "-")}; authorized {FormatUtc(diagnostics.LastAuthorizedAtUtc)}; " +
+                    $"last seen {FormatUtc(connection.LastSeenAtUtc)}; reason {NullDash(connection.Reason)}";
+                WearBridgeTrafficText.Text =
+                    $"samples {diagnostics.TotalSamples}; batches {diagnostics.TotalBatchRequests}; duplicates {diagnostics.TotalDuplicateSamples}; auth failures {diagnostics.TotalAuthFailures}";
+                WearBridgeCommandText.Text =
+                    $"polls {diagnostics.TotalCommandPolls}; pending {diagnostics.PendingCommands}; acks {diagnostics.TotalCommandAcks}; " +
+                    $"queued {NullDash(diagnostics.LastQueuedCommandAction)} {FormatUtc(diagnostics.LastQueuedCommandAtUtc)}; " +
+                    $"delivered {NullDash(diagnostics.LastDeliveredCommandAction)} {FormatUtc(diagnostics.LastDeliveredCommandAtUtc)}; " +
+                    $"ack {NullDash(diagnostics.LastAckAction)} {(diagnostics.LastAckOk ? "ok" : "not ok")} {FormatUtc(diagnostics.LastCommandAckAtUtc)}";
+                WearBridgeEndpointText.Text =
+                    $"remote {NullDash(diagnostics.LastRemoteEndpoint)}; user-agent {NullDash(diagnostics.LastUserAgent)}";
+                WearBridgeSampleIdsText.Text =
+                    $"device {NullDash(diagnostics.LastDeviceId)}; accepted id {NullDash(diagnostics.LastAcceptedSampleId)}; duplicate id {NullDash(diagnostics.LastDuplicateSampleId)}";
+                WearBridgeTokenBox.Text = bridge.Token;
+                WearBridgeUrlsBox.Text = string.Join(Environment.NewLine, bridge.LanUrls.Concat(bridge.ExternalUrls).Distinct());
+                WearBridgeTelemetryText.Text =
+                    connection.TelemetryFresh
+                        ? $"Last telemetry: {telemetry.LastSampleUtc:u}; {telemetry.Summary}; battery {(telemetry.BatteryPercent?.ToString("F0") ?? "-")}%\n" +
+                          $"Bridge: last sample {FormatUtc(diagnostics.LastSampleAtUtc)}; last pair {FormatUtc(diagnostics.LastPairAtUtc)}"
+                        : $"Last telemetry: no fresh wearable sample.\n" +
+                          $"Bridge: last sample {FormatUtc(diagnostics.LastSampleAtUtc)}; last pair {FormatUtc(diagnostics.LastPairAtUtc)}";
+                WearBridgeTelemetryText.Text +=
+                    $"\nCommand ack: {diagnostics.TotalCommandAcks} total; last {NullDash(diagnostics.LastAckAction)} " +
+                    $"({(diagnostics.LastAckOk ? "ok" : "not ok")}) at {FormatUtc(diagnostics.LastCommandAckAtUtc)}; {NullDash(diagnostics.LastAckDetail)}";
+                WearBridgeLastErrorText.Text = string.IsNullOrWhiteSpace(bridge.LastError) ? "No bridge error." : bridge.LastError;
+            }
+            catch (Exception ex)
+            {
+                WearBridgeStatusText.Text = "Status: unavailable";
+                WearBridgeLinkText.Text = "ERROR";
+                WearBridgeLinkText.Foreground = BrushForWearBridgeState("ERROR");
+                WearBridgeLastErrorText.Text = ex.Message;
+            }
+        }
+
+        private void WearBridgeStart_Click(object sender, RoutedEventArgs e)
+        {
+            ServiceContainer.WearableBridge.Start();
+            RefreshWearBridgeUi();
+        }
+
+        private void WearBridgeStop_Click(object sender, RoutedEventArgs e)
+        {
+            ServiceContainer.WearableBridge.Stop();
+            RefreshWearBridgeUi();
+        }
+
+        private void WearBridgeCopyToken_Click(object sender, RoutedEventArgs e)
+        {
+            try { System.Windows.Clipboard.SetText(ServiceContainer.WearableBridge.Token); } catch { }
+        }
+
+        private void WearBridgeCopyDiagnostics_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var bridge = ServiceContainer.WearableBridge;
+                var telemetry = ServiceContainer.WearableTelemetry.State;
+                var payload = new
+                {
+                    capturedAtUtc = DateTime.UtcNow,
+                    bridge.PcId,
+                    bridge.Port,
+                    bridge.BaseUrl,
+                    bridge.LanUrls,
+                    bridge.ExternalUrls,
+                    connection = bridge.GetConnectionSnapshot(telemetry),
+                    diagnostics = bridge.Diagnostics,
+                    wearable = telemetry
+                };
+                System.Windows.Clipboard.SetText(JsonConvert.SerializeObject(payload, Formatting.Indented));
+            }
+            catch { }
+        }
+
+        private void WearBridgeRefreshPair_Click(object sender, RoutedEventArgs e)
+        {
+            ServiceContainer.WearableBridge.QueueCommand("refresh_pairing");
+            RefreshWearBridgeUi();
+        }
+
+        private void WearBridgeRestartWatch_Click(object sender, RoutedEventArgs e)
+        {
+            ServiceContainer.WearableBridge.QueueCommand("restart_service");
+            RefreshWearBridgeUi();
+        }
+
+        private void WearBridgeClearQueue_Click(object sender, RoutedEventArgs e)
+        {
+            ServiceContainer.WearableBridge.QueueCommand("clear_queue");
+            RefreshWearBridgeUi();
+        }
+
+        private static string FormatUtc(DateTime? value) => value.HasValue ? value.Value.ToString("u") : "-";
+        private static string NullDash(string? value) => string.IsNullOrWhiteSpace(value) ? "-" : value.Trim();
+        private static string FormatBridgeState(string state)
+            => string.IsNullOrWhiteSpace(state) ? "UNKNOWN" : state.Replace('_', ' ');
+
+        private static System.Windows.Media.SolidColorBrush BrushForWearBridgeState(string state)
+        {
+            var color = state switch
+            {
+                "LINKED" => System.Windows.Media.Color.FromRgb(0x22, 0xC5, 0x5E),
+                "WAITING_FOR_WATCH" => System.Windows.Media.Color.FromRgb(0xF5, 0x9E, 0x0B),
+                "WAITING_FOR_PAIR" => System.Windows.Media.Color.FromRgb(0xF5, 0x9E, 0x0B),
+                "ERROR" => System.Windows.Media.Color.FromRgb(0xEF, 0x44, 0x44),
+                _ => System.Windows.Media.Color.FromRgb(0x6B, 0x72, 0x80)
+            };
+            return new System.Windows.Media.SolidColorBrush(color);
+        }
 
         private void TitleBar_MouseDown(object s, MouseButtonEventArgs e)
         {

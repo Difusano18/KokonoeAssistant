@@ -137,7 +137,11 @@ namespace KokonoeAssistant.Services
                 })
                 .ToList();
 
-            if (LooksLikeBackgroundInsightObjective(lower) &&
+            var looksLikeBackgroundInsight =
+                LooksLikeBackgroundInsightObjective(lower) ||
+                ContainsAny(lower, "background vault scanner", "vault scanner", "obsidian", "interesting facts", "analyze notes", "\u043f\u0440\u043e\u0430\u043d\u0430\u043b\u0456\u0437\u0443\u0439", "\u043d\u043e\u0442\u0430\u0442\u043e\u043a", "\u0437\u043d\u0430\u0439\u0434\u0438 \u0446\u0456\u043a\u0430\u0432\u0456");
+
+            if (looksLikeBackgroundInsight &&
                 steps.All(s => s.Kind != KokoAgentStepKind.InsightExtraction))
             {
                 var insertAt = steps.FindIndex(s => s.Kind == KokoAgentStepKind.Respond);
@@ -147,7 +151,12 @@ namespace KokonoeAssistant.Services
                     steps[i].Order = i + 1;
             }
 
-            if (LooksLikeSystemControlObjective(lower) &&
+            var looksLikeSystemControl =
+                LooksLikeSystemControlObjective(lower) ||
+                LooksLikeGenericContextScan(lower) ||
+                ContainsAny(lower, "systemcontrol", "system control", "os info", "pc context", "local system");
+
+            if (looksLikeSystemControl &&
                 steps.All(s => s.Kind != KokoAgentStepKind.SystemControl))
             {
                 var insertAt = steps.FindIndex(s => s.Kind == KokoAgentStepKind.Respond);
@@ -220,8 +229,9 @@ RESPONSE PLAN REPAIR:
 """;
         }
 
-        private static string ClassifyIntent(string lower)
+        public static string ClassifyIntent(string lower)
         {
+            if (LooksLikeGenericContextScan(lower)) return "execute";
             if (LooksLikeLongObservationObjective(lower)) return "observe";
             if (ContainsAny(lower, "не хочу жити", "суїцид", "самоушкод", "померти")) return "crisis";
             if (LooksLikeIdentityOrVaultMemoryQuestion(lower)) return "memory";
@@ -232,124 +242,55 @@ RESPONSE PLAN REPAIR:
             if (ContainsAny(lower, "код", "build", "тест", "баг", "помилка", "stacktrace", "exception")) return "engineering";
             if (ContainsAny(lower, "\u043e\u0431\u0441\u0438\u0434\u0456\u0430\u043d", "\u043e\u0431\u0441\u0438\u0434\u0438\u0430\u043d", "\u0449\u043e \u0437\u043d\u0430\u0454\u0448 \u043f\u0440\u043e \u043c\u0435\u043d\u0435", "\u0449\u043e \u0437\u043d\u0430\u0435\u0448 \u043f\u0440\u043e \u043c\u0435\u043d\u0435", "\u0440\u043e\u0437\u043a\u0430\u0436\u0438 \u0432\u0441\u0435 \u0449\u043e \u0437\u043d\u0430\u0454\u0448", "\u0440\u043e\u0437\u043a\u0430\u0437\u0443\u0439 \u0432\u0441\u0435 \u0449\u043e \u0437\u043d\u0430\u0454\u0448", "\u043f\u0440\u043e\u0441\u043a\u0430\u043d\u0443\u0439 \u043e\u0431\u0441\u0438\u0434\u0456\u0430\u043d")) return "memory";
             if (ContainsAny(lower, "vault", "obsidian", "нотат", "пам'ят", "що знаєш про мене", "що пам")) return "memory";
-            if (ContainsAny(lower,
-                "\u043e\u0446\u0456\u043d", "\u043a\u0440\u0438\u0442\u0438", "\u044f\u043a \u0434\u0443\u043c\u0430\u0454\u0448", "\u0447\u0438 \u043d\u043e\u0440\u043c", "\u0456\u0434\u0435\u044f")) return "evaluate";
-            if (ContainsAny(lower,
-                "\u0430\u0440\u0445\u0456\u0442\u0435\u043a\u0442\u0443\u0440", "\u0441\u0438\u0441\u0442\u0435\u043c", "\u043f\u043e\u0432\u0435\u0434\u0456\u043d\u043a", "\u043e\u0441\u043e\u0431\u0438\u0441\u0442", "\u0430\u0441\u0438\u0441\u0442\u0435\u043d\u0442")) return "architecture";
-            if (ContainsAny(lower, "оцін", "крити", "як думаєш", "чи норм", "ідея",
-                    "критич", "оцін", "як думаєш", "чи норм", "ідея", "рішення", "виріши", "самостій"))
+            if (ContainsAny(lower, "\u043e\u0446\u0456\u043d", "\u043a\u0440\u0438\u0442\u0438", "\u044f\u043a \u0434\u0443\u043c\u0430\u0454\u0448", "\u0447\u0438 \u043d\u043e\u0440\u043c", "\u0456\u0434\u0435\u044f")) return "evaluate";
+            if (ContainsAny(lower, "\u0430\u0440\u0445\u0456\u0442\u0435\u043a\u0442\u0443\u0440", "\u0441\u0438\u0441\u0442\u0435\u043c", "\u043f\u043e\u0432\u0435\u0434\u0456\u043d\u043a", "\u043e\u0441\u043e\u0431\u0438\u0441\u0442", "\u0430\u0441\u0438\u0441\u0442\u0435\u043d\u0442")) return "architecture";
+            if (ContainsAny(lower, "оцін", "крити", "як думаєш", "чи норм", "ідея", "критич", "рішення", "виріши", "самостій"))
                 return "evaluate";
-            if (ContainsAny(lower, "архітектур", "система", "поведінк", "особист", "асистент",
-                    "архітектур", "систем", "поведінк", "особист", "асистент", "агент"))
+            if (ContainsAny(lower, "архітектур", "система", "поведінк", "особист", "асистент", "систем", "агент"))
                 return "architecture";
             if (ContainsAny(lower, "план", "стратег", "roadmap")) return "design";
             if (ContainsAny(lower, "поясни", "що це", "як працю")) return "explain";
             return "chat";
         }
 
-        private static string ClassifyCapability(string lower)
+        public static string ClassifyCapability(string lower)
         {
-            if (LooksLikeLongObservationObjective(lower)) return "screen_awareness";
-            if (LooksLikeIdentityOrVaultMemoryQuestion(lower)) return "vault_memory";
-            if (KokoScreenIntent.IsManualScreenScan(lower)) return "screen_awareness";
-            if (LooksLikeFullContextScanObjective(lower)) return "os_control";
-            if (ContainsAny(lower, "код", "build", "тест", "exception", "stacktrace")) return "codebase";
-            if (ContainsAny(lower, "\u043e\u0431\u0441\u0438\u0434\u0456\u0430\u043d", "\u043e\u0431\u0441\u0438\u0434\u0438\u0430\u043d", "\u0449\u043e \u0437\u043d\u0430\u0454\u0448 \u043f\u0440\u043e \u043c\u0435\u043d\u0435", "\u0440\u043e\u0437\u043a\u0430\u0436\u0438 \u0432\u0441\u0435 \u0449\u043e \u0437\u043d\u0430\u0454\u0448", "\u0440\u043e\u0437\u043a\u0430\u0437\u0443\u0439 \u0432\u0441\u0435 \u0449\u043e \u0437\u043d\u0430\u0454\u0448")) return "vault_memory";
-            if (ContainsAny(lower, "vault", "obsidian", "нотат", "пам'ят")) return "vault_memory";
-            if (ContainsAny(lower, "telegram", "тг", "бот")) return "telegram";
-            if (ContainsAny(lower, "екран", "скрін", "бачиш")) return "screen_awareness";
-            if (ContainsAny(lower, "powershell", "terminal", "команду", "команда:", "ps:", "відкрий", "запусти", "процеси", "гучність", "заблокуй пк", "вимкни монітор")) return "os_control";
-            if (ContainsAny(lower, "здоров", "сон", "пульс", "стрес")) return "health";
-            if (ContainsAny(lower, "календар", "нагад", "розклад")) return "calendar";
+            if (KokoScreenIntent.IsManualScreenScan(lower) || LooksLikeLongObservationObjective(lower)) return "screen_awareness";
+            if (LooksLikeGenericContextScan(lower) || LooksLikeSystemControlObjective(lower) || LooksLikeFullContextScanObjective(lower)) return "os_control";
+            if (LooksLikeIdentityOrVaultMemoryQuestion(lower) ||
+                ContainsAny(lower, "vault", "obsidian", "\u043e\u0431\u0441\u0438\u0434\u0456\u0430\u043d", "\u043e\u0431\u0441\u0438\u0434\u0438\u0430\u043d", "\u0449\u043e \u0437\u043d\u0430\u0454\u0448 \u043f\u0440\u043e \u043c\u0435\u043d\u0435", "\u0449\u043e \u0437\u043d\u0430\u0435\u0448 \u043f\u0440\u043e \u043c\u0435\u043d\u0435", "\u0440\u043e\u0437\u043a\u0430\u0437\u0443\u0439 \u0432\u0441\u0435 \u0449\u043e \u0437\u043d\u0430\u0454\u0448"))
+                return "vault_memory";
+            if (ContainsAny(lower, "код", "build", "тест", "баг", "помилка", "stacktrace", "exception")) return "codebase";
             return "conversation";
         }
 
-        private static bool NeedsVaultRead(string lower, string intent)
-            => intent == "memory" ||
-               ContainsAny(lower, "\u043e\u0431\u0441\u0438\u0434\u0456\u0430\u043d", "\u043e\u0431\u0441\u0438\u0434\u0438\u0430\u043d", "\u0449\u043e \u0437\u043d\u0430\u0454\u0448 \u043f\u0440\u043e \u043c\u0435\u043d\u0435", "\u0440\u043e\u0437\u043a\u0430\u0436\u0438 \u0432\u0441\u0435 \u0449\u043e \u0437\u043d\u0430\u0454\u0448", "\u0440\u043e\u0437\u043a\u0430\u0437\u0443\u0439 \u0432\u0441\u0435 \u0449\u043e \u0437\u043d\u0430\u0454\u0448", "\u043f\u0440\u043e\u0441\u043a\u0430\u043d\u0443\u0439 \u043e\u0431\u0441\u0438\u0434\u0456\u0430\u043d") ||
-               ContainsAny(lower, "що знаєш про мене", "що пам", "профіль", "досьє", "згадай", "в vault", "в obsidian");
+        public static bool NeedsVaultRead(string lower, string intent)
+            => intent == "memory" || ContainsAny(lower, "vault", "obsidian", "пам'ят", "нотат");
 
-        private static bool LooksLikeIdentityOrVaultMemoryQuestion(string lower)
+        public static bool NeedsToolUse(string lower, string capability, bool vaultRead)
+            => capability != "conversation" || vaultRead || ContainsAny(lower, "виконай", "зроби", "виправ", "гугл", "пошук");
+
+        public static bool LooksLikeIdentityOrVaultMemoryQuestion(string lower)
+            => ContainsAny(lower, "хто ти", "твоє ім'я", "що ти за асистент", "твоя архітектура");
+
+        public static bool LooksLikeGenericContextScan(string lower)
             => ContainsAny(lower,
-                "хто я",
-                "як мене звати",
-                "як мене звать",
-                "звати мене",
-                "моє ім'я",
-                "моє ім’я",
-                "моє імя",
-                "моє друге ім'я",
-                "моє інше ім'я",
-                "як мене звати по іншому",
-                "як мене називати",
-                "нікнейм",
-                "псевдонім",
-                "у vault написано моє",
-                "в vault написано моє",
-                "у vault є моє",
-                "в obsidian написано моє",
-                "в обсидіані написано моє",
-                "в обсидиані написано моє");
+                "\u0449\u043e \u043d\u043e\u0432\u043e\u0433\u043e",
+                "\u0449\u043e \u0442\u0430\u043c \u043d\u043e\u0432\u043e\u0433\u043e",
+                "what is new",
+                "what's new");
 
-        private static bool NeedsToolUse(string lower, string capability, bool needsVaultRead)
-            => needsVaultRead ||
-               capability is "codebase" or "vault_memory" or "telegram" or "screen_awareness" or "calendar" or "os_control" ||
-               LooksLikeFullContextScanObjective(lower) ||
-               ContainsAny(lower, "запусти", "перевір", "прочитай файл", "відкрий", "знайди",
-                   "запусти", "перевір", "прочитай файл", "відкрий", "знайди", "виправ", "пофікси", "додай");
-
-        private static bool LooksLikeBackgroundInsightObjective(string lower)
-            => ContainsAny(lower,
-                "background vault", "фоновий огляд", "фоновий скан", "background scanner",
-                "insight extraction", "витягни інсайт", "витягни цікаві", "знайди нові зв'язки",
-                "знайди нові зв’язки", "останні 10 змінених нотаток", "останні змінені нотатки");
-
-        private static bool LooksLikeSystemControlObjective(string lower)
-            => ContainsAny(lower,
-                "systemcontrol", "system control", "pc control", "os control",
-                "chain:", "pipeline:", "commands:", "команди:", "ланцюжок",
-                "підготуй все для кодингу", "coding workspace", "workspace for coding",
-                "focus window", "switch to", "arrange windows", "розстав вікна", "упорядкуй вікна",
-                "powershell", "pwsh", "shell:", "ps:", "команда:",
-                "процеси", "процесы", "top processes", "tasklist",
-                "що жере ram", "що жере пам", "ram", "пам'ять пк", "память пк",
-                "sysinfo", "system info", "статус пк", "стан пк",
-                "temp", "temporary", "cleanup", "clean up", "очисти temp", "місце на диску", "место на диске");
+        public static bool LooksLikeSystemControlObjective(string lower)
+            => ContainsAny(lower, "гучність", "заблокуй", "вимкни", "процеси", "скриншот");
 
         public static bool LooksLikeFullContextScanObjective(string lower)
-        {
-            lower = (lower ?? "").ToLowerInvariant();
-            if (ContainsAny(lower, "obsidian", "vault", "обсидіан", "обсидиан", "нотат", "замет"))
-                return false;
-
-            return ContainsAny(lower,
-                "scan everything", "full context", "context scan", "pc context", "what is new", "what do you see", "what can you see",
-                "\u043f\u0440\u043e\u0441\u043a\u0430\u043d\u0443\u0439 \u0432\u0441\u0435", "\u043f\u0440\u043e\u0441\u043a\u0430\u043d\u0443\u0439 \u0441\u0438\u0441\u0442\u0435\u043c\u0443", "\u043f\u0440\u043e\u0441\u043a\u0430\u043d\u0443\u0439 \u043f\u043a", "\u043f\u0440\u043e\u0441\u043a\u0430\u043d\u0443\u0439 \u043a\u043e\u043c\u043f",
-                "\u043f\u0440\u043e\u0441\u043a\u0430\u043d\u0438\u0440\u0443\u0439 \u0432\u0441\u0435", "\u043f\u0440\u043e\u0441\u043a\u0430\u043d\u0438\u0440\u0443\u0439 \u0441\u0438\u0441\u0442\u0435\u043c\u0443", "\u043f\u0440\u043e\u0441\u043a\u0430\u043d\u0438\u0440\u0443\u0439 \u043f\u043a", "\u043f\u0440\u043e\u0441\u043a\u0430\u043d\u0438\u0440\u0443\u0439 \u043a\u043e\u043c\u043f",
-                "\u0449\u043e \u0431\u0430\u0447\u0438\u0448", "\u0448\u043e \u0431\u0430\u0447\u0438\u0448", "\u0447\u0442\u043e \u0432\u0438\u0434\u0438\u0448\u044c",
-                "\u0449\u043e \u043d\u043e\u0432\u043e\u0433\u043e", "\u0448\u043e \u043d\u043e\u0432\u043e\u0433\u043e", "\u0447\u0442\u043e \u043d\u043e\u0432\u043e\u0433\u043e",
-                "\u043f\u043e\u0434\u0438\u0432\u0438\u0441\u044c \u0449\u043e \u0432\u0456\u0434\u043a\u0440\u0438\u0442\u043e", "\u0433\u043b\u044f\u043d\u044c \u0449\u043e \u0432\u0456\u0434\u043a\u0440\u0438\u0442\u043e", "\u044f\u043a\u0456 \u0432\u043a\u043b\u0430\u0434\u043a\u0438", "\u044f\u043a\u0456 \u0432\u0456\u043a\u043d\u0430",
-                "\u043a\u0430\u043a\u0438\u0435 \u0432\u043a\u043b\u0430\u0434\u043a\u0438", "\u043a\u0430\u043a\u0438\u0435 \u043e\u043a\u043d\u0430",
-                "проскануй все", "проскануй систему", "проскануй пк", "проскануй комп",
-                "просканируй все", "просканируй систему", "просканируй пк", "просканируй комп",
-                "що бачиш", "шо бачиш", "что видишь",
-                "що нового", "шо нового", "что нового",
-                "подивись що відкрито", "глянь що відкрито", "які вкладки", "які вікна",
-                "какие вкладки", "какие окна", "open tabs", "browser tabs");
-        }
+            => ContainsAny(lower, "проскануй систему", "що на екрані", "що зараз роблю");
 
         public static bool LooksLikeLongObservationObjective(string lower)
-        {
-            lower = (lower ?? "").ToLowerInvariant();
-            var explicitObserve = ContainsAny(lower,
-                "observe", "watch", "monitor", "long-term observation", "gameplay",
-                "поспостерігай", "поспостеригай", "спостерігай", "спостеригай",
-                "понаблюдай", "наблюдай", "протягом", "проаналізуй геймплей",
-                "аналізуй геймплей", "проаналізуй гру", "аналізуй гру");
-            var timed = ContainsAny(lower, "хвилин", "хв", "minutes", "minute", "min", "протягом");
-            var screenish = ContainsAny(lower, "екран", "скрін", "screen", "desktop", "монітор", "геймплей", "gameplay", "гра", "матч");
-            return (explicitObserve && screenish) || (explicitObserve && timed);
-        }
+            => ContainsAny(lower, "спостерігай", "монітор", "записуй дії");
+
+        public static bool LooksLikeBackgroundInsightObjective(string lower)
+            => ContainsAny(lower, "аналізуй нотатки", "витягни інсайти");
 
         private static string BuildMemoryPolicy(string lower, string intent)
         {
@@ -443,12 +384,6 @@ RESPONSE PLAN REPAIR:
             foreach (var step in frame.Steps) sb.AppendLine($"- {step}");
             sb.AppendLine("constraints:");
             foreach (var constraint in frame.Constraints) sb.AppendLine($"- {constraint}");
-            // var cog = cognition.BuildCognitionContext();
-            // if (!string.IsNullOrWhiteSpace(cog))
-            {
-                // sb.AppendLine("cognitive_context:");
-                // sb.AppendLine(cog);
-            }
             sb.AppendLine("rule: this is private planning, not text to quote.");
             return sb.ToString();
         }

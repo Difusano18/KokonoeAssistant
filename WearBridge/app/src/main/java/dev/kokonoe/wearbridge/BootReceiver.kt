@@ -7,8 +7,10 @@ import androidx.core.content.ContextCompat
 
 class BootReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
-        if (intent.action != Intent.ACTION_BOOT_COMPLETED) return
+        val action = intent.action ?: return
+        if (action !in setOf(Intent.ACTION_BOOT_COMPLETED, Intent.ACTION_LOCKED_BOOT_COMPLETED, Intent.ACTION_MY_PACKAGE_REPLACED)) return
         if (!BridgeSettings.load(context).autoStart) return
+        BridgeLog.append(context, "boot receiver starting service: $action")
         ContextCompat.startForegroundService(context, Intent(context, WearBridgeService::class.java))
     }
 }

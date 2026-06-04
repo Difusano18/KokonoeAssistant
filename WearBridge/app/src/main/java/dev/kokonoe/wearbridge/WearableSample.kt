@@ -1,6 +1,7 @@
 package dev.kokonoe.wearbridge
 
 data class WearableSample(
+    val sampleId: String = "",
     val timestampUtc: String,
     val deviceId: String,
     val source: String = "wear-os-bridge",
@@ -8,6 +9,9 @@ data class WearableSample(
     val ibiMs: Double? = null,
     val hrvRmssdMs: Double? = null,
     val spO2Percent: Double? = null,
+    val skinTemperatureC: Double? = null,
+    val ppgSignalQuality: Double? = null,
+    val ecgAvailable: Boolean? = null,
     val latitude: Double? = null,
     val longitude: Double? = null,
     val locationAccuracyM: Double? = null,

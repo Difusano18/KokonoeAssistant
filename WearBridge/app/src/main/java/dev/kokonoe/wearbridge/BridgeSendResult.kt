@@ -6,5 +6,9 @@ data class BridgeSendResult(
     val error: String = "",
     val pcId: String = "",
     val pcName: String = "",
-    val token: String = ""
+    val token: String = "",
+    val attempts: Int = 1,
+    val commandAction: String = "",
+    val commandId: String = "",
+    val knownBaseUrls: String = ""
 )

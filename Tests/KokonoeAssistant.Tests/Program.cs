@@ -19,9 +19,16 @@ internal static class Program
             Run("Somatic wired from pulse spike", SomaticWiredFromPulseSpike);
             Run("Somatic tired from low charge", SomaticTiredFromLowCharge);
             Run("Wearable telemetry infers likely sleep", WearableTelemetryInfersLikelySleep);
+            Run("Wearable telemetry infers stress initiative", WearableTelemetryInfersStressInitiative);
+            Run("Wearable telemetry ignores duplicate sample ids", WearableTelemetryIgnoresDuplicateSampleIds);
+            Run("Wearable telemetry reloads recent sample ids", WearableTelemetryReloadsRecentSampleIds);
             Run("Heart engine prefers fresh wearable bpm", HeartEnginePrefersFreshWearableBpm);
             Run("Wearable bridge ingests authorized sample", WearableBridgeIngestsAuthorizedSample);
+            Run("Wearable bridge ingests authorized sample batch", WearableBridgeIngestsAuthorizedSampleBatch);
+            Run("Wearable bridge dedupes replayed sample batch", WearableBridgeDedupesReplayedSampleBatch);
             Run("Wearable bridge status exposes pairing metadata", WearableBridgeStatusExposesPairingMetadata);
+            Run("Wearable bridge exposes external fallback URLs", WearableBridgeExposesExternalFallbackUrls);
+            Run("Wearable bridge diagnostics track traffic", WearableBridgeDiagnosticsTrackTraffic);
             Run("Wearable bridge pairs and rejects bad tokens", WearableBridgePairsAndRejectsBadTokens);
             Run("Wearable bridge keeps stable token and pc id", WearableBridgeKeepsStableTokenAndPcId);
             Run("Capability manifest advertises runtime routes", CapabilityManifestAdvertisesRuntimeRoutes);
@@ -339,6 +346,125 @@ internal static class Program
         finally { TryDeleteDir(dir); }
     }
 
+    private static void WearableTelemetryInfersStressInitiative()
+    {
+        var dir = TempDir();
+        try
+        {
+            var service = new KokoWearableTelemetryService(dir);
+            var start = new DateTime(2026, 6, 1, 12, 0, 0, DateTimeKind.Utc);
+
+            for (var i = 0; i < 5; i++)
+            {
+                service.Ingest(new KokoWearableSample
+                {
+                    TimestampUtc = start.AddMinutes(i),
+                    DeviceId = "galaxy-watch-8-lte",
+                    HeartRateBpm = 66,
+                    HrvRmssdMs = 45,
+                    Motion = 0.18,
+                    OnWrist = true
+                });
+            }
+
+            for (var i = 0; i < 6; i++)
+            {
+                service.Ingest(new KokoWearableSample
+                {
+                    TimestampUtc = start.AddMinutes(8 + i),
+                    DeviceId = "galaxy-watch-8-lte",
+                    HeartRateBpm = 112,
+                    HrvRmssdMs = 12,
+                    SpO2Percent = 92,
+                    Motion = 0.05,
+                    OnWrist = true,
+                    Activity = "desk"
+                });
+            }
+
+            var state = service.State;
+            AssertTrue(state.StressScore >= 0.62, "high bpm delta, low HRV and low SpO2 should infer stress");
+            AssertEqual("strained", state.RecoveryState, "high stress should classify recovery as strained");
+            AssertEqual("suggest_short_break", state.SuggestedInitiative, "strained daytime telemetry should suggest a low-risk break");
+            var prompt = service.BuildPromptBlock(start.AddMinutes(15));
+            AssertTrue(prompt.Contains("stress=", StringComparison.OrdinalIgnoreCase), "prompt should expose stress score");
+            AssertTrue(prompt.Contains("initiative=suggest_short_break", StringComparison.OrdinalIgnoreCase), "prompt should expose initiative");
+        }
+        finally { TryDeleteDir(dir); }
+    }
+
+    private static void WearableTelemetryIgnoresDuplicateSampleIds()
+    {
+        var dir = TempDir();
+        try
+        {
+            var service = new KokoWearableTelemetryService(dir);
+            var timestamp = DateTime.UtcNow;
+
+            var first = service.IngestDetailed(new KokoWearableSample
+            {
+                SampleId = "dup-1",
+                TimestampUtc = timestamp,
+                DeviceId = "watch",
+                HeartRateBpm = 72,
+                Motion = 0.2,
+                OnWrist = true
+            });
+            var duplicate = service.IngestDetailed(new KokoWearableSample
+            {
+                SampleId = "dup-1",
+                TimestampUtc = timestamp.AddSeconds(1),
+                DeviceId = "watch",
+                HeartRateBpm = 140,
+                Motion = 0.8,
+                OnWrist = true
+            });
+
+            AssertTrue(first.Accepted, "first sample id should be accepted");
+            AssertTrue(duplicate.Duplicate, "replayed sample id should be flagged as duplicate");
+            AssertTrue(!duplicate.Accepted, "duplicate sample should not be accepted");
+            AssertTrue(Math.Abs(service.State.CurrentBpm - 72) < 0.1, "duplicate sample should not overwrite state");
+            AssertEqual(1, service.RecentSamples.Count, "duplicate sample should not be added to recent samples");
+        }
+        finally { TryDeleteDir(dir); }
+    }
+
+    private static void WearableTelemetryReloadsRecentSampleIds()
+    {
+        var dir = TempDir();
+        try
+        {
+            var timestamp = DateTime.UtcNow;
+            var firstService = new KokoWearableTelemetryService(dir);
+            firstService.IngestDetailed(new KokoWearableSample
+            {
+                SampleId = "restart-dup-1",
+                TimestampUtc = timestamp,
+                DeviceId = "watch",
+                HeartRateBpm = 74,
+                Motion = 0.2,
+                OnWrist = true
+            });
+
+            var secondService = new KokoWearableTelemetryService(dir);
+            var replay = secondService.IngestDetailed(new KokoWearableSample
+            {
+                SampleId = "restart-dup-1",
+                TimestampUtc = timestamp.AddSeconds(5),
+                DeviceId = "watch",
+                HeartRateBpm = 145,
+                Motion = 0.9,
+                OnWrist = true
+            });
+
+            AssertTrue(replay.Duplicate, "replayed sample id should survive telemetry service restart");
+            AssertTrue(!replay.Accepted, "replayed sample after restart should not be accepted");
+            AssertTrue(Math.Abs(secondService.State.CurrentBpm - 74) < 0.1, "replayed sample after restart should not overwrite restored state");
+            AssertEqual(0, secondService.RecentSamples.Count, "replayed sample after restart should not be added to recent samples");
+        }
+        finally { TryDeleteDir(dir); }
+    }
+
     private static void HeartEnginePrefersFreshWearableBpm()
     {
         var dir = TempDir();
@@ -406,6 +532,113 @@ internal static class Program
         finally { TryDeleteDir(dir); }
     }
 
+    private static void WearableBridgeIngestsAuthorizedSampleBatch()
+    {
+        var dir = TempDir();
+        var port = 19500 + Random.Shared.Next(500);
+        try
+        {
+            var telemetry = new KokoWearableTelemetryService(dir);
+            using var bridge = new KokoWearableBridgeService(telemetry, dir, port);
+            bridge.Start();
+            AssertTrue(bridge.IsRunning, $"bridge should start; error={bridge.LastError}");
+
+            using var client = new System.Net.Http.HttpClient();
+            client.DefaultRequestHeaders.Add("X-Koko-Bridge-Token", bridge.Token);
+            var batch = new[]
+            {
+                new KokoWearableSample
+                {
+                    TimestampUtc = DateTime.UtcNow.AddSeconds(-10),
+                    DeviceId = "batch-watch",
+                    HeartRateBpm = 71,
+                    Motion = 0.11,
+                    OnWrist = true,
+                    SemanticLocation = "home"
+                },
+                new KokoWearableSample
+                {
+                    TimestampUtc = DateTime.UtcNow,
+                    DeviceId = "batch-watch",
+                    HeartRateBpm = 74,
+                    Motion = 0.18,
+                    OnWrist = true,
+                    SemanticLocation = "desk"
+                }
+            };
+
+            var response = client.PostAsync(
+                    $"http://localhost:{port}/api/wearable/v1/samples",
+                    new System.Net.Http.StringContent(JsonConvert.SerializeObject(batch), System.Text.Encoding.UTF8, "application/json"))
+                .GetAwaiter().GetResult();
+
+            AssertTrue(response.IsSuccessStatusCode, $"batch POST should succeed: {(int)response.StatusCode}");
+            var json = JObject.Parse(response.Content.ReadAsStringAsync().GetAwaiter().GetResult());
+            AssertEqual(2, json["count"]?.Value<int>() ?? 0, "batch response should report accepted sample count");
+            AssertEqual("batch-watch", telemetry.State.DeviceId, "batch should ingest device id");
+            AssertEqual("desk", telemetry.State.SemanticLocation, "batch should leave state at latest sample");
+            AssertTrue(Math.Abs(telemetry.State.CurrentBpm - 74) < 0.1, "batch should ingest latest heart rate");
+            AssertEqual(2L, bridge.Diagnostics.TotalSamples, "diagnostics should count each sample in batch");
+            AssertEqual(1L, bridge.Diagnostics.TotalBatchRequests, "diagnostics should count batch requests");
+        }
+        finally { TryDeleteDir(dir); }
+    }
+
+    private static void WearableBridgeDedupesReplayedSampleBatch()
+    {
+        var dir = TempDir();
+        var port = 19800 + Random.Shared.Next(500);
+        try
+        {
+            var telemetry = new KokoWearableTelemetryService(dir);
+            using var bridge = new KokoWearableBridgeService(telemetry, dir, port);
+            bridge.Start();
+            AssertTrue(bridge.IsRunning, $"bridge should start; error={bridge.LastError}");
+
+            using var client = new System.Net.Http.HttpClient();
+            client.DefaultRequestHeaders.Add("X-Koko-Bridge-Token", bridge.Token);
+            var batch = new[]
+            {
+                new KokoWearableSample
+                {
+                    SampleId = "batch-dup-1",
+                    TimestampUtc = DateTime.UtcNow.AddSeconds(-10),
+                    DeviceId = "batch-watch",
+                    HeartRateBpm = 71,
+                    OnWrist = true
+                },
+                new KokoWearableSample
+                {
+                    SampleId = "batch-dup-2",
+                    TimestampUtc = DateTime.UtcNow,
+                    DeviceId = "batch-watch",
+                    HeartRateBpm = 74,
+                    OnWrist = true
+                }
+            };
+            var content = JsonConvert.SerializeObject(batch);
+
+            var first = client.PostAsync(
+                    $"http://localhost:{port}/api/wearable/v1/samples",
+                    new System.Net.Http.StringContent(content, System.Text.Encoding.UTF8, "application/json"))
+                .GetAwaiter().GetResult();
+            var replay = client.PostAsync(
+                    $"http://localhost:{port}/api/wearable/v1/samples",
+                    new System.Net.Http.StringContent(content, System.Text.Encoding.UTF8, "application/json"))
+                .GetAwaiter().GetResult();
+
+            AssertTrue(first.IsSuccessStatusCode, "first batch should succeed");
+            AssertTrue(replay.IsSuccessStatusCode, "replayed batch should still be accepted as an idempotent retry");
+            var replayJson = JObject.Parse(replay.Content.ReadAsStringAsync().GetAwaiter().GetResult());
+            AssertEqual(0, replayJson["count"]?.Value<int>() ?? -1, "replayed batch should accept zero new samples");
+            AssertEqual(2L, bridge.Diagnostics.TotalSamples, "diagnostics should count only accepted samples");
+            AssertEqual(2L, bridge.Diagnostics.TotalBatchRequests, "diagnostics should count both batch requests");
+            AssertEqual(2L, bridge.Diagnostics.TotalDuplicateSamples, "diagnostics should count duplicate replayed samples");
+            AssertEqual(2, telemetry.RecentSamples.Count, "telemetry should store each unique sample once");
+        }
+        finally { TryDeleteDir(dir); }
+    }
+
     private static void WearableBridgeStatusExposesPairingMetadata()
     {
         var dir = TempDir();
@@ -428,6 +661,129 @@ internal static class Program
             AssertTrue(json["pcName"]?.ToString()?.Length > 0, "status should expose pc name");
             AssertTrue(json["pairingAvailable"]?.Value<bool>() == true, "status should advertise pairing");
             AssertTrue(json["urls"] is JArray { Count: > 0 }, "status should expose candidate URLs");
+        }
+        finally { TryDeleteDir(dir); }
+    }
+
+    private static void WearableBridgeExposesExternalFallbackUrls()
+    {
+        var dir = TempDir();
+        var port = 20500 + Random.Shared.Next(500);
+        try
+        {
+            var telemetry = new KokoWearableTelemetryService(dir);
+            using var bridge = new KokoWearableBridgeService(
+                telemetry,
+                dir,
+                port,
+                new[] { "192.168.1.10:8787", "http://192.168.0.10:8787", "http://192.168.1.10:8787" });
+            bridge.Start();
+            AssertTrue(bridge.IsRunning, $"bridge should start; error={bridge.LastError}");
+
+            using var client = new System.Net.Http.HttpClient();
+            var response = client.GetAsync($"http://localhost:{port}/api/wearable/v1/status")
+                .GetAwaiter().GetResult();
+            AssertTrue(response.IsSuccessStatusCode, $"status should succeed: {(int)response.StatusCode}");
+
+            var json = JObject.Parse(response.Content.ReadAsStringAsync().GetAwaiter().GetResult());
+            var external = (JArray?)json["externalUrls"] ?? new JArray();
+            AssertTrue(external.Any(x => x?.ToString() == "http://192.168.1.10:8787"), "external URLs should normalize missing scheme");
+            AssertTrue(external.Any(x => x?.ToString() == "http://192.168.0.10:8787"), "external URLs should preserve explicit URL");
+            AssertEqual(2, external.Select(x => x?.ToString()).Distinct().Count(), "external URLs should de-duplicate entries");
+            AssertTrue(((JArray?)json["urls"] ?? new JArray()).Any(x => x?.ToString() == "http://192.168.0.10:8787"), "status URLs should include external fallbacks");
+        }
+        finally { TryDeleteDir(dir); }
+    }
+
+    private static void WearableBridgeDiagnosticsTrackTraffic()
+    {
+        var dir = TempDir();
+        var port = 21200 + Random.Shared.Next(500);
+        try
+        {
+            var telemetry = new KokoWearableTelemetryService(dir);
+            using var bridge = new KokoWearableBridgeService(telemetry, dir, port);
+            bridge.Start();
+            AssertTrue(bridge.IsRunning, $"bridge should start; error={bridge.LastError}");
+
+            using var client = new System.Net.Http.HttpClient();
+            var status = client.GetAsync($"http://localhost:{port}/api/wearable/v1/status")
+                .GetAwaiter().GetResult();
+            AssertTrue(status.IsSuccessStatusCode, "status should be reachable");
+
+            var pair = client.PostAsync(
+                    $"http://localhost:{port}/api/wearable/v1/pair",
+                    new System.Net.Http.StringContent("""{"deviceId":"diag-watch"}""", System.Text.Encoding.UTF8, "application/json"))
+                .GetAwaiter().GetResult();
+            AssertTrue(pair.IsSuccessStatusCode, "pair should succeed");
+            var token = JObject.Parse(pair.Content.ReadAsStringAsync().GetAwaiter().GetResult())["token"]?.ToString() ?? "";
+
+            using var badClient = new System.Net.Http.HttpClient();
+            badClient.DefaultRequestHeaders.Add("X-Koko-Bridge-Token", "bad");
+            var bad = badClient.PostAsync(
+                    $"http://localhost:{port}/api/wearable/v1/sample",
+                    new System.Net.Http.StringContent("""{"deviceId":"diag-watch","heartRateBpm":80}""", System.Text.Encoding.UTF8, "application/json"))
+                .GetAwaiter().GetResult();
+            AssertEqual(System.Net.HttpStatusCode.Unauthorized, bad.StatusCode, "bad token should be counted as auth failure");
+
+            client.DefaultRequestHeaders.Add("X-Koko-Bridge-Token", token);
+            var sample = client.PostAsync(
+                    $"http://localhost:{port}/api/wearable/v1/sample",
+                    new System.Net.Http.StringContent("""{"sampleId":"diag-sample-1","deviceId":"diag-watch","heartRateBpm":81,"onWrist":true}""", System.Text.Encoding.UTF8, "application/json"))
+                .GetAwaiter().GetResult();
+            AssertTrue(sample.IsSuccessStatusCode, "authorized sample should succeed");
+
+            bridge.QueueCommand("clear_queue");
+            var command = client.GetAsync($"http://localhost:{port}/api/wearable/v1/command?deviceId=diag-watch")
+                .GetAwaiter().GetResult();
+            AssertTrue(command.IsSuccessStatusCode, "authorized command poll should succeed");
+            var commandJson = JObject.Parse(command.Content.ReadAsStringAsync().GetAwaiter().GetResult());
+            AssertEqual("clear_queue", commandJson["action"]?.ToString(), "queued command should be delivered");
+            var commandId = commandJson["commandId"]?.ToString() ?? "";
+            var ack = client.PostAsync(
+                    $"http://localhost:{port}/api/wearable/v1/command/ack",
+                    new System.Net.Http.StringContent(
+                        JsonConvert.SerializeObject(new { commandId, action = "clear_queue", ok = true, detail = "queued samples cleared" }),
+                        System.Text.Encoding.UTF8,
+                        "application/json"))
+                .GetAwaiter().GetResult();
+            AssertTrue(ack.IsSuccessStatusCode, "command ack should succeed");
+
+            var diagnostics = bridge.Diagnostics;
+            AssertTrue(diagnostics.TotalStatusRequests >= 1, "diagnostics should count status requests");
+            AssertEqual(1L, diagnostics.TotalPairRequests, "diagnostics should count pair requests");
+            AssertEqual(1L, diagnostics.TotalSamples, "diagnostics should count authorized samples");
+            AssertEqual(1L, diagnostics.TotalAuthFailures, "diagnostics should count auth failures");
+            AssertEqual(1L, diagnostics.TotalCommandPolls, "diagnostics should count command polls");
+            AssertEqual(1L, diagnostics.TotalCommandAcks, "diagnostics should count command acknowledgements");
+            AssertEqual("diag-watch", diagnostics.LastDeviceId, "diagnostics should remember last sample device");
+            AssertEqual("diag-watch", diagnostics.LastPairedDeviceId, "diagnostics should remember last paired device");
+            AssertEqual("diag-sample-1", diagnostics.LastAcceptedSampleId, "diagnostics should remember last accepted sample id");
+            AssertEqual("clear_queue", diagnostics.LastQueuedCommandAction, "diagnostics should remember last queued command action");
+            AssertEqual("clear_queue", diagnostics.LastDeliveredCommandAction, "diagnostics should remember last delivered command action");
+            AssertEqual("clear_queue", diagnostics.LastAckAction, "diagnostics should remember last ack action");
+            AssertTrue(diagnostics.LastAckOk, "diagnostics should remember successful ack status");
+            AssertTrue(diagnostics.LastQueuedCommandAtUtc.HasValue, "diagnostics should record last queued command time");
+            AssertTrue(diagnostics.LastDeliveredCommandAtUtc.HasValue, "diagnostics should record last delivered command time");
+            AssertTrue(diagnostics.LastAuthorizedAtUtc.HasValue, "diagnostics should record last authorized request time");
+            AssertTrue(diagnostics.LastCommandAckAtUtc.HasValue, "diagnostics should record last ack time");
+            AssertTrue(!string.IsNullOrWhiteSpace(diagnostics.LastRemoteEndpoint), "diagnostics should remember remote endpoint");
+            AssertTrue(diagnostics.LastSampleAtUtc.HasValue, "diagnostics should record last sample time");
+            var snapshot = bridge.GetConnectionSnapshot(telemetry.State);
+            AssertEqual("LINKED", snapshot.State, "connection snapshot should classify active authorized traffic as linked");
+            AssertTrue(snapshot.IsLinked, "connection snapshot should mark active bridge as linked");
+            AssertTrue(snapshot.IsPaired, "connection snapshot should mark paired watch");
+
+            var statusAfter = client.GetAsync($"http://localhost:{port}/api/wearable/v1/status")
+                .GetAwaiter().GetResult();
+            var statusJson = JObject.Parse(statusAfter.Content.ReadAsStringAsync().GetAwaiter().GetResult());
+            AssertTrue(statusJson["diagnostics"]?["totalSamples"]?.Value<long>() >= 1, "status JSON should expose diagnostics");
+            AssertEqual("diag-sample-1", statusJson["diagnostics"]?["lastAcceptedSampleId"]?.ToString(), "status JSON should expose accepted sample id");
+            AssertEqual("clear_queue", statusJson["diagnostics"]?["lastDeliveredCommandAction"]?.ToString(), "status JSON should expose delivered command action");
+            AssertTrue(!string.IsNullOrWhiteSpace(statusJson["diagnostics"]?["lastAuthorizedAtUtc"]?.ToString()), "status JSON should expose authorized time");
+            AssertEqual("clear_queue", statusJson["diagnostics"]?["lastAckAction"]?.ToString(), "status JSON should expose ack action");
+            AssertEqual("LINKED", statusJson["connection"]?["state"]?.ToString(), "status JSON should expose bridge connection state");
+            AssertTrue(statusJson["connection"]?["isLinked"]?.Value<bool>() == true, "status JSON should expose linked flag");
         }
         finally { TryDeleteDir(dir); }
     }

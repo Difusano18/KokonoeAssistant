@@ -1,7 +1,7 @@
 <Window x:Class="KokonoeAssistant.SettingsWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Settings" Width="400" Height="600"
+        Title="Settings" Width="420" Height="720"
         Background="#0E0E14" Foreground="#E0E0EE"
         WindowStyle="None" AllowsTransparency="True"
         ResizeMode="NoResize"
@@ -135,6 +135,131 @@
                                    FontFamily="Segoe UI Variable, Segoe UI"
                                    FontSize="12" VerticalAlignment="Center"/>
                     </StackPanel>
+
+                    <Rectangle Height="1" Fill="#1A1A22" Margin="0,12,0,0"/>
+
+                    <!-- WEAR BRIDGE -->
+                    <TextBlock Text="WEAR BRIDGE" Style="{StaticResource SettingsSectionHeader}"/>
+
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                        <CheckBox x:Name="WearBridgeEnabledBox" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                        <TextBlock Text="Enable desktop bridge" Foreground="#9090A8"
+                                   FontFamily="Segoe UI Variable, Segoe UI"
+                                   FontSize="12" VerticalAlignment="Center"/>
+                    </StackPanel>
+
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                        <CheckBox x:Name="WearBridgePromptBox" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                        <TextBlock Text="Include wearable context in prompts" Foreground="#9090A8"
+                                   FontFamily="Segoe UI Variable, Segoe UI"
+                                   FontSize="12" VerticalAlignment="Center"/>
+                    </StackPanel>
+
+                    <TextBlock Text="Port" Style="{StaticResource SettingsLabel}"/>
+                    <TextBox x:Name="WearBridgePortBox" Style="{StaticResource SettingInput}" Margin="0,0,0,10"/>
+
+                    <TextBlock Text="Fallback notebook URLs" Style="{StaticResource SettingsLabel}"/>
+                    <TextBox x:Name="WearBridgeExternalUrlsBox" Style="{StaticResource SettingInput}"
+                             TextWrapping="Wrap" AcceptsReturn="True" MinHeight="48"
+                             Margin="0,0,0,10"/>
+                    <TextBlock Text="One per line, for example http://192.168.1.10:8787 and http://192.168.0.10:8787"
+                               Foreground="#3A3A4E" FontFamily="Segoe UI Variable, Segoe UI"
+                               FontSize="10" Margin="0,0,0,8" TextWrapping="Wrap"/>
+
+                    <Border BorderBrush="#1A1A22" BorderThickness="1"
+                            CornerRadius="6" Padding="12" Margin="0,0,0,10" Background="#0A0A12">
+                        <StackPanel>
+                            <TextBlock x:Name="WearBridgeStatusText" Foreground="#E0E0EE"
+                                       FontFamily="Segoe UI Variable, Segoe UI"
+                                       FontSize="12" FontWeight="SemiBold" TextWrapping="Wrap"/>
+                            <TextBlock x:Name="WearBridgeLinkText" Foreground="#F59E0B"
+                                       FontFamily="Segoe UI Variable, Segoe UI"
+                                       FontSize="18" FontWeight="Bold" TextWrapping="Wrap"
+                                       Margin="0,4,0,8"/>
+                            <Grid Margin="0,0,0,8">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="88"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+
+                                <TextBlock Grid.Row="0" Grid.Column="0" Text="Server" Style="{StaticResource SettingsLabel}" Margin="0,0,8,4"/>
+                                <TextBlock x:Name="WearBridgeServerText" Grid.Row="0" Grid.Column="1" Foreground="#9090A8"
+                                           FontFamily="Segoe UI Variable, Segoe UI" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,4"/>
+
+                                <TextBlock Grid.Row="1" Grid.Column="0" Text="Link" Style="{StaticResource SettingsLabel}" Margin="0,0,8,4"/>
+                                <TextBlock x:Name="WearBridgeLinkDetailText" Grid.Row="1" Grid.Column="1" Foreground="#9090A8"
+                                           FontFamily="Segoe UI Variable, Segoe UI" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,4"/>
+
+                                <TextBlock Grid.Row="2" Grid.Column="0" Text="Traffic" Style="{StaticResource SettingsLabel}" Margin="0,0,8,4"/>
+                                <TextBlock x:Name="WearBridgeTrafficText" Grid.Row="2" Grid.Column="1" Foreground="#9090A8"
+                                           FontFamily="Segoe UI Variable, Segoe UI" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,4"/>
+
+                                <TextBlock Grid.Row="3" Grid.Column="0" Text="Commands" Style="{StaticResource SettingsLabel}" Margin="0,0,8,4"/>
+                                <TextBlock x:Name="WearBridgeCommandText" Grid.Row="3" Grid.Column="1" Foreground="#9090A8"
+                                           FontFamily="Segoe UI Variable, Segoe UI" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,4"/>
+
+                                <TextBlock Grid.Row="4" Grid.Column="0" Text="Endpoint" Style="{StaticResource SettingsLabel}" Margin="0,0,8,4"/>
+                                <TextBlock x:Name="WearBridgeEndpointText" Grid.Row="4" Grid.Column="1" Foreground="#9090A8"
+                                           FontFamily="Segoe UI Variable, Segoe UI" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,4"/>
+
+                                <TextBlock Grid.Row="5" Grid.Column="0" Text="Samples" Style="{StaticResource SettingsLabel}" Margin="0,0,8,4"/>
+                                <TextBlock x:Name="WearBridgeSampleIdsText" Grid.Row="5" Grid.Column="1" Foreground="#9090A8"
+                                           FontFamily="Segoe UI Variable, Segoe UI" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,4"/>
+                            </Grid>
+                            <TextBlock Text="Bridge token" Style="{StaticResource SettingsLabel}" Margin="0,10,0,2"/>
+                            <TextBox x:Name="WearBridgeTokenBox" Style="{StaticResource SettingInput}"
+                                     IsReadOnly="True" Margin="0,0,0,8"/>
+                            <TextBlock Text="LAN URLs" Style="{StaticResource SettingsLabel}"/>
+                            <TextBox x:Name="WearBridgeUrlsBox" Style="{StaticResource SettingInput}"
+                                     IsReadOnly="True" TextWrapping="Wrap" AcceptsReturn="True"
+                                     MinHeight="42" Margin="0,0,0,8"/>
+                            <TextBlock x:Name="WearBridgeTelemetryText" Foreground="#9090A8"
+                                       FontFamily="Segoe UI Variable, Segoe UI"
+                                       FontSize="11" TextWrapping="Wrap" Margin="0,0,0,8"/>
+                            <TextBlock x:Name="WearBridgeLastErrorText" Foreground="#F97316"
+                                       FontFamily="Segoe UI Variable, Segoe UI"
+                                       FontSize="11" TextWrapping="Wrap"/>
+
+                            <WrapPanel Margin="0,10,0,0">
+                                <Button Content="Start" Click="WearBridgeStart_Click"
+                                        Background="#1F2937" BorderBrush="#374151" BorderThickness="1"
+                                        Foreground="#E5E7EB" FontFamily="Segoe UI Variable, Segoe UI"
+                                        FontSize="12" Cursor="Hand" Padding="12,6" Margin="0,0,6,6"/>
+                                <Button Content="Stop" Click="WearBridgeStop_Click"
+                                        Background="#1F2937" BorderBrush="#374151" BorderThickness="1"
+                                        Foreground="#E5E7EB" FontFamily="Segoe UI Variable, Segoe UI"
+                                        FontSize="12" Cursor="Hand" Padding="12,6" Margin="0,0,6,6"/>
+                                <Button Content="Copy Token" Click="WearBridgeCopyToken_Click"
+                                        Background="#1F2937" BorderBrush="#374151" BorderThickness="1"
+                                        Foreground="#E5E7EB" FontFamily="Segoe UI Variable, Segoe UI"
+                                        FontSize="12" Cursor="Hand" Padding="12,6" Margin="0,0,6,6"/>
+                                <Button Content="Copy Diagnostics" Click="WearBridgeCopyDiagnostics_Click"
+                                        Background="#1F2937" BorderBrush="#374151" BorderThickness="1"
+                                        Foreground="#E5E7EB" FontFamily="Segoe UI Variable, Segoe UI"
+                                        FontSize="12" Cursor="Hand" Padding="12,6" Margin="0,0,6,6"/>
+                                <Button Content="Refresh Pair" Click="WearBridgeRefreshPair_Click"
+                                        Background="#1F2937" BorderBrush="#374151" BorderThickness="1"
+                                        Foreground="#E5E7EB" FontFamily="Segoe UI Variable, Segoe UI"
+                                        FontSize="12" Cursor="Hand" Padding="12,6" Margin="0,0,6,6"/>
+                                <Button Content="Restart Watch" Click="WearBridgeRestartWatch_Click"
+                                        Background="#1F2937" BorderBrush="#374151" BorderThickness="1"
+                                        Foreground="#E5E7EB" FontFamily="Segoe UI Variable, Segoe UI"
+                                        FontSize="12" Cursor="Hand" Padding="12,6" Margin="0,0,6,6"/>
+                                <Button Content="Clear Queue" Click="WearBridgeClearQueue_Click"
+                                        Background="#1F2937" BorderBrush="#374151" BorderThickness="1"
+                                        Foreground="#E5E7EB" FontFamily="Segoe UI Variable, Segoe UI"
+                                        FontSize="12" Cursor="Hand" Padding="12,6" Margin="0,0,6,6"/>
+                            </WrapPanel>
+                        </StackPanel>
+                    </Border>
 
                     <Rectangle Height="1" Fill="#1A1A22" Margin="0,12,0,0"/>
 

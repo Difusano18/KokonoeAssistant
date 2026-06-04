@@ -82,6 +82,12 @@ namespace KokonoeAssistant
         public int    MiniAppPort     { get; set; } = 8787;
         public string MiniAppPublicUrl { get; set; } = "";
 
+        // WearBridge
+        public bool WearBridgeEnabled { get; set; } = true;
+        public int WearBridgePort { get; set; } = 8787;
+        public bool WearBridgeIncludePromptContext { get; set; } = true;
+        public string WearBridgeExternalUrls { get; set; } = "";
+
 
 
         // Telegram UserClient (MTProto — повний акаунт)

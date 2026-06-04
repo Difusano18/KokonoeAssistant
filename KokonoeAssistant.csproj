@@ -58,4 +58,8 @@
     <!-- Markdown rendering -->
     <PackageReference Include="Markdig" Version="0.38.0" />
   </ItemGroup>
+
+  <Target Name="StopRunningKokonoeAssistant" BeforeTargets="BeforeBuild" Condition="'$(SkipKokonoePreBuildKill)' != 'true'">
+    <Exec Command="taskkill /IM KokonoeAssistant.exe /F /T &gt;nul 2&gt;nul" IgnoreExitCode="true" />
+  </Target>
 </Project>

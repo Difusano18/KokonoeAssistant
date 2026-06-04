@@ -14,6 +14,9 @@ namespace KokonoeAssistant.Services
         public double Strain { get; set; }
         public double Calm { get; set; }
         public double Volatility { get; set; }
+        public double WearableStressScore { get; set; }
+        public string WearableStressState { get; set; } = "";
+        public string WearableStressHint { get; set; } = "";
         public bool IsElevated => BpmDelta >= 14 || Strain >= 0.65;
         public bool IsVeryElevated => BpmDelta >= 26 || Strain >= 0.82;
         public bool IsLow => Bpm > 0 && BpmDelta <= -10;
@@ -28,6 +31,9 @@ namespace KokonoeAssistant.Services
         public double Arousal { get; set; }
         public double SleepHours { get; set; }
         public int? ReportedStress { get; set; }
+        public double WearableStressScore { get; set; }
+        public string WearableStressState { get; set; } = "";
+        public string WearableStressHint { get; set; } = "";
         public DateTime Now { get; set; } = DateTime.Now;
     }
 
@@ -41,6 +47,7 @@ namespace KokonoeAssistant.Services
         {
             var bpm = heart?.CurrentBpm ?? 0;
             var baseline = heart?.BaselineBpm ?? 0;
+            var wearableStress = heart?.WearableStress ?? new KokoWearableStressFrame();
 
             double sleepHours = 0;
             int? reportedStress = null;
@@ -61,6 +68,9 @@ namespace KokonoeAssistant.Services
                 Arousal = Math.Max(0, emotion.Data.PadA),
                 SleepHours = sleepHours,
                 ReportedStress = reportedStress,
+                WearableStressScore = wearableStress.Score,
+                WearableStressState = wearableStress.State,
+                WearableStressHint = wearableStress.PromptHint,
                 Now = now
             });
         }
@@ -79,6 +89,7 @@ namespace KokonoeAssistant.Services
                 bpmPressure * 0.42 +
                 input.Stress * 0.25 +
                 input.Arousal * 0.18 +
+                input.WearableStressScore * 0.20 +
                 reportedStress +
                 sleepPenalty +
                 circadianTired,
@@ -95,7 +106,10 @@ namespace KokonoeAssistant.Services
                 BpmDelta = delta,
                 Strain = strain,
                 Calm = calm,
-                Volatility = volatility
+                Volatility = volatility,
+                WearableStressScore = input.WearableStressScore,
+                WearableStressState = input.WearableStressState,
+                WearableStressHint = input.WearableStressHint
             };
 
             ApplyState(snapshot, input.Fatigue, input.Now);
@@ -112,6 +126,10 @@ namespace KokonoeAssistant.Services
             sb.AppendLine($"strain={snapshot.Strain:F2} calm={snapshot.Calm:F2} volatility={snapshot.Volatility:F2}");
             if (!string.IsNullOrWhiteSpace(snapshot.BehaviorHint))
                 sb.AppendLine($"behavior_hint={snapshot.BehaviorHint}");
+            if (!string.IsNullOrWhiteSpace(snapshot.WearableStressState))
+                sb.AppendLine($"wearable_stress={snapshot.WearableStressState} score={snapshot.WearableStressScore:F2}");
+            if (!string.IsNullOrWhiteSpace(snapshot.WearableStressHint))
+                sb.AppendLine($"wearable_hint={snapshot.WearableStressHint}");
             sb.AppendLine("rule: somatic state is not a medical diagnosis. Treat it as Kokonoe's body/context signal.");
             return sb.ToString();
         }

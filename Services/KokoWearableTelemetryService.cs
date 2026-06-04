@@ -10,6 +10,7 @@ namespace KokonoeAssistant.Services
 {
     public sealed class KokoWearableSample
     {
+        public string SampleId { get; set; } = "";
         public DateTime TimestampUtc { get; set; } = DateTime.UtcNow;
         public string DeviceId { get; set; } = "unknown";
         public string Source { get; set; } = "wearable";
@@ -17,6 +18,9 @@ namespace KokonoeAssistant.Services
         public double? IbiMs { get; set; }
         public double? HrvRmssdMs { get; set; }
         public double? SpO2Percent { get; set; }
+        public double? SkinTemperatureC { get; set; }
+        public double? PpgSignalQuality { get; set; }
+        public bool? EcgAvailable { get; set; }
         public double? Latitude { get; set; }
         public double? Longitude { get; set; }
         public double? LocationAccuracyM { get; set; }
@@ -38,6 +42,9 @@ namespace KokonoeAssistant.Services
         public double BpmDelta => CurrentBpm > 0 && BaselineBpm > 0 ? CurrentBpm - BaselineBpm : 0;
         public double? HrvRmssdMs { get; set; }
         public double? SpO2Percent { get; set; }
+        public double? SkinTemperatureC { get; set; }
+        public double? PpgSignalQuality { get; set; }
+        public bool? EcgAvailable { get; set; }
         public double? Latitude { get; set; }
         public double? Longitude { get; set; }
         public string SemanticLocation { get; set; } = "";
@@ -49,8 +56,20 @@ namespace KokonoeAssistant.Services
         public string PresenceState { get; set; } = "unknown";
         public string SleepState { get; set; } = "unknown";
         public double SleepConfidence { get; set; }
+        public double StressScore { get; set; }
+        public string RecoveryState { get; set; } = "unknown";
+        public string SuggestedInitiative { get; set; } = "";
+        public string ContextSignal { get; set; } = "";
+        public string ContextHint { get; set; } = "";
         public string Summary { get; set; } = "wearable offline";
         public bool IsFresh(DateTime nowUtc) => LastSampleUtc > DateTime.MinValue && nowUtc - LastSampleUtc <= TimeSpan.FromMinutes(3);
+    }
+
+    public sealed class KokoWearableIngestResult
+    {
+        public KokoWearableState State { get; set; } = new();
+        public bool Accepted { get; set; }
+        public bool Duplicate { get; set; }
     }
 
     public sealed class KokoWearableTelemetryService
@@ -60,6 +79,8 @@ namespace KokonoeAssistant.Services
         private readonly string _samplesPath;
         private readonly string _statePath;
         private readonly Queue<KokoWearableSample> _recent = new();
+        private readonly Queue<string> _recentSampleIds = new();
+        private readonly HashSet<string> _recentSampleIdSet = new(StringComparer.OrdinalIgnoreCase);
         private KokoWearableState _state = new();
 
         public KokoWearableTelemetryService(string dataDir)
@@ -69,6 +90,7 @@ namespace KokonoeAssistant.Services
             _samplesPath = Path.Combine(_dataDir, "wearable-telemetry.jsonl");
             _statePath = Path.Combine(_dataDir, "wearable-state.json");
             LoadState();
+            LoadRecentSampleIds();
         }
 
         public KokoWearableState State
@@ -82,20 +104,37 @@ namespace KokonoeAssistant.Services
         }
 
         public KokoWearableState Ingest(KokoWearableSample sample)
+            => IngestDetailed(sample).State;
+
+        public KokoWearableIngestResult IngestDetailed(KokoWearableSample sample)
         {
             sample ??= new KokoWearableSample();
             if (sample.TimestampUtc.Kind == DateTimeKind.Local)
                 sample.TimestampUtc = sample.TimestampUtc.ToUniversalTime();
             if (sample.TimestampUtc.Kind == DateTimeKind.Unspecified)
                 sample.TimestampUtc = DateTime.SpecifyKind(sample.TimestampUtc, DateTimeKind.Utc);
+            sample.SampleId = (sample.SampleId ?? "").Trim();
             sample.DeviceId = string.IsNullOrWhiteSpace(sample.DeviceId) ? "unknown" : sample.DeviceId.Trim();
             sample.Source = string.IsNullOrWhiteSpace(sample.Source) ? "wearable" : sample.Source.Trim();
             if (sample.HeartRateBpm is <= 25 or >= 230) sample.HeartRateBpm = null;
             if (sample.SpO2Percent is <= 50 or > 100) sample.SpO2Percent = null;
+            if (sample.SkinTemperatureC is < 25 or > 45) sample.SkinTemperatureC = null;
+            if (sample.PpgSignalQuality is < 0 or > 1) sample.PpgSignalQuality = null;
             if (sample.BatteryPercent is < 0 or > 100) sample.BatteryPercent = null;
 
             lock (_lock)
             {
+                if (IsDuplicateLocked(sample.SampleId))
+                {
+                    return new KokoWearableIngestResult
+                    {
+                        State = CloneState(_state),
+                        Accepted = false,
+                        Duplicate = true
+                    };
+                }
+
+                RememberSampleIdLocked(sample.SampleId);
                 _recent.Enqueue(sample);
                 while (_recent.Count > 720)
                     _recent.Dequeue();
@@ -103,7 +142,12 @@ namespace KokonoeAssistant.Services
                 ApplySample(sample);
                 AppendSample(sample);
                 SaveState();
-                return CloneState(_state);
+                return new KokoWearableIngestResult
+                {
+                    State = CloneState(_state),
+                    Accepted = true,
+                    Duplicate = false
+                };
             }
         }
 
@@ -120,11 +164,13 @@ freshness={freshness}
 device={NullDash(state.DeviceId)} on_wrist={state.OnWrist}
 heart={state.CurrentBpm:F0} bpm baseline={state.BaselineBpm:F0} delta={state.BpmDelta:+0;-0;0}
 sleep={state.SleepState} confidence={state.SleepConfidence:F2}
+stress={state.StressScore:F2} recovery={state.RecoveryState} initiative={NullDash(state.SuggestedInitiative)}
+context_signal={NullDash(state.ContextSignal)} context_hint={NullDash(state.ContextHint)}
 presence={state.PresenceState} activity={NullDash(state.Activity)}
 location={(state.Latitude.HasValue && state.Longitude.HasValue ? $"{state.Latitude.Value.ToString("F5", CultureInfo.InvariantCulture)},{state.Longitude.Value.ToString("F5", CultureInfo.InvariantCulture)}" : "-")} semantic_location={NullDash(state.SemanticLocation)}
-spo2={(state.SpO2Percent.HasValue ? $"{state.SpO2Percent.Value:F0}%" : "-")} battery={(state.BatteryPercent.HasValue ? $"{state.BatteryPercent.Value:F0}%" : "-")}
+hrv={(state.HrvRmssdMs.HasValue ? $"{state.HrvRmssdMs.Value:F0}ms" : "-")} spo2={(state.SpO2Percent.HasValue ? $"{state.SpO2Percent.Value:F0}%" : "-")} skin_temp={(state.SkinTemperatureC.HasValue ? $"{state.SkinTemperatureC.Value:F1}C" : "-")} ppg_quality={(state.PpgSignalQuality.HasValue ? state.PpgSignalQuality.Value.ToString("F2", CultureInfo.InvariantCulture) : "-")} battery={(state.BatteryPercent.HasValue ? $"{state.BatteryPercent.Value:F0}%" : "-")}
 summary={state.Summary}
-rule: wearable telemetry is context, not a medical diagnosis. Use it to reduce dumb follow-ups and detect likely sleep/return states.
+rule: wearable telemetry is context, not a medical diagnosis. Use it to reduce dumb follow-ups, detect likely sleep/return/stress states, and propose low-risk breaks only when useful.
 """;
         }
 
@@ -139,6 +185,9 @@ rule: wearable telemetry is context, not a medical diagnosis. Use it to reduce d
             _state.Motion = sample.Motion ?? _state.Motion;
             _state.HrvRmssdMs = sample.HrvRmssdMs ?? _state.HrvRmssdMs;
             _state.SpO2Percent = sample.SpO2Percent ?? _state.SpO2Percent;
+            _state.SkinTemperatureC = sample.SkinTemperatureC ?? _state.SkinTemperatureC;
+            _state.PpgSignalQuality = sample.PpgSignalQuality ?? _state.PpgSignalQuality;
+            _state.EcgAvailable = sample.EcgAvailable ?? _state.EcgAvailable;
             _state.BatteryPercent = sample.BatteryPercent ?? _state.BatteryPercent;
             _state.Charging = sample.Charging ?? _state.Charging;
 
@@ -163,6 +212,7 @@ rule: wearable telemetry is context, not a medical diagnosis. Use it to reduce d
         {
             var local = nowUtc.ToLocalTime();
             var recent = _recent.Where(s => nowUtc - s.TimestampUtc <= TimeSpan.FromMinutes(20)).ToList();
+            var previousSleepState = _state.SleepState;
             var avgBpm = recent.Where(s => s.HeartRateBpm.HasValue).Select(s => s.HeartRateBpm!.Value).DefaultIfEmpty(_state.CurrentBpm).Average();
             var avgMotion = recent.Where(s => s.Motion.HasValue).Select(s => s.Motion!.Value).DefaultIfEmpty(_state.Motion ?? 0).Average();
             var onWristRatio = recent.Count == 0 ? (_state.OnWrist ? 1 : 0) : recent.Count(s => s.OnWrist == true) / (double)recent.Count;
@@ -183,8 +233,46 @@ rule: wearable telemetry is context, not a medical diagnosis. Use it to reduce d
                 confidence >= 0.48 ? "drowsy_or_resting" :
                 night && lowMotion ? "quiet_night" :
                 "awake";
+
+            var stress = 0d;
+            if (_state.BaselineBpm > 0 && avgBpm >= _state.BaselineBpm + 14) stress += 0.38;
+            if ((_state.HrvRmssdMs ?? 999) < 22) stress += 0.24;
+            if ((_state.SpO2Percent ?? 100) < 93) stress += 0.16;
+            if (avgMotion <= 0.10 && !night && _state.OnWrist) stress += 0.10;
+            if ((_state.PpgSignalQuality ?? 1) < 0.45) stress -= 0.12;
+            _state.StressScore = Math.Clamp(stress, 0, 1);
+            _state.RecoveryState = _state.SleepConfidence >= 0.6 ? "resting" :
+                _state.StressScore >= 0.62 ? "strained" :
+                (_state.HrvRmssdMs ?? 0) >= 45 && avgBpm <= _state.BaselineBpm + 4 ? "recovered" :
+                "neutral";
+            _state.SuggestedInitiative = _state.SleepState == "probably_asleep" ? "stay_quiet" :
+                _state.StressScore >= 0.68 ? "suggest_short_break" :
+                avgMotion <= 0.08 && !night ? "suggest_movement" :
+                "";
             _state.PresenceState = _state.OnWrist ? "wearing_watch" : "off_wrist_or_unknown";
-            _state.Summary = $"{_state.SleepState}; bpm {avgBpm:F0}; motion {avgMotion:F2}; wrist {onWristRatio:P0}";
+            _state.ContextSignal = BuildContextSignal(previousSleepState, _state.SleepState, avgMotion, avgBpm, local);
+            _state.ContextHint = _state.ContextSignal switch
+            {
+                "likely_just_woke" => "acknowledge wake transition lightly; avoid demanding tasks immediately",
+                "post_activity" => "user may be physically activated; keep responses practical and low-friction",
+                "resting" => "lower initiative and avoid unnecessary pings",
+                "quiet_work" => "likely sedentary focus; concise task-first replies",
+                _ => ""
+            };
+            _state.Summary = $"{_state.SleepState}; {_state.RecoveryState}; stress {_state.StressScore:F2}; bpm {avgBpm:F0}; motion {avgMotion:F2}; wrist {onWristRatio:P0}";
+        }
+
+        private static string BuildContextSignal(string previousSleep, string currentSleep, double avgMotion, double avgBpm, DateTime local)
+        {
+            if (previousSleep == "probably_asleep" && currentSleep == "awake")
+                return "likely_just_woke";
+            if (avgMotion >= 0.55 && avgBpm >= 95)
+                return "post_activity";
+            if (currentSleep is "probably_asleep" or "drowsy_or_resting")
+                return "resting";
+            if (avgMotion <= 0.12 && local.Hour is >= 9 and <= 22)
+                return "quiet_work";
+            return "";
         }
 
         private void LoadState()
@@ -201,6 +289,25 @@ rule: wearable telemetry is context, not a medical diagnosis. Use it to reduce d
             }
         }
 
+        private void LoadRecentSampleIds()
+        {
+            try
+            {
+                if (!File.Exists(_samplesPath)) return;
+                foreach (var line in File.ReadLines(_samplesPath))
+                {
+                    if (string.IsNullOrWhiteSpace(line)) continue;
+                    var sample = JsonConvert.DeserializeObject<KokoWearableSample>(line);
+                    if (!string.IsNullOrWhiteSpace(sample?.SampleId))
+                        RememberSampleIdLocked(sample.SampleId.Trim());
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[Wearable] sample id cache load failed: {ex.Message}");
+            }
+        }
+
         private void SaveState()
         {
             try { File.WriteAllText(_statePath, JsonConvert.SerializeObject(_state, Formatting.Indented)); }
@@ -211,6 +318,21 @@ rule: wearable telemetry is context, not a medical diagnosis. Use it to reduce d
         {
             try { File.AppendAllText(_samplesPath, JsonConvert.SerializeObject(sample, Formatting.None) + Environment.NewLine); }
             catch (Exception ex) { Debug.WriteLine($"[Wearable] append failed: {ex.Message}"); }
+        }
+
+        private bool IsDuplicateLocked(string sampleId)
+            => !string.IsNullOrWhiteSpace(sampleId) && _recentSampleIdSet.Contains(sampleId);
+
+        private void RememberSampleIdLocked(string sampleId)
+        {
+            if (string.IsNullOrWhiteSpace(sampleId)) return;
+            _recentSampleIds.Enqueue(sampleId);
+            _recentSampleIdSet.Add(sampleId);
+            while (_recentSampleIds.Count > 1440)
+            {
+                var removed = _recentSampleIds.Dequeue();
+                _recentSampleIdSet.Remove(removed);
+            }
         }
 
         private static KokoWearableState CloneState(KokoWearableState state)

@@ -11,6 +11,7 @@ fun WearableSample.toJson(): String {
 
     return buildString {
         append("{")
+        append(stringField("sampleId", sampleId)); append(",")
         append(stringField("timestampUtc", timestampUtc)); append(",")
         append(stringField("deviceId", deviceId)); append(",")
         append(stringField("source", source)); append(",")
@@ -18,6 +19,9 @@ fun WearableSample.toJson(): String {
         append(doubleField("ibiMs", ibiMs)); append(",")
         append(doubleField("hrvRmssdMs", hrvRmssdMs)); append(",")
         append(doubleField("spO2Percent", spO2Percent)); append(",")
+        append(doubleField("skinTemperatureC", skinTemperatureC)); append(",")
+        append(doubleField("ppgSignalQuality", ppgSignalQuality)); append(",")
+        append(boolField("ecgAvailable", ecgAvailable)); append(",")
         append(doubleField("latitude", latitude)); append(",")
         append(doubleField("longitude", longitude)); append(",")
         append(doubleField("locationAccuracyM", locationAccuracyM)); append(",")

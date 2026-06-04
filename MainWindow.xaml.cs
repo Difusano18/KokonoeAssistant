@@ -1439,7 +1439,10 @@ tags: [kokonoe, live-core, diagnostics]
                 {
                     var pulseHeart = ServiceContainer.Heart;
                     var wearable = ServiceContainer.WearableTelemetry.State;
-                    var fresh = wearable.IsFresh(DateTime.UtcNow);
+                    var bridge = ServiceContainer.WearableBridge;
+                    var diagnostics = bridge.Diagnostics;
+                    var connection = bridge.GetConnectionSnapshot(wearable);
+                    var fresh = connection.TelemetryFresh;
                     var lastLocal = wearable.LastSampleUtc > DateTime.MinValue
                         ? wearable.LastSampleUtc.ToLocalTime().ToString("HH:mm:ss")
                         : "--";
@@ -1447,18 +1450,29 @@ tags: [kokonoe, live-core, diagnostics]
 
                     PulseTabBpmBig.Text = wearableCur > 0 ? $"{wearableCur:0}" : "--";
                     PulseTabCurText.Text = wearableCur > 0 ? $"{wearableCur:0.0}" : "--";
-                    PulseTabBaseText.Text = lastLocal;
-                    PulseTabHrvText.Text = string.IsNullOrWhiteSpace(wearable.DeviceId) ? "watch" : wearable.DeviceId;
+                    PulseTabBaseText.Text = wearable.BaselineBpm > 0 ? $"{wearable.BaselineBpm:0.0}" : "--";
+                    PulseTabHrvText.Text = wearable.HrvRmssdMs.HasValue ? $"{wearable.HrvRmssdMs.Value:0}" : "--";
                     PulseTabMinMaxText.Text = fresh ? wearable.SleepState : "stale";
                     PulseTabStateLabel.Text = fresh ? $"{wearable.SleepState} · {wearable.PresenceState}" : "NO FRESH WATCH DATA";
                     PulseSideBpmText.Text = wearableCur > 0 ? $"{wearableCur:0}" : "--";
                     PulseSideStateText.Text = fresh ? $"last {lastLocal} · {wearable.PresenceState}" : "waiting for Galaxy Watch sample";
+
+                    PulseTabStateLabel.Text = fresh ? $"{wearable.SleepState} / {wearable.PresenceState}" : FormatBridgeState(connection.State);
+                    PulseSideStateText.Text = fresh ? $"last {lastLocal} / {wearable.PresenceState}" : $"watch {FormatBridgeState(connection.State).ToLowerInvariant()}";
+                    UpdatePulseBridgeStrip(bridge, diagnostics, connection, wearable, fresh);
 
                     PulseVitalLog.ItemsSource = new[]
                     {
                         new { TimeStr = "pulse", BpmStr = wearableCur > 0 ? $"{wearableCur:0} bpm" : "--" },
                         new { TimeStr = "last measured", BpmStr = lastLocal },
                         new { TimeStr = "freshness", BpmStr = fresh ? "fresh" : "stale" },
+                        new { TimeStr = "link", BpmStr = FormatBridgeState(connection.State).ToLowerInvariant() },
+                        new { TimeStr = "watch app", BpmStr = connection.IsPaired ? NullDash(diagnostics.LastPairedDeviceId) : "not paired" },
+                        new { TimeStr = "bridge", BpmStr = bridge.IsRunning ? $"running:{bridge.Port}" : "stopped" },
+                        new { TimeStr = "authorized", BpmStr = FormatLocalTime(diagnostics.LastAuthorizedAtUtc) },
+                        new { TimeStr = "command poll", BpmStr = FormatLocalTime(diagnostics.LastCommandPollAtUtc) },
+                        new { TimeStr = "ack", BpmStr = $"{NullDash(diagnostics.LastAckAction)} {FormatLocalTime(diagnostics.LastCommandAckAtUtc)}" },
+                        new { TimeStr = "remote", BpmStr = NullDash(diagnostics.LastRemoteEndpoint) },
                         new { TimeStr = "device", BpmStr = string.IsNullOrWhiteSpace(wearable.DeviceId) ? "--" : wearable.DeviceId },
                         new { TimeStr = "sleep", BpmStr = wearable.SleepState },
                         new { TimeStr = "confidence", BpmStr = $"{wearable.SleepConfidence:P0}" },
@@ -1517,6 +1531,233 @@ tags: [kokonoe, live-core, diagnostics]
             catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[PulseTab] {ex.Message}"); }
         }
 
+        private void UpdatePulseBridgeStrip(
+            KokoWearableBridgeService bridge,
+            KokoWearableBridgeService.WearableBridgeDiagnostics diagnostics,
+            KokoWearableBridgeService.WearableBridgeConnectionSnapshot connection,
+            KokoWearableState wearable,
+            bool fresh)
+        {
+            PulseBridgeLinkText.Text = FormatBridgeState(connection.State);
+            PulseBridgeLinkText.Foreground = PulseBridgeBrush(connection.State);
+            PulseBridgeReasonText.Text = NullDash(connection.Reason);
+
+            PulseBridgeWatchText.Text = connection.IsPaired
+                ? $"{NullDash(diagnostics.LastPairedDeviceId)} / {(fresh ? "telemetry fresh" : "telemetry stale")}"
+                : "not paired";
+            PulseBridgeWatchDetailText.Text =
+                $"device {NullDash(wearable.DeviceId)} / poll {FormatLocalTime(diagnostics.LastCommandPollAtUtc)} / ack {FormatLocalTime(diagnostics.LastCommandAckAtUtc)}";
+
+            PulseBridgeDesktopText.Text = bridge.IsRunning ? $"server running :{bridge.Port}" : "server stopped";
+            PulseBridgeDesktopText.Foreground = bridge.IsRunning
+                ? new SolidColorBrush(MediaColor.FromRgb(0x00, 0xE6, 0x76))
+                : new SolidColorBrush(MediaColor.FromRgb(0xFF, 0xB0, 0x20));
+            PulseBridgeDesktopDetailText.Text =
+                $"samples {diagnostics.TotalSamples} / batches {diagnostics.TotalBatchRequests} / dupes {diagnostics.TotalDuplicateSamples} / auth {diagnostics.TotalAuthFailures}";
+
+            PulseBridgeLastSeenText.Text = connection.LastSeenAtUtc.HasValue
+                ? $"{FormatLocalTime(connection.LastSeenAtUtc)} / {FormatAgeSeconds(connection.LastSeenAgeSeconds)} ago"
+                : "--";
+            PulseBridgeEndpointText.Text =
+                $"remote {NullDash(diagnostics.LastRemoteEndpoint)} / queued {NullDash(diagnostics.LastQueuedCommandAction)} / delivered {NullDash(diagnostics.LastDeliveredCommandAction)}";
+
+            var settings = AppSettings.Load();
+            if (!PulseBridgePortBox.IsKeyboardFocusWithin)
+                PulseBridgePortBox.Text = settings.WearBridgePort.ToString();
+            if (!PulseBridgeUrlsInput.IsKeyboardFocusWithin)
+                PulseBridgeUrlsInput.Text = BuildPulseBridgeUrlText(settings, bridge);
+            PulseBridgePairLockText.Text =
+                $"pc {Tail(bridge.PcId, 8)} / token ...{Tail(bridge.Token, 6)}";
+            PulseBridgeSetupHintText.Text = connection.IsPaired
+                ? $"paired to {NullDash(diagnostics.LastPairedDeviceId)}; watch must use one URL above"
+                : "not paired; save URLs, then press Setup Once on watch";
+        }
+
+        private static string BuildPulseBridgeUrlText(AppSettings settings, KokoWearableBridgeService bridge)
+        {
+            var urls = bridge.LanUrls
+                .Concat(bridge.ExternalUrls)
+                .Concat(SplitBridgeUrls(settings.WearBridgeExternalUrls))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Take(6)
+                .ToList();
+            return string.Join(Environment.NewLine, urls
+                .Select(BridgeUrlToHost)
+                .Where(v => !string.IsNullOrWhiteSpace(v) && !IsLoopbackHost(v))
+                .Distinct(StringComparer.OrdinalIgnoreCase));
+        }
+
+        private static string BridgeUrlToHost(string value)
+        {
+            var text = (value ?? "").Trim();
+            if (string.IsNullOrWhiteSpace(text)) return "";
+            if (!text.StartsWith("http://", StringComparison.OrdinalIgnoreCase) &&
+                !text.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+                text = "http://" + text;
+            return Uri.TryCreate(text, UriKind.Absolute, out var uri) ? uri.Host : text;
+        }
+
+        private static bool IsLoopbackHost(string host)
+            => host.Equals("localhost", StringComparison.OrdinalIgnoreCase) ||
+               host.Equals("127.0.0.1", StringComparison.OrdinalIgnoreCase) ||
+               host.Equals("::1", StringComparison.OrdinalIgnoreCase);
+
+        private static IEnumerable<string> SplitBridgeUrls(string value)
+            => (value ?? "")
+                .Split(',', ';', '\n', '\r')
+                .Select(v => v.Trim())
+                .Where(v => !string.IsNullOrWhiteSpace(v));
+
+        private static string NormalizeBridgeUrlInput(string value, int port)
+        {
+            var trimmed = (value ?? "").Trim().TrimEnd('/');
+            if (string.IsNullOrWhiteSpace(trimmed)) return "";
+            if (!trimmed.StartsWith("http://", StringComparison.OrdinalIgnoreCase) &&
+                !trimmed.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+                trimmed = "http://" + trimmed;
+            if (Uri.TryCreate(trimmed, UriKind.Absolute, out var uri))
+            {
+                var builder = new UriBuilder(uri);
+                if (builder.Port <= 0 || uri.IsDefaultPort)
+                    builder.Port = port;
+                return builder.Uri.ToString().TrimEnd('/');
+            }
+            return trimmed;
+        }
+
+        private IReadOnlyList<string> PulseBridgeInputUrls(int port)
+            => PulseBridgeUrlsInput.Text
+                .Split(',', ';', '\n', '\r')
+                .Select(v => NormalizeBridgeUrlInput(v, port))
+                .Where(v => !string.IsNullOrWhiteSpace(v))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+        private static string FormatBridgeState(string state)
+            => string.IsNullOrWhiteSpace(state) ? "UNKNOWN" : state.Replace('_', ' ');
+
+        private static string FormatLocalTime(DateTime? value)
+            => value.HasValue ? value.Value.ToLocalTime().ToString("HH:mm:ss") : "--";
+
+        private static string FormatAgeSeconds(double? seconds)
+        {
+            if (!seconds.HasValue) return "--";
+            var value = Math.Max(0, seconds.Value);
+            return value < 90
+                ? $"{value:0}s"
+                : value < 3600
+                    ? $"{value / 60.0:0}m"
+                    : $"{value / 3600.0:0.0}h";
+        }
+
+        private static string NullDash(string? value)
+            => string.IsNullOrWhiteSpace(value) ? "--" : value.Trim();
+
+        private static string Tail(string value, int count)
+            => string.IsNullOrEmpty(value) ? "--" : value[^Math.Min(count, value.Length)..];
+
+        private static SolidColorBrush PulseBridgeBrush(string state)
+        {
+            var color = state switch
+            {
+                "LINKED" => MediaColor.FromRgb(0x00, 0xE6, 0x76),
+                "WAITING_FOR_WATCH" => MediaColor.FromRgb(0xFF, 0xB0, 0x20),
+                "WAITING_FOR_PAIR" => MediaColor.FromRgb(0xFF, 0xB0, 0x20),
+                "ERROR" => MediaColor.FromRgb(0xFF, 0x4D, 0x6D),
+                _ => MediaColor.FromRgb(0x7A, 0x88, 0xA8)
+            };
+            return new SolidColorBrush(color);
+        }
+
+        private void PulseBridgeSaveRestart_Click(object sender, RoutedEventArgs e)
+        {
+            var settings = AppSettings.Load();
+            if (int.TryParse(PulseBridgePortBox.Text.Trim(), out var port))
+                settings.WearBridgePort = Math.Clamp(port, 1024, 65535);
+            settings.WearBridgeEnabled = true;
+            var urls = PulseBridgeInputUrls(settings.WearBridgePort);
+            settings.WearBridgeExternalUrls = string.Join(Environment.NewLine, urls);
+            settings.Save();
+            ServiceContainer.ReloadWearableBridge();
+            UpdatePulseTabNumbers();
+        }
+
+        private void PulseBridgeCopySetup_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var bridge = ServiceContainer.WearableBridge;
+                var settings = AppSettings.Load();
+                var urls = PulseBridgeInputUrls(settings.WearBridgePort);
+                var setup = new StringBuilder()
+                    .AppendLine("Kokonoe WearBridge setup")
+                    .AppendLine($"Port: {settings.WearBridgePort}")
+                    .AppendLine($"PC ID: {bridge.PcId}")
+                    .AppendLine($"Token: {bridge.Token}")
+                    .AppendLine("Watch PC IPs:")
+                    .AppendLine(string.Join(Environment.NewLine, (urls.Count > 0 ? urls : bridge.LanUrls)
+                        .Select(BridgeUrlToHost)
+                        .Where(v => !IsLoopbackHost(v))))
+                    .AppendLine()
+                    .AppendLine("On watch: enter Port and PC IP 1/2, then press Bind Device.")
+                    .ToString();
+                WClipboard.SetText(setup);
+            }
+            catch { }
+        }
+
+        private void PulseBridgeFixFirewall_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var settings = AppSettings.Load();
+                var exePath = Environment.ProcessPath
+                    ?? System.Diagnostics.Process.GetCurrentProcess().MainModule?.FileName
+                    ?? Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "KokonoeAssistant.exe");
+                var tcpRule = $"Kokonoe WearBridge TCP {settings.WearBridgePort}";
+                var udpRule = $"Kokonoe WearBridge UDP {settings.WearBridgePort}";
+                const string appRule = "Kokonoe Assistant App";
+                static string Q(string value) => "\"" + value.Replace("\"", "\"\"") + "\"";
+
+                var commands = new[]
+                {
+                    $"netsh advfirewall firewall delete rule name={Q(tcpRule)} >nul 2>nul",
+                    $"netsh advfirewall firewall delete rule name={Q(udpRule)} >nul 2>nul",
+                    $"netsh advfirewall firewall delete rule name={Q(appRule)} >nul 2>nul",
+                    $"netsh advfirewall firewall add rule name={Q(tcpRule)} dir=in action=allow protocol=TCP localport={settings.WearBridgePort} profile=any",
+                    $"netsh advfirewall firewall add rule name={Q(udpRule)} dir=in action=allow protocol=UDP localport={settings.WearBridgePort} profile=any",
+                    $"netsh advfirewall firewall add rule name={Q(appRule)} dir=in action=allow program={Q(exePath)} enable=yes profile=any"
+                };
+
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = "cmd.exe",
+                    Arguments = "/c " + string.Join(" & ", commands),
+                    UseShellExecute = true,
+                    Verb = "runas",
+                    WindowStyle = System.Diagnostics.ProcessWindowStyle.Hidden
+                })?.WaitForExit(20000);
+
+                PulseBridgeSetupHintText.Text = "firewall UAC requested; press Bind Device on watch again";
+            }
+            catch (Exception ex)
+            {
+                PulseBridgeSetupHintText.Text = $"firewall rule failed: {ex.Message}";
+            }
+        }
+
+        private void PulseBridgeRefreshPair_Click(object sender, RoutedEventArgs e)
+        {
+            ServiceContainer.WearableBridge.QueueCommand("refresh_pairing");
+            UpdatePulseTabNumbers();
+        }
+
+        private void PulseBridgeRestartWatch_Click(object sender, RoutedEventArgs e)
+        {
+            ServiceContainer.WearableBridge.QueueCommand("restart_service");
+            UpdatePulseTabNumbers();
+        }
+
         private void UpdatePulseSidePanels(double currentBpm)
         {
             try
@@ -1524,13 +1765,21 @@ tags: [kokonoe, live-core, diagnostics]
                 if (DateTime.UtcNow.Ticks >= 0)
                 {
                     var wearable = ServiceContainer.WearableTelemetry.State;
-                    var fresh = wearable.IsFresh(DateTime.UtcNow);
+                    var bridge = ServiceContainer.WearableBridge;
+                    var diagnostics = bridge.Diagnostics;
+                    var connection = bridge.GetConnectionSnapshot(wearable);
+                    var fresh = connection.TelemetryFresh;
                     PulseMoodMainText.Text = fresh ? "WATCH ONLINE" : "WATCH WAITING";
                     PulseMoodDetailText.Text = fresh ? wearable.Summary : "no fresh sensor packet yet";
                     PulseMoodBar.Value = Math.Clamp(wearable.SleepConfidence * 100, 0, 100);
                     PulseSystemStatusText.Text = fresh
                         ? $"watch sample {wearable.LastSampleUtc.ToLocalTime():HH:mm:ss} · {wearable.SleepState}"
                         : "waiting for Galaxy Watch bridge";
+                    PulseMoodMainText.Text = fresh ? "WATCH ONLINE" : FormatBridgeState(connection.State);
+                    PulseMoodDetailText.Text = fresh ? wearable.Summary : NullDash(connection.Reason);
+                    PulseSystemStatusText.Text = fresh
+                        ? $"watch sample {wearable.LastSampleUtc.ToLocalTime():HH:mm:ss} / {wearable.SleepState}"
+                        : $"bridge {FormatBridgeState(connection.State).ToLowerInvariant()} / {NullDash(diagnostics.LastRemoteEndpoint)}";
 
                     var wearableNow = DateTime.Now;
                     var wearableEventBrushHot = new SolidColorBrush(MediaColor.FromRgb(0xFF, 0x4D, 0x6D));
@@ -1538,6 +1787,11 @@ tags: [kokonoe, live-core, diagnostics]
                     var wearableEventBrushWarn = new SolidColorBrush(MediaColor.FromRgb(0xFF, 0xB0, 0x20));
                     PulseRecentEvents.ItemsSource = new[]
                     {
+                        new { Time = wearableNow.ToString("HH:mm:ss"), Text = $"link: {FormatBridgeState(connection.State).ToLowerInvariant()}", Brush = connection.IsLinked ? wearableEventBrushOk : wearableEventBrushWarn },
+                        new { Time = FormatLocalTime(connection.LastSeenAtUtc), Text = $"last seen: {NullDash(connection.Reason)}", Brush = connection.IsLinked ? wearableEventBrushOk : wearableEventBrushWarn },
+                        new { Time = FormatLocalTime(diagnostics.LastPairAtUtc), Text = $"watch app: {(connection.IsPaired ? NullDash(diagnostics.LastPairedDeviceId) : "not paired")}", Brush = connection.IsPaired ? wearableEventBrushOk : wearableEventBrushWarn },
+                        new { Time = FormatLocalTime(diagnostics.LastCommandPollAtUtc), Text = $"command poll / ack: {NullDash(diagnostics.LastAckAction)}", Brush = diagnostics.LastCommandPollAtUtc.HasValue ? wearableEventBrushOk : wearableEventBrushWarn },
+                        new { Time = wearableNow.ToString("HH:mm:ss"), Text = $"bridge: {(bridge.IsRunning ? $"running:{bridge.Port}" : "stopped")} / samples {diagnostics.TotalSamples} / auth {diagnostics.TotalAuthFailures}", Brush = bridge.IsRunning ? wearableEventBrushOk : wearableEventBrushWarn },
                         new { Time = wearableNow.ToString("HH:mm:ss"), Text = fresh ? "watch telemetry fresh" : "watch telemetry stale", Brush = fresh ? wearableEventBrushOk : wearableEventBrushWarn },
                         new { Time = wearable.LastSampleUtc > DateTime.MinValue ? wearable.LastSampleUtc.ToLocalTime().ToString("HH:mm:ss") : "--", Text = $"last pulse sample: {(currentBpm > 0 ? $"{currentBpm:0} bpm" : "--")}", Brush = currentBpm > 0 ? wearableEventBrushOk : wearableEventBrushWarn },
                         new { Time = wearableNow.ToString("HH:mm:ss"), Text = $"sleep state: {wearable.SleepState}", Brush = wearable.SleepConfidence >= 0.72 ? wearableEventBrushHot : wearableEventBrushOk },
