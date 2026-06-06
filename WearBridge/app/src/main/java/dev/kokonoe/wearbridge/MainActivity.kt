@@ -15,6 +15,7 @@ import android.os.PowerManager
 import android.net.Uri
 import android.provider.Settings
 import android.text.InputType
+import android.text.TextUtils
 import android.view.Gravity
 import android.view.View
 import android.widget.Button
@@ -76,46 +77,48 @@ class MainActivity : Activity() {
         val settings = BridgeSettings.load(this)
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(12), dp(14), dp(12), dp(18))
+            setPadding(dp(10), dp(10), dp(10), dp(16))
             setBackgroundColor(Color.rgb(5, 8, 18))
         }
 
         root.addView(TextView(this).apply {
-            text = "Kokonoe Bridge"
-            textSize = 19f
+            text = "Kokonoe"
+            textSize = 18f
             typeface = Typeface.DEFAULT_BOLD
             setTextColor(Color.rgb(245, 248, 255))
             gravity = Gravity.CENTER
         })
         root.addView(TextView(this).apply {
-            text = "telemetry link"
-            textSize = 11f
-            setTextColor(Color.rgb(120, 136, 170))
+            text = "WEARABLE LINK"
+            textSize = 9f
+            typeface = Typeface.DEFAULT_BOLD
+            letterSpacing = 0.08f
+            setTextColor(Color.rgb(102, 255, 220))
             gravity = Gravity.CENTER
         })
         root.addView(primaryButton("Bind Device") {
             setupOnce()
-        }, margin(top = 14, bottom = 10).apply { height = dp(56) })
+        }, margin(top = 9, bottom = 8).apply { height = dp(48) })
 
         heroStatusText = TextView(this).apply {
-            textSize = 13f
+            textSize = 12f
             typeface = Typeface.DEFAULT_BOLD
             gravity = Gravity.CENTER
-            setPadding(dp(12), dp(11), dp(12), dp(11))
+            setPadding(dp(10), dp(9), dp(10), dp(9))
         }
-        root.addView(heroStatusText, margin(top = 12, bottom = 10))
+        root.addView(heroStatusText, margin(bottom = 8))
 
         val telemetryCard = card("Telemetry")
         val metricRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         bpmText = metric("Heart", "--")
         motionText = metric("Motion", "--")
         metricRow.addView(bpmText, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
-        metricRow.addView(space(8))
+        metricRow.addView(space(6))
         metricRow.addView(motionText, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
         telemetryCard.addView(metricRow)
-        sendText = bodyText().apply { setPadding(0, dp(8), 0, 0) }
+        sendText = bodyText().apply { setPadding(0, dp(6), 0, 0) }
         telemetryCard.addView(sendText)
-        root.addView(telemetryCard, margin(bottom = 10))
+        root.addView(telemetryCard, margin(bottom = 8))
 
         val connectionCard = card("Bind PC")
         val urls = BridgeSettings.candidateUrls(settings)
@@ -156,43 +159,44 @@ class MainActivity : Activity() {
         connectionCard.addView(tokenInput)
         connectionCard.addView(locationInput)
         connectionCard.addView(autoStartSwitch)
-        root.addView(connectionCard, margin(bottom = 10))
+        root.addView(connectionCard, margin(bottom = 8))
 
         val controlsCard = card("Controls")
         val row1 = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        row1.addView(button("Find") { findPcBridge() }, LinearLayout.LayoutParams(0, dp(48), 1f))
-        row1.addView(space(8))
-        row1.addView(button("Test") {
+        row1.addView(button("Find", Color.rgb(28, 86, 124), Color.rgb(67, 189, 255)) { findPcBridge() }, LinearLayout.LayoutParams(0, dp(44), 1f))
+        row1.addView(space(6))
+        row1.addView(button("Test", Color.rgb(48, 57, 92), Color.rgb(91, 110, 170)) {
             saveSettings()
             testBridge()
-        }, LinearLayout.LayoutParams(0, dp(48), 1f))
+        }, LinearLayout.LayoutParams(0, dp(44), 1f))
         controlsCard.addView(row1)
         val row2 = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
-            setPadding(0, dp(8), 0, 0)
+            setPadding(0, dp(6), 0, 0)
         }
-        row2.addView(button("Start") {
+        row2.addView(button("Start", Color.rgb(14, 92, 62), Color.rgb(75, 255, 190)) {
             saveSettings()
             startAfterPermissions = true
             if (requestPermissionsIfNeeded()) startBridgeAfterTest()
-        }, LinearLayout.LayoutParams(0, dp(48), 1f))
-        row2.addView(space(8))
-        row2.addView(button("Stop") {
+        }, LinearLayout.LayoutParams(0, dp(44), 1f))
+        row2.addView(space(6))
+        row2.addView(button("Stop", Color.rgb(98, 35, 54), Color.rgb(255, 92, 132)) {
             stopService(Intent(this@MainActivity, WearBridgeService::class.java))
             refreshStatus()
-        }, LinearLayout.LayoutParams(0, dp(48), 1f))
+        }, LinearLayout.LayoutParams(0, dp(44), 1f))
         controlsCard.addView(row2)
-        controlsCard.addView(button("Battery") {
+        controlsCard.addView(button("Battery", Color.rgb(71, 59, 29), Color.rgb(255, 214, 110)) {
             requestBatteryOptimizationExemption()
-        }, margin(top = 8).apply { height = dp(46) })
-        root.addView(controlsCard, margin(bottom = 10))
+        }, margin(top = 6).apply { height = dp(42) })
+        root.addView(controlsCard, margin(bottom = 8))
 
         val diagnosticsCard = card("Diagnostics")
         errorText = bodyText().apply { setTextColor(Color.rgb(255, 170, 120)) }
         detailsText = TextView(this).apply {
-            textSize = 10f
+            textSize = 9f
             setTextColor(Color.rgb(130, 145, 180))
-            setPadding(0, dp(8), 0, 0)
+            setPadding(0, dp(6), 0, 0)
+            setLineSpacing(0f, 0.92f)
         }
         diagnosticsCard.addView(errorText)
         diagnosticsCard.addView(detailsText)
@@ -523,8 +527,8 @@ class MainActivity : Activity() {
     private fun card(title: String): LinearLayout {
         return LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(12), dp(11), dp(12), dp(12))
-            background = rounded(Color.rgb(16, 25, 45), Color.rgb(40, 52, 92), 12)
+            setPadding(dp(10), dp(9), dp(10), dp(10))
+            background = rounded(Color.rgb(13, 22, 42), Color.rgb(44, 58, 102), 10)
             addView(sectionLabel(title))
         }
     }
@@ -532,23 +536,25 @@ class MainActivity : Activity() {
     private fun sectionLabel(textValue: String): TextView {
         return TextView(this).apply {
             text = textValue.uppercase()
-            textSize = 10f
+            textSize = 9f
             typeface = Typeface.DEFAULT_BOLD
             setTextColor(Color.rgb(255, 80, 120))
             gravity = Gravity.CENTER
-            setPadding(0, 0, 0, dp(8))
+            letterSpacing = 0.08f
+            setPadding(0, 0, 0, dp(7))
         }
     }
 
     private fun metric(label: String, value: String): TextView {
         return TextView(this).apply {
             text = "$label\n$value"
-            textSize = 16f
+            textSize = 13f
             typeface = Typeface.DEFAULT_BOLD
             gravity = Gravity.CENTER
             setTextColor(Color.rgb(70, 216, 255))
-            setPadding(dp(10), dp(8), dp(10), dp(8))
-            background = rounded(Color.rgb(9, 15, 30), Color.rgb(35, 45, 82), 10)
+            setPadding(dp(8), dp(7), dp(8), dp(7))
+            minHeight = dp(64)
+            background = rounded(Color.rgb(7, 13, 28), Color.rgb(35, 54, 96), 9)
         }
     }
 
@@ -560,30 +566,39 @@ class MainActivity : Activity() {
             textSize = 12f
             gravity = Gravity.CENTER
             inputType = inputTypeValue
+            ellipsize = TextUtils.TruncateAt.END
             setTextColor(Color.rgb(235, 242, 255))
             setHintTextColor(Color.rgb(100, 116, 150))
-            background = rounded(Color.rgb(8, 13, 28), Color.rgb(45, 57, 100), 10)
-            setPadding(dp(10), 0, dp(10), 0)
-            layoutParams = margin(top = 4, bottom = 6).apply { height = dp(46) }
+            background = rounded(Color.rgb(7, 12, 26), Color.rgb(46, 60, 105), 9)
+            setPadding(dp(9), 0, dp(9), 0)
+            layoutParams = margin(top = 3, bottom = 5).apply { height = dp(40) }
         }
     }
 
     private fun primaryButton(label: String, action: () -> Unit): Button {
         return button(label, action).apply {
-            textSize = 15f
+            textSize = 14f
             typeface = Typeface.DEFAULT_BOLD
-            background = rounded(Color.rgb(255, 58, 105), Color.rgb(255, 128, 160), 26)
+            background = rounded(Color.rgb(232, 51, 97), Color.rgb(255, 122, 158), 22)
         }
     }
 
     private fun button(label: String, action: () -> Unit): Button {
+        return button(label, Color.rgb(64, 45, 118), Color.rgb(103, 78, 190), action)
+    }
+
+    private fun button(label: String, fill: Int, stroke: Int, action: () -> Unit): Button {
         return Button(this).apply {
             text = label
-            textSize = 13f
+            textSize = 12f
+            typeface = Typeface.DEFAULT_BOLD
             isAllCaps = false
             gravity = Gravity.CENTER
             setTextColor(Color.rgb(235, 245, 255))
-            background = rounded(Color.rgb(72, 45, 132), Color.rgb(114, 77, 210), 22)
+            background = rounded(fill, stroke, 18)
+            minHeight = 0
+            minimumHeight = 0
+            setPadding(dp(6), 0, dp(6), 0)
             setOnClickListener { action() }
         }
     }
@@ -593,6 +608,7 @@ class MainActivity : Activity() {
             textSize = 11f
             setTextColor(Color.rgb(170, 184, 215))
             gravity = Gravity.CENTER
+            setLineSpacing(0f, 0.94f)
         }
     }
 

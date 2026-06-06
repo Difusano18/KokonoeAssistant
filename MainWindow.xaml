@@ -2210,10 +2210,15 @@
                                             <ItemsControl.ItemTemplate>
                                                 <DataTemplate>
                                                     <Grid Margin="0,2">
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="132"/>
+                                                            <ColumnDefinition Width="*"/>
+                                                        </Grid.ColumnDefinitions>
                                                         <TextBlock Text="{Binding TimeStr}" FontSize="10" FontFamily="Consolas"
-                                                                   Foreground="{DynamicResource AccentDim}"/>
-                                                        <TextBlock Text="{Binding BpmStr}" FontSize="10" FontFamily="Consolas"
-                                                                   Foreground="#FF4D6D" HorizontalAlignment="Right"/>
+                                                                   Foreground="{DynamicResource AccentDim}" TextTrimming="CharacterEllipsis"/>
+                                                        <TextBlock Grid.Column="1" Text="{Binding BpmStr}" FontSize="10" FontFamily="Consolas"
+                                                                   Foreground="#FF4D6D" TextWrapping="Wrap"
+                                                                   HorizontalAlignment="Stretch" TextAlignment="Right"/>
                                                     </Grid>
                                                 </DataTemplate>
                                             </ItemsControl.ItemTemplate>
