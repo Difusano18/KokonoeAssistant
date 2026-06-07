@@ -4840,6 +4840,10 @@ type: creator-profile
             AssertTrue(File.Exists(Path.Combine(dir, result.BackupPath.Replace('/', Path.DirectorySeparatorChar))), "profile update should write backup");
             AssertTrue(content.Contains("Операційні правила Kokonoe"), "profile should include operating rules");
             AssertTrue(content.Contains("рольплеєм") || content.Contains("рольплей"), "profile should record roleplay preference");
+            AssertTrue(content.Contains("Сигнали з останнього контексту"), "fallback profile should synthesize recent context");
+            AssertTrue(!content.Contains("Останній корисний контекст"), "profile should not dump raw recent chat");
+            AssertTrue(!content.Contains("## Службове"), "profile should not expose service metadata as profile content");
+            AssertTrue(!content.Contains("можеш обновити мій профіль", StringComparison.OrdinalIgnoreCase), "profile should not copy raw user messages");
             AssertTrue(!content.Contains("порушеного когнітивного функціонування"), "profile should remove insulting cognitive framing");
             AssertTrue(!content.Contains("anal", StringComparison.OrdinalIgnoreCase), "profile should remove explicit private tags from main profile");
         }

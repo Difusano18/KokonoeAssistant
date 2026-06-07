@@ -159,6 +159,8 @@ namespace KokonoeAssistant.Services
             sb.AppendLine("Use Ukrainian for visible prose.");
             sb.AppendLine("Preserve stable factual data from the old profile when safe.");
             sb.AppendLine("Think over the recent context and update the profile content, not just canned sections.");
+            sb.AppendLine("Do NOT copy raw chat lines into the profile. Convert them into durable preferences, current projects, boundaries, or dated observations.");
+            sb.AppendLine("Do NOT add a visible service/changelog section. Operational metadata belongs in the app reply and system log, not in the human profile note.");
             sb.AppendLine("Do not include explicit sexual tags, humiliation, medical diagnosis, or hostile psychological claims.");
             sb.AppendLine("Temporary fatigue, pulse, sleep, stress, or crisis material must be dated observations, not permanent identity traits.");
             sb.AppendLine("Must include an 'Операційні правила Kokonoe' section with: actions before roleplay; real file/status artifacts; no fake background progress.");
@@ -214,10 +216,7 @@ namespace KokonoeAssistant.Services
             if (!content.Contains("Операційні правила Kokonoe", StringComparison.OrdinalIgnoreCase))
                 content += "\n\n" + BuildRequiredRulesSection();
 
-            content += "\n\n## Службове\n" +
-                       "- Джерело оновлення: `" + profilePath + "`\n" +
-                       "- Остання інструкція: " + TrimOneLine(instruction, 260) + "\n" +
-                       "- Зміст синтезовано LLM з існуючого профілю та останнього контексту; запис виконано локальним валідованим маршрутом.\n";
+            content = RemoveProfileJunkSections(content);
             return content.TrimEnd() + "\n";
         }
 
@@ -278,13 +277,7 @@ namespace KokonoeAssistant.Services
         {
             var now = DateTime.Now;
             var facts = ExtractStableFacts(existing);
-            var userMessages = recent
-                .Where(m => string.Equals(m.Role, "user", StringComparison.OrdinalIgnoreCase))
-                .Select(m => TrimOneLine(m.Content, 180))
-                .Where(m => !string.IsNullOrWhiteSpace(m))
-                .Where(m => !LooksSensitiveOrUnsafeForProfile(m))
-                .TakeLast(10)
-                .ToList();
+            var recentSignals = BuildRecentSignals(recent);
 
             var sb = new StringBuilder();
             sb.AppendLine("---");
@@ -338,21 +331,49 @@ namespace KokonoeAssistant.Services
             sb.AppendLine("- Watch bridge вже доходив до стану live/linked; наступний фокус — стабільне зчитування реальних датчиків і використання telemetry в логіці програми.");
             sb.AppendLine();
 
-            if (userMessages.Count > 0)
+            if (recentSignals.Count > 0)
             {
-                sb.AppendLine("## Останній корисний контекст");
-                foreach (var msg in userMessages)
-                    sb.AppendLine("- " + msg);
+                sb.AppendLine("## Сигнали з останнього контексту");
+                foreach (var signal in recentSignals)
+                    sb.AppendLine("- " + signal);
                 sb.AppendLine();
             }
 
-            sb.AppendLine("## Службове");
-            sb.AppendLine("- Джерело оновлення: `" + profilePath + "`");
-            sb.AppendLine("- Остання інструкція: " + TrimOneLine(instruction, 260));
-            sb.AppendLine("- Оновлено автоматичним профільним маршрутом, без LLM-обіцянки 'зроблю потім'.");
-            sb.AppendLine();
-
             return sb.ToString();
+        }
+
+        private static List<string> BuildRecentSignals(IReadOnlyList<ChatRepository.ChatMessage> recent)
+        {
+            var userText = string.Join("\n", recent
+                .Where(m => string.Equals(m.Role, "user", StringComparison.OrdinalIgnoreCase))
+                .Select(m => m.Content ?? "")
+                .TakeLast(80));
+            var lower = userText.ToLowerInvariant();
+            var signals = new List<string>();
+
+            if (ContainsAny(lower, "рольплей", "ролплей", "без театру", "нав'язлив"))
+                signals.Add("Користувач прямо просить зменшити рольплей і прибрати театральну поведінку з робочих відповідей.");
+            if (ContainsAny(lower, "manus", "манус", "сама дум", "самостійно", "автоном"))
+                signals.Add("Очікування: система має сама планувати низькоризикові дії, виконувати їх і показувати артефакти, а не чекати покрокових команд.");
+            if (ContainsAny(lower, "профіль", "профиль", "obsidian", "обсидіан", "vault"))
+                signals.Add("Obsidian-профіль має бути живою синтезованою пам'яттю, а не сирим логом останніх повідомлень.");
+            if (ContainsAny(lower, "годин", "watch", "пульс", "датчик", "bridge"))
+                signals.Add("Wearable bridge і реальні датчики залишаються активним технічним пріоритетом.");
+
+            return signals.Distinct(StringComparer.OrdinalIgnoreCase).Take(6).ToList();
+        }
+
+        private static string RemoveProfileJunkSections(string content)
+        {
+            content = RemoveMarkdownSection(content, "Останній корисний контекст");
+            content = RemoveMarkdownSection(content, "Службове");
+            return content;
+        }
+
+        private static string RemoveMarkdownSection(string content, string heading)
+        {
+            var pattern = @"(?ms)^##\s+" + Regex.Escape(heading) + @"\s*\n.*?(?=^##\s+|\z)";
+            return Regex.Replace(content, pattern, "").TrimEnd() + "\n";
         }
 
         private static Dictionary<string, string> ExtractStableFacts(string content)
