@@ -2497,6 +2497,31 @@ tags: [kokonoe, live-core, diagnostics]
                     try { ServiceContainer.BrainEngine?.ProcessUserMessage(sendText); } catch { }
                 }, _llmCts?.Token ?? default);
 
+                var profileUpdate = await TryHandleProfileUpdateAsync(sendText, _llmCts?.Token ?? default);
+                if (profileUpdate.Handled)
+                {
+                    RemoveThinkingBubble();
+                    var replyVm = new ChatMessageVm { Role = "assistant", Content = "" };
+                    var replyTb = AddMessageBubble(replyVm);
+                    if (replyTb != null)
+                        await TypeIntoAsync(replyTb, profileUpdate.Reply, _llmCts?.Token ?? default);
+                    else
+                        replyVm.Content = profileUpdate.Reply;
+                    try
+                    {
+                        ServiceContainer.ChatRepository.InsertMessage(new ChatRepository.ChatMessage
+                        {
+                            Content = profileUpdate.Reply,
+                            Role = "assistant",
+                            Author = "Kokonoe",
+                            Timestamp = DateTime.Now
+                        });
+                    }
+                    catch { }
+                    _ = Task.Run(() => ServiceContainer.ChatLogger.LogExchange("app", sendText, profileUpdate.Reply));
+                    return;
+                }
+
                 if (TryStartObservationAgentTask(sendText, out var observationReply))
                 {
                     RemoveThinkingBubble();
@@ -3434,6 +3459,25 @@ LIVE RESPONSE STYLE
 
         private static bool ContainsAny(string text, params string[] values)
             => values.Any(v => text.Contains(v, StringComparison.OrdinalIgnoreCase));
+
+        private async Task<(bool Handled, string Reply)> TryHandleProfileUpdateAsync(string text, CancellationToken ct)
+        {
+            if (!KokoProfileUpdateService.LooksLikeProfileUpdateRequest(text))
+                return (false, "");
+
+            try
+            {
+                await ShowKokoActivityAsync("Obsidian: оновлюю профіль");
+                var result = await Task.Run(() =>
+                    ServiceContainer.ProfileUpdater.UpdateProfileFromRecentContext(text), ct);
+                return (true, result.ToUserReply());
+            }
+            catch (Exception ex)
+            {
+                KokoSystemLog.Write("PROFILE", "UI route failed: " + ex.Message);
+                return (true, "Профіль не оновлено: " + ex.Message);
+            }
+        }
 
         private bool TryHandleObsidianCommandOrFollowup(string text, out string reply)
         {
@@ -7940,6 +7984,32 @@ tags: [kokonoe, dashboard, live]
                     return;
                 }
 
+                var profileUpdate = await TryHandleProfileUpdateAsync(text, ct);
+                if (profileUpdate.Handled)
+                {
+                    await Dispatcher.InvokeAsync(() =>
+                    {
+                        _tgMessages.Add($"[Kokonoe]: {profileUpdate.Reply}");
+                        TgScroll.ScrollToBottom();
+                        AddMessageBubble(new ChatMessageVm { Role = "user", Content = $"[TG: {from}] {text}" });
+                        AddMessageBubble(new ChatMessageVm { Role = "assistant", Content = profileUpdate.Reply });
+                    });
+                    try { await bot.SendMessage(chatId, profileUpdate.Reply, cancellationToken: ct); } catch { }
+                    try
+                    {
+                        ServiceContainer.ChatRepository.InsertMessage(new ChatRepository.ChatMessage
+                        {
+                            Content = profileUpdate.Reply,
+                            Role = "assistant",
+                            Author = "Kokonoe",
+                            Timestamp = DateTime.Now
+                        });
+                    }
+                    catch { }
+                    _ = Task.Run(() => ServiceContainer.ChatLogger.LogExchange("tg", text, profileUpdate.Reply));
+                    return;
+                }
+
                 if (TryHandleObsidianCommandOrFollowup(text, out var obsidianReply))
                 {
                     await Dispatcher.InvokeAsync(() =>
@@ -8671,6 +8741,32 @@ tags: [kokonoe, dashboard, live]
                     }
                     catch { }
                     await svc.SendAsync(msg.ChatId, controlCommand.Reply, _tgUserCts.Token);
+                    return;
+                }
+
+                var profileUpdate = await TryHandleProfileUpdateAsync(msg.Text, _tgUserCts.Token);
+                if (profileUpdate.Handled)
+                {
+                    await Dispatcher.InvokeAsync(() =>
+                    {
+                        _tgMessages.Add($"[Kokonoe в†’ {msg.ChatName}]: {profileUpdate.Reply}");
+                        TgScroll.ScrollToBottom();
+                        AddMessageBubble(new ChatMessageVm { Role = "user", Content = $"[TG {msg.Sender}]: {msg.Text}" });
+                        AddMessageBubble(new ChatMessageVm { Role = "assistant", Content = profileUpdate.Reply });
+                    });
+                    try
+                    {
+                        ServiceContainer.ChatRepository.InsertMessage(new ChatRepository.ChatMessage
+                        {
+                            Content = profileUpdate.Reply,
+                            Role = "assistant",
+                            Author = "Kokonoe",
+                            Timestamp = DateTime.Now
+                        });
+                    }
+                    catch { }
+                    await svc.SendAsync(msg.ChatId, profileUpdate.Reply, _tgUserCts.Token);
+                    _ = Task.Run(() => ServiceContainer.ChatLogger.LogExchange("tg-user", msg.Text, profileUpdate.Reply));
                     return;
                 }
 

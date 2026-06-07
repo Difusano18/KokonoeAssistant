@@ -233,6 +233,7 @@ RESPONSE PLAN REPAIR:
         {
             if (LooksLikeGenericContextScan(lower)) return "execute";
             if (LooksLikeLongObservationObjective(lower)) return "observe";
+            if (KokoProfileUpdateService.LooksLikeProfileUpdateRequest(lower)) return "execute";
             if (ContainsAny(lower, "не хочу жити", "суїцид", "самоушкод", "померти")) return "crisis";
             if (LooksLikeIdentityOrVaultMemoryQuestion(lower)) return "memory";
             if (KokoScreenIntent.IsManualScreenScan(lower)) return "screen";
@@ -257,6 +258,7 @@ RESPONSE PLAN REPAIR:
         {
             if (KokoScreenIntent.IsManualScreenScan(lower) || LooksLikeLongObservationObjective(lower)) return "screen_awareness";
             if (LooksLikeGenericContextScan(lower) || LooksLikeSystemControlObjective(lower) || LooksLikeFullContextScanObjective(lower)) return "os_control";
+            if (KokoProfileUpdateService.LooksLikeProfileUpdateRequest(lower)) return "vault_memory";
             if (LooksLikeIdentityOrVaultMemoryQuestion(lower) ||
                 ContainsAny(lower, "vault", "obsidian", "\u043e\u0431\u0441\u0438\u0434\u0456\u0430\u043d", "\u043e\u0431\u0441\u0438\u0434\u0438\u0430\u043d", "\u0449\u043e \u0437\u043d\u0430\u0454\u0448 \u043f\u0440\u043e \u043c\u0435\u043d\u0435", "\u0449\u043e \u0437\u043d\u0430\u0435\u0448 \u043f\u0440\u043e \u043c\u0435\u043d\u0435", "\u0440\u043e\u0437\u043a\u0430\u0437\u0443\u0439 \u0432\u0441\u0435 \u0449\u043e \u0437\u043d\u0430\u0454\u0448"))
                 return "vault_memory";
@@ -265,7 +267,7 @@ RESPONSE PLAN REPAIR:
         }
 
         public static bool NeedsVaultRead(string lower, string intent)
-            => intent == "memory" || ContainsAny(lower, "vault", "obsidian", "пам'ят", "нотат");
+            => intent == "memory" || KokoProfileUpdateService.LooksLikeProfileUpdateRequest(lower) || ContainsAny(lower, "vault", "obsidian", "пам'ят", "нотат", "\u043f\u0440\u043e\u0444\u0456\u043b");
 
         public static bool NeedsToolUse(string lower, string capability, bool vaultRead)
             => capability != "conversation" || vaultRead || ContainsAny(lower, "виконай", "зроби", "виправ", "гугл", "пошук");

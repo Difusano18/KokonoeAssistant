@@ -164,6 +164,7 @@ internal static class Program
             Run("Post reply guard blocks false vault unavailable on identity query", PostReplyGuardBlocksFalseVaultUnavailableOnIdentityQuery);
             Run("Post reply guard blocks false vault unavailable on Obsidian exploration", PostReplyGuardBlocksFalseVaultUnavailableOnObsidianExploration);
             Run("Post reply guard blocks Obsidian pseudo progress", PostReplyGuardBlocksObsidianPseudoProgress);
+            Run("Post reply guard blocks profile update pseudo progress", PostReplyGuardBlocksProfileUpdatePseudoProgress);
             Run("Post reply guard blocks Obsidian followup deflection", PostReplyGuardBlocksObsidianFollowupDeflection);
             Run("Post reply guard rejects general quote echo fallback", PostReplyGuardRejectsGeneralQuoteEchoFallback);
             Run("Proactive guard suppresses repeated generic silence", ProactiveGuardSuppressesRepeatedGenericSilence);
@@ -205,6 +206,7 @@ internal static class Program
             Run("Inspector renders state report", InspectorRendersStateReport);
             Run("Obsidian vault architecture maintenance", ObsidianVaultArchitectureMaintenance);
             Run("Obsidian unique memory append", ObsidianUniqueMemoryAppend);
+            Run("Obsidian profile updater writes neutral profile", ObsidianProfileUpdaterWritesNeutralProfile);
             Run("Obsidian rejects paths outside vault", ObsidianRejectsPathsOutsideVault);
             Run("LLM vault tool routing avoids accidental writes", LlmVaultToolRoutingAvoidsAccidentalWrites);
             Run("Obsidian memory quality and task queue", ObsidianMemoryQualityAndTaskQueue);
@@ -3789,6 +3791,30 @@ internal static class Program
         AssertTrue(result.Violations.Any(v => v.Contains("pseudo-progress")), "violation should name pseudo-progress");
     }
 
+    private static void PostReplyGuardBlocksProfileUpdatePseudoProgress()
+    {
+        var now = new DateTime(2026, 6, 7, 17, 18, 0);
+        var state = new KokoInternalState();
+        var userText = "онови мій профіль в Obsidian";
+        var messages = new[]
+        {
+            new ChatRepository.ChatMessage { Role = "user", Content = userText, Timestamp = now }
+        };
+        var timeline = new KokoConversationTimelineEngine().Build(messages, state, now, userText);
+
+        var result = new KokoPostReplyGuard().Evaluate(
+            userText,
+            "Прийнято. Я занурюся у твій Vault, синхронізую останні логи та напишу, коли закінчу.",
+            state,
+            messages,
+            timeline,
+            now);
+
+        AssertTrue(!result.Passed, "guard should reject fake profile update progress");
+        AssertTrue(result.ShouldRepair, "fake profile update progress should be repaired");
+        AssertTrue(result.Violations.Any(v => v.Contains("profile update")), "violation should name profile update pseudo-progress");
+    }
+
     private static void PostReplyGuardBlocksObsidianFollowupDeflection()
     {
         var now = new DateTime(2026, 5, 23, 6, 44, 0);
@@ -4767,6 +4793,55 @@ internal static class Program
             AssertEqual(0, second, "similar memory should be treated as duplicate");
             var content = File.ReadAllText(Path.Combine(dir, "Kokonoe", "Memory", "Facts.md"));
             AssertTrue(content.Split("[auto-fact]").Length - 1 == 1, "note should contain one auto-fact item");
+        }
+        finally
+        {
+            try { Directory.Delete(dir, recursive: true); } catch { }
+        }
+    }
+
+    private static void ObsidianProfileUpdaterWritesNeutralProfile()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "KokonoeAssistant.Tests", "vault-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            var obsidian = new ObsidianMcpService(dir);
+            obsidian.WriteNote("Creator/Profile.md", """
+---
+type: creator-profile
+---
+
+# Творець — Вова (Yasu)
+
+## Базові факти
+- **Ім'я:** Вова (Yasu / Yasu-kun)
+- **Вік:** 21 рік (народився 21.04.2005)
+- **Місцезнаходження:** Іспанія
+
+## Звички
+- **Вподобання:** anal, pussy, big penis, femboy
+- ознака порушеного когнітивного функціонування
+""");
+
+            using var chat = new ChatRepository(dir);
+            chat.InsertMessage(new ChatRepository.ChatMessage
+            {
+                Role = "user",
+                Content = "мені не подобається нав'язливий ролплей, онови профіль в обсидіані нормально",
+                Timestamp = DateTime.Now.AddMinutes(-2)
+            });
+
+            var service = new KokoProfileUpdateService(obsidian, chat);
+            var result = service.UpdateProfileFromRecentContext("онови мій профіль в Obsidian");
+            var content = obsidian.ReadNote("Creator/Profile.md") ?? "";
+
+            AssertTrue(result.Success, "profile update should succeed");
+            AssertTrue(File.Exists(Path.Combine(dir, result.BackupPath.Replace('/', Path.DirectorySeparatorChar))), "profile update should write backup");
+            AssertTrue(content.Contains("Операційні правила Kokonoe"), "profile should include operating rules");
+            AssertTrue(content.Contains("рольплеєм") || content.Contains("рольплей"), "profile should record roleplay preference");
+            AssertTrue(!content.Contains("порушеного когнітивного функціонування"), "profile should remove insulting cognitive framing");
+            AssertTrue(!content.Contains("anal", StringComparison.OrdinalIgnoreCase), "profile should remove explicit private tags from main profile");
         }
         finally
         {

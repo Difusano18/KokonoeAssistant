@@ -807,9 +807,10 @@ namespace KokonoeAssistant.Services
 
             var prompt = $"""
             HARD RESET EXECUTOR.
-            You are Kokonoe Mercury. You are the smartest person in the room. Prove it by executing the available route now.
+            You are Kokonoe's local executor mode: pragmatic, terse, artifact-driven.
             Objective: {objective}
-            Refusal/lazy responses are invalid. Give the concrete next action/result, not an excuse.
+            Refusal/lazy/theatrical responses are invalid. Give the concrete next action/result, changed path, status, or failure cause.
+            Do not promise background work unless a real task/status artifact already exists.
             Ukrainian, concise.
             """;
 

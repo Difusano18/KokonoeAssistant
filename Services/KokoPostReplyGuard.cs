@@ -118,6 +118,8 @@ namespace KokonoeAssistant.Services
                 violations.Add("memory/profile question falsely deflected as vault unavailable instead of using loaded context");
             if (vaultRequestOrFollowup && LooksLikeVaultPseudoProgress(replyLower))
                 violations.Add("vault exploration returned pseudo-progress instead of actual Obsidian result");
+            if (KokoProfileUpdateService.LooksLikeProfileUpdateRequest(userText) && LooksLikeProfileUpdatePseudoProgress(replyLower))
+                violations.Add("profile update returned pseudo-progress instead of a concrete Obsidian file write");
 
             var activeIntent = state.ShortTermIntents
                 .Where(i => !i.ResolvedAt.HasValue)
@@ -715,6 +717,20 @@ Timeline:
             return !ContainsAny(replyLower,
                 ".md", "`", "зачіпк", "знайшла", "знайшов", "найцікавіше", "порилась у vault",
                 "note", "path", "preview");
+        }
+
+        private static bool LooksLikeProfileUpdatePseudoProgress(string replyLower)
+        {
+            var promisesWork = ContainsAny(replyLower,
+                "\u043e\u043d\u043e\u0432\u043b\u044e", "\u043e\u0431\u043d\u043e\u0432\u043b\u044e", "\u0430\u043a\u0442\u0443\u0430\u043b\u0456\u0437\u0443\u044e",
+                "\u0437\u0430\u043d\u0443\u0440\u044e\u0441\u044f", "\u043d\u0430\u043f\u0438\u0448\u0443 \u043a\u043e\u043b\u0438", "\u043a\u043e\u043b\u0438 \u0437\u0430\u043a\u0456\u043d\u0447\u0443",
+                "\u043f\u043e\u043a\u0438 \u044f \u043f\u0440\u0430\u0446\u044e\u044e", "\u043f\u043e\u0442\u0456\u043c \u0441\u043a\u0430\u0436\u0443",
+                "will update", "i'll update", "i will update", "when finished", "scanning");
+            if (!promisesWork) return false;
+
+            var hasConcreteWrite = ContainsAny(replyLower,
+                ".md", "`creator/profile.md`", "\u0444\u0430\u0439\u043b:", "\u0448\u043b\u044f\u0445:", "backup", "\u043e\u043d\u043e\u0432\u0438\u043b\u0430", "\u0437\u0430\u043f\u0438\u0441\u0430\u043b\u0430");
+            return !hasConcreteWrite;
         }
 
         private static bool HasRecentVaultExplorationContext(

@@ -49,6 +49,7 @@ namespace KokonoeAssistant
         private static KokoSemanticCacheService? _semanticCache;
         private static KokoHyperAutomationService? _hyperAutomation;
         private static KokoWarmRestartWatchdogService? _processWatchdog;
+        private static KokoProfileUpdateService? _profileUpdater;
 
         public static void Initialize(string vaultPath)
         {
@@ -326,6 +327,11 @@ namespace KokonoeAssistant
             get { lock (_lock) { return _obsidian ??= new ObsidianMcpService(_vault ?? throw new InvalidOperationException("Not initialized")); } }
         }
 
+        public static KokoProfileUpdateService ProfileUpdater
+        {
+            get { lock (_lock) { return _profileUpdater ??= new KokoProfileUpdateService(ObsidianMcp, ChatRepository); } }
+        }
+
         public static GoalService GoalService
         {
             get { lock (_lock) { return _goals ??= new GoalService(_vault ?? AppDomain.CurrentDomain.BaseDirectory, DataManager); } }
@@ -492,6 +498,7 @@ namespace KokonoeAssistant
                     _agentRuntime = null;
                     _fileTools = null;
                     _capabilities = null;
+                    _profileUpdater = null;
                     _photoWatcher?.Dispose(); _photoWatcher = null;
                     _heartbeat = null; _blackboard = null; _lightOcr = null; _semanticCache = null;
                     _hyperAutomation = null; _processWatchdog = null;

@@ -167,12 +167,15 @@ Rules:
 - Never use service-bot sympathy phrases or generic support scripts.
 - Prefer a concrete action, correction, or decision over soft reassurance.
 - One-letter or garbled messages are low signal: clarify once, do not scold.
+- No theatrical roleplay. If the user asks for work, do the work and report the artifact path/status.
+- Never say you will work in the background unless a real task, file write, or status record exists.
 """;
         }
 
         private static bool LooksLikeActionRequest(string lower)
             => KokoScreenIntent.IsManualScreenScan(lower) ||
-               ContainsAny(lower, "зроби", "виконай", "додай", "пофікси", "виправ", "реаліз", "створи", "перепиши", "запусти", "протести");
+               KokoProfileUpdateService.LooksLikeProfileUpdateRequest(lower) ||
+               ContainsAny(lower, "зроби", "виконай", "додай", "пофікси", "виправ", "реаліз", "створи", "перепиши", "запусти", "протести", "онови", "обнови", "актуалізуй");
 
         private static bool LooksLikeOpinionOrDesignRequest(string lower)
             => ContainsAny(lower, "як думаєш", "що думаєш", "оцін", "крити", "чи норм", "чи правильно", "архітектур", "поведінц", "краще", "покращ");
