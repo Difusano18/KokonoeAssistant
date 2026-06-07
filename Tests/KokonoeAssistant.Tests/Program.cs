@@ -43,6 +43,7 @@ internal static class Program
             Run("Presence detects overdue course followup", PresenceDetectsOverdueCourseFollowup);
             Run("Presence waits for return home intent", PresenceWaitsForReturnHomeIntent);
             Run("Presence treats active screen idle input as present", PresenceTreatsActiveScreenIdleInputAsPresent);
+            Run("Presence active screen idle can interrupt after ten minutes", PresenceActiveScreenIdleCanInterruptAfterTenMinutes);
             Run("Presence treats unchanged screen idle input as away", PresenceTreatsUnchangedScreenIdleInputAsAway);
             Run("Presence treats stuck coding idle input as present", PresenceTreatsStuckCodingIdleInputAsPresent);
             Run("Presence treats active input chat silence as present", PresenceTreatsActiveInputChatSilenceAsPresent);
@@ -173,6 +174,7 @@ internal static class Program
             Run("Screen awareness suppresses repeated comments", ScreenAwarenessSuppressesRepeatedComments);
             Run("Screen awareness redacts private identifiers", ScreenAwarenessRedactsPrivateIdentifiers);
             Run("Screen awareness allows rare passive jab", ScreenAwarenessAllowsRarePassiveJab);
+            Run("Screen awareness allows medium passive chat jab", ScreenAwarenessAllowsMediumPassiveChatJab);
             Run("Screen awareness lets jab bypass comment cooldown", ScreenAwarenessLetsJabBypassCommentCooldown);
             Run("Screen awareness game mode uses active jab cooldown", ScreenAwarenessGameModeUsesActiveJabCooldown);
             Run("Screen awareness blocks sensitive screens", ScreenAwarenessBlocksSensitiveScreens);
@@ -1205,6 +1207,36 @@ internal static class Program
         AssertEqual("presence_screen_active_idle_input", frame.Trigger, "screen-active idle should use explicit trigger");
         AssertTrue(!frame.ShouldInterrupt, "watching/reading should not be interrupted as absence");
         AssertTrue(frame.ExtraContext.Contains("Screen presence", StringComparison.OrdinalIgnoreCase), "presence prompt should include screen signal");
+    }
+
+    private static void PresenceActiveScreenIdleCanInterruptAfterTenMinutes()
+    {
+        var now = new DateTime(2026, 5, 24, 21, 0, 0);
+        var state = new KokoInternalState
+        {
+            LastPresenceInterruptAt = now.AddMinutes(-30),
+            LastScreenAwarenessAt = now.AddMinutes(-2),
+            LastScreenAwarenessMode = "media",
+            LastScreenAwarenessActivity = "changed active video playback",
+            LastScreenAwarenessSummary = "YouTube video is playing",
+            LastScreenSituationProgress = "moving"
+        };
+        var messages = new[]
+        {
+            new ChatRepository.ChatMessage { Role = "user", Content = "watching something", Timestamp = now.AddMinutes(-20) }
+        };
+
+        var frame = new KokoPresenceContinuityEngine().Evaluate(
+            state,
+            messages,
+            now,
+            autonomyLevel: 2,
+            systemInfoOverride: new SystemInfo { IdleTime = TimeSpan.FromMinutes(12) });
+
+        AssertEqual("physically_present", frame.SituationKind, "active screen should still mean present");
+        AssertEqual("presence_screen_active_idle_input", frame.Trigger, "active idle screen should keep explicit trigger");
+        AssertTrue(frame.ShouldInterrupt, "active screen idle over ten minutes should allow a contextual observation");
+        AssertTrue(state.LastPresenceAt == now, "silent presence evaluation should refresh LastPresenceAt");
     }
 
     private static void PresenceTreatsUnchangedScreenIdleInputAsAway()
@@ -4014,6 +4046,35 @@ internal static class Program
 
         AssertTrue(decision.ShouldSend, "jab should not be blocked by the general assist cooldown");
         AssertEqual("jab", decision.Kind, "idle passive screen should stay a jab");
+    }
+
+    private static void ScreenAwarenessAllowsMediumPassiveChatJab()
+    {
+        var service = new KokoScreenAwarenessService();
+        var now = new DateTime(2026, 5, 12, 12, 9, 0);
+        var analysis = new KokoScreenAwarenessAnalysis
+        {
+            SummaryUk = "telegram chat/profile, same idle screen",
+            ActivityUk = "same idle profile",
+            ScreenMode = "telegram",
+            ShouldComment = true,
+            CommentUk = "Still staring at the same chat. Revolutionary productivity.",
+            Importance = 0.52
+        };
+
+        var decision = service.DecideComment(
+            analysis,
+            now,
+            now.AddHours(-2),
+            "",
+            cooldownMinutes: 30,
+            commentsEnabled: true,
+            screenChanged: false,
+            isActive: false,
+            activeWindowTitle: "Telegram");
+
+        AssertTrue(decision.ShouldSend, "medium-importance passive chat should allow a jab");
+        AssertEqual("jab", decision.Kind, "medium passive chat should be a jab");
     }
 
     private static void ScreenAwarenessGameModeUsesActiveJabCooldown()

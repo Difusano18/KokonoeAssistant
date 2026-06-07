@@ -80,6 +80,7 @@ namespace KokonoeAssistant.Services
             if (activeIntent != null)
             {
                 ApplyIntentContinuity(frame, activeIntent, now, autonomyLevel);
+                RecordPassivePresence(state, frame, now);
                 frame.ExtraContext = BuildPromptBlock(frame, state, now, activeIntent);
                 return frame;
             }
@@ -92,11 +93,13 @@ namespace KokonoeAssistant.Services
             if (resolvedIntent != null)
             {
                 ApplyResolvedIntent(frame, resolvedIntent, now);
+                RecordPassivePresence(state, frame, now);
                 frame.ExtraContext = BuildPromptBlock(frame, state, now, resolvedIntent);
                 return frame;
             }
 
             ApplySilenceContinuity(frame, state, now, autonomyLevel, sysInfo, screenAnalysisOverride);
+            RecordPassivePresence(state, frame, now);
             frame.ExtraContext = BuildPromptBlock(frame, state, now, null);
             return frame;
         }
@@ -201,8 +204,13 @@ namespace KokonoeAssistant.Services
                     frame.Trigger = "presence_screen_active_idle_input";
                     frame.StyleHint = "observation";
                     frame.ToneHint = "input is idle, but screen content is active; assume watching/reading/playing, not away";
-                    frame.Priority = 48;
-                    frame.ShouldInterrupt = false;
+                    frame.Priority = idleMinutes >= 10.0 ? 64 : 48;
+                    frame.ShouldInterrupt = autonomyLevel >= 2 &&
+                        idleMinutes >= 10.0 &&
+                        now - state.LastPresenceInterruptAt > TimeSpan.FromMinutes(20);
+                    frame.NextUsefulAt = frame.ShouldInterrupt
+                        ? now
+                        : now.AddMinutes(Math.Max(1, 10 - idleMinutes));
                     frame.SummaryUk = $"Ввід неактивний {FormatDuration(sysInfo.IdleTime)}, але екран активний ({screen.Mode}/{screen.Activity}). Ймовірно, він дивиться або читає, а не відійшов.";
                     return;
                 }
@@ -288,6 +296,24 @@ namespace KokonoeAssistant.Services
             frame.Priority = 32;
             frame.ShouldInterrupt = false;
             frame.SummaryUk = $"Коротка тиша в чаті: {FormatDuration(TimeSpan.FromMinutes(silence))}.";
+        }
+
+        private static void RecordPassivePresence(KokoInternalState state, KokoPresenceFrame frame, DateTime now)
+        {
+            if (string.IsNullOrWhiteSpace(frame.SummaryUk))
+                return;
+
+            var shouldTrace = state.LastPresenceAt <= DateTime.MinValue ||
+                now - state.LastPresenceAt >= TimeSpan.FromMinutes(5) ||
+                !string.Equals(state.LastPresenceSituation, frame.SituationKind, StringComparison.OrdinalIgnoreCase);
+
+            state.LastPresenceAt = now;
+            state.LastPresenceSummary = frame.SummaryUk;
+            state.LastPresenceSituation = frame.SituationKind;
+            state.LastPresenceTone = frame.ToneHint;
+
+            if (shouldTrace)
+                RememberTrace(state, $"{now:dd.MM HH:mm} passive:{frame.SituationKind} - {Trim(frame.SummaryUk, 120)}");
         }
 
         private static ScreenPresenceSignal BuildScreenPresenceSignal(

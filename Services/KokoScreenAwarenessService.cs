@@ -237,9 +237,9 @@ JSON schema:
             analysis.ScreenMode = NormalizeMode(analysis.ScreenMode, $"{activeWindowTitle} {analysis.SummaryUk} {analysis.ActivityUk}");
 
             var gameMode = analysis.ScreenMode == "game";
-            var importanceFloor = gameMode ? 0.55 : 0.60;
+            var importanceFloor = gameMode ? 0.40 : 0.45;
             if (analysis.Importance < importanceFloor)
-                return No("low importance");
+                return No($"Importance {analysis.Importance:0.00} < {importanceFloor:0.00}");
 
             var useful = LooksUseful(activeWindowTitle, analysis, screenChanged, isActive);
             var jabCandidate = LooksJabCandidate(activeWindowTitle, analysis, screenChanged, isActive, passiveChatWindow);
@@ -247,15 +247,15 @@ JSON schema:
                 useful = true;
             if (situation?.RecommendedBehavior == "jab")
                 jabCandidate = true;
-            if (gameMode && analysis.Importance >= 0.55 && (screenChanged || isActive))
+            if (gameMode && analysis.Importance >= 0.40 && (screenChanged || isActive))
                 jabCandidate = true;
 
             if (!screenChanged && !isActive && !jabCandidate)
                 return No("unchanged idle screen");
 
-            var kind = useful && !passiveChatWindow ? "assist" : jabCandidate ? "jab" : "observe";
+            var kind = useful ? "assist" : jabCandidate ? "jab" : "observe";
             if (kind == "observe")
-                return No(passiveChatWindow ? "passive chat/profile screen" : "observation only");
+                return No("observation only");
 
             var cooldown = Math.Clamp(cooldownMinutes, 1, 180);
             if (kind != "jab" && (now - lastCommentAt).TotalMinutes < cooldown)
@@ -485,10 +485,10 @@ JSON schema:
         private static bool LooksUseful(string activeWindowTitle, KokoScreenAwarenessAnalysis analysis, bool screenChanged, bool isActive)
         {
             var text = $"{activeWindowTitle} {analysis.SummaryUk} {analysis.ActivityUk} {analysis.CommentUk}".ToLowerInvariant();
-            if (analysis.Importance >= 0.88 && (screenChanged || isActive))
+            if (analysis.Importance >= 0.78 && (screenChanged || isActive))
                 return true;
 
-            return analysis.Importance >= 0.65 && ContainsAny(text,
+            return analysis.Importance >= 0.55 && ContainsAny(text,
                 "error", "exception", "failed", "crash", "bug", "помил", "злам",
                 "code", "код", "visual studio", "vscode", "rider", "terminal", "build",
                 "завдання", "homework", "курс", "навчан", "obsidian", "editor", "редактор");
@@ -497,13 +497,13 @@ JSON schema:
         private static bool LooksJabCandidate(string activeWindowTitle, KokoScreenAwarenessAnalysis analysis, bool screenChanged, bool isActive, bool passiveChatWindow)
         {
             var text = $"{activeWindowTitle} {analysis.SummaryUk} {analysis.ActivityUk} {analysis.CommentUk}".ToLowerInvariant();
-            if (passiveChatWindow && analysis.Importance >= 0.70)
+            if (passiveChatWindow && analysis.Importance >= 0.50)
                 return true;
 
-            if (!screenChanged && !isActive && analysis.Importance >= 0.70)
+            if (!screenChanged && !isActive && analysis.Importance >= 0.60)
                 return true;
 
-            return analysis.Importance >= 0.65 && ContainsAny(text,
+            return analysis.Importance >= 0.50 && ContainsAny(text,
                 "youtube", "tiktok", "reddit", "steam", "telegram", "chat", "чат",
                 "game", "гра", "dota", "дота", "мем", "картин", "scroll", "горта",
                 "idle", "same", "завис", "дивиш", "профіль", "profile");

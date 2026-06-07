@@ -752,9 +752,9 @@ namespace KokonoeAssistant.Services
         private async Task<bool> SendTgAndLog(string message, string category = "spontaneous")
         {
             if (!EnsureTelegram() || string.IsNullOrWhiteSpace(message)) return false;
-            if (ShouldSuppressAutomatedTelegram(category))
+            if (ShouldSuppressAutomatedTelegram(category, out var suppressionReason))
             {
-                Log($"TG send suppressed ({category}): recent user message cooldown");
+                Log($"TG send suppressed ({category}): {suppressionReason}");
                 return false;
             }
 
@@ -773,19 +773,37 @@ namespace KokonoeAssistant.Services
         }
 
         private bool ShouldSuppressAutomatedTelegram(string category)
+            => ShouldSuppressAutomatedTelegram(category, out _);
+
+        private bool ShouldSuppressAutomatedTelegram(string category, out string reason)
         {
+            reason = "";
             if (category.Contains("crisis", StringComparison.OrdinalIgnoreCase))
                 return false;
 
             if (_state.ProactiveMutedUntil > DateTime.Now)
+            {
+                reason = $"proactive muted until {_state.ProactiveMutedUntil:HH:mm}";
                 return true;
+            }
 
             var lastUserAt = _state.LastUserMessageAt;
             if (lastUserAt <= DateTime.MinValue)
                 return false;
 
-            return DateTime.Now - lastUserAt < TimeSpan.FromMinutes(10);
+            var cooldownMinutes = IsFastProactiveCategory(category) ? 5 : 10;
+            var elapsed = DateTime.Now - lastUserAt;
+            if (elapsed >= TimeSpan.FromMinutes(cooldownMinutes))
+                return false;
+
+            reason = $"recent user message cooldown {elapsed.TotalMinutes:0.0}m < {cooldownMinutes}m";
+            return true;
         }
+
+        private static bool IsFastProactiveCategory(string category)
+            => category.Contains("jab", StringComparison.OrdinalIgnoreCase) ||
+               category.Contains("observation", StringComparison.OrdinalIgnoreCase) ||
+               category.Contains("observe", StringComparison.OrdinalIgnoreCase);
 
         // ---- STATE PERSISTENCE ----
 
@@ -3514,7 +3532,15 @@ namespace KokonoeAssistant.Services
 
             var now = DateTime.Now;
             var interval = GetEffectiveScreenAwarenessInterval(settings, now);
-            if ((now - _state.LastScreenAwarenessAt).TotalMinutes < interval) return;
+            var forceByInitiative = ShouldForceScreenAwarenessFromAutonomy(now);
+            var sinceLastScreen = (now - _state.LastScreenAwarenessAt).TotalMinutes;
+            if (!forceByInitiative && sinceLastScreen < interval)
+            {
+                Log($"ScreenAwareness suppressed: interval {sinceLastScreen:0.0}m < {interval}m");
+                return;
+            }
+            if (forceByInitiative)
+                Log("ScreenAwareness forced: autonomy curiosity/observation trigger");
             if (now < _state.VisionBackoffUntil)
             {
                 Log($"ScreenAwareness skipped: vision backoff until {_state.VisionBackoffUntil:HH:mm}");
@@ -3761,6 +3787,29 @@ namespace KokonoeAssistant.Services
                 return normal;
 
             return Math.Clamp(Math.Min(normal, settings.GameScreenAwarenessIntervalMins), 3, 60);
+        }
+
+        private bool ShouldForceScreenAwarenessFromAutonomy(DateTime now)
+        {
+            DateTime decisionAt;
+            DateTime lastScreenAt;
+            string text;
+            lock (_lock)
+            {
+                decisionAt = _state.LastAutonomyDecisionAt;
+                lastScreenAt = _state.LastScreenAwarenessAt;
+                text = $"{_state.LastAutonomySource} {_state.LastAutonomyTrigger} {_state.LastAutonomyReason}".ToLowerInvariant();
+            }
+
+            if (decisionAt <= DateTime.MinValue || now - decisionAt > TimeSpan.FromMinutes(12))
+                return false;
+            if (lastScreenAt > DateTime.MinValue && now - lastScreenAt < TimeSpan.FromMinutes(2))
+                return false;
+
+            return text.Contains("curiosity", StringComparison.OrdinalIgnoreCase) ||
+                text.Contains("observation", StringComparison.OrdinalIgnoreCase) ||
+                text.Contains("observe", StringComparison.OrdinalIgnoreCase) ||
+                text.Contains("screen", StringComparison.OrdinalIgnoreCase);
         }
 
         private int GetEffectiveScreenAwarenessCommentCooldown(AppSettings settings, KokoScreenAwarenessAnalysis analysis, ActivityAnalyzer.ActivityState activity)

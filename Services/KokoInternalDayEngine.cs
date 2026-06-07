@@ -29,6 +29,7 @@ namespace KokonoeAssistant.Services
             DateTime now,
             int autonomyLevel)
         {
+            now = EnsureLocalTime(now);
             autonomyLevel = Math.Clamp(autonomyLevel, 0, 3);
             var phase = GetPhase(now);
             var frame = new KokoInternalDayFrame
@@ -53,6 +54,7 @@ namespace KokonoeAssistant.Services
 
         public void Record(KokoInternalState state, KokoInternalDayFrame frame, DateTime now)
         {
+            now = EnsureLocalTime(now);
             state.LastInternalDayAt = now;
             state.LastInternalDayPhase = frame.Phase;
             state.LastInternalDaySummary = frame.SummaryUk;
@@ -64,6 +66,7 @@ namespace KokonoeAssistant.Services
 
         public string BuildVaultStatus(KokoInternalState state, KokoInternalDayFrame frame, KokoPresenceFrame presence, DateTime now)
         {
+            now = EnsureLocalTime(now);
             var sb = new StringBuilder();
             sb.AppendLine("---");
             sb.AppendLine($"updated: {now:yyyy-MM-dd HH:mm:ss}");
@@ -133,6 +136,9 @@ namespace KokonoeAssistant.Services
             if (now.Hour is >= 22 or < 2) return "night_watch";
             return "low_power_night";
         }
+
+        private static DateTime EnsureLocalTime(DateTime now)
+            => now.Kind == DateTimeKind.Utc ? now.ToLocalTime() : now;
 
         private static string BuildFocus(string phase, KokoPresenceFrame presence, KokoSomaticSnapshot somatic)
         {

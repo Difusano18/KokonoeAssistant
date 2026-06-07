@@ -42,11 +42,13 @@ namespace KokonoeAssistant
         private static KokoAgentRuntimeService? _agentRuntime;
         private static KokoFileSystemToolService? _fileTools;
         private static KokoCapabilityManifestService? _capabilities;
+        private static KokoPhotoFileWatcherService? _photoWatcher;
 
         public static void Initialize(string vaultPath)
         {
             lock (_lock) { _vault = vaultPath; }
             try { _ = WearableBridge; } catch { }
+            try { PhotoFileWatcher.Start(); } catch { }
         }
 
         public static bool IsInitialized
@@ -226,6 +228,21 @@ namespace KokonoeAssistant
             get { lock (_lock) { return _capabilities ??= new KokoCapabilityManifestService(); } }
         }
 
+        public static KokoPhotoFileWatcherService PhotoFileWatcher
+        {
+            get
+            {
+                lock (_lock)
+                {
+                    return _photoWatcher ??= new KokoPhotoFileWatcherService(
+                        Path.Combine(_vault ?? AppDomain.CurrentDomain.BaseDirectory, "kokonoe-data"),
+                        () => LlmService,
+                        ChatRepository,
+                        () => ChatLogger);
+                }
+            }
+        }
+
         public static HealthService HealthService
         {
             get { lock (_lock) { return _health ??= new HealthService(_vault ?? throw new InvalidOperationException("Not initialized")); } }
@@ -399,6 +416,7 @@ namespace KokonoeAssistant
                     _agentRuntime = null;
                     _fileTools = null;
                     _capabilities = null;
+                    _photoWatcher?.Dispose(); _photoWatcher = null;
                 }
                 catch { }
             }

@@ -102,13 +102,13 @@ namespace KokonoeAssistant
         // Spontaneous messages
         public bool SpontaneousEnabled      { get; set; } = true;
         public int  SpontaneousIntervalMins { get; set; } = 25;
-        public int  ProactiveAutonomyLevel  { get; set; } = 3; // 0=тихо, 1=обережно, 2=нормально, 3=живий режим
+        public int  ProactiveAutonomyLevel  { get; set; } = 2; // 0=тихо, 1=обережно, 2=нормально, 3=живий режим
 
         // Screen awareness
         public bool ScreenAwarenessEnabled { get; set; } = true;
         public bool ScreenAwarenessSendComments { get; set; } = true;
-        public int  ScreenAwarenessIntervalMins { get; set; } = 30;
-        public int  ScreenAwarenessCommentCooldownMins { get; set; } = 30;
+        public int  ScreenAwarenessIntervalMins { get; set; } = 10;
+        public int  ScreenAwarenessCommentCooldownMins { get; set; } = 15;
         public int  GameScreenAwarenessIntervalMins { get; set; } = 5;
         public int  GameScreenAwarenessCommentCooldownMins { get; set; } = 10;
 
@@ -166,9 +166,22 @@ namespace KokonoeAssistant
                 changed = true;
             }
 
-            if (settings.ScreenAwarenessIntervalMins < 30)
+            var normalizedAutonomy = Math.Clamp(settings.ProactiveAutonomyLevel, 0, 3);
+            if (settings.ProactiveAutonomyLevel != normalizedAutonomy)
             {
-                settings.ScreenAwarenessIntervalMins = 30;
+                settings.ProactiveAutonomyLevel = normalizedAutonomy;
+                changed = true;
+            }
+
+            if (settings.ScreenAwarenessIntervalMins == 30 || settings.ScreenAwarenessIntervalMins < 10)
+            {
+                settings.ScreenAwarenessIntervalMins = 10;
+                changed = true;
+            }
+
+            if (settings.ScreenAwarenessCommentCooldownMins == 30 || settings.ScreenAwarenessCommentCooldownMins < 5)
+            {
+                settings.ScreenAwarenessCommentCooldownMins = 15;
                 changed = true;
             }
 
