@@ -1987,7 +1987,7 @@
                                 BorderBrush="{DynamicResource AccentBgBorder2}" BorderThickness="0,0,0,1" Padding="20,12">
                             <Grid>
                                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                    <TextBlock Text="// WEARABLE TELEMETRY" FontSize="12" FontFamily="Consolas" FontWeight="Bold"
+                                    <TextBlock Text="// GALAXY WATCH LINK" FontSize="12" FontFamily="Consolas" FontWeight="Bold"
                                                Foreground="#FF4D6D" VerticalAlignment="Center"/>
                                     <TextBlock Text=" · CARDIAC · NEURAL · INTERFACE" FontSize="9" FontFamily="Consolas"
                                                Foreground="{DynamicResource AccentDim}" VerticalAlignment="Center" Margin="8,0,0,0"/>
@@ -2187,13 +2187,13 @@
                         <!-- Telemetry workspace -->
                         <Grid Grid.Row="5" Margin="20,12,20,12">
                             <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="0"/>
-                                <ColumnDefinition Width="0"/>
-                                <ColumnDefinition Width="0"/>
-                                <ColumnDefinition Width="0"/>
-                                <ColumnDefinition Width="0"/>
-                                <ColumnDefinition Width="0"/>
+                                <ColumnDefinition Width="1.15*"/>
+                                <ColumnDefinition Width="12"/>
+                                <ColumnDefinition Width="1.15*"/>
+                                <ColumnDefinition Width="12"/>
+                                <ColumnDefinition Width="1.05*"/>
+                                <ColumnDefinition Width="12"/>
+                                <ColumnDefinition Width="320"/>
                             </Grid.ColumnDefinitions>
                             <Border Grid.Column="0" Background="{DynamicResource AccentBgCard}"
                                     BorderBrush="{DynamicResource AccentBgBorder2}" BorderThickness="1" CornerRadius="8"

@@ -491,6 +491,11 @@ namespace KokonoeAssistant.Services
                     RecordAuthorized(req);
                     var body = req.Body;
                     var sample = JsonConvert.DeserializeObject<KokoWearableSample>(body) ?? new KokoWearableSample();
+                    if (!IsSampleFromPairedDevice(sample, out var samplePairError))
+                    {
+                        LogBridge($"sample rejected reason={samplePairError} device={sample.DeviceId} remote={req.RemoteEndpoint}");
+                        return new BridgeHttpResponse(403, new { ok = false, error = samplePairError, pairedDeviceId = GetPairedDeviceId() });
+                    }
                     var ingest = _telemetry.IngestDetailed(sample);
                     if (ingest.Accepted) RecordSample(req, sample);
                     if (ingest.Duplicate) RecordDuplicateSample(req, sample);
@@ -511,6 +516,13 @@ namespace KokonoeAssistant.Services
                     if (samples.Count == 0)
                     {
                         return new BridgeHttpResponse(400, new { ok = false, error = "empty_sample_batch" });
+                    }
+                    var rejected = samples.FirstOrDefault(s => !IsSampleFromPairedDevice(s, out _));
+                    if (rejected != null)
+                    {
+                        IsSampleFromPairedDevice(rejected, out var batchPairError);
+                        LogBridge($"sample batch rejected reason={batchPairError} device={rejected.DeviceId} remote={req.RemoteEndpoint}");
+                        return new BridgeHttpResponse(403, new { ok = false, error = batchPairError, pairedDeviceId = GetPairedDeviceId() });
                     }
 
                     KokoWearableState? state = null;
@@ -560,6 +572,41 @@ namespace KokonoeAssistant.Services
                 RecordRemoteLocked(req);
             }
             LogBridge($"pair device={deviceId} remote={req.RemoteEndpoint}");
+        }
+
+        private string GetPairedDeviceId()
+        {
+            lock (_lock)
+                return _lastPairedDeviceId;
+        }
+
+        private bool IsSampleFromPairedDevice(KokoWearableSample sample, out string error)
+        {
+            var sampleDevice = (sample.DeviceId ?? "").Trim();
+            string paired;
+            lock (_lock)
+                paired = (_lastPairedDeviceId ?? "").Trim();
+
+            if (string.IsNullOrWhiteSpace(paired) || paired.Equals("unknown", StringComparison.OrdinalIgnoreCase))
+            {
+                error = "device_not_paired";
+                return false;
+            }
+
+            if (string.IsNullOrWhiteSpace(sampleDevice) || sampleDevice.Equals("unknown", StringComparison.OrdinalIgnoreCase))
+            {
+                error = "sample_device_missing";
+                return false;
+            }
+
+            if (!sampleDevice.Equals(paired, StringComparison.OrdinalIgnoreCase))
+            {
+                error = "sample_device_mismatch";
+                return false;
+            }
+
+            error = "";
+            return true;
         }
 
         private void RecordAuthorized(BridgeHttpRequest req)

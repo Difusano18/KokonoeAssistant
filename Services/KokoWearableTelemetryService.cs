@@ -217,12 +217,16 @@ namespace KokonoeAssistant.Services
             KokoWearableState state;
             lock (_lock) state = CloneState(_state);
 
-            var freshness = state.IsFresh(now) ? "fresh" : "stale";
+            var verifiedFresh = state.IsFresh(now) && !LooksLikeDiagnosticTelemetry(state.DeviceId);
+            var freshness = verifiedFresh ? "fresh" : "stale";
+            var heartLine = verifiedFresh && state.CurrentBpm > 0
+                ? $"heart={state.CurrentBpm:F0} bpm baseline={state.BaselineBpm:F0} delta={state.BpmDelta:+0;-0;0}"
+                : "heart=unavailable baseline=unavailable delta=unavailable";
             return $"""
 WEARABLE TELEMETRY
 freshness={freshness}
 device={NullDash(state.DeviceId)} on_wrist={state.OnWrist}
-heart={state.CurrentBpm:F0} bpm baseline={state.BaselineBpm:F0} delta={state.BpmDelta:+0;-0;0}
+{heartLine}
 sleep={state.SleepState} confidence={state.SleepConfidence:F2}
 stress={state.StressScore:F2} live_stress_score={state.LiveStressScore}/100 recovery={state.RecoveryState} initiative={NullDash(state.SuggestedInitiative)}
 context_signal={NullDash(state.ContextSignal)} context_hint={NullDash(state.ContextHint)}
@@ -232,6 +236,18 @@ hrv={(state.HrvRmssdMs.HasValue ? $"{state.HrvRmssdMs.Value:F0}ms" : "-")} spo2=
 summary={state.Summary}
 rule: wearable telemetry is context, not a medical diagnosis. Use it to reduce dumb follow-ups, detect likely sleep/return/stress states, and propose low-risk breaks only when useful.
 """;
+        }
+
+        private static bool LooksLikeDiagnosticTelemetry(string? value)
+        {
+            var text = (value ?? "").Trim().ToLowerInvariant();
+            if (string.IsNullOrWhiteSpace(text)) return false;
+            return text.Contains("smoke") ||
+                   text.Contains("mock") ||
+                   text.Contains("dummy") ||
+                   text.Contains("emulated") ||
+                   text.Contains("simulator") ||
+                   text.Contains("test-watch");
         }
 
         private void ApplySample(KokoWearableSample sample)

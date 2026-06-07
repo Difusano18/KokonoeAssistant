@@ -1437,35 +1437,40 @@ tags: [kokonoe, live-core, diagnostics]
             {
                 if (DateTime.UtcNow.Ticks >= 0)
                 {
-                    var pulseHeart = ServiceContainer.Heart;
                     var wearable = ServiceContainer.WearableTelemetry.State;
                     var bridge = ServiceContainer.WearableBridge;
                     var diagnostics = bridge.Diagnostics;
                     var connection = bridge.GetConnectionSnapshot(wearable);
-                    var fresh = connection.TelemetryFresh;
+                    var verified = IsVerifiedWearableTelemetry(connection, diagnostics, wearable);
+                    var fresh = verified;
                     var lastLocal = wearable.LastSampleUtc > DateTime.MinValue
                         ? wearable.LastSampleUtc.ToLocalTime().ToString("HH:mm:ss")
                         : "--";
-                    var wearableCur = wearable.CurrentBpm > 0 ? wearable.CurrentBpm : pulseHeart?.CurrentBpm ?? 0;
+                    var wearableCur = verified && wearable.CurrentBpm > 0 ? wearable.CurrentBpm : 0;
 
                     PulseTabBpmBig.Text = wearableCur > 0 ? $"{wearableCur:0}" : "--";
                     PulseTabCurText.Text = wearableCur > 0 ? $"{wearableCur:0.0}" : "--";
-                    PulseTabBaseText.Text = wearable.BaselineBpm > 0 ? $"{wearable.BaselineBpm:0.0}" : "--";
-                    PulseTabHrvText.Text = wearable.HrvRmssdMs.HasValue ? $"{wearable.HrvRmssdMs.Value:0}" : "--";
-                    PulseTabMinMaxText.Text = fresh ? wearable.SleepState : "stale";
-                    PulseTabStateLabel.Text = fresh ? $"{wearable.SleepState} · {wearable.PresenceState}" : "NO FRESH WATCH DATA";
+                    PulseTabBaseText.Text = verified && wearable.BaselineBpm > 0 ? $"{wearable.BaselineBpm:0.0}" : "--";
+                    PulseTabHrvText.Text = verified && wearable.HrvRmssdMs.HasValue ? $"{wearable.HrvRmssdMs.Value:0}" : "--";
+                    PulseTabMinMaxText.Text = verified ? wearable.SleepState : "no verified sample";
+                    var trustBrush = verified
+                        ? new SolidColorBrush(MediaColor.FromRgb(0x00, 0xE6, 0x76))
+                        : PulseBridgeBrush(connection.State);
+                    PulseTabBpmBig.Foreground = trustBrush;
+                    PulseTabCurText.Foreground = trustBrush;
+                    PulseSideBpmText.Foreground = trustBrush;
                     PulseSideBpmText.Text = wearableCur > 0 ? $"{wearableCur:0}" : "--";
-                    PulseSideStateText.Text = fresh ? $"last {lastLocal} · {wearable.PresenceState}" : "waiting for Galaxy Watch sample";
 
-                    PulseTabStateLabel.Text = fresh ? $"{wearable.SleepState} / {wearable.PresenceState}" : FormatBridgeState(connection.State);
-                    PulseSideStateText.Text = fresh ? $"last {lastLocal} / {wearable.PresenceState}" : $"watch {FormatBridgeState(connection.State).ToLowerInvariant()}";
+                    PulseTabStateLabel.Text = verified ? "LIVE VERIFIED" : FormatBridgeState(connection.State);
+                    PulseSideStateText.Text = verified ? $"last {lastLocal} / {wearable.PresenceState}" : VerifiedWearableBlockReason(connection, diagnostics, wearable);
                     UpdatePulseBridgeStrip(bridge, diagnostics, connection, wearable, fresh);
 
                     var vitalRows = new List<object>
                     {
                         new { TimeStr = "pulse", BpmStr = wearableCur > 0 ? $"{wearableCur:0} bpm" : "--" },
                         new { TimeStr = "last measured", BpmStr = lastLocal },
-                        new { TimeStr = "freshness", BpmStr = fresh ? "fresh" : "stale" },
+                        new { TimeStr = "authority", BpmStr = verified ? "verified Galaxy Watch" : "blocked / unverified" },
+                        new { TimeStr = "freshness", BpmStr = verified ? "fresh" : "not trusted" },
                         new { TimeStr = "link", BpmStr = FormatBridgeState(connection.State).ToLowerInvariant() },
                         new { TimeStr = "watch app", BpmStr = connection.IsPaired ? NullDash(diagnostics.LastPairedDeviceId) : "not paired" },
                         new { TimeStr = "bridge", BpmStr = bridge.IsRunning ? $"running:{bridge.Port}" : "stopped" },
@@ -1473,12 +1478,13 @@ tags: [kokonoe, live-core, diagnostics]
                         new { TimeStr = "command poll", BpmStr = FormatLocalTime(diagnostics.LastCommandPollAtUtc) },
                         new { TimeStr = "ack", BpmStr = $"{NullDash(diagnostics.LastAckAction)} {FormatLocalTime(diagnostics.LastCommandAckAtUtc)}" },
                         new { TimeStr = "remote", BpmStr = NullDash(diagnostics.LastRemoteEndpoint) },
-                        new { TimeStr = "device", BpmStr = string.IsNullOrWhiteSpace(wearable.DeviceId) ? "--" : wearable.DeviceId },
-                        new { TimeStr = "sleep", BpmStr = wearable.SleepState },
-                        new { TimeStr = "confidence", BpmStr = $"{wearable.SleepConfidence:P0}" },
-                        new { TimeStr = "stress", BpmStr = $"{wearable.LiveStressScore}/100" },
-                        new { TimeStr = "on wrist", BpmStr = wearable.OnWrist ? "yes" : "unknown/no" },
-                        new { TimeStr = "location", BpmStr = wearable.Latitude.HasValue && wearable.Longitude.HasValue ? "available" : "--" },
+                        new { TimeStr = "sample device", BpmStr = string.IsNullOrWhiteSpace(wearable.DeviceId) ? "--" : wearable.DeviceId },
+                        new { TimeStr = "trusted device", BpmStr = verified ? NullDash(diagnostics.LastPairedDeviceId) : "--" },
+                        new { TimeStr = "sleep", BpmStr = verified ? wearable.SleepState : "--" },
+                        new { TimeStr = "confidence", BpmStr = verified ? $"{wearable.SleepConfidence:P0}" : "--" },
+                        new { TimeStr = "stress", BpmStr = verified ? $"{wearable.LiveStressScore}/100" : "--" },
+                        new { TimeStr = "on wrist", BpmStr = verified && wearable.OnWrist ? "yes" : "--" },
+                        new { TimeStr = "location", BpmStr = verified && wearable.Latitude.HasValue && wearable.Longitude.HasValue ? "available" : "--" },
                     };
                     foreach (var line in ServiceContainer.WearableTelemetry.RecentLogLines(8).Reverse())
                     {
@@ -1488,6 +1494,13 @@ tags: [kokonoe, live-core, diagnostics]
                     PulseVitalLog.ItemsSource = vitalRows;
 
                     UpdatePulseSidePanels(wearableCur);
+                    if (!verified)
+                    {
+                        PulseAvgText.Text = "-- bpm";
+                        PulsePeakText.Text = "-- bpm";
+                        PulseLowText.Text = "-- bpm";
+                        PulseConsistencyText.Text = "--";
+                    }
                     return;
                 }
 
@@ -1536,6 +1549,55 @@ tags: [kokonoe, live-core, diagnostics]
                 DrawPulseHrGraph();
             }
             catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[PulseTab] {ex.Message}"); }
+        }
+
+        private static bool IsVerifiedWearableTelemetry(
+            KokoWearableBridgeService.WearableBridgeConnectionSnapshot connection,
+            KokoWearableBridgeService.WearableBridgeDiagnostics diagnostics,
+            KokoWearableState wearable)
+        {
+            if (!connection.IsPaired || !connection.IsLinked || !connection.TelemetryFresh || !connection.SampleRecent)
+                return false;
+
+            var paired = (diagnostics.LastPairedDeviceId ?? "").Trim();
+            var device = (wearable.DeviceId ?? "").Trim();
+            if (string.IsNullOrWhiteSpace(paired) ||
+                paired.Equals("unknown", StringComparison.OrdinalIgnoreCase) ||
+                string.IsNullOrWhiteSpace(device) ||
+                device.Equals("unknown", StringComparison.OrdinalIgnoreCase))
+                return false;
+
+            if (!device.Equals(paired, StringComparison.OrdinalIgnoreCase))
+                return false;
+
+            return !LooksLikeDiagnosticWearable(device) && !LooksLikeDiagnosticWearable(diagnostics.LastAcceptedSampleId);
+        }
+
+        private static bool LooksLikeDiagnosticWearable(string? value)
+        {
+            var text = (value ?? "").Trim().ToLowerInvariant();
+            if (string.IsNullOrWhiteSpace(text)) return false;
+            return text.Contains("smoke") ||
+                   text.Contains("mock") ||
+                   text.Contains("dummy") ||
+                   text.Contains("emulated") ||
+                   text.Contains("simulator") ||
+                   text.Contains("test-watch");
+        }
+
+        private static string VerifiedWearableBlockReason(
+            KokoWearableBridgeService.WearableBridgeConnectionSnapshot connection,
+            KokoWearableBridgeService.WearableBridgeDiagnostics diagnostics,
+            KokoWearableState wearable)
+        {
+            if (!connection.IsPaired) return "no paired Galaxy Watch";
+            if (!connection.IsLinked) return "watch not linked";
+            if (!connection.TelemetryFresh || !connection.SampleRecent) return "waiting for fresh sensor sample";
+            if (LooksLikeDiagnosticWearable(wearable.DeviceId) || LooksLikeDiagnosticWearable(diagnostics.LastAcceptedSampleId))
+                return "diagnostic sample hidden";
+            if (!string.Equals((wearable.DeviceId ?? "").Trim(), (diagnostics.LastPairedDeviceId ?? "").Trim(), StringComparison.OrdinalIgnoreCase))
+                return "sample device does not match pair";
+            return "telemetry not trusted";
         }
 
         private void UpdatePulseBridgeStrip(
@@ -1775,16 +1837,13 @@ tags: [kokonoe, live-core, diagnostics]
                     var bridge = ServiceContainer.WearableBridge;
                     var diagnostics = bridge.Diagnostics;
                     var connection = bridge.GetConnectionSnapshot(wearable);
-                    var fresh = connection.TelemetryFresh;
-                    PulseMoodMainText.Text = fresh ? "WATCH ONLINE" : "WATCH WAITING";
-                    PulseMoodDetailText.Text = fresh ? wearable.Summary : "no fresh sensor packet yet";
-                    PulseMoodBar.Value = Math.Clamp(wearable.SleepConfidence * 100, 0, 100);
-                    PulseSystemStatusText.Text = fresh
-                        ? $"watch sample {wearable.LastSampleUtc.ToLocalTime():HH:mm:ss} · {wearable.SleepState}"
-                        : "waiting for Galaxy Watch bridge";
-                    PulseMoodMainText.Text = fresh ? "WATCH ONLINE" : FormatBridgeState(connection.State);
-                    PulseMoodDetailText.Text = fresh ? wearable.Summary : NullDash(connection.Reason);
-                    PulseSystemStatusText.Text = fresh
+                    var verified = IsVerifiedWearableTelemetry(connection, diagnostics, wearable);
+                    PulseMoodMainText.Text = verified ? "WATCH VERIFIED" : FormatBridgeState(connection.State);
+                    PulseMoodDetailText.Text = verified ? wearable.Summary : VerifiedWearableBlockReason(connection, diagnostics, wearable);
+                    PulseMoodBar.Value = verified ? Math.Clamp(wearable.SleepConfidence * 100, 0, 100) : 0;
+                    PulseMoodMainText.Text = verified ? "WATCH VERIFIED" : FormatBridgeState(connection.State);
+                    PulseMoodDetailText.Text = verified ? wearable.Summary : VerifiedWearableBlockReason(connection, diagnostics, wearable);
+                    PulseSystemStatusText.Text = verified
                         ? $"watch sample {wearable.LastSampleUtc.ToLocalTime():HH:mm:ss} / {wearable.SleepState}"
                         : $"bridge {FormatBridgeState(connection.State).ToLowerInvariant()} / {NullDash(diagnostics.LastRemoteEndpoint)}";
 
@@ -1794,14 +1853,14 @@ tags: [kokonoe, live-core, diagnostics]
                     var wearableEventBrushWarn = new SolidColorBrush(MediaColor.FromRgb(0xFF, 0xB0, 0x20));
                     PulseRecentEvents.ItemsSource = new[]
                     {
-                        new { Time = wearableNow.ToString("HH:mm:ss"), Text = $"link: {FormatBridgeState(connection.State).ToLowerInvariant()}", Brush = connection.IsLinked ? wearableEventBrushOk : wearableEventBrushWarn },
-                        new { Time = FormatLocalTime(connection.LastSeenAtUtc), Text = $"last seen: {NullDash(connection.Reason)}", Brush = connection.IsLinked ? wearableEventBrushOk : wearableEventBrushWarn },
+                        new { Time = wearableNow.ToString("HH:mm:ss"), Text = $"link: {FormatBridgeState(connection.State).ToLowerInvariant()}", Brush = verified ? wearableEventBrushOk : wearableEventBrushWarn },
+                        new { Time = FormatLocalTime(connection.LastSeenAtUtc), Text = $"trust: {(verified ? "verified" : VerifiedWearableBlockReason(connection, diagnostics, wearable))}", Brush = verified ? wearableEventBrushOk : wearableEventBrushWarn },
                         new { Time = FormatLocalTime(diagnostics.LastPairAtUtc), Text = $"watch app: {(connection.IsPaired ? NullDash(diagnostics.LastPairedDeviceId) : "not paired")}", Brush = connection.IsPaired ? wearableEventBrushOk : wearableEventBrushWarn },
                         new { Time = FormatLocalTime(diagnostics.LastCommandPollAtUtc), Text = $"command poll / ack: {NullDash(diagnostics.LastAckAction)}", Brush = diagnostics.LastCommandPollAtUtc.HasValue ? wearableEventBrushOk : wearableEventBrushWarn },
                         new { Time = wearableNow.ToString("HH:mm:ss"), Text = $"bridge: {(bridge.IsRunning ? $"running:{bridge.Port}" : "stopped")} / samples {diagnostics.TotalSamples} / auth {diagnostics.TotalAuthFailures}", Brush = bridge.IsRunning ? wearableEventBrushOk : wearableEventBrushWarn },
-                        new { Time = wearableNow.ToString("HH:mm:ss"), Text = fresh ? "watch telemetry fresh" : "watch telemetry stale", Brush = fresh ? wearableEventBrushOk : wearableEventBrushWarn },
+                        new { Time = wearableNow.ToString("HH:mm:ss"), Text = verified ? "watch telemetry verified" : "watch telemetry blocked", Brush = verified ? wearableEventBrushOk : wearableEventBrushWarn },
                         new { Time = wearable.LastSampleUtc > DateTime.MinValue ? wearable.LastSampleUtc.ToLocalTime().ToString("HH:mm:ss") : "--", Text = $"last pulse sample: {(currentBpm > 0 ? $"{currentBpm:0} bpm" : "--")}", Brush = currentBpm > 0 ? wearableEventBrushOk : wearableEventBrushWarn },
-                        new { Time = wearableNow.ToString("HH:mm:ss"), Text = $"sleep state: {wearable.SleepState}", Brush = wearable.SleepConfidence >= 0.72 ? wearableEventBrushHot : wearableEventBrushOk },
+                        new { Time = wearableNow.ToString("HH:mm:ss"), Text = $"sleep state: {(verified ? wearable.SleepState : "--")}", Brush = verified && wearable.SleepConfidence >= 0.72 ? wearableEventBrushHot : wearableEventBrushOk },
                     };
                     return;
                 }
