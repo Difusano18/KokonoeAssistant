@@ -56,10 +56,10 @@ namespace KokonoeAssistant
         {
             lock (_lock) { _vault = vaultPath; }
             KokoSystemLog.Configure(Path.Combine(_vault ?? AppDomain.CurrentDomain.BaseDirectory, "kokonoe-data"));
-            try { _ = WearableBridge; } catch { }
-            try { PhotoFileWatcher.Start(); } catch { }
-            try { ProfileCurator.Start(); } catch { }
-            try { _ = ProcessWatchdog; } catch { }
+            try { _ = WearableBridge; } catch (Exception ex) { KokoSystemLog.Write("BOOT", "wearable bridge start failed: " + ex.Message); }
+            try { PhotoFileWatcher.Start(); } catch (Exception ex) { KokoSystemLog.Write("BOOT", "photo watcher start failed: " + ex.Message); }
+            try { ProfileCurator.Start(); } catch (Exception ex) { KokoSystemLog.Write("BOOT", "profile curator start failed: " + ex.Message); }
+            try { _ = ProcessWatchdog; } catch (Exception ex) { KokoSystemLog.Write("BOOT", "process watchdog start failed: " + ex.Message); }
         }
 
         public static bool IsInitialized
