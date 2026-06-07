@@ -2519,6 +2519,7 @@ tags: [kokonoe, live-core, diagnostics]
                     }
                     catch { }
                     _ = Task.Run(() => ServiceContainer.ChatLogger.LogExchange("app", sendText, profileUpdate.Reply));
+                    ObserveAutonomousProfile("app", sendText, profileUpdate.Reply);
                     return;
                 }
 
@@ -2543,6 +2544,7 @@ tags: [kokonoe, live-core, diagnostics]
                     }
                     catch { }
                     _ = Task.Run(() => ServiceContainer.ChatLogger.LogExchange("app", sendText, observationReply));
+                    ObserveAutonomousProfile("app", sendText, observationReply);
                     return;
                 }
 
@@ -2595,6 +2597,7 @@ tags: [kokonoe, live-core, diagnostics]
                     catch { }
 
                     _ = Task.Run(() => ServiceContainer.ChatLogger.LogExchange("app", sendText, obsidianCommand.replyText));
+                    ObserveAutonomousProfile("app", sendText, obsidianCommand.replyText);
                     return;
                 }
 
@@ -2620,6 +2623,7 @@ tags: [kokonoe, live-core, diagnostics]
                     }
                     catch { }
                     _ = Task.Run(() => ServiceContainer.ChatLogger.LogExchange("app", sendText, controlCommand.Reply));
+                    ObserveAutonomousProfile("app", sendText, controlCommand.Reply);
                     return;
                 }
 
@@ -2668,6 +2672,7 @@ tags: [kokonoe, live-core, diagnostics]
                 {
                     try { ServiceContainer.BrainEngine?.ObserveExchangeForVaultSync(sendText, reply); } catch { }
                 });
+                ObserveAutonomousProfile("app", sendText, reply);
 
                 if (AppSettings.Load().TtsEnabled) SpeakAsync(reply);
 
@@ -3477,6 +3482,15 @@ LIVE RESPONSE STYLE
                 KokoSystemLog.Write("PROFILE", "UI route failed: " + ex.Message);
                 return (true, "Профіль не оновлено: " + ex.Message);
             }
+        }
+
+        private static void ObserveAutonomousProfile(string source, string userText, string assistantText)
+        {
+            _ = Task.Run(async () =>
+            {
+                try { await ServiceContainer.ProfileCurator.ObserveExchangeAsync(userText, assistantText, source); }
+                catch (Exception ex) { KokoSystemLog.Write("PROFILE_CURATOR", "observe failed: " + ex.Message); }
+            });
         }
 
         private bool TryHandleObsidianCommandOrFollowup(string text, out string reply)
@@ -7958,6 +7972,7 @@ tags: [kokonoe, dashboard, live]
                     }
                     catch { }
                     _ = Task.Run(() => ServiceContainer.ChatLogger.LogExchange("tg", text, observationReply));
+                    ObserveAutonomousProfile("tg", text, observationReply);
                     return;
                 }
 
@@ -7981,6 +7996,7 @@ tags: [kokonoe, dashboard, live]
                     }
                     catch { }
                     _ = Task.Run(() => ServiceContainer.ChatLogger.LogExchange("tg", text, controlCommand.Reply));
+                    ObserveAutonomousProfile("tg", text, controlCommand.Reply);
                     return;
                 }
 
@@ -8007,6 +8023,7 @@ tags: [kokonoe, dashboard, live]
                     }
                     catch { }
                     _ = Task.Run(() => ServiceContainer.ChatLogger.LogExchange("tg", text, profileUpdate.Reply));
+                    ObserveAutonomousProfile("tg", text, profileUpdate.Reply);
                     return;
                 }
 
@@ -8032,6 +8049,7 @@ tags: [kokonoe, dashboard, live]
                     }
                     catch { }
                     _ = Task.Run(() => ServiceContainer.ChatLogger.LogExchange("tg", text, obsidianReply));
+                    ObserveAutonomousProfile("tg", text, obsidianReply);
                     return;
                 }
 
@@ -8069,6 +8087,7 @@ tags: [kokonoe, dashboard, live]
 
                 // Log TG exchange to vault archive
                 _ = Task.Run(() => ServiceContainer.ChatLogger.LogExchange("tg", text, reply));
+                ObserveAutonomousProfile("tg", text, reply);
             }
             catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[TG] HandleUpdate: {ex.Message}"); }
         }
@@ -8741,6 +8760,7 @@ tags: [kokonoe, dashboard, live]
                     }
                     catch { }
                     await svc.SendAsync(msg.ChatId, controlCommand.Reply, _tgUserCts.Token);
+                    ObserveAutonomousProfile("tg-user", msg.Text, controlCommand.Reply);
                     return;
                 }
 
@@ -8767,6 +8787,7 @@ tags: [kokonoe, dashboard, live]
                     catch { }
                     await svc.SendAsync(msg.ChatId, profileUpdate.Reply, _tgUserCts.Token);
                     _ = Task.Run(() => ServiceContainer.ChatLogger.LogExchange("tg-user", msg.Text, profileUpdate.Reply));
+                    ObserveAutonomousProfile("tg-user", msg.Text, profileUpdate.Reply);
                     return;
                 }
 
@@ -8792,6 +8813,7 @@ tags: [kokonoe, dashboard, live]
                     catch { }
                     await svc.SendAsync(msg.ChatId, obsidianReply, _tgUserCts.Token);
                     _ = Task.Run(() => ServiceContainer.ChatLogger.LogExchange("tg-user", msg.Text, obsidianReply));
+                    ObserveAutonomousProfile("tg-user", msg.Text, obsidianReply);
                     return;
                 }
 
@@ -8823,6 +8845,8 @@ tags: [kokonoe, dashboard, live]
                 }
                 catch { }
                 await svc.SendAsync(msg.ChatId, reply, _tgUserCts.Token);
+                _ = Task.Run(() => ServiceContainer.ChatLogger.LogExchange("tg-user", msg.Text, reply));
+                ObserveAutonomousProfile("tg-user", msg.Text, reply);
             }
             catch (Exception ex)
             {
@@ -8866,6 +8890,7 @@ tags: [kokonoe, dashboard, live]
             try { await bot.SendMessage(chatId, reply, cancellationToken: ct); } catch { }
             StoreAssistantReply(reply);
             _ = Task.Run(() => ServiceContainer.ChatLogger.LogExchange("tg", text, reply));
+            ObserveAutonomousProfile("tg", text, reply);
             return true;
         }
 
@@ -8906,6 +8931,7 @@ tags: [kokonoe, dashboard, live]
             StoreAssistantReply(reply);
             await svc.SendAsync(msg.ChatId, reply, ct);
             _ = Task.Run(() => ServiceContainer.ChatLogger.LogExchange("tg-user", msg.Text, reply));
+            ObserveAutonomousProfile("tg-user", msg.Text, reply);
             return true;
         }
 

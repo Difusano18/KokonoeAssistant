@@ -50,6 +50,7 @@ namespace KokonoeAssistant
         private static KokoHyperAutomationService? _hyperAutomation;
         private static KokoWarmRestartWatchdogService? _processWatchdog;
         private static KokoProfileUpdateService? _profileUpdater;
+        private static KokoAutonomousProfileCuratorService? _profileCurator;
 
         public static void Initialize(string vaultPath)
         {
@@ -57,6 +58,7 @@ namespace KokonoeAssistant
             KokoSystemLog.Configure(Path.Combine(_vault ?? AppDomain.CurrentDomain.BaseDirectory, "kokonoe-data"));
             try { _ = WearableBridge; } catch { }
             try { PhotoFileWatcher.Start(); } catch { }
+            try { ProfileCurator.Start(); } catch { }
             try { _ = ProcessWatchdog; } catch { }
         }
 
@@ -332,6 +334,22 @@ namespace KokonoeAssistant
             get { lock (_lock) { return _profileUpdater ??= new KokoProfileUpdateService(ObsidianMcp, ChatRepository); } }
         }
 
+        public static KokoAutonomousProfileCuratorService ProfileCurator
+        {
+            get
+            {
+                lock (_lock)
+                {
+                    return _profileCurator ??= new KokoAutonomousProfileCuratorService(
+                        Path.Combine(_vault ?? AppDomain.CurrentDomain.BaseDirectory, "kokonoe-data"),
+                        ChatRepository,
+                        ObsidianMcp,
+                        ProfileUpdater,
+                        () => _llm);
+                }
+            }
+        }
+
         public static GoalService GoalService
         {
             get { lock (_lock) { return _goals ??= new GoalService(_vault ?? AppDomain.CurrentDomain.BaseDirectory, DataManager); } }
@@ -499,6 +517,7 @@ namespace KokonoeAssistant
                     _fileTools = null;
                     _capabilities = null;
                     _profileUpdater = null;
+                    _profileCurator?.Dispose(); _profileCurator = null;
                     _photoWatcher?.Dispose(); _photoWatcher = null;
                     _heartbeat = null; _blackboard = null; _lightOcr = null; _semanticCache = null;
                     _hyperAutomation = null; _processWatchdog = null;

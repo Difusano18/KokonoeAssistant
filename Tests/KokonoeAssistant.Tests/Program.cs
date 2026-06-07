@@ -207,6 +207,8 @@ internal static class Program
             Run("Obsidian vault architecture maintenance", ObsidianVaultArchitectureMaintenance);
             Run("Obsidian unique memory append", ObsidianUniqueMemoryAppend);
             Run("Obsidian profile updater writes neutral profile", ObsidianProfileUpdaterWritesNeutralProfile);
+            Run("Autonomous profile curator detects durable facts", AutonomousProfileCuratorDetectsDurableFacts);
+            Run("Autonomous profile curator writes synthesized update", AutonomousProfileCuratorWritesSynthesizedUpdate);
             Run("Obsidian rejects paths outside vault", ObsidianRejectsPathsOutsideVault);
             Run("LLM vault tool routing avoids accidental writes", LlmVaultToolRoutingAvoidsAccidentalWrites);
             Run("Obsidian memory quality and task queue", ObsidianMemoryQualityAndTaskQueue);
@@ -4846,6 +4848,78 @@ type: creator-profile
             AssertTrue(!content.Contains("можеш обновити мій профіль", StringComparison.OrdinalIgnoreCase), "profile should not copy raw user messages");
             AssertTrue(!content.Contains("порушеного когнітивного функціонування"), "profile should remove insulting cognitive framing");
             AssertTrue(!content.Contains("anal", StringComparison.OrdinalIgnoreCase), "profile should remove explicit private tags from main profile");
+        }
+        finally
+        {
+            try { Directory.Delete(dir, recursive: true); } catch { }
+        }
+    }
+
+    private static void AutonomousProfileCuratorDetectsDurableFacts()
+    {
+        AssertTrue(
+            KokoAutonomousProfileCuratorService.ShouldTriggerFromExchange(
+                "Remember this for Obsidian: I do not want intrusive roleplay; keep the profile factual.",
+                "Recorded as an operating preference."),
+            "curator should trigger on durable Obsidian/profile preference");
+
+        AssertTrue(
+            KokoAutonomousProfileCuratorService.ShouldTriggerFromExchange(
+                "Watch bridge is now linked and pulse telemetry is a project priority.",
+                ""),
+            "curator should trigger on wearable/project state");
+
+        AssertTrue(
+            !KokoAutonomousProfileCuratorService.ShouldTriggerFromExchange("hi", "hello"),
+            "curator should ignore low-signal greetings");
+    }
+
+    private static void AutonomousProfileCuratorWritesSynthesizedUpdate()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "KokonoeAssistant.Tests", "vault-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            var obsidian = new ObsidianMcpService(dir);
+            obsidian.WriteNote("Creator/Profile.md", """
+---
+type: creator-profile
+---
+
+# Creator Profile
+
+## Stable Facts
+- Name: Yasu
+""");
+
+            using var chat = new ChatRepository(dir);
+            chat.InsertMessage(new ChatRepository.ChatMessage
+            {
+                Role = "user",
+                Author = "user",
+                Content = "Remember for Obsidian: profile updates must be autonomous, factual, and based on real project state. Watch bridge and pulse telemetry are active priorities.",
+                Timestamp = DateTime.Now.AddMinutes(-1)
+            });
+
+            var profileUpdater = new KokoProfileUpdateService(obsidian, chat);
+            using var curator = new KokoAutonomousProfileCuratorService(
+                Path.Combine(dir, "kokonoe-data"),
+                chat,
+                obsidian,
+                profileUpdater,
+                () => null);
+
+            var result = curator.RunOnceAsync("test-autonomous-curator", force: true).GetAwaiter().GetResult();
+            var profile = obsidian.ReadNote("Creator/Profile.md") ?? "";
+            var status = obsidian.ReadNote("Kokonoe/Automation/Profile Curator.md") ?? "";
+
+            AssertTrue(result != null && result.Success, "curator should perform a profile update when forced with durable context");
+            AssertTrue(profile.Contains("Obsidian", StringComparison.OrdinalIgnoreCase), "profile should keep Obsidian operating context");
+            AssertTrue(profile.Contains("Watch bridge", StringComparison.OrdinalIgnoreCase) || profile.Contains("Galaxy Watch", StringComparison.OrdinalIgnoreCase), "profile should retain wearable project context");
+            AssertTrue(profile.Contains("Сигнали з останнього контексту") || profile.Contains("РЎРёРіРЅР°Р»Рё Р· РѕСЃС‚Р°РЅРЅСЊРѕРіРѕ РєРѕРЅС‚РµРєСЃС‚Сѓ"), "profile should synthesize recent signals");
+            AssertTrue(!profile.Contains("Remember for Obsidian:", StringComparison.OrdinalIgnoreCase), "profile should not copy raw user command text");
+            AssertTrue(!profile.Contains("## Службове") && !profile.Contains("## РЎР»СѓР¶Р±РѕРІРµ"), "profile should not expose service metadata");
+            AssertTrue(status.Contains("Profile Curator", StringComparison.OrdinalIgnoreCase) || status.Contains("проф", StringComparison.OrdinalIgnoreCase), "curator should write an automation status artifact");
         }
         finally
         {
