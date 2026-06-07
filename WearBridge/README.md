@@ -12,6 +12,7 @@ KokonoeAssistant starts a local bridge:
 - `POST http://<pc-ip>:8787/api/wearable/v1/samples`
 - `GET  http://<pc-ip>:8787/api/wearable/v1/command`
 - `POST http://<pc-ip>:8787/api/wearable/v1/command/ack`
+- `POST http://<pc-ip>:8787/api/wearable/v1/action`
 
 The POST request must include:
 
@@ -76,6 +77,11 @@ Desktop commands use a simple mailbox:
 2. watch polls `/command`
 3. watch executes the command locally
 4. watch posts `/command/ack` with `commandId`, `action`, `ok`, and `detail`
+
+Watch actions go the other way with `POST /action`. The watch can send compact
+commands such as `look_screen_now`, `note_this`, and `im_stressed`; the desktop
+routes them into the autonomous brain/vision loop and records the action in the
+central system log.
 
 The KokonoeAssistant settings window shows the same bridge diagnostics under
 **Wear Bridge**. The large link state is intentionally stricter than "server is

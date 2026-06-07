@@ -34,6 +34,9 @@ internal static class Program
             Run("Wearable bridge emulates dual real-time pulse clients", WearableBridgeEmulatesDualRealtimePulseClients);
             Run("Wearable bridge pairs and rejects bad tokens", WearableBridgePairsAndRejectsBadTokens);
             Run("Wearable bridge keeps stable token and pc id", WearableBridgeKeepsStableTokenAndPcId);
+            Run("Wearable bridge accepts watch action endpoint", WearableBridgeAcceptsWatchActionEndpoint);
+            Run("Heartbeat dashboard writes markdown and html", HeartbeatDashboardWritesMarkdownAndHtml);
+            Run("Semantic cache returns similar cached answer", SemanticCacheReturnsSimilarCachedAnswer);
             Run("Capability manifest advertises runtime routes", CapabilityManifestAdvertisesRuntimeRoutes);
             Run("Self regulation clamps pulse spike", SelfRegulationClampsPulseSpike);
             Run("Self regulation protects vulnerable tone", SelfRegulationProtectsVulnerableTone);
@@ -986,6 +989,71 @@ internal static class Program
             using var bridge2 = new KokoWearableBridgeService(telemetry, dir, 23000 + Random.Shared.Next(1000));
             AssertEqual(token1, bridge2.Token, "token should persist across bridge instances");
             AssertEqual(pcId1, bridge2.PcId, "pc id should persist across bridge instances");
+        }
+        finally { TryDeleteDir(dir); }
+    }
+
+    private static void WearableBridgeAcceptsWatchActionEndpoint()
+    {
+        var dir = TempDir();
+        var port = 24000 + Random.Shared.Next(1000);
+        try
+        {
+            var telemetry = new KokoWearableTelemetryService(dir);
+            using var bridge = new KokoWearableBridgeService(telemetry, dir, port);
+            bridge.Start();
+            AssertTrue(bridge.IsRunning, $"bridge should start; error={bridge.LastError}");
+
+            KokoWearableBridgeService.WearableActionRequest? received = null;
+            using var actionReceived = new System.Threading.ManualResetEventSlim(false);
+            bridge.ActionReceived += action =>
+            {
+                received = action;
+                actionReceived.Set();
+            };
+
+            using var client = new System.Net.Http.HttpClient();
+            client.DefaultRequestHeaders.Add("X-Koko-Bridge-Token", bridge.Token);
+            var response = client.PostAsync(
+                    $"http://localhost:{port}/api/wearable/v1/action",
+                    new System.Net.Http.StringContent("""{"action":"look_screen_now","payload":"from watch","deviceId":"watch-action"}""", System.Text.Encoding.UTF8, "application/json"))
+                .GetAwaiter().GetResult();
+            AssertTrue(response.IsSuccessStatusCode, $"watch action should succeed: {(int)response.StatusCode}");
+            AssertTrue(actionReceived.Wait(TimeSpan.FromSeconds(2)), "watch action event should be raised");
+            AssertEqual("look_screen_now", received?.Action, "action should round-trip");
+            AssertEqual("watch-action", received?.DeviceId, "device id should round-trip");
+        }
+        finally { TryDeleteDir(dir); }
+    }
+
+    private static void HeartbeatDashboardWritesMarkdownAndHtml()
+    {
+        var dir = TempDir();
+        try
+        {
+            var heartbeat = new KokoServiceHeartbeatService(dir);
+            heartbeat.Update("WATCH", "OK", "samples fresh");
+            heartbeat.Update("VISION", "SCANNING", "mini OCR");
+
+            AssertTrue(File.Exists(heartbeat.MarkdownPath), "heartbeat markdown should be written");
+            AssertTrue(File.Exists(heartbeat.HtmlPath), "heartbeat html should be written");
+            var md = File.ReadAllText(heartbeat.MarkdownPath);
+            AssertTrue(md.Contains("WATCH") && md.Contains("VISION"), "heartbeat markdown should list services");
+            var html = File.ReadAllText(heartbeat.HtmlPath);
+            AssertTrue(html.Contains("KOKONOE SERVICE HEARTBEAT"), "heartbeat html should have title");
+        }
+        finally { TryDeleteDir(dir); }
+    }
+
+    private static void SemanticCacheReturnsSimilarCachedAnswer()
+    {
+        var dir = TempDir();
+        try
+        {
+            var cache = new KokoSemanticCacheService(dir);
+            cache.Put("як працює wearable bridge між годинником і пк", "Bridge приймає samples з годинника, перевіряє token і оновлює telemetry state.");
+            AssertTrue(cache.TryGet("як саме працює wearable bridge між годинником і моїм пк", out var answer), "similar query should hit semantic cache");
+            AssertTrue(answer.Contains("samples", StringComparison.OrdinalIgnoreCase), "cached answer should return stored content");
         }
         finally { TryDeleteDir(dir); }
     }

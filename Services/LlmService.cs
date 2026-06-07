@@ -69,6 +69,7 @@ namespace KokonoeAssistant.Services
         public GoalService?          Goals          { get; set; }
         public OllamaKeyPoolService? OllamaPool     { get; set; }
         public KokoAgentTaskService? AgentTasks     { get; set; }
+        public KokoSemanticCacheService? SemanticCache { get; set; }
         public string                ScreenCtx      { get; set; } = "";
         public string                PersonalityHint  { get; set; } = "";
         public double                DynamicTemperature { get; set; } = 0.85;
@@ -1574,6 +1575,15 @@ namespace KokonoeAssistant.Services
 
             try
             {
+                if (imageBytes == null &&
+                    string.IsNullOrWhiteSpace(agentId) &&
+                    LooksCacheableUserQuery(userText) &&
+                    SemanticCache?.TryGet(userText, out var cachedReply) == true)
+                {
+                    RecordLlmSuccess(diagProvider, diagModel, "chat:semantic-cache", diagWatch, "semantic_cache");
+                    return cachedReply;
+                }
+
                 if (imageBytes == null
                     && ReminderCommandParser.TryParse(userText, DateTime.Now, out var reminder))
                 {
@@ -2042,6 +2052,8 @@ namespace KokonoeAssistant.Services
                                 CompressHistoryLocked();
                         }
                         RecordLlmSuccess(diagProvider, diagModel, diagChannel, diagWatch);
+                        if (imageBytes == null && !useTools && string.IsNullOrWhiteSpace(agentId) && LooksCacheableUserQuery(userText))
+                            SemanticCache?.Put(userText, reply);
                         return reply;
                     }
 
@@ -3253,6 +3265,46 @@ namespace KokonoeAssistant.Services
             score += System.Text.RegularExpressions.Regex.Matches(text, @"\u0420\p{IsCyrillic}").Count;
             score += System.Text.RegularExpressions.Regex.Matches(text, @"\u0421\p{IsCyrillic}").Count;
             return score;
+        }
+
+        private static bool LooksCacheableUserQuery(string? userText)
+        {
+            if (string.IsNullOrWhiteSpace(userText))
+                return false;
+            var text = userText.Trim();
+            if (text.Length < 24 || text.Length > 700)
+                return false;
+            var lower = text.ToLowerInvariant();
+            if (lower.Contains("зроби") ||
+                lower.Contains("виконай") ||
+                lower.Contains("запусти") ||
+                lower.Contains("відкрий") ||
+                lower.Contains("видали") ||
+                lower.Contains("коміт") ||
+                lower.Contains("commit") ||
+                lower.Contains("build") ||
+                lower.Contains("тест") ||
+                lower.Contains("test") ||
+                lower.Contains("зараз") ||
+                lower.Contains("сьогодні") ||
+                lower.Contains("latest") ||
+                lower.Contains("онови"))
+                return false;
+            if (lower.Contains("пам") ||
+                lower.Contains("obsidian") ||
+                lower.Contains("vault") ||
+                lower.Contains("екран") ||
+                lower.Contains("бачиш") ||
+                lower.Contains("screen"))
+                return false;
+            return lower.StartsWith("що ") ||
+                   lower.StartsWith("чому ") ||
+                   lower.StartsWith("як ") ||
+                   lower.StartsWith("поясни") ||
+                   lower.StartsWith("розкажи") ||
+                   lower.StartsWith("what ") ||
+                   lower.StartsWith("why ") ||
+                   lower.StartsWith("how ");
         }
         // ------------------------------------------------------------
 

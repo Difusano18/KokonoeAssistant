@@ -182,6 +182,13 @@ namespace KokonoeAssistant.Services
         public DateTime LastBridgeSelfHealAt { get; set; } = DateTime.MinValue;
         public DateTime LastReflectiveInsightAt { get; set; } = DateTime.MinValue;
         public string LastReflectiveInsightSummary { get; set; } = "";
+        public DateTime LastMorningBriefingAt { get; set; } = DateTime.MinValue;
+        public string LastMorningBriefingSummary { get; set; } = "";
+        public DateTime LastDailySelfReviewAt { get; set; } = DateTime.MinValue;
+        public string LastDailySelfReviewSummary { get; set; } = "";
+        public string CurrentSomaticAutomationMode { get; set; } = "";
+        public DateTime LastWatchActionAt { get; set; } = DateTime.MinValue;
+        public string LastWatchAction { get; set; } = "";
         public DateTime ScreenAwarenessObserveOnlyUntil { get; set; } = DateTime.MinValue;
         public DateTime ProactiveMutedUntil { get; set; } = DateTime.MinValue;
         public string ProactiveMuteReason { get; set; } = "";
@@ -302,6 +309,8 @@ namespace KokonoeAssistant.Services
         private readonly System.Threading.Timer _spontaneousTimer;
         private readonly System.Threading.Timer _screenAwarenessTimer;
         private readonly System.Threading.Timer _resourceGuardianTimer;
+        private readonly System.Threading.Timer _stateCheckpointTimer;
+        private readonly System.Threading.Timer _dailyReviewTimer;
         private bool               _disposed;
         // Семафор: тільки один фоновий LLM-запит за раз (щоб не забивати чергу)
         private readonly SemaphoreSlim _bgLlmSemaphore = new(1, 1);
@@ -318,6 +327,7 @@ namespace KokonoeAssistant.Services
         private DateTime _lastReflectiveInsightAt = DateTime.MinValue;
         private bool _agentCompletionEventsHooked;
         private bool _wearableEventsHooked;
+        private bool _wearableActionEventsHooked;
         private readonly object    _lock = new();
         private DateTime           _lastInAppSilenceMsgAt = DateTime.MinValue;
 
@@ -400,8 +410,16 @@ namespace KokonoeAssistant.Services
             _resourceGuardianTimer = new System.Threading.Timer(_ => _ = GuardedResourceGuardianAsync(), null,
                 TimeSpan.FromMinutes(2), TimeSpan.FromMinutes(5));
 
+            _stateCheckpointTimer = new System.Threading.Timer(_ => CheckpointStateAndHeartbeat(), null,
+                TimeSpan.FromMinutes(1), TimeSpan.FromMinutes(5));
+
+            _dailyReviewTimer = new System.Threading.Timer(_ => _ = TryDailySelfReviewAsync("daily-review-timer"), null,
+                TimeSpan.FromMinutes(10), TimeSpan.FromMinutes(30));
+
             HookAgentCompletionEvents();
             HookWearableTelemetryEvents();
+            HookWearableActionEvents();
+            CheckpointStateAndHeartbeat();
         }
 
         // Reentrancy guards: skip tick if previous still running.
@@ -463,7 +481,7 @@ namespace KokonoeAssistant.Services
             {
                 ServiceContainer.WearableTelemetry.SampleAccepted += (result, sample) =>
                 {
-                    if (result.Accepted && !string.IsNullOrWhiteSpace(result.EventKind))
+                    if (result.Accepted)
                         _ = Task.Run(() => HandleWearableSomaticEventAsync(result, sample));
                 };
                 Log("Wearable telemetry events hooked");
@@ -474,11 +492,104 @@ namespace KokonoeAssistant.Services
             }
         }
 
+        private void HookWearableActionEvents()
+        {
+            if (_wearableActionEventsHooked) return;
+            _wearableActionEventsHooked = true;
+            try
+            {
+                ServiceContainer.WearableBridge.ActionReceived += action =>
+                {
+                    _ = Task.Run(() => HandleWatchActionAsync(action));
+                };
+                Log("Wearable action events hooked");
+            }
+            catch (Exception ex)
+            {
+                Log($"HookWearableActionEvents: {ex.Message}");
+            }
+        }
+
+        private async Task HandleWatchActionAsync(KokoWearableBridgeService.WearableActionRequest action)
+        {
+            try
+            {
+                var name = (action.Action ?? "").Trim().ToLowerInvariant();
+                if (string.IsNullOrWhiteSpace(name))
+                    return;
+
+                lock (_lock)
+                {
+                    _state.LastWatchActionAt = DateTime.Now;
+                    _state.LastWatchAction = name;
+                    _state.AutonomyDecisionLog.Add($"[{DateTime.Now:HH:mm}] watch action: {name}");
+                    if (_state.AutonomyDecisionLog.Count > 80)
+                        _state.AutonomyDecisionLog.RemoveRange(0, _state.AutonomyDecisionLog.Count - 80);
+                    SaveState();
+                }
+
+                ServiceContainer.Blackboard.Publish("heart-agent", "watch_action", $"{name}: {action.Payload}", 0.9, action);
+                ServiceContainer.Heartbeat.Update("WATCH_ACTION", "received", name);
+                Log($"Watch action received: {name}; payload={TrimForLog(action.Payload, 120)}");
+
+                switch (name)
+                {
+                    case "look_screen_now":
+                    case "screen_now":
+                    case "look":
+                        await ForceScreenAwarenessAsync("watch_action:look_screen_now", "The user explicitly asked from the watch. Give a concise useful observation.");
+                        break;
+                    case "note_this":
+                    case "note":
+                        TryWriteWatchNote(action);
+                        break;
+                    case "im_stressed":
+                    case "stress":
+                        await ForceScreenAwarenessAsync("watch_action:im_stressed", "Protective tone. Look for what might be stressing the user and suggest one low-risk next step.");
+                        ServiceContainer.WearableBridge.QueueCommand("vibrate", "Kokonoe: бачу сигнал стресу. Зроби коротку паузу.");
+                        break;
+                    default:
+                        Log($"Watch action ignored: unknown action {name}");
+                        break;
+                }
+            }
+            catch (Exception ex)
+            {
+                Log($"HandleWatchActionAsync: {ex.Message}");
+            }
+        }
+
+        private void TryWriteWatchNote(KokoWearableBridgeService.WearableActionRequest action)
+        {
+            try
+            {
+                var now = DateTime.Now;
+                var foreground = ServiceContainer.PcControl.GetForegroundWindow();
+                var text = string.IsNullOrWhiteSpace(action.Payload)
+                    ? $"Watch note requested. Foreground: {foreground.ProcessName} / {foreground.Title}"
+                    : action.Payload.Trim();
+                var path = $"Kokonoe/Watch Notes/{now:yyyy-MM-dd HHmmss} - quick note.md";
+                _obsidian.WriteNote(path, $"---\ntype: watch-note\ntags: [kokonoe, wearable, quick-note]\ncreated: {now:O}\n---\n\n# Watch note\n\n{text}\n\nForeground: `{foreground.ProcessName}` / {foreground.Title}\n");
+                Memory.RecordEpisodeBlocking(text, "watch_note", 0.72f, new[] { "wearable", "watch-action" });
+                ServiceContainer.Blackboard.Publish("vault-agent", "watch_note", path, 0.78);
+                Log($"Watch note wrote {path}");
+            }
+            catch (Exception ex)
+            {
+                Log($"TryWriteWatchNote: {ex.Message}");
+            }
+        }
+
         private async Task HandleWearableSomaticEventAsync(KokoWearableIngestResult result, KokoWearableSample sample)
         {
             try
             {
                 var now = DateTime.Now;
+                TryApplySomaticAutomation(result, sample, now);
+
+                if (string.IsNullOrWhiteSpace(result.EventKind))
+                    return;
+
                 if (now - _lastSomaticVisionTriggerAt < TimeSpan.FromMinutes(4))
                 {
                     Log($"Wearable somatic event suppressed: cooldown {result.EventKind} {result.EventReason}");
@@ -515,6 +626,182 @@ namespace KokonoeAssistant.Services
             {
                 Log($"HandleWearableSomaticEventAsync: {ex.Message}");
             }
+        }
+
+        private void TryApplySomaticAutomation(KokoWearableIngestResult result, KokoWearableSample sample, DateTime now)
+        {
+            try
+            {
+                var state = result.State;
+                if (state == null)
+                    return;
+
+                ServiceContainer.Heartbeat.Update("HEART_AGENT", "sample", state.Summary);
+                ServiceContainer.Blackboard.Publish("heart-agent", "sample", state.Summary, state.LiveStressScore / 100.0);
+
+                if (state.ContextSignal == "woke_up" &&
+                    (_state.LastMorningBriefingAt <= DateTime.MinValue || now - _state.LastMorningBriefingAt > TimeSpan.FromHours(8)))
+                {
+                    TryWriteMorningBriefing(now, state);
+                }
+
+                var activity = $"{state.Activity} {sample.Activity}".ToLowerInvariant();
+                var workout = activity.Contains("running") || activity.Contains("workout") ||
+                              activity.Contains("exercise") || ((state.Motion ?? 0) >= 0.70 && state.CurrentBpm >= 95);
+                if (workout)
+                {
+                    lock (_lock)
+                    {
+                        _state.CurrentSomaticAutomationMode = "coach";
+                        _state.ProactiveMutedUntil = now.AddMinutes(45);
+                        _state.ProactiveMuteReason = "workout_nonessential_notifications_muted";
+                        _state.AutonomyDecisionLog.Add($"[{now:HH:mm}] somatic mode coach; workout detected; notifications muted");
+                        if (_state.AutonomyDecisionLog.Count > 80)
+                            _state.AutonomyDecisionLog.RemoveRange(0, _state.AutonomyDecisionLog.Count - 80);
+                        SaveState();
+                    }
+                    ServiceContainer.Heartbeat.Update("SOMATIC_MODE", "coach", "workout/running detected");
+                    ServiceContainer.Blackboard.Publish("heart-agent", "somatic_mode", "coach mode; nonessential proactive muted", 0.82);
+                }
+            }
+            catch (Exception ex)
+            {
+                Log($"TryApplySomaticAutomation: {ex.Message}");
+            }
+        }
+
+        private void TryWriteMorningBriefing(DateTime now, KokoWearableState state)
+        {
+            try
+            {
+                var recent = string.Join("\n", _state.Observations.TakeLast(12).Select(o => "- " + o));
+                var insight = string.IsNullOrWhiteSpace(_state.LastReflectiveInsightSummary)
+                    ? "No fresh reflective insight yet."
+                    : _state.LastReflectiveInsightSummary;
+                var path = $"Kokonoe/Morning Briefings/{now:yyyy-MM-dd} - wearable wake briefing.md";
+                var body = $"""
+---
+type: morning-briefing
+tags: [kokonoe, wearable, briefing]
+created: {now:O}
+---
+
+# Morning Briefing
+
+Wake signal: {state.ContextSignal}
+Wearable: {state.Summary}
+
+## Planned While You Were Away
+
+{insight}
+
+## Recent Observations
+
+{recent}
+""";
+                _obsidian.WriteNote(path, body);
+                lock (_lock)
+                {
+                    _state.LastMorningBriefingAt = now;
+                    _state.LastMorningBriefingSummary = path;
+                    SaveState();
+                }
+                ServiceContainer.Blackboard.Publish("vault-agent", "morning_briefing", path, 0.86);
+                Log($"Morning briefing wrote {path}");
+            }
+            catch (Exception ex)
+            {
+                Log($"TryWriteMorningBriefing: {ex.Message}");
+            }
+        }
+
+        private void CheckpointStateAndHeartbeat()
+        {
+            try
+            {
+                lock (_lock) { SaveState(); }
+                ServiceContainer.Heartbeat.Update("BRAIN", "online", $"mood={_state.CurrentMood}; thoughts={_state.PendingThoughts.Count}; autonomy={TrimForLog(_state.LastAutonomyDecision, 80)}");
+                ServiceContainer.Heartbeat.Update("VISION", _screenAwarenessInFlight == 1 ? "scanning" : "idle", $"last={FormatAge(_state.LastScreenAwarenessAt)}; failures={_state.VisionFailureCount}");
+                ServiceContainer.Heartbeat.Update("WATCH", ServiceContainer.WearableBridge.GetConnectionSnapshot().State, ServiceContainer.WearableTelemetry.State.Summary);
+                ServiceContainer.Heartbeat.Update("BLACKBOARD", "online", $"{ServiceContainer.Blackboard.Recent(10).Count} recent events");
+                KokoSystemLog.Write("BRAIN", "state checkpoint saved");
+            }
+            catch (Exception ex)
+            {
+                Log($"CheckpointStateAndHeartbeat: {ex.Message}");
+            }
+        }
+
+        private async Task TryDailySelfReviewAsync(string source)
+        {
+            try
+            {
+                var now = DateTime.Now;
+                if (_state.LastDailySelfReviewAt.Date == now.Date || now.Hour < 4)
+                    return;
+
+                var autonomyTail = string.Join("\n", _state.AutonomyDecisionLog.TakeLast(12).Select(x => "- " + x));
+                var observations = string.Join("\n", _state.Observations.TakeLast(16).Select(x => "- " + x));
+                var stabilityDelta = _state.VisionFailureCount >= 3 ? -0.03f : 0.01f;
+                _state.MoodFactors["self_review_stability"] = Math.Clamp(
+                    (_state.MoodFactors.TryGetValue("self_review_stability", out var old) ? old : 0f) + stabilityDelta,
+                    -0.25f,
+                    0.25f);
+
+                var summary = $"vision_failures={_state.VisionFailureCount}; resource={_state.LastResourceGuardianSummary}; wearable={ServiceContainer.WearableTelemetry.State.Summary}";
+                var path = $"Kokonoe/Daily Reviews/{now:yyyy-MM-dd} - autonomous self review.md";
+                var body = $"""
+---
+type: daily-self-review
+tags: [kokonoe, self-review, autonomy]
+created: {now:O}
+source: {source}
+---
+
+# Autonomous Self Review
+
+Summary: {summary}
+
+## Autonomy Decisions
+
+{autonomyTail}
+
+## Observations
+
+{observations}
+
+## Adjustment
+
+- mood factor `self_review_stability`: {_state.MoodFactors["self_review_stability"]:F2}
+- vision failure count considered: {_state.VisionFailureCount}
+""";
+                await Task.Run(() => _obsidian.WriteNote(path, body)).ConfigureAwait(false);
+                lock (_lock)
+                {
+                    _state.LastDailySelfReviewAt = now;
+                    _state.LastDailySelfReviewSummary = summary;
+                    SaveState();
+                }
+                ServiceContainer.Blackboard.Publish("brain-agent", "daily_self_review", summary, 0.72);
+                ServiceContainer.Heartbeat.Update("SELF_REVIEW", "written", path);
+                Log($"Daily self-review wrote {path}");
+            }
+            catch (Exception ex)
+            {
+                Log($"TryDailySelfReviewAsync: {ex.Message}");
+            }
+        }
+
+        private static string FormatAge(DateTime at)
+        {
+            if (at <= DateTime.MinValue)
+                return "never";
+            var age = DateTime.Now - at;
+            if (age.TotalSeconds < 90)
+                return $"{age.TotalSeconds:0}s ago";
+            if (age.TotalMinutes < 90)
+                return $"{age.TotalMinutes:0}m ago";
+            return $"{age.TotalHours:0.0}h ago";
         }
 
         private void ObserveAgentTaskCompletion(KokoAgentTask task, KokoAgentCompletionNotice notice)
@@ -6509,6 +6796,8 @@ CHAT:
             _spontaneousTimer.Dispose();
             _screenAwarenessTimer.Dispose();
             _resourceGuardianTimer.Dispose();
+            _stateCheckpointTimer.Dispose();
+            _dailyReviewTimer.Dispose();
             _bgLlmSemaphore.Dispose();
         }
     }

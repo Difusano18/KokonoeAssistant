@@ -188,6 +188,22 @@ class MainActivity : Activity() {
         controlsCard.addView(button("Battery", Color.rgb(71, 59, 29), Color.rgb(255, 214, 110)) {
             requestBatteryOptimizationExemption()
         }, margin(top = 6).apply { height = dp(42) })
+        val row3 = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            setPadding(0, dp(6), 0, 0)
+        }
+        row3.addView(button("Look", Color.rgb(13, 65, 84), Color.rgb(52, 211, 235)) {
+            sendWatchAction("look_screen_now")
+        }, LinearLayout.LayoutParams(0, dp(40), 1f))
+        row3.addView(space(6))
+        row3.addView(button("Note", Color.rgb(62, 55, 20), Color.rgb(255, 214, 110)) {
+            sendWatchAction("note_this")
+        }, LinearLayout.LayoutParams(0, dp(40), 1f))
+        row3.addView(space(6))
+        row3.addView(button("Stress", Color.rgb(86, 24, 48), Color.rgb(255, 92, 132)) {
+            sendWatchAction("im_stressed")
+        }, LinearLayout.LayoutParams(0, dp(40), 1f))
+        controlsCard.addView(row3)
         root.addView(controlsCard, margin(bottom = 8))
 
         val diagnosticsCard = card("Diagnostics")
@@ -225,6 +241,22 @@ class MainActivity : Activity() {
                 knownBaseUrls = urls.joinToString("\n")
             )
         )
+    }
+
+    private fun sendWatchAction(action: String) {
+        saveSettings()
+        scope.launch {
+            val result = BridgeSender(BridgeSettings.load(this@MainActivity)).sendAction(action)
+            if (result.ok) {
+                toast("Sent: $action")
+                BridgeLog.append(this@MainActivity, "watch action sent: $action")
+            } else {
+                val error = result.error.ifBlank { "HTTP ${result.httpCode}" }
+                toast("Action failed: $error")
+                BridgeLog.append(this@MainActivity, "watch action failed: $action $error")
+            }
+            refreshStatus()
+        }
     }
 
     private fun pcInputUrls(port: Int): List<String> {

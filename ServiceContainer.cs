@@ -43,6 +43,12 @@ namespace KokonoeAssistant
         private static KokoFileSystemToolService? _fileTools;
         private static KokoCapabilityManifestService? _capabilities;
         private static KokoPhotoFileWatcherService? _photoWatcher;
+        private static KokoServiceHeartbeatService? _heartbeat;
+        private static KokoInternalBlackboardService? _blackboard;
+        private static KokoLightOcrService? _lightOcr;
+        private static KokoSemanticCacheService? _semanticCache;
+        private static KokoHyperAutomationService? _hyperAutomation;
+        private static KokoWarmRestartWatchdogService? _processWatchdog;
 
         public static void Initialize(string vaultPath)
         {
@@ -50,6 +56,7 @@ namespace KokonoeAssistant
             KokoSystemLog.Configure(Path.Combine(_vault ?? AppDomain.CurrentDomain.BaseDirectory, "kokonoe-data"));
             try { _ = WearableBridge; } catch { }
             try { PhotoFileWatcher.Start(); } catch { }
+            try { _ = ProcessWatchdog; } catch { }
         }
 
         public static bool IsInitialized
@@ -161,6 +168,7 @@ namespace KokonoeAssistant
                         _llm.State      = StateEngine;
                         _llm.OllamaPool = OllamaPool;
                         _llm.AgentTasks = AgentTasks;
+                        _llm.SemanticCache = SemanticCache;
                         // Ensure BrainEngine is initialized to wire up Emotion, Memory, Patterns
                         // This ensures all LlmService dependencies are properly set
                         var brain = BrainEngine;
@@ -227,6 +235,68 @@ namespace KokonoeAssistant
         public static KokoCapabilityManifestService Capabilities
         {
             get { lock (_lock) { return _capabilities ??= new KokoCapabilityManifestService(); } }
+        }
+
+        public static KokoServiceHeartbeatService Heartbeat
+        {
+            get
+            {
+                lock (_lock)
+                {
+                    return _heartbeat ??= new KokoServiceHeartbeatService(
+                        Path.Combine(_vault ?? AppDomain.CurrentDomain.BaseDirectory, "kokonoe-data"));
+                }
+            }
+        }
+
+        public static KokoInternalBlackboardService Blackboard
+        {
+            get
+            {
+                lock (_lock)
+                {
+                    return _blackboard ??= new KokoInternalBlackboardService(
+                        Path.Combine(_vault ?? AppDomain.CurrentDomain.BaseDirectory, "kokonoe-data"));
+                }
+            }
+        }
+
+        public static KokoLightOcrService LightOcr
+        {
+            get { lock (_lock) { return _lightOcr ??= new KokoLightOcrService(); } }
+        }
+
+        public static KokoSemanticCacheService SemanticCache
+        {
+            get
+            {
+                lock (_lock)
+                {
+                    return _semanticCache ??= new KokoSemanticCacheService(
+                        Path.Combine(_vault ?? AppDomain.CurrentDomain.BaseDirectory, "kokonoe-data"));
+                }
+            }
+        }
+
+        public static KokoHyperAutomationService HyperAutomation
+        {
+            get
+            {
+                lock (_lock)
+                {
+                    return _hyperAutomation ??= new KokoHyperAutomationService(
+                        PcControl,
+                        LightOcr,
+                        Blackboard,
+                        Heartbeat,
+                        () => _brain);
+                }
+            }
+        }
+
+        public static KokoWarmRestartWatchdogService ProcessWatchdog
+        {
+            get { lock (_lock) { return _processWatchdog ??= new KokoWarmRestartWatchdogService(Heartbeat); } }
         }
 
         public static KokoPhotoFileWatcherService PhotoFileWatcher
@@ -387,6 +457,7 @@ namespace KokonoeAssistant
                         LlmService.Patterns   = _brain.Patterns;
                         LlmService.Scheduler  = _brain.Scheduler;
                         LlmService.Goals      = GoalService;
+                        _ = HyperAutomation;
                     }
                     return _brain;
                 }
@@ -402,6 +473,8 @@ namespace KokonoeAssistant
                     _chatRepo?.Dispose();
                     _audio?.Dispose();
                     _health?.Dispose();
+                    _hyperAutomation?.Dispose();
+                    _processWatchdog?.Dispose();
                     // HttpClient in LlmService should be disposed properly
                     _llm?.ClearHistory(); // cleanup any pending operations
                     _chatRepo = null; _audio = null; _whisper = null;
@@ -420,6 +493,8 @@ namespace KokonoeAssistant
                     _fileTools = null;
                     _capabilities = null;
                     _photoWatcher?.Dispose(); _photoWatcher = null;
+                    _heartbeat = null; _blackboard = null; _lightOcr = null; _semanticCache = null;
+                    _hyperAutomation = null; _processWatchdog = null;
                 }
                 catch { }
             }

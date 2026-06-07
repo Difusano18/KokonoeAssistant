@@ -160,6 +160,26 @@ class BridgeSender(private val settings: BridgeSettings) {
         }
     }
 
+    suspend fun sendAction(action: String, payload: String = ""): BridgeSendResult = withContext(Dispatchers.IO) {
+        executeWithRetry("watch_action", maxAttempts = 3, initialDelayMs = 350L) {
+            val body = JSONObject()
+                .put("action", action)
+                .put("payload", payload.take(240))
+                .put("deviceId", settings.deviceId)
+                .toString()
+                .toRequestBody("application/json; charset=utf-8".toMediaType())
+            val request = Request.Builder()
+                .url("${settings.desktopBaseUrl.trimEnd('/')}/api/wearable/v1/action")
+                .header("X-Koko-Bridge-Token", settings.bridgeToken)
+                .post(body)
+                .build()
+
+            client.newCall(request).execute().use {
+                BridgeSendResult(ok = it.isSuccessful, httpCode = it.code, error = if (it.isSuccessful) "" else it.message)
+            }
+        }
+    }
+
     private suspend fun executeWithRetry(
         operation: String,
         maxAttempts: Int = 3,

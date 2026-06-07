@@ -60,6 +60,8 @@ namespace KokonoeAssistant.Services
         private bool _lastAckOk;
         private string _lastAckDetail = "";
 
+        public event Action<WearableActionRequest>? ActionReceived;
+
         public KokoWearableBridgeService(
             KokoWearableTelemetryService telemetry,
             string dataDir,
@@ -430,6 +432,28 @@ namespace KokonoeAssistant.Services
                     RecordCommandAck(req, ack);
                     RemoveCommandLocked(ack.CommandId);
                     return new BridgeHttpResponse(200, new { ok = true, diagnostics = BuildDiagnosticsPayload() });
+                }
+
+                if (req.HttpMethod == "POST" && path.EndsWith("/action", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (!IsAuthorized(req))
+                    {
+                        RecordAuthFailure(req);
+                        return new BridgeHttpResponse(401, new { ok = false, error = "missing_or_invalid_bridge_token" });
+                    }
+
+                    RecordAuthorized(req);
+                    var body = req.Body;
+                    var action = string.IsNullOrWhiteSpace(body)
+                        ? new WearableActionRequest()
+                        : JsonConvert.DeserializeObject<WearableActionRequest>(body) ?? new WearableActionRequest();
+                    action.DeviceId = string.IsNullOrWhiteSpace(action.DeviceId) ? _lastDeviceId : action.DeviceId.Trim();
+                    action.RemoteEndpoint = req.RemoteEndpoint;
+                    action.ReceivedAtUtc = DateTime.UtcNow;
+                    LogBridge($"watch action={action.Action} device={action.DeviceId} payload={TrimForLog(action.Payload, 120)}");
+                    try { ActionReceived?.Invoke(action); }
+                    catch (Exception ex) { LogBridge($"watch action handler failed: {ex.Message}"); }
+                    return new BridgeHttpResponse(200, new { ok = true, action = action.Action, receivedAtUtc = action.ReceivedAtUtc });
                 }
 
                 if (req.HttpMethod == "POST" && path.EndsWith("/pair", StringComparison.OrdinalIgnoreCase))
@@ -1014,6 +1038,14 @@ namespace KokonoeAssistant.Services
             }
         }
 
+        private static string TrimForLog(string? value, int max)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                return "";
+            var text = value.Replace("\r", " ").Replace("\n", " ").Trim();
+            return text.Length <= max ? text : text[..max].TrimEnd() + "...";
+        }
+
         private sealed class WearablePairRequest
         {
             public string DeviceId { get; set; } = "";
@@ -1043,6 +1075,15 @@ namespace KokonoeAssistant.Services
             public string Action { get; set; } = "";
             public bool Ok { get; set; }
             public string Detail { get; set; } = "";
+        }
+
+        public sealed class WearableActionRequest
+        {
+            public string Action { get; set; } = "";
+            public string Payload { get; set; } = "";
+            public string DeviceId { get; set; } = "";
+            public string RemoteEndpoint { get; set; } = "";
+            public DateTime ReceivedAtUtc { get; set; } = DateTime.UtcNow;
         }
 
         private sealed class BridgeHttpRequest
