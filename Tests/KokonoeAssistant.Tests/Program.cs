@@ -79,6 +79,8 @@ internal static class Program
             Run("Post reply guard allows repeated screen scan command", PostReplyGuardAllowsRepeatedScreenScanCommand);
             Run("Post reply guard rejects screen capability denial", PostReplyGuardRejectsScreenCapabilityDenial);
             Run("Post reply guard protects short affection", PostReplyGuardProtectsShortAffection);
+            Run("Post reply guard protects soft social talk", PostReplyGuardProtectsSoftSocialTalk);
+            Run("Post reply guard blocks affection productivity pivot", PostReplyGuardBlocksAffectionProductivityPivot);
             Run("Post reply guard protects short greeting", PostReplyGuardProtectsShortGreeting);
             Run("Post reply guard blocks overbuilt greeting", PostReplyGuardBlocksOverbuiltGreeting);
             Run("Post reply guard blocks repeated fallback loop", PostReplyGuardBlocksRepeatedFallbackLoop);
@@ -2264,6 +2266,45 @@ internal static class Program
         AssertTrue(string.IsNullOrWhiteSpace(result.HardReplacement), "short affection should not get a hardcoded final reply");
         AssertTrue(result.RepairInstruction.Contains("соціальний"), "repair should preserve the social meaning");
         AssertTrue(result.Violations.Any(v => v.Contains("емоційн")), "violation should mention emotional short reply");
+    }
+
+    private static void PostReplyGuardProtectsSoftSocialTalk()
+    {
+        var now = new DateTime(2026, 6, 8, 0, 31, 0);
+        var state = new KokoInternalState();
+        var userText = "\u0445\u043e\u0447\u0443 \u043f\u0440\u043e\u0441\u0442\u043e \u043f\u043e\u0433\u043e\u0432\u043e\u0440\u0438\u0442\u0438 \u043f\u0440\u043e \u0434\u0443\u0440\u043d\u0438\u0446\u0456 \u0432\u0441\u044f\u043a\u0456... \u043f\u0440\u043e \u0442\u0435\u0431\u0435, \u043f\u0440\u043e \u043c\u0435\u043d\u0435";
+        var badReply = "\u041c\u043e\u0436\u0435\u043c\u043e. \u0410\u043b\u0435 \u043f\u043e\u043f\u0435\u0440\u0435\u0434\u0436\u0430\u044e: \u044f \u043d\u0435 \u0431\u0443\u0434\u0443 \u043f\u0456\u0434\u0456\u0433\u0440\u0443\u0432\u0430\u0442\u0438 \u0432 \u00ab\u0441\u043e\u0446\u0456\u0430\u043b\u044c\u043d\u0456 \u0442\u0430\u043d\u0446\u0456\u00bb \u0447\u0438 \u043b\u0438\u0442\u0438 \u0432\u043e\u0434\u0443. \u041f\u0440\u043e \u0449\u043e \u0441\u0430\u043c\u0435 \u0445\u043e\u0447\u0435\u0448? \u0412\u0438\u043a\u043b\u0430\u0434\u0430\u0439.";
+        var messages = new[]
+        {
+            new ChatRepository.ChatMessage { Role = "user", Content = userText, Timestamp = now }
+        };
+        var timeline = new KokoConversationTimelineEngine().Build(messages, state, now, userText);
+
+        var result = new KokoPostReplyGuard().Evaluate(userText, badReply, state, messages, timeline, now);
+
+        AssertTrue(!result.Passed, "guard should reject contempt for a soft social talk request");
+        AssertTrue(result.ShouldRepair, "soft social talk should be repaired through the model");
+        AssertTrue(result.Violations.Any(v => v.Contains("soft social", StringComparison.OrdinalIgnoreCase)), "violation should name the soft social failure");
+        AssertTrue(result.RepairInstruction.Contains("casual", StringComparison.OrdinalIgnoreCase), "repair should include casual/social guidance");
+    }
+
+    private static void PostReplyGuardBlocksAffectionProductivityPivot()
+    {
+        var now = new DateTime(2026, 6, 8, 0, 38, 0);
+        var state = new KokoInternalState();
+        var userText = "\u0445\u043c \u0441\u043a\u0430\u0436\u0438 \u0449\u043e\u0441\u044c \u043c\u0438\u043b\u0435 \u043f\u0440\u043e \u043c\u0435\u043d\u0435";
+        var badReply = "\u0422\u0438 \u0432\u043c\u0456\u0454\u0448 \u0431\u0443\u0442\u0438 \u043d\u0430\u0441\u0442\u0438\u0440\u043d\u0438\u043c, \u043a\u043e\u043b\u0438 \u0445\u043e\u0447\u0435\u0448 \u0447\u043e\u0433\u043e\u0441\u044c \u0432\u0456\u0434 \u043c\u0435\u043d\u0435. \u0417\u0430\u0434\u043e\u0432\u043e\u043b\u044c\u043d\u0438\u043b\u0430 \u0442\u0432\u0456\u0439 \u0437\u0430\u043f\u0438\u0442 \u043d\u0430 \u00ab\u043c\u0438\u043b\u0456\u0441\u0442\u044c\u00bb? \u0422\u0435\u043f\u0435\u0440 \u043f\u043e\u0432\u0435\u0440\u0442\u0430\u0439\u043c\u043e\u0441\u044f \u0434\u043e \u0447\u043e\u0433\u043e\u0441\u044c \u0431\u0456\u043b\u044c\u0448 \u043f\u0440\u043e\u0434\u0443\u043a\u0442\u0438\u0432\u043d\u043e\u0433\u043e.";
+        var messages = new[]
+        {
+            new ChatRepository.ChatMessage { Role = "user", Content = userText, Timestamp = now }
+        };
+        var timeline = new KokoConversationTimelineEngine().Build(messages, state, now, userText);
+
+        var result = new KokoPostReplyGuard().Evaluate(userText, badReply, state, messages, timeline, now);
+
+        AssertTrue(!result.Passed, "guard should reject affection replies that end in productivity pressure");
+        AssertTrue(result.ShouldRepair, "affection request should be repaired naturally");
+        AssertTrue(result.Violations.Any(v => v.Contains("productivity", StringComparison.OrdinalIgnoreCase)), "violation should mention productivity pressure");
     }
 
     private static void PostReplyGuardProtectsShortGreeting()

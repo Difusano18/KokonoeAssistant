@@ -62,6 +62,8 @@ namespace KokonoeAssistant.Services
                 violations.Add("pulse question was answered with hostile intelligence/biology scolding instead of telemetry status");
             if (LooksLikePunitiveNetworkThreat(userLower, replyLower))
                 violations.Add("reply invented a punitive network-control threat instead of answering the chat boundary");
+            if (LooksLikeSoftSocialTurn(userLower) && LooksLikeSoftSocialContempt(replyLower))
+                violations.Add("soft social/affectionate request was turned into contempt, productivity pressure, or task-demanding roleplay");
 
             if (violations.Count == 0 && LooksLikeTransportError(reply))
                 return Pass("transport error surfaced; do not hide provider failure");
@@ -295,6 +297,8 @@ Timeline:
                 rules.Add("- User gave a short apology. Acknowledge in one line and move on; do not analyze guilt, politeness, or wasted time.");
             if (violations.Any(v => v.Contains("network-control", StringComparison.OrdinalIgnoreCase)))
                 rules.Add("- Do not threaten fake OS/network punishment in normal chat. If setting a boundary, answer briefly without claiming you will block access.");
+            if (violations.Any(v => v.Contains("soft social", StringComparison.OrdinalIgnoreCase)))
+                rules.Add("- Latest user turn is casual, social, or affectionate. Answer that mode directly: restrained warmth is allowed, one dry edge is fine, but do not demand a task, mock the need for warmth, or pivot to productivity.");
             if (violations.Any(v => v.Contains("one-letter", StringComparison.OrdinalIgnoreCase)))
                 rules.Add("- Stale one-letter ambiguity is not the topic anymore unless the latest user explicitly asks about that exact letter.");
             if (violations.Any(v => v.Contains("vault unavailable", StringComparison.OrdinalIgnoreCase)))
@@ -428,6 +432,29 @@ Timeline:
                 "заблокую інтернет",
                 "block your network",
                 "block your internet");
+        }
+
+        private static bool LooksLikeSoftSocialTurn(string userLower)
+        {
+            if (string.IsNullOrWhiteSpace(userLower)) return false;
+
+            return ContainsAny(userLower,
+                "\u043f\u0440\u043e\u0441\u0442\u043e \u043f\u043e\u0433\u043e\u0432\u043e\u0440", "\u043f\u043e\u0433\u043e\u0432\u043e\u0440\u0438\u0442\u0438 \u043f\u0440\u043e \u0434\u0443\u0440\u043d", "\u043f\u0440\u043e \u0442\u0435\u0431\u0435", "\u043f\u0440\u043e \u043c\u0435\u043d\u0435", "\u043f\u0440\u043e \u043d\u0430\u0441",
+                "\u0441\u043a\u0430\u0436\u0438 \u0449\u043e\u0441\u044c \u043c\u0438\u043b", "\u0441\u043a\u0430\u0436\u0438 \u043c\u0438\u043b", "\u0449\u043e\u0441\u044c \u043c\u0438\u043b", "\u043c\u0438\u043b\u0435 \u043f\u0440\u043e \u043c\u0435\u043d\u0435", "\u043c\u0438\u043b\u043e\u0441\u0442",
+                "\u043d\u0456\u0436\u043d", "\u0442\u0435\u043f\u043b", "\u043e\u0431\u0456\u0439", "\u043f\u0440\u0438\u0454\u043c\u043d", "\u0434\u0443\u0440\u043d\u0438\u0446",
+                "just talk", "talk nonsense", "something nice", "say something nice", "about us", "about you", "about me");
+        }
+
+        private static bool LooksLikeSoftSocialContempt(string replyLower)
+        {
+            if (string.IsNullOrWhiteSpace(replyLower)) return false;
+
+            return ContainsAny(replyLower,
+                "\u0441\u043e\u0446\u0456\u0430\u043b\u044c\u043d\u0456 \u0442\u0430\u043d\u0446", "\u043b\u0438\u0442\u0438 \u0432\u043e\u0434\u0443", "\u043d\u0435 \u0431\u0443\u0434\u0443 \u043f\u0456\u0434\u0456\u0433\u0440\u0430\u0432\u0430\u0442", "\u0432\u0438\u043a\u043b\u0430\u0434\u0430\u0439",
+                "\u0437\u0430\u0434\u043e\u0432\u043e\u043b\u044c\u043d\u0438\u043b\u0430 \u0442\u0432\u0456\u0439 \u0437\u0430\u043f\u0438\u0442", "\u0437\u0430\u043f\u0438\u0442 \u043d\u0430 \u043c\u0438\u043b", "\u043c\u0438\u043b\u0456\u0441\u0442",
+                "\u043f\u043e\u0432\u0435\u0440\u0442\u0430\u0439\u043c\u043e\u0441\u044f \u0434\u043e \u0447\u043e\u0433\u043e\u0441\u044c \u0431\u0456\u043b\u044c\u0448 \u043f\u0440\u043e\u0434\u0443\u043a\u0442\u0438\u0432", "\u0431\u0456\u043b\u044c\u0448 \u043f\u0440\u043e\u0434\u0443\u043a\u0442\u0438\u0432\u043d", "\u0434\u0430\u0432\u0430\u0439 \u0431\u0456\u043b\u044c\u0448\u0435 \u043a\u043e\u043d\u043a\u0440\u0435\u0442",
+                "\u043c\u043e\u0454 \u0442\u0435\u0440\u043f\u0456\u043d\u043d\u044f", "\u043c\u0430\u0440\u043d\u0443\u0454\u0448", "\u0432\u0438\u0442\u0440\u0430\u0447\u0430\u0454\u0448 \u0447\u0430\u0441",
+                "social dance", "pour water", "back to something productive", "more productive", "satisfied your request", "my patience", "wasting time");
         }
 
         private static bool IsLowInformationTurn(string userText)
