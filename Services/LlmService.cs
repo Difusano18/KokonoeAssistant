@@ -1160,6 +1160,41 @@ namespace KokonoeAssistant.Services
 
         public void ClearHistory() { lock (_histLock) { _history.Clear(); } }
 
+        private void CompressHistoryLocked()
+        {
+            if (_history.Count <= MAX_HISTORY_ENTRIES)
+                return;
+
+            var preserve = Math.Max(8, MAX_HISTORY_ENTRIES - HISTORY_TRUNCATE_STEP);
+            var old = _history.Take(Math.Max(0, _history.Count - preserve)).ToList();
+            var recent = _history.TakeLast(preserve).ToList();
+            var textTurns = old
+                .Where(h => h.Content is string && h.Role is "user" or "assistant" or "system")
+                .Select(h => $"{h.Role}: {TrimForCompression((string)h.Content)}")
+                .Where(s => s.Length > 12)
+                .TakeLast(12)
+                .ToList();
+
+            var summary = textTurns.Count == 0
+                ? "Older non-text/tool context compressed. Preserve recent turns as primary source."
+                : "Older conversation compressed. Key prior turns: " + string.Join(" | ", textTurns);
+
+            _history.Clear();
+            _history.Add(new HistoryEntry("system", "[COGNITIVE COMPRESSION] " + TrimForCompression(summary, 1800)));
+            _history.AddRange(recent);
+            KokoSystemLog.Write("LLM", $"history compressed: old={old.Count}; kept={recent.Count}");
+        }
+
+        private static string TrimForCompression(string text, int max = 180)
+        {
+            if (string.IsNullOrWhiteSpace(text))
+                return "";
+            text = text.Replace("\r", " ").Replace("\n", " ").Trim();
+            while (text.Contains("  ", StringComparison.Ordinal))
+                text = text.Replace("  ", " ");
+            return text.Length <= max ? text : text[..max] + "...";
+        }
+
         /// <summary>
         /// Виконує системний запит до LLM з підтримкою інструментів (Agent Loop).
         /// Використовується для автономних завдань, де Kokonoe може сама планувати дії.
@@ -1870,7 +1905,7 @@ namespace KokonoeAssistant.Services
                                     _history.Add(new HistoryEntry("user", userText));
                                     _history.Add(new HistoryEntry("assistant", compactReply));
                                     if (_history.Count > MAX_HISTORY_ENTRIES)
-                                        _history.RemoveRange(0, Math.Min(HISTORY_TRUNCATE_STEP, _history.Count));
+                                        CompressHistoryLocked();
                                 }
                                 RecordLlmSuccess(diagProvider, diagModel, diagChannel, diagWatch, "compact_retry");
                                 return compactReply;
@@ -2004,7 +2039,7 @@ namespace KokonoeAssistant.Services
 
                             // Truncate history if exceeds limit
                             if (_history.Count > MAX_HISTORY_ENTRIES)
-                                _history.RemoveRange(0, HISTORY_TRUNCATE_STEP);
+                                CompressHistoryLocked();
                         }
                         RecordLlmSuccess(diagProvider, diagModel, diagChannel, diagWatch);
                         return reply;
@@ -3404,7 +3439,7 @@ namespace KokonoeAssistant.Services
                 lock (_histLock)
                 {
                     _history.Add(new HistoryEntry("assistant", reply));
-                    if (_history.Count > MAX_HISTORY_ENTRIES) _history.RemoveRange(0, HISTORY_TRUNCATE_STEP);
+                    if (_history.Count > MAX_HISTORY_ENTRIES) CompressHistoryLocked();
                 }
                 if (streamIsOllamaCloud && !string.IsNullOrEmpty(usedOllamaKey))
                     RecordOllamaKeyRequest(agentId, usedOllamaKey);

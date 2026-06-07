@@ -56,7 +56,8 @@ namespace KokonoeAssistant.Services
             string lastComment,
             DateTime now,
             ForegroundWindowInfo? foreground = null,
-            TimeSpan idleTime = default)
+            TimeSpan idleTime = default,
+            string multimodalContext = "")
         {
             var window = string.IsNullOrWhiteSpace(activity.ActiveWindowTitle)
                 ? "невідоме вікно"
@@ -68,6 +69,7 @@ namespace KokonoeAssistant.Services
 Foreground window metadata: {{foregroundLine}}
 Goal: find subtle patterns and help the user improve efficiency, focus, debugging, or gameplay. Do not hide behind "not important" when there is a useful pattern.
 Input idle time: {{idleMinutes}} minutes
+{{BuildMultimodalPromptBlock(multimodalContext)}}
 Ти Kokonoe. Подивись на скрін екрана користувача і зроби короткий screen-awareness аналіз.
 
 Поточний час: {{now:dd.MM.yyyy HH:mm}}
@@ -140,6 +142,13 @@ JSON schema:
             {
                 return new KokoScreenAwarenessAnalysis { SummaryUk = Trim(raw, 180), ScreenMode = NormalizeMode("", raw), Raw = raw };
             }
+        }
+
+        private static string BuildMultimodalPromptBlock(string context)
+        {
+            if (string.IsNullOrWhiteSpace(context))
+                return "";
+            return $"Multimodal context:\n{context.Trim()}\n";
         }
 
         public KokoScreenSituation BuildSituation(

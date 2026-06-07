@@ -71,6 +71,8 @@ namespace KokonoeAssistant.Services
         public KokoWearableState State { get; set; } = new();
         public bool Accepted { get; set; }
         public bool Duplicate { get; set; }
+        public string EventKind { get; set; } = "";
+        public string EventReason { get; set; } = "";
     }
 
     public sealed class KokoWearableTelemetryService
@@ -85,6 +87,8 @@ namespace KokonoeAssistant.Services
         private readonly Queue<string> _recentSampleIds = new();
         private readonly HashSet<string> _recentSampleIdSet = new(StringComparer.OrdinalIgnoreCase);
         private KokoWearableState _state = new();
+
+        public event Action<KokoWearableIngestResult, KokoWearableSample>? SampleAccepted;
 
         public KokoWearableTelemetryService(string dataDir)
         {
@@ -143,6 +147,7 @@ namespace KokonoeAssistant.Services
             {
                 Debug.WriteLine($"[Wearable] log write failed: {ex.Message}");
             }
+            KokoSystemLog.Write("WEARABLE", message);
         }
 
         public KokoWearableState Ingest(KokoWearableSample sample)
@@ -166,6 +171,7 @@ namespace KokonoeAssistant.Services
             if (sample.PpgSignalQuality is < 0 or > 1) sample.PpgSignalQuality = null;
             if (sample.BatteryPercent is < 0 or > 100) sample.BatteryPercent = null;
 
+            KokoWearableIngestResult result;
             lock (_lock)
             {
                 if (IsDuplicateLocked(sample.SampleId))
@@ -183,17 +189,26 @@ namespace KokonoeAssistant.Services
                 while (_recent.Count > 720)
                     _recent.Dequeue();
 
+                var previous = CloneState(_state);
                 ApplySample(sample);
+                var eventKind = ClassifySomaticEvent(previous, _state, sample);
+                var eventReason = BuildSomaticEventReason(eventKind, previous, _state, sample);
                 AppendSample(sample);
                 SaveState();
                 WriteLog($"[WEARABLE] Sample Accepted: BPM={FormatNullable(sample.HeartRateBpm)}, Motion={FormatNullable(sample.Motion)}, Device={sample.DeviceId}");
-                return new KokoWearableIngestResult
+                if (!string.IsNullOrWhiteSpace(eventKind))
+                    WriteLog($"[WEARABLE] Somatic Event: {eventKind} {eventReason}");
+                result = new KokoWearableIngestResult
                 {
                     State = CloneState(_state),
                     Accepted = true,
-                    Duplicate = false
+                    Duplicate = false,
+                    EventKind = eventKind,
+                    EventReason = eventReason
                 };
             }
+            try { SampleAccepted?.Invoke(result, sample); } catch (Exception ex) { WriteLog($"[WEARABLE] sample event handler failed: {ex.Message}"); }
+            return result;
         }
 
         public string BuildPromptBlock(DateTime? nowUtc = null)
@@ -323,6 +338,37 @@ rule: wearable telemetry is context, not a medical diagnosis. Use it to reduce d
             if (avgMotion <= 0.12 && local.Hour is >= 9 and <= 22)
                 return "quiet_work";
             return "";
+        }
+
+        private static string ClassifySomaticEvent(KokoWearableState previous, KokoWearableState current, KokoWearableSample sample)
+        {
+            if (!sample.HeartRateBpm.HasValue)
+                return "";
+
+            var baseline = current.BaselineBpm > 0 ? current.BaselineBpm : previous.BaselineBpm;
+            var delta = baseline > 0 ? sample.HeartRateBpm.Value - baseline : 0;
+            var bpmJump = previous.CurrentBpm > 0 ? sample.HeartRateBpm.Value - previous.CurrentBpm : 0;
+
+            if (current.SleepState is "probably_asleep" or "drowsy_or_resting")
+                return "";
+            if (current.StressScore >= 0.70 || delta >= 18 || bpmJump >= 16)
+                return "stress_spike";
+            if (current.RecoveryState == "strained" && current.StressScore >= 0.62)
+                return "high_strain";
+            if (delta <= -10 && (current.Motion ?? 0) <= 0.12)
+                return "fatigue_drop";
+            return "";
+        }
+
+        private static string BuildSomaticEventReason(string eventKind, KokoWearableState previous, KokoWearableState current, KokoWearableSample sample)
+        {
+            if (string.IsNullOrWhiteSpace(eventKind))
+                return "";
+
+            var jump = previous.CurrentBpm > 0 && sample.HeartRateBpm.HasValue
+                ? sample.HeartRateBpm.Value - previous.CurrentBpm
+                : 0;
+            return $"bpm={current.CurrentBpm:F0}; baseline={current.BaselineBpm:F0}; delta={current.BpmDelta:+0;-0;0}; jump={jump:+0;-0;0}; stress={current.LiveStressScore}/100; recovery={current.RecoveryState}; motion={(current.Motion.HasValue ? current.Motion.Value.ToString("F2", CultureInfo.InvariantCulture) : "-")}";
         }
 
         private void LoadState()

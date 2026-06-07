@@ -21,6 +21,7 @@ internal static class Program
             Run("Somatic tired from low charge", SomaticTiredFromLowCharge);
             Run("Wearable telemetry infers likely sleep", WearableTelemetryInfersLikelySleep);
             Run("Wearable telemetry infers stress initiative", WearableTelemetryInfersStressInitiative);
+            Run("Wearable telemetry raises stress spike event", WearableTelemetryRaisesStressSpikeEvent);
             Run("Wearable telemetry ignores duplicate sample ids", WearableTelemetryIgnoresDuplicateSampleIds);
             Run("Wearable telemetry reloads recent sample ids", WearableTelemetryReloadsRecentSampleIds);
             Run("Heart engine prefers fresh wearable bpm", HeartEnginePrefersFreshWearableBpm);
@@ -124,6 +125,7 @@ internal static class Program
             Run("Image processing enhances screenshot bytes", ImageProcessingEnhancesScreenshotBytes);
             Run("Screen awareness prompt includes foreground metadata", ScreenAwarenessPromptIncludesForegroundMetadata);
             Run("Screen awareness prompt includes idle time", ScreenAwarenessPromptIncludesIdleTime);
+            Run("Screen awareness prompt includes multimodal context", ScreenAwarenessPromptIncludesMultimodalContext);
             Run("Screen awareness prompt asks for subtle patterns", ScreenAwarenessPromptAsksForSubtlePatterns);
             Run("Post reply guard repairs vision technical error", PostReplyGuardRepairsVisionTechnicalError);
             Run("Post reply guard protects image only prompt", PostReplyGuardProtectsImageOnlyPrompt);
@@ -429,6 +431,48 @@ internal static class Program
             AssertTrue(!duplicate.Accepted, "duplicate sample should not be accepted");
             AssertTrue(Math.Abs(service.State.CurrentBpm - 72) < 0.1, "duplicate sample should not overwrite state");
             AssertEqual(1, service.RecentSamples.Count, "duplicate sample should not be added to recent samples");
+        }
+        finally { TryDeleteDir(dir); }
+    }
+
+    private static void WearableTelemetryRaisesStressSpikeEvent()
+    {
+        var dir = TempDir();
+        try
+        {
+            var service = new KokoWearableTelemetryService(dir);
+            var timestamp = new DateTime(2026, 6, 1, 12, 0, 0, DateTimeKind.Utc);
+            var events = new List<string>();
+            service.SampleAccepted += (result, _) =>
+            {
+                if (!string.IsNullOrWhiteSpace(result.EventKind))
+                    events.Add(result.EventKind);
+            };
+
+            service.IngestDetailed(new KokoWearableSample
+            {
+                SampleId = "stress-base",
+                TimestampUtc = timestamp,
+                DeviceId = "watch",
+                HeartRateBpm = 70,
+                HrvRmssdMs = 42,
+                Motion = 0.12,
+                OnWrist = true
+            });
+            var spike = service.IngestDetailed(new KokoWearableSample
+            {
+                SampleId = "stress-spike",
+                TimestampUtc = timestamp.AddSeconds(10),
+                DeviceId = "watch",
+                HeartRateBpm = 98,
+                HrvRmssdMs = 16,
+                Motion = 0.08,
+                OnWrist = true
+            });
+
+            AssertTrue(spike.Accepted, "stress spike sample should be accepted");
+            AssertEqual("stress_spike", spike.EventKind, "large fresh BPM jump should raise a stress spike event");
+            AssertTrue(events.Contains("stress_spike"), "sample accepted event should publish the stress spike");
         }
         finally { TryDeleteDir(dir); }
     }
@@ -5716,6 +5760,27 @@ Persistent Obsidian context is now a core project requirement.
             idleTime: TimeSpan.FromMinutes(8.4));
 
         AssertTrue(prompt.Contains("Input idle time: 8.4 minutes", StringComparison.OrdinalIgnoreCase), "vision prompt should include idle input duration");
+    }
+
+    private static void ScreenAwarenessPromptIncludesMultimodalContext()
+    {
+        var service = new KokoScreenAwarenessService();
+        var prompt = service.BuildVisionPrompt(
+            new ActivityAnalyzer.ActivityState
+            {
+                ActiveWindowTitle = "Visual Studio",
+                TimeSinceLastChange = TimeSpan.FromMinutes(1),
+                PixelDifferencePercentage = 3.0
+            },
+            "",
+            "",
+            new DateTime(2026, 5, 24, 21, 0, 0),
+            idleTime: TimeSpan.FromMinutes(2),
+            multimodalContext: "heart_samples=21:00 bpm=115 | work_mode=Coding");
+
+        AssertTrue(prompt.Contains("Multimodal context", StringComparison.OrdinalIgnoreCase), "vision prompt should label multimodal context");
+        AssertTrue(prompt.Contains("heart_samples=21:00 bpm=115", StringComparison.OrdinalIgnoreCase), "vision prompt should include heart samples");
+        AssertTrue(prompt.Contains("work_mode=Coding", StringComparison.OrdinalIgnoreCase), "vision prompt should include work mode");
     }
 
     private static void ScreenAwarenessPromptAsksForSubtlePatterns()

@@ -47,6 +47,7 @@ namespace KokonoeAssistant
         public static void Initialize(string vaultPath)
         {
             lock (_lock) { _vault = vaultPath; }
+            KokoSystemLog.Configure(Path.Combine(_vault ?? AppDomain.CurrentDomain.BaseDirectory, "kokonoe-data"));
             try { _ = WearableBridge; } catch { }
             try { PhotoFileWatcher.Start(); } catch { }
         }
@@ -238,7 +239,9 @@ namespace KokonoeAssistant
                         Path.Combine(_vault ?? AppDomain.CurrentDomain.BaseDirectory, "kokonoe-data"),
                         () => LlmService,
                         ChatRepository,
-                        () => ChatLogger);
+                        () => ChatLogger,
+                        () => KokoMemory,
+                        () => ObsidianMcp);
                 }
             }
         }

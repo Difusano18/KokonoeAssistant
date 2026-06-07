@@ -178,6 +178,10 @@ namespace KokonoeAssistant.Services
         public DateTime VisionBackoffUntil { get; set; } = DateTime.MinValue;
         public int VisionFailureCount { get; set; }
         public string LastVisionFailureSummary { get; set; } = "";
+        public DateTime LastVisionSelfHealAt { get; set; } = DateTime.MinValue;
+        public DateTime LastBridgeSelfHealAt { get; set; } = DateTime.MinValue;
+        public DateTime LastReflectiveInsightAt { get; set; } = DateTime.MinValue;
+        public string LastReflectiveInsightSummary { get; set; } = "";
         public DateTime ScreenAwarenessObserveOnlyUntil { get; set; } = DateTime.MinValue;
         public DateTime ProactiveMutedUntil { get; set; } = DateTime.MinValue;
         public string ProactiveMuteReason { get; set; } = "";
@@ -309,7 +313,11 @@ namespace KokonoeAssistant.Services
         private int _memorySelfHealInFlight;
         private DateTime _lastVaultFreshnessCheckAt = DateTime.MinValue;
         private DateTime _lastAutonomousAgentTaskAt = DateTime.MinValue;
+        private DateTime _lastSomaticVisionTriggerAt = DateTime.MinValue;
+        private DateTime _lastPredictiveIdlePromptAt = DateTime.MinValue;
+        private DateTime _lastReflectiveInsightAt = DateTime.MinValue;
         private bool _agentCompletionEventsHooked;
+        private bool _wearableEventsHooked;
         private readonly object    _lock = new();
         private DateTime           _lastInAppSilenceMsgAt = DateTime.MinValue;
 
@@ -393,6 +401,7 @@ namespace KokonoeAssistant.Services
                 TimeSpan.FromMinutes(2), TimeSpan.FromMinutes(5));
 
             HookAgentCompletionEvents();
+            HookWearableTelemetryEvents();
         }
 
         // Reentrancy guards: skip tick if previous still running.
@@ -446,6 +455,68 @@ namespace KokonoeAssistant.Services
             }
         }
 
+        private void HookWearableTelemetryEvents()
+        {
+            if (_wearableEventsHooked) return;
+            _wearableEventsHooked = true;
+            try
+            {
+                ServiceContainer.WearableTelemetry.SampleAccepted += (result, sample) =>
+                {
+                    if (result.Accepted && !string.IsNullOrWhiteSpace(result.EventKind))
+                        _ = Task.Run(() => HandleWearableSomaticEventAsync(result, sample));
+                };
+                Log("Wearable telemetry events hooked");
+            }
+            catch (Exception ex)
+            {
+                Log($"HookWearableTelemetryEvents: {ex.Message}");
+            }
+        }
+
+        private async Task HandleWearableSomaticEventAsync(KokoWearableIngestResult result, KokoWearableSample sample)
+        {
+            try
+            {
+                var now = DateTime.Now;
+                if (now - _lastSomaticVisionTriggerAt < TimeSpan.FromMinutes(4))
+                {
+                    Log($"Wearable somatic event suppressed: cooldown {result.EventKind} {result.EventReason}");
+                    return;
+                }
+
+                _lastSomaticVisionTriggerAt = now;
+                var protective = result.EventKind is "stress_spike" or "high_strain";
+                var tone = protective
+                    ? "Protective/concerned: be concrete, low-pressure, and reduce teasing."
+                    : "Fatigue-aware: shorter, quieter, avoid pushing.";
+                var reason = $"wearable_{result.EventKind}: {result.EventReason}";
+
+                Log($"Triggering Scan: {reason}");
+                KokoSystemLog.Write("BRAIN", $"Triggering Scan: {reason}");
+
+                if (protective)
+                {
+                    try
+                    {
+                        ServiceContainer.WearableBridge.QueueCommand(
+                            "vibrate",
+                            "Kokonoe: коротка пауза. Пульс підскочив, генію.");
+                    }
+                    catch (Exception ex)
+                    {
+                        Log($"Wearable vibrate command failed: {ex.Message}");
+                    }
+                }
+
+                await ForceScreenAwarenessAsync(reason, tone).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                Log($"HandleWearableSomaticEventAsync: {ex.Message}");
+            }
+        }
+
         private void ObserveAgentTaskCompletion(KokoAgentTask task, KokoAgentCompletionNotice notice)
         {
             if (task.Steps.All(s => s.Kind != KokoAgentStepKind.InsightExtraction))
@@ -487,6 +558,9 @@ namespace KokonoeAssistant.Services
                 if (level <= 0)
                     return;
 
+                TryPredictiveIdlePrompt(source, now, level);
+                TrySelfHealWearableBridge(source, now);
+
                 var lastUser = _chatRepo.GetMessages(20)
                     .Where(m => m.Role == "user")
                     .OrderByDescending(m => m.Timestamp)
@@ -499,6 +573,7 @@ namespace KokonoeAssistant.Services
                     return;
 
                 TryRunMemorySelfHealing("autonomous-objectives");
+                TryWriteReflectiveInsight(source, now, silence);
 
                 DateTime lastScan;
                 lock (_lock) { lastScan = _state.LastBackgroundVaultScanAt; }
@@ -582,6 +657,165 @@ namespace KokonoeAssistant.Services
             });
         }
 
+        private void TryPredictiveIdlePrompt(string source, DateTime now, int autonomyLevel)
+        {
+            if (autonomyLevel < 2)
+                return;
+            if (now.Hour != 9 || now.Minute < 10 || now.Minute > 45)
+                return;
+            if (now - _lastPredictiveIdlePromptAt < TimeSpan.FromHours(6))
+                return;
+
+            TimeSpan idle;
+            try { idle = ServiceContainer.PcControl.GetSystemInfo().IdleTime; }
+            catch (Exception ex)
+            {
+                Log($"PredictiveIdlePrompt skipped: idle read failed: {ex.Message}");
+                return;
+            }
+
+            if (idle < TimeSpan.FromMinutes(10))
+                return;
+
+            string forecast;
+            try { forecast = ServiceContainer.Predictor.GetForecastContext(); }
+            catch (Exception ex) { forecast = $"predictor unavailable: {ex.Message}"; }
+
+            _lastPredictiveIdlePromptAt = now;
+            Log($"PredictiveIdlePrompt firing: source={source}; idle={idle.TotalMinutes:0.0}m; forecast={TrimStateMention(forecast)}");
+            _ = Task.Run(async () =>
+            {
+                var message = "09:10, а комп'ютер досі в ступорі. Ти живий, чи мені вмикати ранковий запуск мозку примусово?";
+                await SendTgAndLog(message, "predictive_observation").ConfigureAwait(false);
+            });
+        }
+
+        private void TryWriteReflectiveInsight(string source, DateTime now, TimeSpan silence)
+        {
+            if (silence < TimeSpan.FromHours(4))
+                return;
+
+            DateTime lastInsight;
+            lock (_lock) lastInsight = _state.LastReflectiveInsightAt;
+            if (lastInsight > DateTime.MinValue && now - lastInsight < TimeSpan.FromHours(4))
+                return;
+            if (now - _lastReflectiveInsightAt < TimeSpan.FromMinutes(30))
+                return;
+            _lastReflectiveInsightAt = now;
+
+            try
+            {
+                List<string> observations;
+                List<string> thoughts;
+                List<string> initiatives;
+                string screenSummary;
+                lock (_lock)
+                {
+                    observations = _state.Observations.TakeLast(12).ToList();
+                    thoughts = _state.PendingThoughts.TakeLast(8).ToList();
+                    initiatives = _state.InitiativeReasonLog.TakeLast(8).ToList();
+                    screenSummary = $"{_state.LastScreenAwarenessMode}: {_state.LastScreenAwarenessSummary}; {_state.LastScreenSituationProgress}; {_state.LastScreenSituationBehavior}";
+                }
+
+                var insight = BuildReflectiveInsightText(now, source, silence, observations, thoughts, initiatives, screenSummary);
+                var path = $"Kokonoe/Reflective Insights/{now:yyyy-MM-dd HHmm} - autonomous insight.md";
+                _obsidian.WriteNote(path, insight);
+                Memory.RecordEpisodeBlocking(
+                    $"Autonomous reflective insight: {TrimStateMention(string.Join("; ", observations.TakeLast(3)))}",
+                    "reflective",
+                    0.62f,
+                    new[] { "autonomy", "reflection", "screen", "patterns" });
+
+                lock (_lock)
+                {
+                    _state.LastReflectiveInsightAt = now;
+                    _state.LastReflectiveInsightSummary = TrimStateMention(insight);
+                    _state.AutonomyDecisionLog.Add($"[{now:HH:mm}] {source} wrote reflective insight after {silence.TotalHours:0.0}h inactivity");
+                    if (_state.AutonomyDecisionLog.Count > 80)
+                        _state.AutonomyDecisionLog.RemoveRange(0, _state.AutonomyDecisionLog.Count - 80);
+                    SaveState();
+                }
+                Log($"ReflectiveInsight wrote {path}");
+            }
+            catch (Exception ex)
+            {
+                Log($"ReflectiveInsight failed: {ex.Message}");
+            }
+        }
+
+        private static string BuildReflectiveInsightText(
+            DateTime now,
+            string source,
+            TimeSpan silence,
+            IReadOnlyList<string> observations,
+            IReadOnlyList<string> thoughts,
+            IReadOnlyList<string> initiatives,
+            string screenSummary)
+        {
+            var sb = new StringBuilder();
+            sb.AppendLine("---");
+            sb.AppendLine($"created: {now:yyyy-MM-dd HH:mm:ss}");
+            sb.AppendLine("tags: [kokonoe, reflective-insight, autonomous]");
+            sb.AppendLine("---");
+            sb.AppendLine();
+            sb.AppendLine("# Autonomous Reflective Insight");
+            sb.AppendLine();
+            sb.AppendLine($"Source: {source}");
+            sb.AppendLine($"User inactivity window: {silence.TotalHours:0.0}h");
+            sb.AppendLine($"Last screen: {screenSummary}");
+            sb.AppendLine();
+            AppendInsightList(sb, "Recent observations", observations);
+            AppendInsightList(sb, "Pending thoughts", thoughts);
+            AppendInsightList(sb, "Initiative trace", initiatives);
+            sb.AppendLine("## Pattern");
+            sb.AppendLine("- If the same screen state, silence, or task residue repeats, prefer one concrete next action over generic checking.");
+            sb.AppendLine("- Treat wearable/screen/file signals as context, not certainty. Useful suspicion, not prophecy.");
+            return sb.ToString().Trim() + Environment.NewLine;
+        }
+
+        private static void AppendInsightList(StringBuilder sb, string title, IReadOnlyList<string> items)
+        {
+            sb.AppendLine($"## {title}");
+            if (items.Count == 0)
+            {
+                sb.AppendLine("- none");
+                sb.AppendLine();
+                return;
+            }
+            foreach (var item in items)
+                sb.AppendLine("- " + TrimStateMention(item));
+            sb.AppendLine();
+        }
+
+        private void TrySelfHealWearableBridge(string source, DateTime now)
+        {
+            try
+            {
+                var bridge = ServiceContainer.WearableBridge;
+                var diagnostics = bridge.Diagnostics;
+                var shouldRestart = !diagnostics.IsRunning || !string.IsNullOrWhiteSpace(diagnostics.LastError);
+                if (!shouldRestart)
+                    return;
+
+                DateTime lastHeal;
+                lock (_lock) lastHeal = _state.LastBridgeSelfHealAt;
+                if (lastHeal > DateTime.MinValue && now - lastHeal < TimeSpan.FromMinutes(5))
+                    return;
+
+                Log($"Bridge self-heal: source={source}; running={diagnostics.IsRunning}; error={diagnostics.LastError}; port={diagnostics.Port}");
+                ServiceContainer.ReloadWearableBridge();
+                lock (_lock)
+                {
+                    _state.LastBridgeSelfHealAt = now;
+                    SaveState();
+                }
+            }
+            catch (Exception ex)
+            {
+                Log($"Bridge self-heal failed: {ex.Message}");
+            }
+        }
+
         private void TryQueueAutonomousAgentCycle(string source)
         {
             try
@@ -630,6 +864,18 @@ namespace KokonoeAssistant.Services
                 return;
             }
             try { await SafeScreenAwarenessAsync(); }
+            finally { Interlocked.Exchange(ref _screenAwarenessInFlight, 0); }
+        }
+
+        public async Task ForceScreenAwarenessAsync(string reason, string toneDirective = "")
+        {
+            if (Interlocked.CompareExchange(ref _screenAwarenessInFlight, 1, 0) != 0)
+            {
+                Log($"Forced ScreenAwareness skipped: previous tick still in flight; reason={reason}");
+                return;
+            }
+
+            try { await SafeScreenAwarenessAsync(reason, toneDirective); }
             finally { Interlocked.Exchange(ref _screenAwarenessInFlight, 0); }
         }
 
@@ -3525,20 +3771,23 @@ namespace KokonoeAssistant.Services
             catch (Exception ex) { Log($"RefreshScreenContext: {ex.Message}"); }
         }
 
-        private async Task SafeScreenAwarenessAsync()
+        private async Task SafeScreenAwarenessAsync(string forceReason = "", string toneDirective = "")
         {
             var settings = AppSettings.Load();
             if (!settings.ScreenAwarenessEnabled) return;
 
             var now = DateTime.Now;
             var interval = GetEffectiveScreenAwarenessInterval(settings, now);
-            var forceByInitiative = ShouldForceScreenAwarenessFromAutonomy(now);
+            var forceBySignal = !string.IsNullOrWhiteSpace(forceReason);
+            var forceByInitiative = !forceBySignal && ShouldForceScreenAwarenessFromAutonomy(now);
             var sinceLastScreen = (now - _state.LastScreenAwarenessAt).TotalMinutes;
-            if (!forceByInitiative && sinceLastScreen < interval)
+            if (!forceBySignal && !forceByInitiative && sinceLastScreen < interval)
             {
                 Log($"ScreenAwareness suppressed: interval {sinceLastScreen:0.0}m < {interval}m");
                 return;
             }
+            if (forceBySignal)
+                Log($"ScreenAwareness forced: {forceReason}");
             if (forceByInitiative)
                 Log("ScreenAwareness forced: autonomy curiosity/observation trigger");
             if (now < _state.VisionBackoffUntil)
@@ -3603,7 +3852,8 @@ namespace KokonoeAssistant.Services
                     _state.LastScreenAwarenessComment,
                     now,
                     foreground,
-                    idleTime);
+                    idleTime,
+                    BuildVisionMultimodalContext(now, forceReason, toneDirective));
 
                 using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(90));
                 var raw = await _llm.SendSystemVisionQueryAsync(prompt, screenshot, "image/jpeg", cts.Token);
@@ -3783,10 +4033,60 @@ namespace KokonoeAssistant.Services
         private int GetEffectiveScreenAwarenessInterval(AppSettings settings, DateTime now)
         {
             var normal = Math.Clamp(settings.ScreenAwarenessIntervalMins, 1, 60);
+            if (IsHighActivityScreenLikelyActive(now))
+                return Math.Clamp(Math.Min(normal, 2), 2, 60);
+            if (IsStaticIdleScreenLikelyActive(now))
+                return Math.Clamp(Math.Max(normal, 20), 2, 60);
             if (!IsGameScreenLikelyActive(now))
                 return normal;
 
             return Math.Clamp(Math.Min(normal, settings.GameScreenAwarenessIntervalMins), 3, 60);
+        }
+
+        private string BuildVisionMultimodalContext(DateTime now, string forceReason, string toneDirective)
+        {
+            var lines = new List<string>();
+            if (!string.IsNullOrWhiteSpace(forceReason))
+                lines.Add($"trigger={forceReason}");
+            if (!string.IsNullOrWhiteSpace(toneDirective))
+                lines.Add($"tone_directive={toneDirective}");
+
+            try
+            {
+                var samples = ServiceContainer.WearableTelemetry.RecentSamples
+                    .Where(s => s.HeartRateBpm.HasValue)
+                    .OrderByDescending(s => s.TimestampUtc)
+                    .Take(3)
+                    .OrderBy(s => s.TimestampUtc)
+                    .Select(s => $"{s.TimestampUtc.ToLocalTime():HH:mm:ss} bpm={s.HeartRateBpm:F0} motion={(s.Motion.HasValue ? s.Motion.Value.ToString("F2") : "-")} wrist={(s.OnWrist.HasValue ? s.OnWrist.Value.ToString() : "-")}")
+                    .ToList();
+                if (samples.Count > 0)
+                    lines.Add("heart_samples=" + string.Join(" | ", samples));
+
+                var wearable = ServiceContainer.WearableTelemetry.State;
+                if (wearable.IsFresh(DateTime.UtcNow))
+                    lines.Add($"wearable_state=stress {wearable.LiveStressScore}/100; recovery={wearable.RecoveryState}; sleep={wearable.SleepState}; delta={wearable.BpmDelta:+0;-0;0}");
+            }
+            catch (Exception ex)
+            {
+                lines.Add($"wearable_context_error={ex.Message}");
+            }
+
+            try
+            {
+                var stress = ServiceContainer.Heart.WearableStress;
+                if (!string.IsNullOrWhiteSpace(stress.State))
+                    lines.Add($"heart_stress={stress.State}; score={stress.Score:F2}; {stress.Reason}");
+            }
+            catch { }
+
+            try
+            {
+                lines.Add($"work_mode={GetCurrentWorkModeLabel()}");
+            }
+            catch { }
+
+            return string.Join("\n", lines.Where(l => !string.IsNullOrWhiteSpace(l)));
         }
 
         private bool ShouldForceScreenAwarenessFromAutonomy(DateTime now)
@@ -3833,6 +4133,43 @@ namespace KokonoeAssistant.Services
             return recentScreen && lastWindowMode == "game";
         }
 
+        private bool IsHighActivityScreenLikelyActive(DateTime now)
+        {
+            var recentScreen = _state.LastScreenAwarenessAt > DateTime.MinValue &&
+                now - _state.LastScreenAwarenessAt < TimeSpan.FromMinutes(20);
+            if (!recentScreen)
+                return false;
+
+            var mode = KokoScreenAwarenessService.NormalizeMode(
+                _state.LastScreenAwarenessMode,
+                $"{_state.LastScreenAwarenessWindow} {_state.LastScreenAwarenessSummary} {_state.LastScreenAwarenessActivity}");
+            var progress = (_state.LastScreenSituationProgress ?? "").ToLowerInvariant();
+            var activity = (_state.LastScreenAwarenessActivity ?? "").ToLowerInvariant();
+
+            return mode is "game" or "coding" or "obsidian" or "media" &&
+                (progress is "moving" or "switching" ||
+                 activity.Contains("active", StringComparison.OrdinalIgnoreCase) ||
+                 activity.Contains("changed", StringComparison.OrdinalIgnoreCase));
+        }
+
+        private bool IsStaticIdleScreenLikelyActive(DateTime now)
+        {
+            var recentScreen = _state.LastScreenAwarenessAt > DateTime.MinValue &&
+                now - _state.LastScreenAwarenessAt < TimeSpan.FromMinutes(45);
+            if (!recentScreen)
+                return false;
+
+            var mode = KokoScreenAwarenessService.NormalizeMode(
+                _state.LastScreenAwarenessMode,
+                $"{_state.LastScreenAwarenessWindow} {_state.LastScreenAwarenessSummary} {_state.LastScreenAwarenessActivity}");
+            var progress = (_state.LastScreenSituationProgress ?? "").ToLowerInvariant();
+            var activity = (_state.LastScreenAwarenessActivity ?? "").ToLowerInvariant();
+            return mode is "idle" or "desktop" ||
+                progress == "idle" ||
+                activity.Contains("same", StringComparison.OrdinalIgnoreCase) ||
+                activity.Contains("idle", StringComparison.OrdinalIgnoreCase);
+        }
+
         private void RegisterVisionFailure(string? raw, DateTime now, ActivityAnalyzer.ActivityState? activity)
         {
             _state.LastScreenAwarenessAt = now;
@@ -3850,6 +4187,21 @@ namespace KokonoeAssistant.Services
             _cachedScreenContext = $"[SCREEN AWARENESS]\nMode: {_state.LastScreenAwarenessMode}\nVision unavailable; using window/activity fallback.\nWindow: {activity?.ActiveWindowTitle ?? "-"}";
             _screenContextCachedAt = now;
             _llm.ScreenCtx = _cachedScreenContext;
+            TrySelfHealVisionPipeline(now, raw);
+        }
+
+        private void TrySelfHealVisionPipeline(DateTime now, string? raw)
+        {
+            if (_state.VisionFailureCount < 3)
+                return;
+            if (_state.LastVisionSelfHealAt > DateTime.MinValue &&
+                now - _state.LastVisionSelfHealAt < TimeSpan.FromMinutes(10))
+                return;
+
+            _state.LastVisionSelfHealAt = now;
+            _state.VisionBackoffUntil = now.AddMinutes(2);
+            try { _llm.ClearHistory(); } catch { }
+            Log($"Vision self-heal: failures={_state.VisionFailureCount}; backoff reset to 2m; last={TrimForLog(raw, 160)}");
         }
 
         private void ObserveScreenPattern(KokoScreenPatternCandidate candidate, DateTime now)
@@ -5649,17 +6001,24 @@ namespace KokonoeAssistant.Services
             }
         }
 
-        private static void Log(string msg) =>
+        private static void Log(string msg)
+        {
             System.Diagnostics.Debug.WriteLine($"[Brain] {msg}");
+            KokoSystemLog.Write("BRAIN", msg);
+        }
 
         private void LogError(string msg)
         {
             System.Diagnostics.Debug.WriteLine($"[Brain ERROR] {msg}");
+            KokoSystemLog.Write("BRAIN_ERROR", msg);
             var _h9 = OnNewMessage; _h9?.Invoke("system", $"⚠️ {msg}");
         }
 
-        private static void LogTelegramDeliveryFailure(string msg) =>
+        private static void LogTelegramDeliveryFailure(string msg)
+        {
             System.Diagnostics.Debug.WriteLine($"[Brain TG] {msg}");
+            KokoSystemLog.Write("BRAIN_TG", msg);
+        }
 
         // =================================================================
         // TOOLS WINDOW API - ?????? ?? ??????????? ????? ??? ????????
