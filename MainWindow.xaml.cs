@@ -3468,8 +3468,8 @@ LIVE RESPONSE STYLE
             try
             {
                 await ShowKokoActivityAsync("Obsidian: оновлюю профіль");
-                var result = await Task.Run(() =>
-                    ServiceContainer.ProfileUpdater.UpdateProfileFromRecentContext(text), ct);
+                var result = await ServiceContainer.ProfileUpdater
+                    .UpdateProfileFromRecentContextAsync(text, ServiceContainer.LlmService, ct);
                 return (true, result.ToUserReply());
             }
             catch (Exception ex)

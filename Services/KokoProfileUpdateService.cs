@@ -4,6 +4,8 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace KokonoeAssistant.Services
 {
@@ -15,6 +17,7 @@ namespace KokonoeAssistant.Services
         public string Error { get; set; } = "";
         public int RecentContextItems { get; set; }
         public string[] ChangedSections { get; set; } = Array.Empty<string>();
+        public bool UsedLlmSynthesis { get; set; }
 
         public string ToUserReply()
         {
@@ -26,6 +29,7 @@ namespace KokonoeAssistant.Services
                    "- Файл: `" + ProfilePath + "`\n" +
                    "- Backup: `" + BackupPath + "`\n" +
                    "- Змінено: " + sections + "\n" +
+                   "- Синтез: " + (UsedLlmSynthesis ? "LLM прочитала профіль і контекст; валідатор записав файл" : "fallback-план, бо LLM-синтез не пройшов валідацію") + "\n" +
                    "- Контекст: " + RecentContextItems + " останніх реплік враховано.";
         }
     }
@@ -67,6 +71,15 @@ namespace KokonoeAssistant.Services
         }
 
         public KokoProfileUpdateResult UpdateProfileFromRecentContext(string instruction, int recentMessageLimit = 120)
+            => UpdateProfileFromRecentContextAsync(instruction, null, CancellationToken.None, recentMessageLimit)
+                .GetAwaiter()
+                .GetResult();
+
+        public async Task<KokoProfileUpdateResult> UpdateProfileFromRecentContextAsync(
+            string instruction,
+            LlmService? llm,
+            CancellationToken ct = default,
+            int recentMessageLimit = 120)
         {
             var result = new KokoProfileUpdateResult();
             try
@@ -79,13 +92,20 @@ namespace KokonoeAssistant.Services
                     .OrderBy(m => m.Timestamp)
                     .ToList();
 
-                var content = BuildProfile(profilePath, existing, instruction, recent);
+                var llmDraft = llm == null
+                    ? null
+                    : await TryBuildProfileWithLlmAsync(llm, profilePath, existing, instruction, recent, ct).ConfigureAwait(false);
+                var usedLlm = IsUsableProfileDraft(llmDraft);
+                var content = usedLlm
+                    ? NormalizeGeneratedProfile(llmDraft!, profilePath, instruction)
+                    : BuildProfile(profilePath, existing, instruction, recent);
                 _obsidian.WriteNote(profilePath, content);
 
                 result.Success = true;
                 result.ProfilePath = profilePath;
                 result.BackupPath = backupPath;
                 result.RecentContextItems = recent.Count;
+                result.UsedLlmSynthesis = usedLlm;
                 result.ChangedSections = new[]
                 {
                     "поточний стан",
@@ -93,7 +113,7 @@ namespace KokonoeAssistant.Services
                     "операційні правила",
                     "межі пам'яті"
                 };
-                KokoSystemLog.Write("PROFILE", $"updated {profilePath}; backup={backupPath}; context={recent.Count}");
+                KokoSystemLog.Write("PROFILE", $"updated {profilePath}; backup={backupPath}; context={recent.Count}; llm={usedLlm}");
             }
             catch (Exception ex)
             {
@@ -103,6 +123,122 @@ namespace KokonoeAssistant.Services
             }
 
             return result;
+        }
+
+        private static async Task<string?> TryBuildProfileWithLlmAsync(
+            LlmService llm,
+            string profilePath,
+            string existing,
+            string instruction,
+            IReadOnlyList<ChatRepository.ChatMessage> recent,
+            CancellationToken ct)
+        {
+            try
+            {
+                var prompt = BuildLlmProfilePrompt(profilePath, existing, instruction, recent);
+                var raw = await llm.SendSystemQueryAsync(prompt, useTools: false, ct: ct, agentId: "system").ConfigureAwait(false);
+                return string.IsNullOrWhiteSpace(raw) ? null : raw.Trim();
+            }
+            catch (Exception ex)
+            {
+                KokoSystemLog.Write("PROFILE", "LLM synthesis failed: " + ex.Message);
+                return null;
+            }
+        }
+
+        private static string BuildLlmProfilePrompt(
+            string profilePath,
+            string existing,
+            string instruction,
+            IReadOnlyList<ChatRepository.ChatMessage> recent)
+        {
+            var sb = new StringBuilder();
+            sb.AppendLine("PROFILE UPDATE TASK");
+            sb.AppendLine("You are editing the user's Obsidian profile as an autonomous local operator.");
+            sb.AppendLine("Return ONLY the complete markdown file. No code fences. No promise to do it later.");
+            sb.AppendLine("Use Ukrainian for visible prose.");
+            sb.AppendLine("Preserve stable factual data from the old profile when safe.");
+            sb.AppendLine("Think over the recent context and update the profile content, not just canned sections.");
+            sb.AppendLine("Do not include explicit sexual tags, humiliation, medical diagnosis, or hostile psychological claims.");
+            sb.AppendLine("Temporary fatigue, pulse, sleep, stress, or crisis material must be dated observations, not permanent identity traits.");
+            sb.AppendLine("Must include an 'Операційні правила Kokonoe' section with: actions before roleplay; real file/status artifacts; no fake background progress.");
+            sb.AppendLine("Must include the current complaint: user dislikes intrusive roleplay and wants Manus-like visible execution.");
+            sb.AppendLine("Target path: " + profilePath);
+            sb.AppendLine("Instruction: " + TrimOneLine(instruction, 500));
+            sb.AppendLine();
+            sb.AppendLine("OLD PROFILE:");
+            sb.AppendLine(TrimBlock(existing, 12000));
+            sb.AppendLine();
+            sb.AppendLine("RECENT CONTEXT:");
+            foreach (var msg in recent.TakeLast(50))
+            {
+                var role = string.IsNullOrWhiteSpace(msg.Role) ? "message" : msg.Role;
+                sb.AppendLine("- " + msg.Timestamp.ToString("yyyy-MM-dd HH:mm") + " " + role + ": " + TrimOneLine(msg.Content, 280));
+            }
+            return sb.ToString();
+        }
+
+        private static bool IsUsableProfileDraft(string? draft)
+        {
+            if (string.IsNullOrWhiteSpace(draft) || draft.Length < 500) return false;
+            var lower = draft.ToLowerInvariant();
+            if (!draft.Contains("#", StringComparison.Ordinal)) return false;
+            if (!ContainsAny(lower, "операційні правила", "operating rules")) return false;
+            if (ContainsAny(lower,
+                    "anal", "pussy", "penis", "rule34",
+                    "жалігід", "жалюгід", "когнітивного функціонування",
+                    "порушеного когнітив", "you are pathetic"))
+                return false;
+            if (ContainsAny(lower, "я занурюся", "напишу коли", "коли закінчу", "i will update", "when finished")) return false;
+            return true;
+        }
+
+        private static string NormalizeGeneratedProfile(string draft, string profilePath, string instruction)
+        {
+            var content = StripCodeFence(draft).Replace("\r\n", "\n").Replace('\r', '\n').Trim();
+            var lines = content.Split('\n')
+                .Where(line => !LooksSensitiveOrUnsafeForProfile(line))
+                .ToList();
+            content = string.Join("\n", lines).Trim();
+
+            if (!content.StartsWith("---", StringComparison.Ordinal))
+            {
+                content = "---\n" +
+                          "type: creator-profile\n" +
+                          "updated: " + DateTime.Now.ToString("yyyy-MM-dd HH:mm") + "\n" +
+                          "managed-by: KokonoeProfileUpdateService\n" +
+                          "tags: [creator, profile, operating-context]\n" +
+                          "---\n\n" + content;
+            }
+
+            if (!content.Contains("Операційні правила Kokonoe", StringComparison.OrdinalIgnoreCase))
+                content += "\n\n" + BuildRequiredRulesSection();
+
+            content += "\n\n## Службове\n" +
+                       "- Джерело оновлення: `" + profilePath + "`\n" +
+                       "- Остання інструкція: " + TrimOneLine(instruction, 260) + "\n" +
+                       "- Зміст синтезовано LLM з існуючого профілю та останнього контексту; запис виконано локальним валідованим маршрутом.\n";
+            return content.TrimEnd() + "\n";
+        }
+
+        private static string BuildRequiredRulesSection()
+            => """
+## Операційні правила Kokonoe
+- Спочатку виконання, потім короткий звіт.
+- Якщо запит стосується Obsidian/Vault/профілю, потрібен реальний файл, backup або status artifact.
+- Не обіцяти фонову роботу без реальної задачі з id/status.
+- Рольплей і сарказм не мають перекривати корисну дію.
+""";
+
+        private static string StripCodeFence(string text)
+        {
+            var value = (text ?? "").Trim();
+            if (!value.StartsWith("```", StringComparison.Ordinal)) return value;
+            var firstBreak = value.IndexOf('\n');
+            var lastFence = value.LastIndexOf("```", StringComparison.Ordinal);
+            if (firstBreak >= 0 && lastFence > firstBreak)
+                return value[(firstBreak + 1)..lastFence].Trim();
+            return value;
         }
 
         private string ResolveProfilePath()
@@ -244,6 +380,13 @@ namespace KokonoeAssistant.Services
         private static string TrimOneLine(string? value, int max)
         {
             var text = Regex.Replace(value ?? "", @"\s+", " ").Trim();
+            if (text.Length <= max) return text;
+            return text[..Math.Max(0, max - 1)].TrimEnd() + "…";
+        }
+
+        private static string TrimBlock(string? value, int max)
+        {
+            var text = (value ?? "").Trim();
             if (text.Length <= max) return text;
             return text[..Math.Max(0, max - 1)].TrimEnd() + "…";
         }
