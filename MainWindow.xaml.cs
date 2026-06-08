@@ -98,6 +98,9 @@ namespace KokonoeAssistant
 
         // ---- Dashboard ----
         private DispatcherTimer? _dashTimer;
+        private DispatcherTimer? _pulseLiveTimer;
+        private DateTime _lastPulseUiRefresh = DateTime.MinValue;
+        private bool _wearablePulseEventsHooked;
         private bool _activeDashTabDev = false;
         private readonly ObservableCollection<DashThoughtVm> _dashThoughts    = new();
         private readonly ObservableCollection<string>        _dashCuriosities = new();
@@ -803,6 +806,7 @@ tags: [kokonoe, live-core, diagnostics]
                 SetLoadingProgress(75, "мозок...");
                 InitBrain();
                 StartLiveCoreMonitor();
+                StartPulseLiveMonitor();
                 HookAgentTaskEvents();
                 RefreshAgentTaskBoard();
 
@@ -1427,10 +1431,64 @@ tags: [kokonoe, live-core, diagnostics]
             DrawPulseHrGraph();
         }
 
+        private void StartPulseLiveMonitor()
+        {
+            if (_pulseLiveTimer != null)
+                return;
+
+            HookWearablePulseEvents();
+            _pulseLiveTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
+            _pulseLiveTimer.Tick += (s, e) =>
+            {
+                if (PulseTab.Visibility == Visibility.Visible)
+                    RefreshPulseTabLive();
+            };
+            _pulseLiveTimer.Start();
+        }
+
+        private void HookWearablePulseEvents()
+        {
+            if (_wearablePulseEventsHooked)
+                return;
+
+            try
+            {
+                ServiceContainer.WearableTelemetry.SampleAccepted += (result, sample) =>
+                {
+                    if (!sample.HeartRateBpm.HasValue)
+                        return;
+
+                    _ = Dispatcher.InvokeAsync(() =>
+                    {
+                        if (PulseTab.Visibility != Visibility.Visible)
+                            return;
+
+                        var now = DateTime.UtcNow;
+                        if (now - _lastPulseUiRefresh < TimeSpan.FromMilliseconds(250))
+                            return;
+
+                        RefreshPulseTabLive();
+                    });
+                };
+                _wearablePulseEventsHooked = true;
+            }
+            catch (Exception ex)
+            {
+                KokoSystemLog.Write("PULSE_UI", "wearable event hook failed: " + ex.Message);
+            }
+        }
+
+        private void RefreshPulseTabLive()
+        {
+            _lastPulseUiRefresh = DateTime.UtcNow;
+            UpdatePulseTabNumbers();
+            DrawPulseHrGraph();
+        }
+
         private void UpdatePulseTab()
         {
             StopEcgAnimation();
-            UpdatePulseTabNumbers();
+            RefreshPulseTabLive();
         }
 
         private void UpdatePulseTabNumbers()
@@ -1496,13 +1554,7 @@ tags: [kokonoe, live-core, diagnostics]
                     PulseVitalLog.ItemsSource = vitalRows;
 
                     UpdatePulseSidePanels(wearableCur);
-                    if (!verified)
-                    {
-                        PulseAvgText.Text = "-- bpm";
-                        PulsePeakText.Text = "-- bpm";
-                        PulseLowText.Text = "-- bpm";
-                        PulseConsistencyText.Text = "--";
-                    }
+                    UpdatePulseStatsFromSeries(GetVerifiedPulseGraphSamples(diagnostics));
                     return;
                 }
 
@@ -1905,59 +1957,299 @@ tags: [kokonoe, live-core, diagnostics]
             catch { }
         }
 
+        private IReadOnlyList<(DateTime t, double bpm)> GetVerifiedPulseGraphSamples(
+            KokoWearableBridgeService.WearableBridgeDiagnostics? diagnostics = null)
+        {
+            try
+            {
+                diagnostics ??= ServiceContainer.WearableBridge.Diagnostics;
+                var pairedDevice = (diagnostics.LastPairedDeviceId ?? "").Trim();
+                if (string.IsNullOrWhiteSpace(pairedDevice) ||
+                    pairedDevice.Equals("unknown", StringComparison.OrdinalIgnoreCase) ||
+                    LooksLikeDiagnosticWearable(pairedDevice))
+                    return Array.Empty<(DateTime t, double bpm)>();
+
+                var cutoff = DateTime.UtcNow.AddMinutes(-5);
+                return ServiceContainer.WearableTelemetry.RecentSamples
+                    .Where(s => s.TimestampUtc >= cutoff &&
+                                s.HeartRateBpm is > 25 and < 230 &&
+                                string.Equals((s.DeviceId ?? "").Trim(), pairedDevice, StringComparison.OrdinalIgnoreCase) &&
+                                !LooksLikeDiagnosticWearable(s.DeviceId) &&
+                                !LooksLikeDiagnosticWearable(s.SampleId))
+                    .GroupBy(s => string.IsNullOrWhiteSpace(s.SampleId)
+                        ? s.TimestampUtc.Ticks.ToString(System.Globalization.CultureInfo.InvariantCulture)
+                        : s.SampleId.Trim(),
+                        StringComparer.OrdinalIgnoreCase)
+                    .Select(g => g.OrderByDescending(s => s.TimestampUtc).First())
+                    .OrderBy(s => s.TimestampUtc)
+                    .Select(s => (s.TimestampUtc.ToLocalTime(), s.HeartRateBpm!.Value))
+                    .ToList();
+            }
+            catch (Exception ex)
+            {
+                KokoSystemLog.Write("PULSE_UI", "graph sample read failed: " + ex.Message);
+                return Array.Empty<(DateTime t, double bpm)>();
+            }
+        }
+
+        private void UpdatePulseStatsFromSeries(IReadOnlyList<(DateTime t, double bpm)> pts)
+        {
+            if (pts.Count == 0)
+            {
+                PulseAvgText.Text = "-- bpm";
+                PulsePeakText.Text = "-- bpm";
+                PulseLowText.Text = "-- bpm";
+                PulseConsistencyText.Text = "--";
+                return;
+            }
+
+            var avg = pts.Average(p => p.bpm);
+            var min = pts.Min(p => p.bpm);
+            var max = pts.Max(p => p.bpm);
+            var spread = max - min;
+            var consistency = pts.Count < 3 ? 100 : Math.Clamp(100 - spread * 2.4, 0, 100);
+            PulseAvgText.Text = $"{avg:0.0} bpm";
+            PulsePeakText.Text = $"{max:0} bpm";
+            PulseLowText.Text = $"{min:0} bpm";
+            PulseConsistencyText.Text = $"{consistency:0}%";
+        }
+
         private void DrawPulseHrGraph()
         {
             var canvas = PulseHr24Canvas;
             if (canvas == null) return;
             canvas.Children.Clear();
             double w = canvas.ActualWidth, h = canvas.ActualHeight;
-            if (w < 20 || h < 20 || _heartHistory.Count < 2) return;
+            if (w < 80 || h < 80) return;
 
-            var pts = _heartHistory.ToArray();
-            double minBpm = Math.Max(35, pts.Min(p => p.bpm) - 8);
-            double maxBpm = Math.Min(160, pts.Max(p => p.bpm) + 8);
-            double rng = Math.Max(10, maxBpm - minBpm);
-            double tMin = pts[0].t.Ticks, tMax = pts[^1].t.Ticks;
-            double tRng = Math.Max(1, tMax - tMin);
+            var diagnostics = ServiceContainer.WearableBridge.Diagnostics;
+            var pts = GetVerifiedPulseGraphSamples(diagnostics);
+            UpdatePulseStatsFromSeries(pts);
 
-            foreach (var marker in new[] { 60.0, 90.0, 120.0 })
+            var left = 34.0;
+            var right = 14.0;
+            var top = 16.0;
+            var bottom = 24.0;
+            var plotW = Math.Max(1, w - left - right);
+            var plotH = Math.Max(1, h - top - bottom);
+            var plotBottom = top + plotH;
+
+            DrawPulseChartFrame(canvas, left, top, plotW, plotH);
+
+            if (pts.Count < 2)
             {
-                if (marker < minBpm || marker > maxBpm) continue;
-                var y = h - (marker - minBpm) / rng * h;
-                canvas.Children.Add(new System.Windows.Shapes.Line
-                {
-                    X1 = 0, X2 = w, Y1 = y, Y2 = y,
-                    Stroke = new SolidColorBrush(MediaColor.FromArgb(28, 255, 255, 255)),
-                    StrokeThickness = 0.5,
-                    StrokeDashArray = new DoubleCollection { 3, 5 }
-                });
+                DrawPulseChartEmptyState(canvas, w, h, diagnostics.LastPairedDeviceId);
+                return;
             }
 
-            var poly = new System.Windows.Shapes.Polyline
+            var now = DateTime.Now;
+            var windowStart = now.AddMinutes(-5);
+            var windowEnd = now;
+            var minBpm = Math.Max(35, pts.Min(p => p.bpm) - 6);
+            var maxBpm = Math.Min(190, pts.Max(p => p.bpm) + 6);
+            var wearableBaseline = ServiceContainer.WearableTelemetry.State.BaselineBpm;
+            if (wearableBaseline > 0)
             {
+                minBpm = Math.Min(minBpm, wearableBaseline - 6);
+                maxBpm = Math.Max(maxBpm, wearableBaseline + 6);
+            }
+            var range = Math.Max(12, maxBpm - minBpm);
+
+            double MapX(DateTime t)
+            {
+                var ratio = (t - windowStart).TotalSeconds / Math.Max(1, (windowEnd - windowStart).TotalSeconds);
+                return left + Math.Clamp(ratio, 0, 1) * plotW;
+            }
+
+            double MapY(double bpm)
+            {
+                var ratio = (bpm - minBpm) / range;
+                return plotBottom - Math.Clamp(ratio, 0, 1) * plotH;
+            }
+
+            DrawPulseChartAxes(canvas, left, top, plotW, plotH, minBpm, maxBpm, windowStart, windowEnd);
+            if (wearableBaseline > 0 && wearableBaseline >= minBpm && wearableBaseline <= maxBpm)
+                DrawPulseBaseline(canvas, left, plotW, MapY(wearableBaseline), wearableBaseline);
+
+            var points = pts
+                .Select(p => new System.Windows.Point(MapX(p.t), MapY(p.bpm)))
+                .Where(p => p.X >= left && p.X <= left + plotW)
+                .ToList();
+            if (points.Count < 2)
+            {
+                DrawPulseChartEmptyState(canvas, w, h, diagnostics.LastPairedDeviceId);
+                return;
+            }
+
+            var areaFigure = new PathFigure { StartPoint = new System.Windows.Point(points[0].X, plotBottom), IsClosed = true };
+            areaFigure.Segments.Add(new LineSegment(points[0], true));
+            areaFigure.Segments.Add(new PolyLineSegment(points.Skip(1), true));
+            areaFigure.Segments.Add(new LineSegment(new System.Windows.Point(points[^1].X, plotBottom), true));
+            var areaGeometry = new PathGeometry(new[] { areaFigure });
+            canvas.Children.Add(new System.Windows.Shapes.Path
+            {
+                Data = areaGeometry,
+                Fill = new SolidColorBrush(MediaColor.FromArgb(34, 255, 77, 109))
+            });
+
+            var lineFigure = new PathFigure { StartPoint = points[0], IsClosed = false };
+            lineFigure.Segments.Add(new PolyLineSegment(points.Skip(1), true));
+            canvas.Children.Add(new System.Windows.Shapes.Path
+            {
+                Data = new PathGeometry(new[] { lineFigure }),
                 Stroke = new SolidColorBrush(MediaColor.FromRgb(0xFF, 0x4D, 0x6D)),
-                StrokeThickness = 1.5,
+                StrokeThickness = 2.4,
+                StrokeStartLineCap = PenLineCap.Round,
+                StrokeEndLineCap = PenLineCap.Round,
+                StrokeLineJoin = PenLineJoin.Round,
                 Effect = new System.Windows.Media.Effects.DropShadowEffect
                 {
                     Color = MediaColor.FromRgb(0xFF, 0x4D, 0x6D),
-                    ShadowDepth = 0, BlurRadius = 7, Opacity = 0.55
+                    ShadowDepth = 0,
+                    BlurRadius = 9,
+                    Opacity = 0.55
                 }
-            };
-            foreach (var (t, bpm) in pts)
-            {
-                double x = (t.Ticks - tMin) / tRng * w;
-                double y = h - (bpm - minBpm) / rng * h;
-                poly.Points.Add(new System.Windows.Point(x, y));
-            }
-            canvas.Children.Add(poly);
+            });
 
             var last = pts[^1];
-            var lx = w;
-            var ly = h - (last.bpm - minBpm) / rng * h;
-            var dot = new System.Windows.Shapes.Ellipse { Width = 7, Height = 7, Fill = new SolidColorBrush(MediaColor.FromRgb(0xFF, 0x4D, 0x6D)) };
-            Canvas.SetLeft(dot, lx - 4);
-            Canvas.SetTop(dot, ly - 4);
+            var lastPoint = points[^1];
+            var dot = new System.Windows.Shapes.Ellipse
+            {
+                Width = 10,
+                Height = 10,
+                Fill = new SolidColorBrush(MediaColor.FromRgb(0xFF, 0x4D, 0x6D)),
+                Stroke = new SolidColorBrush(MediaColor.FromRgb(0xFF, 0xD1, 0xDC)),
+                StrokeThickness = 1.2
+            };
+            Canvas.SetLeft(dot, lastPoint.X - 5);
+            Canvas.SetTop(dot, lastPoint.Y - 5);
             canvas.Children.Add(dot);
+
+            var age = Math.Max(0, (DateTime.Now - last.t).TotalSeconds);
+            DrawPulseOverlayLabel(canvas, left + 8, top + 8, $"{last.bpm:0} bpm  /  {age:0}s ago", MediaColor.FromRgb(0xFF, 0xD1, 0xDC));
+        }
+
+        private static void DrawPulseChartFrame(Canvas canvas, double left, double top, double plotW, double plotH)
+        {
+            var frame = new System.Windows.Shapes.Rectangle
+            {
+                Width = plotW,
+                Height = plotH,
+                Stroke = new SolidColorBrush(MediaColor.FromArgb(40, 80, 105, 148)),
+                StrokeThickness = 1,
+                Fill = new SolidColorBrush(MediaColor.FromArgb(22, 3, 8, 20))
+            };
+            canvas.Children.Add(frame);
+            Canvas.SetLeft(frame, left);
+            Canvas.SetTop(frame, top);
+        }
+
+        private static void DrawPulseChartAxes(
+            Canvas canvas,
+            double left,
+            double top,
+            double plotW,
+            double plotH,
+            double minBpm,
+            double maxBpm,
+            DateTime windowStart,
+            DateTime windowEnd)
+        {
+            var gridBrush = new SolidColorBrush(MediaColor.FromArgb(30, 160, 190, 230));
+            var textBrush = new SolidColorBrush(MediaColor.FromArgb(118, 180, 196, 220));
+            var plotBottom = top + plotH;
+
+            for (var i = 0; i <= 4; i++)
+            {
+                var y = top + plotH * i / 4.0;
+                canvas.Children.Add(new System.Windows.Shapes.Line
+                {
+                    X1 = left,
+                    X2 = left + plotW,
+                    Y1 = y,
+                    Y2 = y,
+                    Stroke = gridBrush,
+                    StrokeThickness = 0.6,
+                    StrokeDashArray = i is 0 or 4 ? null : new DoubleCollection { 3, 5 }
+                });
+                var bpm = maxBpm - (maxBpm - minBpm) * i / 4.0;
+                var label = new TextBlock
+                {
+                    Text = $"{bpm:0}",
+                    FontSize = 8,
+                    FontFamily = new WpfFF("Consolas"),
+                    Foreground = textBrush
+                };
+                Canvas.SetLeft(label, 2);
+                Canvas.SetTop(label, y - 8);
+                canvas.Children.Add(label);
+            }
+
+            for (var i = 0; i <= 5; i++)
+            {
+                var x = left + plotW * i / 5.0;
+                canvas.Children.Add(new System.Windows.Shapes.Line
+                {
+                    X1 = x,
+                    X2 = x,
+                    Y1 = top,
+                    Y2 = plotBottom,
+                    Stroke = new SolidColorBrush(MediaColor.FromArgb(18, 160, 190, 230)),
+                    StrokeThickness = 0.5
+                });
+
+                if (i is 0 or 5)
+                {
+                    var time = windowStart.AddSeconds((windowEnd - windowStart).TotalSeconds * i / 5.0);
+                    var label = new TextBlock
+                    {
+                        Text = time.ToString("HH:mm"),
+                        FontSize = 8,
+                        FontFamily = new WpfFF("Consolas"),
+                        Foreground = textBrush
+                    };
+                    Canvas.SetLeft(label, Math.Clamp(x - 18, left, left + plotW - 36));
+                    Canvas.SetTop(label, plotBottom + 5);
+                    canvas.Children.Add(label);
+                }
+            }
+        }
+
+        private static void DrawPulseBaseline(Canvas canvas, double left, double plotW, double y, double baseline)
+        {
+            canvas.Children.Add(new System.Windows.Shapes.Line
+            {
+                X1 = left,
+                X2 = left + plotW,
+                Y1 = y,
+                Y2 = y,
+                Stroke = new SolidColorBrush(MediaColor.FromArgb(130, 34, 211, 238)),
+                StrokeThickness = 1,
+                StrokeDashArray = new DoubleCollection { 6, 5 }
+            });
+            DrawPulseOverlayLabel(canvas, left + plotW - 92, y - 18, $"base {baseline:0}", MediaColor.FromRgb(0x22, 0xD3, 0xEE));
+        }
+
+        private static void DrawPulseChartEmptyState(Canvas canvas, double w, double h, string? pairedDevice)
+        {
+            var text = string.IsNullOrWhiteSpace(pairedDevice)
+                ? "waiting for paired Galaxy Watch samples"
+                : "waiting for verified live samples";
+            DrawPulseOverlayLabel(canvas, Math.Max(20, w * 0.5 - 112), Math.Max(18, h * 0.5 - 12), text, MediaColor.FromRgb(0x94, 0xA3, 0xB8));
+        }
+
+        private static void DrawPulseOverlayLabel(Canvas canvas, double x, double y, string text, MediaColor color)
+        {
+            var label = new TextBlock
+            {
+                Text = text,
+                FontSize = 10,
+                FontFamily = new WpfFF("Consolas"),
+                Foreground = new SolidColorBrush(color)
+            };
+            Canvas.SetLeft(label, x);
+            Canvas.SetTop(label, y);
+            canvas.Children.Add(label);
         }
 
         // ---- ECG REAL-TIME ANIMATION ----
