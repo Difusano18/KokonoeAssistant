@@ -22,13 +22,16 @@ namespace KokonoeAssistant.Services
         private WhisperProcessor? _processor;
         private bool _initialized;
         private bool _disposed;
+        private readonly Task _initTask;
         private readonly SemaphoreSlim _semaphore = new(1, 1);
         private readonly object _initLock = new();
+        private string _lastTranscriptionError = "";
 
         private readonly string? _openAiKey;
         private static readonly HttpClient _http = new() { Timeout = TimeSpan.FromSeconds(60) };
 
         public bool IsLocalReady => _initialized && _processor != null;
+        public string LastTranscriptionError => _lastTranscriptionError;
 
         public class TranscriptionResult
         {
@@ -45,7 +48,7 @@ namespace KokonoeAssistant.Services
             _modelPath = Path.Combine(dir, ModelFileName);
             _openAiKey = openAiApiKeyFallback ?? Environment.GetEnvironmentVariable("OPENAI_API_KEY");
 
-            _ = Task.Run(InitializeLocalAsync);
+            _initTask = Task.Run(InitializeLocalAsync);
         }
 
         private async Task InitializeLocalAsync()
@@ -80,7 +83,8 @@ namespace KokonoeAssistant.Services
             }
             catch (Exception ex)
             {
-                Log($"local Whisper initialization failed: {DescribeException(ex)}; OpenAI fallback available={_openAiKey != null}");
+                _lastTranscriptionError = $"local Whisper initialization failed: {DescribeException(ex)}";
+                Log($"{_lastTranscriptionError}; OpenAI fallback available={_openAiKey != null}");
             }
         }
 
@@ -101,13 +105,33 @@ namespace KokonoeAssistant.Services
 
         public async Task<string?> TranscribeAsync(byte[] audioBytes, string language = "uk")
         {
+            _lastTranscriptionError = "";
+
             if (_initialized && _processor != null)
                 return await TranscribeLocalAsync(audioBytes);
+
+            if (!_initTask.IsCompleted)
+            {
+                Log("local model not ready; waiting for initialization before fallback");
+                try
+                {
+                    await _initTask;
+                }
+                catch (Exception ex)
+                {
+                    _lastTranscriptionError = "Whisper initialization failed: " + DescribeException(ex);
+                    Log(_lastTranscriptionError);
+                }
+
+                if (_initialized && _processor != null)
+                    return await TranscribeLocalAsync(audioBytes);
+            }
 
             if (_openAiKey != null)
                 return await TranscribeOpenAiAsync(audioBytes, language);
 
-            Log("transcription unavailable: no local model and no OpenAI key");
+            _lastTranscriptionError = "transcription unavailable: no local model and no OpenAI key";
+            Log(_lastTranscriptionError);
             return null;
         }
 
@@ -132,13 +156,15 @@ namespace KokonoeAssistant.Services
 
                 if (samples.Length < SampleRate / 2)
                 {
-                    Log("transcription skipped: audio shorter than 0.5s");
+                    _lastTranscriptionError = "transcription skipped: audio shorter than 0.5s";
+                    Log(_lastTranscriptionError);
                     return null;
                 }
 
                 if (peak < 0.001f)
                 {
-                    Log("transcription skipped: silence/near-silence detected");
+                    _lastTranscriptionError = "transcription skipped: silence/near-silence detected";
+                    Log(_lastTranscriptionError);
                     return null;
                 }
 
@@ -148,11 +174,14 @@ namespace KokonoeAssistant.Services
 
                 var text = result.ToString().Trim();
                 Log($"local Whisper result chars={text.Length}");
+                if (string.IsNullOrWhiteSpace(text))
+                    _lastTranscriptionError = $"local Whisper returned empty text; peak={peak:F4}; rms={rms:F4}; gain={gain:F2}";
                 return string.IsNullOrWhiteSpace(text) ? null : text;
             }
             catch (Exception ex)
             {
-                Log($"local Whisper error: {DescribeException(ex)}");
+                _lastTranscriptionError = "local Whisper error: " + DescribeException(ex);
+                Log(_lastTranscriptionError);
                 return null;
             }
             finally
@@ -187,7 +216,8 @@ namespace KokonoeAssistant.Services
             }
             catch (Exception ex)
             {
-                Log($"OpenAI fallback error: {DescribeException(ex)}");
+                _lastTranscriptionError = "OpenAI fallback error: " + DescribeException(ex);
+                Log(_lastTranscriptionError);
                 return null;
             }
         }

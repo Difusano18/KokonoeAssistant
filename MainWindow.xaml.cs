@@ -5223,16 +5223,19 @@ tags: []
                         {
                             InputBox.Text += (InputBox.Text.Length > 0 ? " " : "") + text;
                             VoiceTranscriptText.Text = text;
-                            SetVoiceStatus($"transcribed; level={audio.LastInputLevel:P0}; device={audio.ActiveDevice ?? "mic"}");
+                            SetVoiceStatus($"transcribed; peak={audio.PeakInputLevel:P0}; device={audio.ActiveDevice ?? "mic"}");
                         }
                         else
                         {
-                            VoiceTranscriptText.Text = "Audio was captured, but Whisper returned empty text. Input was probably too quiet or unclear.";
-                            SetVoiceStatus($"empty transcript; level={audio.LastInputLevel:P0}; file={audio.CurrentRecordFile ?? "-"}");
+                            var reason = string.IsNullOrWhiteSpace(whisper.LastTranscriptionError)
+                                ? "Whisper returned empty text. Input may be unclear."
+                                : whisper.LastTranscriptionError;
+                            VoiceTranscriptText.Text = $"Audio was captured, but transcription failed.\n{reason}";
+                            SetVoiceStatus($"transcription failed; peak={audio.PeakInputLevel:P0}; {reason}");
                             AddMessageBubble(new ChatMessageVm
                             {
                                 Role = "system",
-                                Content = "Voice input captured, but transcription was empty. Check microphone level or run test_mic."
+                                Content = $"Voice input captured, but transcription failed. {reason}"
                             });
                         }
                     }
@@ -5331,8 +5334,8 @@ tags: []
                     return;
                 }
 
-                VoiceTranscriptText.Text = $"Saved microphone test WAV:\n{file}\nPeak level: {audio.LastInputLevel:P0}";
-                SetVoiceStatus($"test_mic saved; level={audio.LastInputLevel:P0}; file={Path.GetFileName(file)}");
+                VoiceTranscriptText.Text = $"Saved microphone test WAV:\n{file}\nPeak level: {audio.PeakInputLevel:P0}";
+                SetVoiceStatus($"test_mic saved; peak={audio.PeakInputLevel:P0}; file={Path.GetFileName(file)}");
                 AddMessageBubble(new ChatMessageVm
                 {
                     Role = "system",

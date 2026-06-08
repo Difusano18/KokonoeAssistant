@@ -24,6 +24,7 @@ namespace KokonoeAssistant.Services
         private long _totalBytesRecorded;
         private bool _sawData;
         private float _lastInputLevel;
+        private float _sessionPeakLevel;
         private string _lastError = "";
         private string _activeDevice = "";
         private WaveFormat? _activeFormat;
@@ -39,6 +40,7 @@ namespace KokonoeAssistant.Services
         public string? CurrentRecordFile => _currentRecordFile;
         public string LastError => _lastError;
         public float LastInputLevel => _lastInputLevel;
+        public float PeakInputLevel => _sessionPeakLevel;
         public long TotalBytesRecorded => _totalBytesRecorded;
         public string ActiveDevice => _activeDevice;
         public WaveFormat? ActiveFormat => _activeFormat;
@@ -153,7 +155,7 @@ namespace KokonoeAssistant.Services
                 var length = _currentRecordFile != null && File.Exists(_currentRecordFile)
                     ? new FileInfo(_currentRecordFile).Length
                     : 0;
-                Log($"recording stopped; bytes={_totalBytesRecorded}; wavBytes={length}; peak={_lastInputLevel:P0}; dataSeen={_sawData}; file={_currentRecordFile}");
+                Log($"recording stopped; bytes={_totalBytesRecorded}; wavBytes={length}; peak={_sessionPeakLevel:P0}; last={_lastInputLevel:P0}; dataSeen={_sawData}; file={_currentRecordFile}");
                 if (!_sawData || _totalBytesRecorded == 0)
                     Log("warning: recording stopped without audio buffers. This usually means device access was blocked or the selected input is silent.");
 
@@ -181,7 +183,7 @@ namespace KokonoeAssistant.Services
 
             await Task.Delay(seconds);
             await StopRecordingAsync();
-            Log($"test_mic saved file={_currentRecordFile}; level={_lastInputLevel:P0}; bytes={_totalBytesRecorded}");
+            Log($"test_mic saved file={_currentRecordFile}; peak={_sessionPeakLevel:P0}; last={_lastInputLevel:P0}; bytes={_totalBytesRecorded}");
             return _currentRecordFile;
         }
 
@@ -240,6 +242,8 @@ namespace KokonoeAssistant.Services
                 _totalBytesRecorded += e.BytesRecorded;
                 var level = ComputePcm16Peak(e.Buffer, e.BytesRecorded);
                 _lastInputLevel = level;
+                if (level > _sessionPeakLevel)
+                    _sessionPeakLevel = level;
                 InputLevelChanged?.Invoke(this, level);
 
                 if (_totalBytesRecorded <= e.BytesRecorded)
@@ -267,6 +271,7 @@ namespace KokonoeAssistant.Services
         {
             _lastError = "";
             _lastInputLevel = 0;
+            _sessionPeakLevel = 0;
             _totalBytesRecorded = 0;
             _sawData = false;
             _activeDevice = "";

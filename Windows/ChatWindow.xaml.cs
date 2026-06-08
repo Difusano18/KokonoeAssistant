@@ -226,7 +226,10 @@ namespace KokonoeAssistant.Windows
                         }
                         else
                         {
-                            MessageBox.Show("Audio was captured, but transcription returned empty text. Run test_mic in the main chat or check microphone level.", "Voice recorder", MessageBoxButton.OK, MessageBoxImage.Information);
+                            var reason = string.IsNullOrWhiteSpace(whisper.LastTranscriptionError)
+                                ? "Whisper returned empty text. Run test_mic in the main chat or check microphone level."
+                                : whisper.LastTranscriptionError;
+                            MessageBox.Show("Audio was captured, but transcription failed.\n\n" + reason, "Voice recorder", MessageBoxButton.OK, MessageBoxImage.Information);
                         }
                     }
 
