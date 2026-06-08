@@ -78,6 +78,8 @@ namespace KokonoeAssistant
 
         // ---- Voice ----
         private bool _isRecording;
+        private bool _voiceDiagnosticsHooked;
+        private static bool UseVoicePipelineV2 => true;
 
         // ---- Telegram Bot ----
         private TelegramBotClient? _tgBot;
@@ -2505,6 +2507,14 @@ tags: [kokonoe, live-core, diagnostics]
                 InputBox.Clear();
                 AddMessageBubble(new ChatMessageVm { Role = "system", Content = "Запускаємо brain trigger..." });
                 ServiceContainer.BrainEngine?.TriggerSpontaneous();
+                return;
+            }
+
+            if (text.Equals("test_mic", StringComparison.OrdinalIgnoreCase) ||
+                text.Equals("/test_mic", StringComparison.OrdinalIgnoreCase))
+            {
+                InputBox.Clear();
+                await RunVoiceMicTestAsync();
                 return;
             }
 
@@ -5128,6 +5138,12 @@ tags: []
 
         private async void Record_Click(object sender, RoutedEventArgs e)
         {
+            if (UseVoicePipelineV2)
+            {
+                await HandleRecordClickAsync();
+                return;
+            }
+
             try
             {
                 var audio = ServiceContainer.AudioRecordService;
@@ -5172,6 +5188,183 @@ tags: []
                 _isRecording = false;
                 WMsgBox.Show($"Помилка запису: {ex.Message}");
             }
+        }
+
+        private async Task HandleRecordClickAsync()
+        {
+            try
+            {
+                WireVoiceDiagnostics();
+                var audio = ServiceContainer.AudioRecordService;
+
+                if (_isRecording || audio.IsRecording)
+                {
+                    _isRecording = false;
+                    SetVoiceRecordButtons("Processing...", false);
+                    SetVoiceStatus("stopping recorder...");
+
+                    await audio.StopRecordingAsync();
+                    var bytes = await audio.GetRecordingBytesAsync();
+
+                    if (bytes?.Length > 0)
+                    {
+                        var whisper = ServiceContainer.WhisperService;
+                        if (!whisper.IsAvailable())
+                        {
+                            SetVoiceStatus("whisper unavailable: model not loaded and no fallback key");
+                            VoiceTranscriptText.Text = "Whisper is not available. Check model download or API key.";
+                            WMsgBox.Show("Whisper is not available. Check the model file or OpenAI API key.", "Voice STT");
+                            return;
+                        }
+
+                        SetVoiceStatus($"transcribing {bytes.Length:N0} bytes...");
+                        var text = await whisper.TranscribeAsync(bytes, "uk");
+                        if (!string.IsNullOrWhiteSpace(text))
+                        {
+                            InputBox.Text += (InputBox.Text.Length > 0 ? " " : "") + text;
+                            VoiceTranscriptText.Text = text;
+                            SetVoiceStatus($"transcribed; level={audio.LastInputLevel:P0}; device={audio.ActiveDevice ?? "mic"}");
+                        }
+                        else
+                        {
+                            VoiceTranscriptText.Text = "Audio was captured, but Whisper returned empty text. Input was probably too quiet or unclear.";
+                            SetVoiceStatus($"empty transcript; level={audio.LastInputLevel:P0}; file={audio.CurrentRecordFile ?? "-"}");
+                            AddMessageBubble(new ChatMessageVm
+                            {
+                                Role = "system",
+                                Content = "Voice input captured, but transcription was empty. Check microphone level or run test_mic."
+                            });
+                        }
+                    }
+                    else
+                    {
+                        VoiceTranscriptText.Text = "No microphone buffers were recorded.";
+                        SetVoiceStatus(audio.LastError ?? "no audio data captured");
+                    }
+
+                    SetVoiceRecordButtons("Voice", true);
+                    return;
+                }
+
+                SetVoiceRecordButtons("Starting...", false);
+                SetVoiceStatus("opening microphone...");
+                var started = await audio.StartRecordingAsync();
+                if (!started)
+                {
+                    _isRecording = false;
+                    SetVoiceRecordButtons("Voice", true);
+                    var error = audio.LastError ?? "microphone failed to start";
+                    VoiceTranscriptText.Text = error;
+                    SetVoiceStatus(error);
+                    WMsgBox.Show(error, "Voice recorder");
+                    return;
+                }
+
+                _isRecording = true;
+                SetVoiceRecordButtons("Stop", true);
+                SetVoiceStatus($"recording; level={audio.LastInputLevel:P0}; device={audio.ActiveDevice ?? "mic"}; format={audio.ActiveFormat?.ToString() ?? "-"}");
+            }
+            catch (Exception ex)
+            {
+                SetVoiceRecordButtons("Voice", true);
+                _isRecording = false;
+                SetVoiceStatus($"recording error: {ex.Message}");
+                VoiceTranscriptText.Text = ex.Message;
+                WMsgBox.Show($"Recording error: {ex.Message}", "Voice recorder");
+            }
+        }
+
+        private void WireVoiceDiagnostics()
+        {
+            if (_voiceDiagnosticsHooked)
+                return;
+
+            var audio = ServiceContainer.AudioRecordService;
+            audio.InputLevelChanged += (_, level) =>
+            {
+                _ = Dispatcher.InvokeAsync(() =>
+                {
+                    VoiceInputLevelBar.Value = Math.Clamp(level * 100.0, 0, 100);
+                    if (audio.IsRecording)
+                        SetVoiceStatus($"recording; level={level:P0}; device={audio.ActiveDevice ?? "mic"}");
+                });
+            };
+            audio.RecordingStarted += (_, _) =>
+            {
+                _ = Dispatcher.InvokeAsync(() => SetVoiceStatus($"recording; device={audio.ActiveDevice ?? "mic"}; format={audio.ActiveFormat?.ToString() ?? "-"}"));
+            };
+            audio.RecordingStopped += (_, _) =>
+            {
+                _ = Dispatcher.InvokeAsync(() => VoiceInputLevelBar.Value = 0);
+            };
+            audio.RecordingError += (_, error) =>
+            {
+                _ = Dispatcher.InvokeAsync(() =>
+                {
+                    VoiceTranscriptText.Text = error.Message;
+                    SetVoiceStatus(error.Message);
+                });
+            };
+
+            _voiceDiagnosticsHooked = true;
+        }
+
+        private async Task RunVoiceMicTestAsync()
+        {
+            WireVoiceDiagnostics();
+            var audio = ServiceContainer.AudioRecordService;
+            SetVoiceRecordButtons("Testing...", false);
+            VoiceTranscriptText.Text = "Recording 3-second microphone test...";
+            SetVoiceStatus("test_mic recording for 3 seconds...");
+
+            try
+            {
+                var file = await audio.TestMicAsync(TimeSpan.FromSeconds(3));
+                SetVoiceRecordButtons("Voice", true);
+
+                if (string.IsNullOrWhiteSpace(file))
+                {
+                    var error = audio.LastError ?? "test_mic failed";
+                    VoiceTranscriptText.Text = error;
+                    SetVoiceStatus(error);
+                    WMsgBox.Show(error, "test_mic");
+                    return;
+                }
+
+                VoiceTranscriptText.Text = $"Saved microphone test WAV:\n{file}\nPeak level: {audio.LastInputLevel:P0}";
+                SetVoiceStatus($"test_mic saved; level={audio.LastInputLevel:P0}; file={Path.GetFileName(file)}");
+                AddMessageBubble(new ChatMessageVm
+                {
+                    Role = "system",
+                    Content = $"test_mic saved: {file}"
+                });
+            }
+            catch (Exception ex)
+            {
+                SetVoiceRecordButtons("Voice", true);
+                VoiceTranscriptText.Text = ex.Message;
+                SetVoiceStatus($"test_mic error: {ex.Message}");
+                WMsgBox.Show(ex.Message, "test_mic");
+            }
+        }
+
+        private void SetVoiceRecordButtons(string text, bool enabled)
+        {
+            RecordBtn.Content = text;
+            RecordBtn.IsEnabled = enabled;
+            VoiceRecordBtn.Content = text;
+            VoiceRecordBtn.IsEnabled = enabled;
+        }
+
+        private void SetVoiceStatus(string status)
+        {
+            VoiceStatusLabel.Text = status;
+            KokoSystemLog.Write("VOICE_UI", status);
+        }
+
+        private async void VoiceTestMic_Click(object sender, RoutedEventArgs e)
+        {
+            await RunVoiceMicTestAsync();
         }
 
         // ------------------------------------------------------------

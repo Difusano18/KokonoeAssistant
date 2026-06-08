@@ -224,6 +224,10 @@ namespace KokonoeAssistant.Windows
                             InputTextBox.Text += text + " ";
                             Debug.WriteLine($"[ChatWindow] Transcribed: {text}");
                         }
+                        else
+                        {
+                            MessageBox.Show("Audio was captured, but transcription returned empty text. Run test_mic in the main chat or check microphone level.", "Voice recorder", MessageBoxButton.OK, MessageBoxImage.Information);
+                        }
                     }
 
                     RecordButton.Content = "🎤 Record";
@@ -231,7 +235,15 @@ namespace KokonoeAssistant.Windows
                 }
                 else
                 {
-                    await audio.StartRecordingAsync();
+                    var started = await audio.StartRecordingAsync();
+                    if (!started)
+                    {
+                        MessageBox.Show(audio.LastError ?? "Microphone failed to start", "Voice recorder", MessageBoxButton.OK, MessageBoxImage.Error);
+                        RecordButton.Content = "🎤 Record";
+                        RecordButton.IsEnabled = true;
+                        return;
+                    }
+
                     RecordButton.Content = "⏹ Stop";
                 }
             }
