@@ -56,7 +56,8 @@ internal static class Program
             Run("Presence refuses stale sleep instruction after return", PresenceRefusesStaleSleepInstructionAfterReturn);
             Run("Presence never interrupts active sleep intent", PresenceNeverInterruptsActiveSleepIntent);
             Run("Sleep intent at night resolves to morning", SleepIntentAtNightResolvesToMorning);
-            Run("State freshness expires stale sleep intent", StateFreshnessExpiresStaleSleepIntent);
+            Run("State freshness protects stale sleep intent", StateFreshnessProtectsStaleSleepIntent);
+            Run("State freshness keeps sleep through passive desktop", StateFreshnessKeepsSleepThroughPassiveDesktop);
             Run("State freshness closes intent on wake signal", StateFreshnessClosesIntentOnWakeSignal);
             Run("State freshness closes stale course on later activity", StateFreshnessClosesStaleCourseOnLaterActivity);
             Run("Vault sync policy flushes stale partial batch", VaultSyncPolicyFlushesStalePartialBatch);
@@ -1586,9 +1587,9 @@ internal static class Program
         var frame = new KokoPresenceContinuityEngine()
             .Evaluate(state, ctx.Chat.GetMessages(10), now, autonomyLevel: 3);
 
-        AssertEqual("due_intent_followup", frame.SituationKind, "sleep may be due but should stay non-interrupting");
+        AssertEqual("sleeping", frame.SituationKind, "sleep should stay protected instead of becoming a due follow-up");
         AssertTrue(!frame.ShouldInterrupt, "sleep intent should never proactively interrupt");
-        AssertTrue(frame.ToneHint.Contains("let him sleep") || frame.ToneHint.Contains("do not tell him to sleep"), "tone should preserve sleep quiet rule");
+        AssertTrue(frame.ToneHint.Contains("protected") || frame.ToneHint.Contains("sleep intent"), "tone should preserve sleep quiet rule");
     }
 
     private static void SleepIntentAtNightResolvesToMorning()
@@ -1607,7 +1608,7 @@ internal static class Program
         AssertEqual(intent.ExpectedUntil, intent.FollowUpAt, "sleep follow-up should wait until morning window");
     }
 
-    private static void StateFreshnessExpiresStaleSleepIntent()
+    private static void StateFreshnessProtectsStaleSleepIntent()
     {
         var now = new DateTime(2026, 5, 7, 12, 30, 0);
         var state = new KokoInternalState();
@@ -1627,9 +1628,40 @@ internal static class Program
 
         var result = new KokoStateFreshnessService().Refresh(state, messages, now);
 
-        AssertTrue(result.Changed, "stale sleep should change state");
-        AssertTrue(result.ExpiredIntentCount == 1, "stale sleep should expire by time");
-        AssertTrue(state.ShortTermIntents.All(i => i.ResolvedAt.HasValue), "expired sleep should no longer be active");
+        AssertTrue(!result.Changed, "stale sleep should not be resolved by time alone");
+        AssertTrue(result.ExpiredIntentCount == 0, "sleep should not expire without explicit wake/biometric/high-importance screen signal");
+        AssertTrue(state.ShortTermIntents.All(i => !i.ResolvedAt.HasValue), "sleep should remain active until a real wake signal");
+    }
+
+    private static void StateFreshnessKeepsSleepThroughPassiveDesktop()
+    {
+        var now = new DateTime(2026, 5, 7, 9, 36, 0);
+        var state = new KokoInternalState();
+        state.ShortTermIntents.Add(new ShortTermIntent
+        {
+            Kind = "sleep",
+            Summary = "sleep until morning",
+            SourceText = "good night",
+            CreatedAt = now.AddHours(-5),
+            FollowUpAt = now.AddMinutes(-36),
+            ExpectedUntil = now.AddMinutes(-36)
+        });
+        var messages = new[]
+        {
+            new ChatRepository.ChatMessage { Role = "user", Content = "good night", Timestamp = now.AddHours(-5) }
+        };
+        var signals = new KokoStateReconciliationSignals
+        {
+            Channel = "desktop",
+            ScreenMode = "desktop",
+            ScreenSummary = "same static desktop background process",
+            LastDesktopActivityAt = now.AddMinutes(-1)
+        };
+
+        var result = new KokoStateFreshnessService().Refresh(state, messages, now, signals);
+
+        AssertTrue(result.ResolvedIntentCount == 0, "passive desktop should not close sleep");
+        AssertTrue(!state.ShortTermIntents[0].ResolvedAt.HasValue, "sleep should stay active through passive desktop activity");
     }
 
     private static void StateFreshnessClosesIntentOnWakeSignal()
@@ -1767,9 +1799,9 @@ internal static class Program
             autonomyLevel: 3,
             systemInfoOverride: new SystemInfo { IdleTime = TimeSpan.FromMinutes(40) });
 
-        AssertEqual("away", frame.SituationKind, "PC idle should override generic long-silence ping");
-        AssertTrue(!frame.ShouldInterrupt, "away state should stay silent even after long chat silence");
-        AssertTrue(frame.SummaryUk.Contains("відійшов від ПК", StringComparison.Ordinal), "away summary should explain the actual presence signal");
+        AssertEqual("ghost_mode", frame.SituationKind, "PC idle should enter ghost mode instead of generic long-silence ping");
+        AssertTrue(!frame.ShouldInterrupt, "ghost mode should stay silent even after long chat silence");
+        AssertTrue(frame.SummaryUk.Contains("Ghost mode", StringComparison.OrdinalIgnoreCase), "ghost summary should explain silent observation");
     }
 
     private static void InternalDayShiftsPhaseAndWritesVaultStatus()

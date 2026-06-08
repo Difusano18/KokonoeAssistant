@@ -36,6 +36,7 @@ namespace KokonoeAssistant.Services
 
         // Останні надіслані спонтанні повідомлення (для запобігання повторень)
         public List<string> LastSpontaneousMsgs  { get; set; } = new();
+        public List<RecentThoughtFingerprint> RecentThoughtBuffer { get; set; } = new();
 
         // Нагадування та аналітика
         public DateTime   LastReminderCheckAt    { get; set; } = DateTime.MinValue;
@@ -216,6 +217,15 @@ namespace KokonoeAssistant.Services
         public string   Type    { get; set; } = ""; // anxious_followup, topic_followup, bad_pattern
         public string   Context { get; set; } = "";
         public DateTime FireAt  { get; set; }
+    }
+
+    public class RecentThoughtFingerprint
+    {
+        public DateTime At { get; set; } = DateTime.MinValue;
+        public string Category { get; set; } = "";
+        public string Hash { get; set; } = "";
+        public string Canonical { get; set; } = "";
+        public string Preview { get; set; } = "";
     }
 
     public class ShortTermIntent
@@ -1290,10 +1300,16 @@ Summary: {summary}
                 Log($"TG send suppressed ({category}): {suppressionReason}");
                 return false;
             }
+            if (ShouldSuppressRecentThought(message, category, out var duplicateReason))
+            {
+                Log($"TG send suppressed duplicate ({category}): {duplicateReason}");
+                return false;
+            }
 
             try
             {
                 await _tgBot!.SendMessage(_tgChatId, message);
+                RecordRecentThought(message, category, DateTime.Now);
                 // Log to vault archive
                 try { ServiceContainer.ChatLogger.LogOutgoing("tg", message, category); } catch { }
                 return true;
@@ -1320,6 +1336,20 @@ Summary: {summary}
                 return true;
             }
 
+            if (HasActiveSleepIntent(DateTime.Now) && IsSleepInterruptCategory(category))
+            {
+                reason = "active sleep intent; suppress automated Telegram until explicit wake/safe biometric wake";
+                return true;
+            }
+
+            if (IsLowActivityState(DateTime.Now) &&
+                DateTime.Now - _state.LastSpontaneousAt < TimeSpan.FromMinutes(60) &&
+                IsSpontaneousLikeCategory(category))
+            {
+                reason = "low activity cooldown 60m";
+                return true;
+            }
+
             var lastUserAt = _state.LastUserMessageAt;
             if (lastUserAt <= DateTime.MinValue)
                 return false;
@@ -1332,6 +1362,164 @@ Summary: {summary}
             reason = $"recent user message cooldown {elapsed.TotalMinutes:0.0}m < {cooldownMinutes}m";
             return true;
         }
+
+        private bool ShouldSuppressRecentThought(string message, string category, out string reason)
+        {
+            reason = "";
+            if (category.Contains("crisis", StringComparison.OrdinalIgnoreCase))
+                return false;
+
+            var now = DateTime.Now;
+            _state.RecentThoughtBuffer.RemoveAll(t => now - t.At > TimeSpan.FromHours(6));
+            var canonical = NormalizeThoughtForBuffer(message);
+            if (canonical.Length < 8)
+                return false;
+
+            var isIdle = LooksLikeIdleOrStuckThought(canonical, category);
+            var similar = _state.RecentThoughtBuffer
+                .Where(t => now - t.At <= TimeSpan.FromHours(6))
+                .Select(t => new { Thought = t, Score = ThoughtSimilarity(canonical, t.Canonical) })
+                .Where(x => x.Score >= 0.72 || x.Thought.Hash == canonical)
+                .OrderByDescending(x => x.Score)
+                .ToList();
+
+            if (similar.Any())
+            {
+                var hit = similar[0].Thought;
+                reason = $"similar thought already sent at {hit.At:HH:mm}; score={similar[0].Score:F2}; preview={hit.Preview}";
+                return true;
+            }
+
+            if (isIdle)
+            {
+                var idleCount = _state.RecentThoughtBuffer.Count(t =>
+                    now - t.At <= TimeSpan.FromHours(6) &&
+                    LooksLikeIdleOrStuckThought(t.Canonical, t.Category));
+                if (idleCount >= 2)
+                {
+                    reason = $"idle/stuck observation already sent {idleCount} times in 6h";
+                    return true;
+                }
+            }
+
+            if (WouldRepeatPresenceTrace(canonical, now))
+            {
+                reason = "presence trace already contains this idle/away/sleep observation";
+                return true;
+            }
+
+            return false;
+        }
+
+        private void RecordRecentThought(string message, string category, DateTime now)
+        {
+            var canonical = NormalizeThoughtForBuffer(message);
+            if (canonical.Length < 8)
+                return;
+
+            _state.RecentThoughtBuffer.RemoveAll(t => now - t.At > TimeSpan.FromHours(6));
+            _state.RecentThoughtBuffer.Add(new RecentThoughtFingerprint
+            {
+                At = now,
+                Category = category,
+                Hash = canonical,
+                Canonical = canonical,
+                Preview = TrimStateMention(message)
+            });
+            if (_state.RecentThoughtBuffer.Count > 80)
+                _state.RecentThoughtBuffer.RemoveRange(0, _state.RecentThoughtBuffer.Count - 80);
+        }
+
+        private static string NormalizeThoughtForBuffer(string text)
+        {
+            var chars = (text ?? "")
+                .ToLowerInvariant()
+                .Select(ch => char.IsLetterOrDigit(ch) || char.IsWhiteSpace(ch) ? ch : ' ')
+                .ToArray();
+            var normalized = new string(chars);
+            while (normalized.Contains("  ", StringComparison.Ordinal))
+                normalized = normalized.Replace("  ", " ");
+            return normalized.Trim();
+        }
+
+        private static double ThoughtSimilarity(string left, string right)
+        {
+            if (string.IsNullOrWhiteSpace(left) || string.IsNullOrWhiteSpace(right))
+                return 0;
+            if (left == right)
+                return 1;
+
+            var a = left.Split(' ', StringSplitOptions.RemoveEmptyEntries).Where(t => t.Length > 2).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var b = right.Split(' ', StringSplitOptions.RemoveEmptyEntries).Where(t => t.Length > 2).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            if (a.Count == 0 || b.Count == 0)
+                return 0;
+            var intersection = a.Count(t => b.Contains(t));
+            var union = a.Count + b.Count - intersection;
+            return union <= 0 ? 0 : intersection / (double)union;
+        }
+
+        private static bool LooksLikeIdleOrStuckThought(string canonical, string category)
+        {
+            var text = $"{canonical} {category}".ToLowerInvariant();
+            return ContainsAny(text,
+                "idle", "stuck", "silence", "away", "ghost", "zombie", "завис", "пропав", "мовч", "тиша", "idle_staring");
+        }
+
+        private bool WouldRepeatPresenceTrace(string canonical, DateTime now)
+        {
+            if (!LooksLikeIdleOrStuckThought(canonical, ""))
+                return false;
+
+            return _state.PresenceTrace
+                .TakeLast(8)
+                .Any(t => ContainsAny(t.ToLowerInvariant(), "idle", "away", "ghost", "sleep", "stuck", "завис", "відійшов"));
+        }
+
+        private bool HasActiveSleepIntent(DateTime now)
+            => _state.ShortTermIntents.Any(i => !i.ResolvedAt.HasValue && i.Kind == "sleep" && now - i.CreatedAt < TimeSpan.FromHours(24));
+
+        private bool IsLowActivityState(DateTime now)
+        {
+            if (HasActiveSleepIntent(now))
+                return true;
+            if (_state.LastPresenceSituation is "away" or "ghost_mode" or "watch_sleeping" or "sleep_locked" or "sleeping")
+                return true;
+
+            try
+            {
+                if (ServiceContainer.PcControl.GetSystemInfo().IdleTime >= TimeSpan.FromMinutes(30))
+                    return true;
+            }
+            catch { }
+
+            try
+            {
+                var wearable = ServiceContainer.WearableTelemetry?.State;
+                if (wearable != null && wearable.IsFresh(now.ToUniversalTime()) &&
+                    wearable.OnWrist &&
+                    ((wearable.Motion ?? 0) <= 0.01 || wearable.SleepState is "probably_asleep" or "drowsy_or_resting" or "quiet_night"))
+                    return true;
+            }
+            catch { }
+
+            return false;
+        }
+
+        private static bool IsSpontaneousLikeCategory(string category)
+            => category.Contains("spontaneous", StringComparison.OrdinalIgnoreCase) ||
+               category.Contains("jab", StringComparison.OrdinalIgnoreCase) ||
+               category.Contains("observation", StringComparison.OrdinalIgnoreCase) ||
+               category.Contains("reactive", StringComparison.OrdinalIgnoreCase) ||
+               category.Contains("screen", StringComparison.OrdinalIgnoreCase) ||
+               category.Contains("night", StringComparison.OrdinalIgnoreCase);
+
+        private static bool IsSleepInterruptCategory(string category)
+            => IsSpontaneousLikeCategory(category) ||
+               category.Contains("briefing", StringComparison.OrdinalIgnoreCase) ||
+               category.Contains("digest", StringComparison.OrdinalIgnoreCase) ||
+               category.Contains("analytics", StringComparison.OrdinalIgnoreCase) ||
+               category.Contains("resource_guardian", StringComparison.OrdinalIgnoreCase) ||
+               category.Contains("predictive", StringComparison.OrdinalIgnoreCase);
 
         private static bool IsFastProactiveCategory(string category)
             => category.Contains("jab", StringComparison.OrdinalIgnoreCase) ||
@@ -2711,8 +2899,13 @@ Summary: {summary}
                 {
                     foreach (var intent in _state.ShortTermIntents.Where(i => !i.ResolvedAt.HasValue && i.FollowUpAt <= DateTime.Now.AddMinutes(1)))
                     {
-                        intent.ResolvedAt = DateTime.Now;
-                        intent.ResolutionText = "follow-up sent once; do not repeat stale intent";
+                        if (intent.Kind == "sleep")
+                        {
+                            LogSleepIntent("kept active after blocked/legacy follow-up path");
+                            continue;
+                        }
+
+                        ResolveIntent(intent, DateTime.Now, "follow-up sent once; do not repeat stale intent");
                     }
                     _state.PendingTriggers.RemoveAll(t => t.Type == "intent_followup");
                     _state.SilenceLevel1At = DateTime.Now;
@@ -2936,8 +3129,13 @@ Summary: {summary}
             _state.PendingTriggers.Clear();
             foreach (var intent in _state.ShortTermIntents.Where(i => !i.ResolvedAt.HasValue))
             {
-                intent.ResolvedAt = now;
-                intent.ResolutionText = "user muted proactive follow-ups: " + TrimStateMention(content);
+                if (intent.Kind == "sleep")
+                {
+                    LogSleepIntent("kept active while user muted proactive follow-ups: " + TrimStateMention(content));
+                    continue;
+                }
+
+                ResolveIntent(intent, now, "user muted proactive follow-ups: " + TrimStateMention(content));
             }
             _state.SilenceLevel1At = now;
             _state.SilenceLevel2At = now;
@@ -3020,7 +3218,7 @@ Summary: {summary}
             _state.ShortTermIntents.RemoveAll(i =>
                 i.ResolvedAt.HasValue && now - i.ResolvedAt.Value > TimeSpan.FromDays(2));
             _state.ShortTermIntents.RemoveAll(i =>
-                !i.ResolvedAt.HasValue && now - i.ExpectedUntil > TimeSpan.FromHours(12));
+                !i.ResolvedAt.HasValue && i.Kind != "sleep" && now - i.ExpectedUntil > TimeSpan.FromHours(12));
 
             ResolveShortTermIntentsFromMessage(content, now);
 
@@ -3180,13 +3378,36 @@ Summary: {summary}
                 "поспав", "проснув", "прокинув", "поїв", "поів", "їв", "норм поїв", "відпочиваю", "відпочив",
                 "вернув", "повернув", "прийшов", "я тут", "закінчив", "закінчились", "вже вдома", "поспав", "проснув", "прокинув");
             if (!returned) return;
+            var explicitWake = LooksLikeExplicitWakeMessage(lower);
 
             foreach (var intent in _state.ShortTermIntents.Where(i => !i.ResolvedAt.HasValue))
             {
-                intent.ResolvedAt = now;
-                intent.ResolutionText = content.Trim();
+                if (intent.Kind == "sleep" && !explicitWake)
+                    continue;
+
+                ResolveIntent(intent, now, "user message resolved intent: " + TrimStateMention(content));
             }
             _state.PendingTriggers.RemoveAll(t => t.Type == "intent_followup");
+        }
+
+        private void ResolveIntent(ShortTermIntent intent, DateTime now, string reason)
+        {
+            intent.ResolvedAt = now;
+            intent.ResolutionText = reason;
+            if (intent.Kind == "sleep")
+                LogSleepIntent("deactivated: " + reason);
+        }
+
+        private static bool LooksLikeExplicitWakeMessage(string lower)
+            => ContainsAny(lower,
+                "прокин", "проснув", "поспав", "встав", "я встав", "я прокинув", "я проснув",
+                "woke", "wake", "awake", "i am up", "im up",
+                "РїСЂРѕРєРёРЅ", "РїСЂРѕСЃРЅСѓРІ", "РїРѕСЃРїР°РІ", "РІСЃС‚Р°РІ");
+
+        private static void LogSleepIntent(string message)
+        {
+            try { KokoSystemLog.Write("SLEEP_INTENT", message); }
+            catch { }
         }
 
         private static string BuildIntentQuestion(ShortTermIntent intent) => intent.Kind switch

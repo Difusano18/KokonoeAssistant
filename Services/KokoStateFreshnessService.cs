@@ -81,16 +81,26 @@ namespace KokonoeAssistant.Services
             var count = 0;
             foreach (var intent in state.ShortTermIntents.Where(i => !i.ResolvedAt.HasValue).ToList())
             {
-                if (intent.Kind == "sleep" && !ContainsAny(mode + " " + summary, "telegram", "desktop", "chat"))
+                if (intent.Kind == "sleep")
+                {
+                    if (!CanResolveSleepFromExternalSignals(intent, mode, summary, channel, desktopActive, now, out var sleepReason))
+                    {
+                        LogSleep($"protected active sleep intent from passive signal; source={channel}/{mode}; reason={sleepReason}");
+                        continue;
+                    }
+
+                    MarkResolved(intent, now,
+                        $"sleep deactivated by high-importance screen activity after expected window: {channel}/{mode}; {Trim(signals.ScreenSummary, 120)}");
+                    count++;
                     continue;
+                }
 
                 if (now < intent.ExpectedUntil.AddMinutes(10) && !desktopActive)
                     continue;
 
                 if (intent.Kind is "course" or "return_home" or "errand" or "walk" or "busy" or "work" or "sleep")
                 {
-                    intent.ResolvedAt = now;
-                    intent.ResolutionText = $"auto-state-reconcile: {channel}/{mode} activity superseded stale {intent.Kind} intent";
+                    MarkResolved(intent, now, $"auto-state-reconcile: {channel}/{mode} activity superseded stale {intent.Kind} intent");
                     count++;
                 }
             }
@@ -106,8 +116,10 @@ namespace KokonoeAssistant.Services
             var count = 0;
             foreach (var intent in state.ShortTermIntents.Where(i => !i.ResolvedAt.HasValue))
             {
-                intent.ResolvedAt = now;
-                intent.ResolutionText = $"auto-state-refresh: latest user signal closed it: {Trim(lastUser.Content, 160)}";
+                if (intent.Kind == "sleep" && !LooksLikeExplicitWakeSignal(lower))
+                    continue;
+
+                MarkResolved(intent, now, $"auto-state-refresh: latest user signal closed it: {Trim(lastUser.Content, 160)}");
                 count++;
             }
             return count;
@@ -133,8 +145,7 @@ namespace KokonoeAssistant.Services
                 if (LooksLikeSameIntentContinuation(lower, intent.Kind))
                     continue;
 
-                intent.ResolvedAt = now;
-                intent.ResolutionText = $"auto-state-refresh: later user activity superseded stale {intent.Kind} intent: {Trim(content, 160)}";
+                MarkResolved(intent, now, $"auto-state-refresh: later user activity superseded stale {intent.Kind} intent: {Trim(content, 160)}");
                 count++;
             }
 
@@ -146,6 +157,9 @@ namespace KokonoeAssistant.Services
             var count = 0;
             foreach (var intent in state.ShortTermIntents.Where(i => !i.ResolvedAt.HasValue).ToList())
             {
+                if (intent.Kind == "sleep")
+                    continue;
+
                 var grace = GraceFor(intent.Kind);
                 var maxAge = MaxAgeFor(intent.Kind);
                 var expiredByWindow = now > intent.ExpectedUntil + grace;
@@ -154,11 +168,74 @@ namespace KokonoeAssistant.Services
                 if (!expiredByWindow && !expiredByAge)
                     continue;
 
-                intent.ResolvedAt = now;
-                intent.ResolutionText = "auto-state-refresh: intent window expired";
+                MarkResolved(intent, now, "auto-state-refresh: intent window expired");
                 count++;
             }
             return count;
+        }
+
+        private static bool CanResolveSleepFromExternalSignals(
+            ShortTermIntent intent,
+            string mode,
+            string summary,
+            string channel,
+            bool desktopActive,
+            DateTime now,
+            out string reason)
+        {
+            var minLockUntil = intent.CreatedAt.AddHours(4);
+            if (now < minLockUntil)
+            {
+                reason = $"minimum sleep lock until {minLockUntil:HH:mm}";
+                return false;
+            }
+
+            if (now < intent.ExpectedUntil)
+            {
+                reason = $"expected sleep window still active until {intent.ExpectedUntil:HH:mm}";
+                return false;
+            }
+
+            if (!desktopActive)
+            {
+                reason = "no fresh desktop activity";
+                return false;
+            }
+
+            if (!LooksLikeHighImportanceWakeScreen(mode, summary, channel))
+            {
+                reason = "screen signal is passive or low-importance";
+                return false;
+            }
+
+            reason = "high-importance screen activity after expected sleep window";
+            return true;
+        }
+
+        private static bool LooksLikeHighImportanceWakeScreen(string mode, string summary, string channel)
+        {
+            var text = $"{mode} {summary} {channel}".ToLowerInvariant();
+            if (ContainsAny(text, "idle", "same", "static", "video", "youtube", "music", "background", "lockscreen"))
+                return false;
+
+            return ContainsAny(text,
+                "coding", "ide", "visual studio", "vscode", "build", "debug", "error", "exception",
+                "obsidian", "editing", "typing", "active", "changed", "commit", "game", "telegram active",
+                "РєРѕРґ", "Р°РєС‚РёРІ", "Р·РјС–РЅ", "РїРёС€Рµ", "СЂРµРґР°РєС‚РѕСЂ");
+        }
+
+        private static void MarkResolved(ShortTermIntent intent, DateTime now, string reason)
+        {
+            intent.ResolvedAt = now;
+            intent.ResolutionText = reason;
+            if (intent.Kind == "sleep")
+                LogSleep("deactivated: " + reason);
+        }
+
+        private static void LogSleep(string message)
+        {
+            try { KokoSystemLog.Write("SLEEP_INTENT", message); }
+            catch { }
         }
 
         private static TimeSpan GraceFor(string kind) => kind switch
@@ -207,6 +284,12 @@ namespace KokonoeAssistant.Services
                 "прокин", "проснув", "поспав", "встав", "я тут","ранку",
                 "вернув", "повернув", "прийшов", "прийшла", "вже вдома",
                 "закінчив", "закінчились", "закінчилося", "приїхав", "доїхав");
+
+        private static bool LooksLikeExplicitWakeSignal(string lower)
+            => ContainsAny(lower,
+                "прокин", "проснув", "поспав", "встав", "я встав", "я прокинув", "я проснув",
+                "woke", "wake", "awake", "i am up", "im up",
+                "РїСЂРѕРєРёРЅ", "РїСЂРѕСЃРЅСѓРІ", "РїРѕСЃРїР°РІ", "РІСЃС‚Р°РІ");
 
         private static string BuildSummary(KokoStateFreshnessResult result, ChatRepository.ChatMessage? lastUser, DateTime now)
         {

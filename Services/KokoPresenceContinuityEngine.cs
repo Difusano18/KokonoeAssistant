@@ -125,6 +125,12 @@ namespace KokonoeAssistant.Services
 
         private static void ApplyIntentContinuity(KokoPresenceFrame frame, ShortTermIntent intent, DateTime now, int autonomyLevel)
         {
+            if (intent.Kind == "sleep")
+            {
+                ApplySleepIntentContinuity(frame, intent, now);
+                return;
+            }
+
             var until = intent.ExpectedUntil - now;
             var followDue = now >= intent.FollowUpAt;
             var overdue = now >= intent.ExpectedUntil;
@@ -159,6 +165,30 @@ namespace KokonoeAssistant.Services
             frame.SummaryUk = $"Активний намір: {intent.Summary}; {timeText}.";
         }
 
+        private static void ApplySleepIntentContinuity(KokoPresenceFrame frame, ShortTermIntent intent, DateTime now)
+        {
+            var minLockUntil = intent.CreatedAt.AddHours(4);
+            var withinLock = now < minLockUntil;
+            var expectedPassed = now >= intent.ExpectedUntil;
+            var next = withinLock ? minLockUntil : intent.ExpectedUntil;
+            if (next < now) next = now.AddMinutes(30);
+
+            frame.SituationKind = withinLock
+                ? "sleep_locked"
+                : expectedPassed
+                    ? "sleep_expected_window_passed"
+                    : "sleeping";
+            frame.Trigger = withinLock ? "presence_sleep_locked" : "presence_sleep_protected";
+            frame.StyleHint = "ghost";
+            frame.Priority = withinLock ? 4 : expectedPassed ? 18 : 8;
+            frame.ShouldInterrupt = false;
+            frame.NextUsefulAt = next;
+            frame.ToneHint = withinLock
+                ? "sleep intent is locked for minimum 4 hours; observe only unless user explicitly wakes"
+                : "sleep intent remains protected; do not send fake morning or idle pings without explicit wake signal";
+            frame.SummaryUk = $"Sleep intent active and protected: {intent.Summary}; created {intent.CreatedAt:HH:mm}, expected until {intent.ExpectedUntil:HH:mm}. Passive PC/screen activity must not wake him.";
+        }
+
         private static void ApplyResolvedIntent(KokoPresenceFrame frame, ShortTermIntent intent, DateTime now)
         {
             frame.SituationKind = "returned_after_intent";
@@ -184,6 +214,9 @@ namespace KokonoeAssistant.Services
             var idleMinutes = sysInfo.IdleTime.TotalMinutes;
             var screen = BuildScreenPresenceSignal(state, now, screenAnalysisOverride);
 
+            if (TryApplyWatchFirstPresence(frame, now))
+                return;
+
             if (idleMinutes < 1.0 && silence > 5 && silence < 360)
             {
                 frame.SituationKind = "physically_present";
@@ -193,6 +226,19 @@ namespace KokonoeAssistant.Services
                 frame.Priority = 28;
                 frame.ShouldInterrupt = false;
                 frame.SummaryUk = $"ПК активний: ввід був {FormatDuration(sysInfo.IdleTime)} тому, але в чаті тиша {FormatDuration(TimeSpan.FromMinutes(silence))}.";
+                return;
+            }
+
+            if (idleMinutes >= 30.0)
+            {
+                frame.SituationKind = "ghost_mode";
+                frame.Trigger = "presence_pc_idle_ghost";
+                frame.StyleHint = "ghost";
+                frame.ToneHint = "PC has been idle for more than 30 minutes; treat user as away or sleeping even if the screen is doing something";
+                frame.Priority = 6;
+                frame.ShouldInterrupt = false;
+                frame.NextUsefulAt = now.AddMinutes(30);
+                frame.SummaryUk = $"PC idle {FormatDuration(sysInfo.IdleTime)}. Enter ghost mode: observe/log only, no zombie pings.";
                 return;
             }
 
@@ -296,6 +342,36 @@ namespace KokonoeAssistant.Services
             frame.Priority = 32;
             frame.ShouldInterrupt = false;
             frame.SummaryUk = $"Коротка тиша в чаті: {FormatDuration(TimeSpan.FromMinutes(silence))}.";
+        }
+
+        private static bool TryApplyWatchFirstPresence(KokoPresenceFrame frame, DateTime now)
+        {
+            try
+            {
+                var wearable = ServiceContainer.WearableTelemetry?.State;
+                if (wearable == null || !wearable.IsFresh(now.ToUniversalTime()))
+                    return false;
+
+                var motion = wearable.Motion ?? 0;
+                var sleepLike = wearable.SleepState is "probably_asleep" or "drowsy_or_resting" or "quiet_night";
+                var noMotionOnWrist = wearable.OnWrist && motion <= 0.01;
+                if (!sleepLike && !noMotionOnWrist)
+                    return false;
+
+                frame.SituationKind = sleepLike ? "watch_sleeping" : "ghost_mode";
+                frame.Trigger = sleepLike ? "presence_watch_sleep" : "presence_watch_zero_motion";
+                frame.StyleHint = "ghost";
+                frame.ToneHint = "watch-first presence: fresh wearable telemetry says low/no motion; observe and do not ping";
+                frame.Priority = sleepLike ? 3 : 6;
+                frame.ShouldInterrupt = false;
+                frame.NextUsefulAt = now.AddMinutes(30);
+                frame.SummaryUk = $"Watch-first presence: sleep={wearable.SleepState}, motion={motion:F2}, bpm={wearable.CurrentBpm:F0}, wrist={wearable.OnWrist}. Treat as resting/sleeping until explicit wake or strong biometric movement.";
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
         }
 
         private static void RecordPassivePresence(KokoInternalState state, KokoPresenceFrame frame, DateTime now)
