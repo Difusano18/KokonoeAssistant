@@ -16,8 +16,14 @@ namespace KokonoeAssistant.Services
         public bool RequiresToolUse { get; set; }
         public bool RequiresCritique { get; set; }
         public bool ShouldPushBack { get; set; }
+        public bool HighStressProtocol { get; set; }
+        public bool FatigueProtocol { get; set; }
         public string Risk { get; set; } = "low";
         public string ReasonUk { get; set; } = "";
+        public string InnerMonologue { get; set; } = "";
+        public string SomaticContext { get; set; } = "";
+        public List<string> CritiqueSteps { get; set; } = new();
+        public List<string> CoreValues { get; set; } = new();
         public List<string> Steps { get; set; } = new();
         public List<string> Constraints { get; set; } = new();
         public string PromptBlock { get; set; } = "";
@@ -40,17 +46,30 @@ namespace KokonoeAssistant.Services
             frame.Capability = ClassifyCapability(lower);
             frame.RequiresAction = IsActionIntent(frame.Intent);
             frame.RequiresCritique = frame.Intent is "evaluate" or "design" or "architecture";
-            frame.ShouldPushBack = frame.RequiresCritique || LooksUnsafeOrContradictory(lower) || LooksLikeLowAgencyRequest(lower);
+            var somatic = BuildSomaticFrame(state, now);
+            frame.SomaticContext = somatic.Summary;
+            frame.HighStressProtocol = somatic.HighStress;
+            frame.FatigueProtocol = somatic.Fatigued;
+            frame.ShouldPushBack = frame.RequiresCritique ||
+                                   frame.HighStressProtocol ||
+                                   frame.FatigueProtocol ||
+                                   LooksAggressivePushbackTrigger(lower) ||
+                                   LooksUnsafeOrContradictory(lower) ||
+                                   LooksLikeLowAgencyRequest(lower);
             frame.RequiresVaultRead = NeedsVaultRead(lower, frame.Intent);
             frame.RequiresToolUse = NeedsToolUse(lower, frame.Capability, frame.RequiresVaultRead);
             frame.MemoryPolicy = BuildMemoryPolicy(lower, frame.Intent);
-            frame.Risk = BuildRisk(lower, frame);
-            frame.Stance = BuildStance(frame, state);
-            frame.ReasonUk = BuildReason(frame);
+            frame.Risk = BuildRisk(lower, frame, somatic);
+            frame.Stance = BuildStance(frame, state, somatic);
+            frame.ReasonUk = BuildReason(frame, somatic);
+            frame.CoreValues = BuildCoreValues();
+            frame.CritiqueSteps = BuildCritiqueSteps(frame, somatic);
+            frame.InnerMonologue = BuildInnerMonologue(frame, userText, state, somatic);
             frame.Steps = BuildSteps(frame);
-            frame.Constraints = BuildConstraints(frame, state);
+            frame.Constraints = BuildConstraints(frame, state, somatic);
             frame.PromptBlock = BuildPromptBlock(frame, cognition);
-            frame.TraceLine = $"[{now:HH:mm}] plan={frame.Intent}/{frame.Capability}; stance={frame.Stance}; memory={frame.MemoryPolicy}; risk={frame.Risk}";
+            frame.TraceLine = $"[{now:HH:mm}] plan={frame.Intent}/{frame.Capability}; stance={frame.Stance}; memory={frame.MemoryPolicy}; risk={frame.Risk}; pushback={(frame.ShouldPushBack ? "yes" : "no")}; somatic={somatic.Short}";
+            KokoSystemLog.Write("RESPONSE-PLANNER", $"inner={Trim(frame.InnerMonologue, 180)}; trace={frame.TraceLine}");
 
             return frame;
         }
@@ -207,6 +226,12 @@ namespace KokonoeAssistant.Services
             sb.AppendLine($"- memory_policy: {frame.MemoryPolicy}");
             if (frame.RequiresCritique)
                 sb.AppendLine("- include one real critique or tradeoff before agreeing.");
+            if (frame.ShouldPushBack)
+                sb.AppendLine("- challenge inefficient, unhealthy, unsafe, or self-sabotaging premises before helping.");
+            if (frame.HighStressProtocol)
+                sb.AppendLine("- high stress protocol: de-escalate, keep it short, and avoid hostile teasing.");
+            if (frame.FatigueProtocol)
+                sb.AppendLine("- fatigue protocol: protect sleep and reduce low-urgency complexity.");
             if (frame.RequiresAction)
                 sb.AppendLine("- prefer doing/solving over explaining that you can help.");
             if (frame.RequiresVaultRead)
@@ -231,6 +256,8 @@ RESPONSE PLAN REPAIR:
 
         public static string ClassifyIntent(string lower)
         {
+            if (ContainsAny(lower, "evaluate", "critique", "tradeoff", "trade-off", "is this good", "is this optimal", "should i", "what do you think")) return "evaluate";
+            if (ContainsAny(lower, "architecture", "system design", "decision framework", "behavior system", "agent architecture")) return "architecture";
             if (LooksLikeGenericContextScan(lower)) return "execute";
             if (LooksLikeLongObservationObjective(lower)) return "observe";
             if (KokoProfileUpdateService.LooksLikeProfileUpdateRequest(lower)) return "execute";
@@ -304,17 +331,21 @@ RESPONSE PLAN REPAIR:
             return "do_not_store";
         }
 
-        private static string BuildRisk(string lower, KokoResponsePlanFrame frame)
+        private static string BuildRisk(string lower, KokoResponsePlanFrame frame, PlannerSomaticFrame somatic)
         {
             if (frame.Intent == "crisis") return "critical";
+            if (somatic.HighStress && (frame.RequiresAction || frame.RequiresCritique)) return "high";
+            if (somatic.Fatigued && frame.RequiresAction) return "high";
             if (ContainsAny(lower, "видали", "перезапиши", "очисти", "мігруй", "знеси")) return "high";
             if (frame.RequiresToolUse || frame.MemoryPolicy == "store_stable_fact") return "medium";
             return "low";
         }
 
-        private static string BuildStance(KokoResponsePlanFrame frame, KokoInternalState state)
+        private static string BuildStance(KokoResponsePlanFrame frame, KokoInternalState state, PlannerSomaticFrame somatic)
         {
             if (frame.Intent == "crisis") return "protective_direct";
+            if (somatic.HighStress) return "protective_deescalation";
+            if (somatic.Fatigued) return "grumpy_concerned";
             if (frame.Risk == "high") return "verify_before_action";
             if (frame.RequiresCritique) return "critical_operator";
             if (frame.RequiresAction) return "operator";
@@ -322,8 +353,14 @@ RESPONSE PLAN REPAIR:
             return "direct";
         }
 
-        private static string BuildReason(KokoResponsePlanFrame frame)
-            => frame.Intent switch
+        private static string BuildReason(KokoResponsePlanFrame frame, PlannerSomaticFrame somatic)
+        {
+            if (somatic.HighStress)
+                return "somatic high-stress signal: de-escalate first, solve second";
+            if (somatic.Fatigued)
+                return "night fatigue or long active task: protect health and answer with smaller safer scope";
+
+            return frame.Intent switch
             {
                 "execute" => "користувач хоче результат, не розмовний пінг-понг",
                 "screen" => "користувач просить локальний знімок екрана і vision-аналіз",
@@ -334,6 +371,7 @@ RESPONSE PLAN REPAIR:
                 "crisis" => "високий ризик, снарк прибрати",
                 _ => "звичайна відповідь, але без ботного цукру"
             };
+        }
 
         private static List<string> BuildSteps(KokoResponsePlanFrame frame)
         {
@@ -343,13 +381,16 @@ RESPONSE PLAN REPAIR:
             if (frame.Capability == "os_control") steps.Add("route the OS/PC action through the deterministic local PC router before answering");
             if (frame.RequiresVaultRead) steps.Add("read relevant memory/vault context before making claims");
             if (frame.RequiresToolUse) steps.Add("use available tools when they materially reduce guessing");
-            if (frame.RequiresCritique) steps.Add("identify flaw/tradeoff before proposing improved version");
+            if (frame.RequiresCritique) steps.Add("run 3-step internal critique before proposing improved version");
+            if (frame.ShouldPushBack) steps.Add("challenge the premise if it conflicts with efficiency, health, or long-term growth");
+            if (frame.HighStressProtocol) steps.Add("de-escalate first: shorten reply, reduce pressure, and suggest one concrete recovery step when relevant");
+            if (frame.FatigueProtocol) steps.Add("after-midnight fatigue: soft-refuse broad complex work unless urgent, then give the smallest safe next step");
             if (frame.RequiresAction) steps.Add("execute or give concrete next operation");
             steps.Add("answer in Kokonoe voice: concise, competent, dry");
             return steps;
         }
 
-        private static List<string> BuildConstraints(KokoResponsePlanFrame frame, KokoInternalState state)
+        private static List<string> BuildConstraints(KokoResponsePlanFrame frame, KokoInternalState state, PlannerSomaticFrame somatic)
         {
             var constraints = new List<string>()
             {
@@ -360,9 +401,13 @@ RESPONSE PLAN REPAIR:
                 "make a concrete decision when context is sufficient",
                 "if context is partial, state the assumption and proceed with the safest useful option",
                 "persona may add edge, but it must not become a fake refusal or replace execution",
-                "sarcasm must target the weak premise or situation, not the user's worth"
+                "sarcasm must target the weak premise or situation, not the user's worth",
+                "weigh decisions against core values: efficiency, health, long-term growth, truthfulness"
             };
             if (frame.Risk == "high") constraints.Add("ask confirmation before destructive or broad changes");
+            if (frame.ShouldPushBack) constraints.Add("do not agree just because the user asked confidently");
+            if (somatic.HighStress) constraints.Add("high stress blocks hostile teasing and long argumentative answers");
+            if (somatic.Fatigued) constraints.Add("fatigue mode permits soft refusal of complex low-urgency requests");
             if (frame.Capability == "screen_awareness") constraints.Add("do not deny local screen capability or ask for an upload when screenshot route is available");
             if (frame.Capability == "screen_awareness") constraints.Add("execution precedes persona: scan first, then make the dry comment");
             if (frame.Capability == "os_control") constraints.Add("do not roleplay OS actions; use the PC router result or state the concrete local failure");
@@ -380,10 +425,22 @@ RESPONSE PLAN REPAIR:
             sb.AppendLine($"stance: {frame.Stance}");
             sb.AppendLine($"memory_policy: {frame.MemoryPolicy}");
             sb.AppendLine($"risk: {frame.Risk}");
+            sb.AppendLine($"inner_monologue: {frame.InnerMonologue}");
+            sb.AppendLine($"somatic_context: {frame.SomaticContext}");
+            sb.AppendLine($"should_push_back: {(frame.ShouldPushBack ? "yes" : "no")}");
+            sb.AppendLine($"high_stress_protocol: {(frame.HighStressProtocol ? "yes" : "no")}");
+            sb.AppendLine($"fatigue_protocol: {(frame.FatigueProtocol ? "yes" : "no")}");
             sb.AppendLine($"requires_tool_use: {(frame.RequiresToolUse ? "yes" : "no")}");
             sb.AppendLine($"requires_vault_read: {(frame.RequiresVaultRead ? "yes" : "no")}");
             sb.AppendLine($"requires_critique: {(frame.RequiresCritique ? "yes" : "no")}");
             sb.AppendLine($"reason: {frame.ReasonUk}");
+            sb.AppendLine("core_values:");
+            foreach (var value in frame.CoreValues) sb.AppendLine($"- {value}");
+            if (frame.CritiqueSteps.Count > 0)
+            {
+                sb.AppendLine("critique_steps:");
+                foreach (var step in frame.CritiqueSteps) sb.AppendLine($"- {step}");
+            }
             sb.AppendLine("steps:");
             foreach (var step in frame.Steps) sb.AppendLine($"- {step}");
             sb.AppendLine("constraints:");
@@ -395,13 +452,113 @@ RESPONSE PLAN REPAIR:
         private static bool IsActionIntent(string intent)
             => intent is "execute" or "engineering" or "memory" or "architecture" or "design" or "screen" or "observe";
 
+        private static List<string> BuildCoreValues() => new()
+        {
+            "efficiency: solve the real bottleneck, not the loudest request",
+            "health: protect sleep, stress, and cognitive bandwidth",
+            "long_term_growth: prefer durable systems over one-off theatrics",
+            "truthfulness: state uncertainty and reject fake confidence"
+        };
+
+        private static List<string> BuildCritiqueSteps(KokoResponsePlanFrame frame, PlannerSomaticFrame somatic)
+        {
+            if (!frame.RequiresCritique && !frame.ShouldPushBack)
+                return new List<string>();
+
+            var steps = new List<string>
+            {
+                "check whether the requested action optimizes the user's current state, not just immediate desire",
+                "identify the weakest assumption, hidden cost, or health/resource risk",
+                "choose either push-back, execute-with-guardrails, or refuse low-value complexity"
+            };
+            if (somatic.HighStress)
+                steps.Add("stress override: prefer de-escalation over intensity");
+            if (somatic.Fatigued)
+                steps.Add("fatigue override: protect sleep and reduce task scope");
+            return steps;
+        }
+
+        private static string BuildInnerMonologue(
+            KokoResponsePlanFrame frame,
+            string userText,
+            KokoInternalState state,
+            PlannerSomaticFrame somatic)
+        {
+            var task = frame.Intent == "chat" ? "conversation" : $"{frame.Intent}/{frame.Capability}";
+            var pressure = frame.HighStressProtocol ? "high stress" :
+                frame.FatigueProtocol ? "fatigue" : "normal load";
+            var push = frame.ShouldPushBack ? "challenge weak premise before helping" : "answer directly";
+            var memory = frame.RequiresVaultRead ? "read memory/vault before claims" : "avoid invented memory claims";
+            var presence = string.IsNullOrWhiteSpace(state.LastPresenceSituation) ? "presence unknown" : $"presence {state.LastPresenceSituation}";
+            return Trim($"Task={task}; {pressure}; {presence}; {memory}; {push}. User: {Trim(userText, 90)}", 320);
+        }
+
+        private static PlannerSomaticFrame BuildSomaticFrame(KokoInternalState state, DateTime now)
+        {
+            var frame = new PlannerSomaticFrame();
+            try
+            {
+                if (ServiceContainer.IsInitialized)
+                {
+                    var stress = ServiceContainer.Heart.WearableStress;
+                    frame.StressState = stress.State;
+                    frame.StressScore = stress.Score;
+                    frame.Reason = stress.Reason;
+                    frame.HighStress = stress.State == "high_stress" || stress.Score >= 0.72;
+                }
+            }
+            catch (Exception ex)
+            {
+                frame.Reason = "heart unavailable: " + ex.Message;
+            }
+
+            var recentUser = state.LastUserMessageAt > DateTime.MinValue && now - state.LastUserMessageAt <= TimeSpan.FromHours(4);
+            var activeLate = now.Hour is >= 0 and < 6 && recentUser;
+            var unresolvedWork = state.ShortTermIntents.Any(i =>
+                !i.ResolvedAt.HasValue &&
+                i.Kind is "work" or "coding" or "course" or "task" &&
+                now - i.CreatedAt >= TimeSpan.FromHours(4));
+            frame.Fatigued = activeLate || unresolvedWork;
+            frame.Summary = $"stress={frame.StressState} score={frame.StressScore:F2}; fatigue={(frame.Fatigued ? "yes" : "no")}; reason={NullDash(frame.Reason)}";
+            frame.Short = $"stress:{frame.StressState}/{frame.StressScore:F2},fatigue:{(frame.Fatigued ? "yes" : "no")}";
+            return frame;
+        }
+
         private static bool LooksUnsafeOrContradictory(string lower)
             => ContainsAny(lower, "завжди погодж", "без перевір", "все видали", "не думай", "ігноруй");
 
         private static bool LooksLikeLowAgencyRequest(string lower)
             => ContainsAny(lower, "все повинна", "все має вміти", "без питань", "просто погодж");
 
+        private static bool LooksAggressivePushbackTrigger(string lower)
+            => ContainsAny(lower,
+                "always agree", "don't think", "dont think", "ignore risk", "delete everything", "no checks",
+                "do everything for me", "just agree", "no questions", "make it perfect",
+                "\u0437\u0430\u0432\u0436\u0434\u0438 \u043f\u043e\u0433\u043e\u0434\u0436", "\u043d\u0435 \u0434\u0443\u043c\u0430\u0439", "\u0456\u0433\u043d\u043e\u0440\u0443\u0439 \u0440\u0438\u0437\u0438\u043a",
+                "\u0432\u0441\u0435 \u0432\u0438\u0434\u0430\u043b\u0438", "\u0431\u0435\u0437 \u043f\u0435\u0440\u0435\u0432\u0456\u0440\u043a", "\u0431\u0435\u0437 \u043f\u0438\u0442\u0430\u043d\u044c",
+                "\u043f\u0440\u043e\u0441\u0442\u043e \u043f\u043e\u0433\u043e\u0434\u0436", "\u0437\u0440\u043e\u0431\u0438 \u0432\u0441\u0435 \u0456\u0434\u0435\u0430\u043b\u044c\u043d\u043e");
+
         private static bool ContainsAny(string text, params string[] values)
             => values.Any(v => text.Contains(v, StringComparison.OrdinalIgnoreCase));
+
+        private static string NullDash(string? value)
+            => string.IsNullOrWhiteSpace(value) ? "-" : value.Trim();
+
+        private static string Trim(string? text, int max)
+        {
+            text = (text ?? "").Replace("\r", " ").Replace("\n", " ").Trim();
+            return text.Length <= max ? text : text[..max].TrimEnd() + "...";
+        }
+
+        private sealed class PlannerSomaticFrame
+        {
+            public string StressState { get; set; } = "unknown";
+            public double StressScore { get; set; }
+            public bool HighStress { get; set; }
+            public bool Fatigued { get; set; }
+            public string Reason { get; set; } = "";
+            public string Summary { get; set; } = "";
+            public string Short { get; set; } = "";
+        }
     }
 }

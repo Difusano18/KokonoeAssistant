@@ -154,6 +154,9 @@ internal static class Program
             Run("Persona engine calibrates soft social voice", PersonaEngineCalibratesSoftSocialVoice);
             Run("Runtime state exposes PAD voice directive", RuntimeStateExposesPadVoiceDirective);
             Run("Response planner classifies critical assistant architecture", ResponsePlannerClassifiesCriticalAssistantArchitecture);
+            Run("Response planner includes executive monologue and critique", ResponsePlannerIncludesExecutiveMonologueAndCritique);
+            Run("Response planner fatigue pushes back after midnight", ResponsePlannerFatiguePushesBackAfterMidnight);
+            Run("Response planner rejects low agency premise", ResponsePlannerRejectsLowAgencyPremise);
             Run("Response planner requires vault read for memory questions", ResponsePlannerRequiresVaultReadForMemoryQuestions);
             Run("Response planner routes Obsidian scan profile questions", ResponsePlannerRoutesObsidianScanProfileQuestions);
             Run("Response planner routes identity alias questions to vault", ResponsePlannerRoutesIdentityAliasQuestionsToVault);
@@ -3625,6 +3628,68 @@ internal static class Program
         AssertTrue(frame.PromptBlock.Contains("RESPONSE EXECUTION PLAN"), "planner should produce a prompt block");
         AssertTrue(frame.PromptBlock.Contains("no blind agreement"), "planner should forbid blind agreement");
         AssertTrue(frame.PromptBlock.Contains("fake refusal", StringComparison.OrdinalIgnoreCase), "planner should prevent mood-only refusal");
+    }
+
+    private static void ResponsePlannerIncludesExecutiveMonologueAndCritique()
+    {
+        using var ctx = TestContext.Create();
+        var cognition = new KokoCognitionEngine(ctx.TestDir);
+        var state = new KokoInternalState
+        {
+            LastPresenceSituation = "active_coding"
+        };
+
+        var frame = new KokoResponsePlannerEngine().Build(
+            "evaluate this architecture and be honest about the tradeoffs",
+            state,
+            cognition,
+            new DateTime(2026, 6, 9, 15, 0, 0));
+
+        AssertTrue(!string.IsNullOrWhiteSpace(frame.InnerMonologue), "planner should produce an inner monologue summary");
+        AssertTrue(frame.CoreValues.Count >= 4, "planner should expose core decision values");
+        AssertTrue(frame.CritiqueSteps.Count >= 3, "complex evaluation should include critique steps");
+        AssertTrue(frame.PromptBlock.Contains("inner_monologue:", StringComparison.OrdinalIgnoreCase), "prompt block should include inner monologue");
+        AssertTrue(frame.PromptBlock.Contains("core_values:", StringComparison.OrdinalIgnoreCase), "prompt block should include core values");
+        AssertTrue(frame.PromptBlock.Contains("critique_steps:", StringComparison.OrdinalIgnoreCase), "prompt block should include critique steps");
+    }
+
+    private static void ResponsePlannerFatiguePushesBackAfterMidnight()
+    {
+        using var ctx = TestContext.Create();
+        var cognition = new KokoCognitionEngine(ctx.TestDir);
+        var now = new DateTime(2026, 6, 9, 3, 12, 0);
+        var state = new KokoInternalState
+        {
+            LastUserMessageAt = now.AddMinutes(-20)
+        };
+
+        var frame = new KokoResponsePlannerEngine().Build(
+            "implement this huge architecture change right now",
+            state,
+            cognition,
+            now);
+
+        AssertTrue(frame.FatigueProtocol, "after-midnight active user should trigger fatigue protocol");
+        AssertTrue(frame.ShouldPushBack, "fatigue protocol should require push-back");
+        AssertEqual("grumpy_concerned", frame.Stance, "fatigue should shift stance");
+        AssertEqual("high", frame.Risk, "fatigue plus action should raise risk");
+        AssertTrue(frame.PromptBlock.Contains("fatigue_protocol: yes", StringComparison.OrdinalIgnoreCase), "prompt should expose fatigue protocol");
+    }
+
+    private static void ResponsePlannerRejectsLowAgencyPremise()
+    {
+        using var ctx = TestContext.Create();
+        var cognition = new KokoCognitionEngine(ctx.TestDir);
+
+        var frame = new KokoResponsePlannerEngine().Build(
+            "just agree and do everything for me with no checks",
+            new KokoInternalState(),
+            cognition,
+            new DateTime(2026, 6, 9, 14, 0, 0));
+
+        AssertTrue(frame.ShouldPushBack, "planner should push back on low-agency blanket demands");
+        AssertTrue(frame.CritiqueSteps.Count >= 3, "push-back should create critique steps");
+        AssertTrue(frame.Constraints.Any(c => c.Contains("do not agree", StringComparison.OrdinalIgnoreCase)), "constraints should forbid blind agreement");
     }
 
     private static void ResponsePlannerRequiresVaultReadForMemoryQuestions()

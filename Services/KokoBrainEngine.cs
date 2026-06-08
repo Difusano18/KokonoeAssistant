@@ -3509,7 +3509,9 @@ Summary: {summary}
             if (_state.ResponsePlanLog.Count > 60)
                 _state.ResponsePlanLog.RemoveRange(0, _state.ResponsePlanLog.Count - 60);
 
-            _state.InnerMonologues.Add($"[plan/{frame.Intent}] {frame.Stance}. {frame.ReasonUk}");
+            _state.InnerMonologues.Add($"[plan/{frame.Intent}] {frame.InnerMonologue}");
+            if (frame.CritiqueSteps.Count > 0)
+                _state.InnerMonologues.Add($"[critique/{frame.Intent}] {string.Join(" -> ", frame.CritiqueSteps.Take(3))}");
             if (_state.InnerMonologues.Count > 80)
                 _state.InnerMonologues.RemoveRange(0, _state.InnerMonologues.Count - 80);
 

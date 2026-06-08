@@ -51,6 +51,8 @@ namespace KokonoeAssistant
         private static KokoWarmRestartWatchdogService? _processWatchdog;
         private static KokoProfileUpdateService? _profileUpdater;
         private static KokoAutonomousProfileCuratorService? _profileCurator;
+        private static KokoActiveAgencyService? _activeAgency;
+        private static KokoResearchService? _research;
 
         public static void Initialize(string vaultPath)
         {
@@ -59,6 +61,9 @@ namespace KokonoeAssistant
             try { _ = WearableBridge; } catch (Exception ex) { KokoSystemLog.Write("BOOT", "wearable bridge start failed: " + ex.Message); }
             try { PhotoFileWatcher.Start(); } catch (Exception ex) { KokoSystemLog.Write("BOOT", "photo watcher start failed: " + ex.Message); }
             try { ProfileCurator.Start(); } catch (Exception ex) { KokoSystemLog.Write("BOOT", "profile curator start failed: " + ex.Message); }
+            try { _ = HyperAutomation; } catch (Exception ex) { KokoSystemLog.Write("BOOT", "hyper automation start failed: " + ex.Message); }
+            try { ActiveAgency.Start(); } catch (Exception ex) { KokoSystemLog.Write("BOOT", "active agency start failed: " + ex.Message); }
+            try { Research.Start(); } catch (Exception ex) { KokoSystemLog.Write("BOOT", "research start failed: " + ex.Message); }
             try { _ = ProcessWatchdog; } catch (Exception ex) { KokoSystemLog.Write("BOOT", "process watchdog start failed: " + ex.Message); }
         }
 
@@ -350,6 +355,42 @@ namespace KokonoeAssistant
             }
         }
 
+        public static KokoActiveAgencyService ActiveAgency
+        {
+            get
+            {
+                lock (_lock)
+                {
+                    return _activeAgency ??= new KokoActiveAgencyService(
+                        Path.Combine(_vault ?? AppDomain.CurrentDomain.BaseDirectory, "kokonoe-data"),
+                        PcControl,
+                        ChatRepository,
+                        Blackboard,
+                        Heartbeat,
+                        () => _wearable,
+                        () => _brain);
+                }
+            }
+        }
+
+        public static KokoResearchService Research
+        {
+            get
+            {
+                lock (_lock)
+                {
+                    return _research ??= new KokoResearchService(
+                        Path.Combine(_vault ?? AppDomain.CurrentDomain.BaseDirectory, "kokonoe-data"),
+                        SearchService,
+                        ChatRepository,
+                        ObsidianMcp,
+                        Blackboard,
+                        Heartbeat,
+                        () => _brain?.State);
+                }
+            }
+        }
+
         public static GoalService GoalService
         {
             get { lock (_lock) { return _goals ??= new GoalService(_vault ?? AppDomain.CurrentDomain.BaseDirectory, DataManager); } }
@@ -498,6 +539,8 @@ namespace KokonoeAssistant
                     _audio?.Dispose();
                     _health?.Dispose();
                     _hyperAutomation?.Dispose();
+                    _activeAgency?.Dispose();
+                    _research?.Dispose();
                     _processWatchdog?.Dispose();
                     // HttpClient in LlmService should be disposed properly
                     _llm?.ClearHistory(); // cleanup any pending operations
@@ -518,6 +561,7 @@ namespace KokonoeAssistant
                     _capabilities = null;
                     _profileUpdater = null;
                     _profileCurator?.Dispose(); _profileCurator = null;
+                    _activeAgency = null; _research = null;
                     _photoWatcher?.Dispose(); _photoWatcher = null;
                     _heartbeat = null; _blackboard = null; _lightOcr = null; _semanticCache = null;
                     _hyperAutomation = null; _processWatchdog = null;
