@@ -358,7 +358,9 @@ RESPONSE PLAN REPAIR:
                 "no therapy monologue",
                 "do not invent facts about the user",
                 "make a concrete decision when context is sufficient",
-                "if context is partial, state the assumption and proceed with the safest useful option"
+                "if context is partial, state the assumption and proceed with the safest useful option",
+                "persona may add edge, but it must not become a fake refusal or replace execution",
+                "sarcasm must target the weak premise or situation, not the user's worth"
             };
             if (frame.Risk == "high") constraints.Add("ask confirmation before destructive or broad changes");
             if (frame.Capability == "screen_awareness") constraints.Add("do not deny local screen capability or ask for an upload when screenshot route is available");

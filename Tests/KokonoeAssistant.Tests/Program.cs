@@ -150,6 +150,8 @@ internal static class Program
             Run("Post reply guard blocks service bot tone", PostReplyGuardBlocksServiceBotTone);
             Run("Post reply guard blocks punitive network threat", PostReplyGuardBlocksPunitiveNetworkThreat);
             Run("Post reply guard blocks blind agreement", PostReplyGuardBlocksBlindAgreement);
+            Run("Persona engine calibrates soft social voice", PersonaEngineCalibratesSoftSocialVoice);
+            Run("Runtime state exposes PAD voice directive", RuntimeStateExposesPadVoiceDirective);
             Run("Response planner classifies critical assistant architecture", ResponsePlannerClassifiesCriticalAssistantArchitecture);
             Run("Response planner requires vault read for memory questions", ResponsePlannerRequiresVaultReadForMemoryQuestions);
             Run("Response planner routes Obsidian scan profile questions", ResponsePlannerRoutesObsidianScanProfileQuestions);
@@ -3520,6 +3522,59 @@ internal static class Program
         AssertTrue(result.RepairInstruction.Contains("CRITICAL THINKING"), "repair should include critical thinking rules");
     }
 
+    private static void PersonaEngineCalibratesSoftSocialVoice()
+    {
+        var state = new KokoInternalState
+        {
+            PersonalityDailyMood = "sharp",
+            PersonalityIrritation = 0.70f,
+            PersonalityWarmth = 0.48f
+        };
+
+        var frame = new KokoPersonaEngine().Build(
+            "\u0445\u043c \u0441\u043a\u0430\u0436\u0438 \u0449\u043e\u0441\u044c \u043c\u0438\u043b\u0435 \u043f\u0440\u043e \u043c\u0435\u043d\u0435",
+            state,
+            new DateTime(2026, 6, 8, 1, 10, 0),
+            KokoEmotionEngine.BondLevel.Trusted);
+
+        AssertEqual("social_calibrated", frame.Mode, "soft social request should use social persona mode");
+        AssertEqual(KokoEmotionEngine.BondLevel.Trusted, frame.Bond, "persona should carry bond level");
+        AssertTrue(frame.VoiceBand.Contains("guarded_warm", StringComparison.OrdinalIgnoreCase), "sharp social mode should be guarded warm, not hostile");
+        AssertTrue(frame.PromptBlock.Contains("voice_band"), "persona prompt should expose voice band");
+        AssertTrue(frame.PromptBlock.Contains("Bond controls intimacy", StringComparison.OrdinalIgnoreCase), "persona prompt should include bond guidance");
+        AssertTrue(frame.PromptBlock.Contains("not contemptuous", StringComparison.OrdinalIgnoreCase), "persona prompt should prevent social contempt");
+    }
+
+    private static void RuntimeStateExposesPadVoiceDirective()
+    {
+        using var ctx = TestContext.Create();
+        var state = new KokoInternalState
+        {
+            PersonalityDailyMood = "sharp",
+            PersonalityIrritation = 0.75f,
+            PersonalityWarmth = 0.20f,
+            MoodScore = 0.32f,
+            LastUserEmotionalTone = "angry"
+        };
+
+        ctx.Emotion.UpdateStressAcute(0.85f);
+        using var health = new HealthService(ctx.TestDir);
+
+        var block = new KokoRuntimeStateService().BuildPromptBlock(
+            state,
+            ctx.Emotion,
+            health,
+            ctx.Chat,
+            currentBpm: 112,
+            baselineBpm: 76);
+
+        AssertTrue(block.Contains("pad:", StringComparison.OrdinalIgnoreCase), "runtime prompt should include PAD vector");
+        AssertTrue(block.Contains("voice: sharp", StringComparison.OrdinalIgnoreCase), "runtime prompt should include sharp voice directive");
+        AssertTrue(block.Contains("one targeted jab max", StringComparison.OrdinalIgnoreCase), "runtime prompt should bound sarcasm");
+        AssertTrue(block.Contains("Do not refuse useful work just because mood is sharp", StringComparison.OrdinalIgnoreCase), "runtime prompt should forbid mood-based fake refusal");
+        AssertTrue(block.Contains("heart: bpm=112", StringComparison.OrdinalIgnoreCase), "runtime prompt should keep somatic context");
+    }
+
     private static void ResponsePlannerClassifiesCriticalAssistantArchitecture()
     {
         using var ctx = TestContext.Create();
@@ -3537,6 +3592,7 @@ internal static class Program
         AssertTrue(frame.ShouldPushBack, "planner should push back on weak assumptions");
         AssertTrue(frame.PromptBlock.Contains("RESPONSE EXECUTION PLAN"), "planner should produce a prompt block");
         AssertTrue(frame.PromptBlock.Contains("no blind agreement"), "planner should forbid blind agreement");
+        AssertTrue(frame.PromptBlock.Contains("fake refusal", StringComparison.OrdinalIgnoreCase), "planner should prevent mood-only refusal");
     }
 
     private static void ResponsePlannerRequiresVaultReadForMemoryQuestions()

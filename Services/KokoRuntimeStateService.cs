@@ -60,6 +60,8 @@ namespace KokonoeAssistant.Services
             sb.AppendLine($"stress: acute={emotion.Stress.AcuteStress:F2} chronic={emotion.Stress.ChronicStress:F2} fatigue={emotion.Stress.Fatigue:F2}");
             sb.AppendLine($"personality: daily={state.PersonalityDailyMood} irritation={state.PersonalityIrritation:F2} warmth={state.PersonalityWarmth:F2}");
             sb.AppendLine($"user_tone: {state.LastUserEmotionalTone} mood_score={state.MoodScore:F2}");
+            sb.AppendLine($"pad: P={emotion.CurrentPad.P:+0.00;-0.00;0.00} A={emotion.CurrentPad.A:+0.00;-0.00;0.00} D={emotion.CurrentPad.D:+0.00;-0.00;0.00}");
+            sb.AppendLine($"voice: {BuildVoiceDirective(state, emotion, mode)}");
             sb.AppendLine($"focus: {focus}");
             sb.AppendLine($"initiative: {initiative}");
             if (silence.HasValue)
@@ -82,8 +84,30 @@ namespace KokonoeAssistant.Services
             sb.AppendLine("behavior:");
             sb.AppendLine("- Use this state as behavior control, not as text to reveal.");
             sb.AppendLine("- If mode=work, be sharper and task-first; if mode=care, reduce sarcasm; if mode=idle, short observation is enough.");
+            sb.AppendLine("- Sarcasm is seasoning, not the meal: one precise jab is enough unless the user is explicitly bantering.");
+            sb.AppendLine("- Do not refuse useful work just because mood is sharp; push back only on weak premises, missing facts, or unsafe/destructive actions.");
             sb.AppendLine("- Initiative should affect whether you ask a concrete follow-up or stay quiet.");
             return sb.ToString();
+        }
+
+        private static string BuildVoiceDirective(KokoInternalState state, KokoEmotionEngine emotion, string mode)
+        {
+            if (state.PersonalityInCrisis || mode == "care")
+                return "protective: quiet, grounded, sarcasm suppressed";
+
+            if (state.PersonalityDailyMood == "sharp" || state.PersonalityIrritation > 0.62f || emotion.Current == KokoEmotionEngine.EmotionState.Irritated)
+                return "sharp: short, dry, one targeted jab max, no cruelty";
+
+            if (state.PersonalityDailyMood == "playful" || emotion.Current is KokoEmotionEngine.EmotionState.Playful or KokoEmotionEngine.EmotionState.Excited)
+                return "playful: light teasing and energy allowed, still concrete";
+
+            if (state.PersonalityDailyMood == "warm" || state.PersonalityWarmth > 0.58f)
+                return "warm: guarded warmth, no syrup, no service-bot sympathy";
+
+            if (state.PersonalityDailyMood == "distant" || emotion.Current == KokoEmotionEngine.EmotionState.Distant)
+                return "distant: compact, factual, not dismissive";
+
+            return "standard: competent, concise, dry when it adds signal";
         }
 
         private static ToneProfile DetectTone(string message)

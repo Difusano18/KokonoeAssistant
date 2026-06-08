@@ -3264,7 +3264,7 @@ Summary: {summary}
 
         private KokoPersonaFrame RecordPersonaDecision(string userText, DateTime now)
         {
-            var frame = Persona.Build(userText, _state, now);
+            var frame = Persona.Build(userText, _state, now, Emotion.Bond);
             _state.LastPersonaDecision = frame.PromptBlock;
             _state.LastPersonaDecisionAt = now;
             _state.PersonaDecisionLog.Add(frame.TraceLine);

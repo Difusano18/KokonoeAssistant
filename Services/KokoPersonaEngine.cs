@@ -11,6 +11,8 @@ namespace KokonoeAssistant.Services
         public bool ShouldChallenge { get; set; }
         public bool ShouldAct { get; set; }
         public bool ShouldAskOneQuestionMax { get; set; }
+        public KokoEmotionEngine.BondLevel Bond { get; set; } = KokoEmotionEngine.BondLevel.Known;
+        public string VoiceBand { get; set; } = "standard";
         public string ReasonUk { get; set; } = "";
         public string PromptBlock { get; set; } = "";
         public string TraceLine { get; set; } = "";
@@ -33,11 +35,15 @@ namespace KokonoeAssistant.Services
             "як мовна модель", "як ai", "як штучний інтелект"
         };
 
-        public KokoPersonaFrame Build(string? userText, KokoInternalState state, DateTime now)
+        public KokoPersonaFrame Build(
+            string? userText,
+            KokoInternalState state,
+            DateTime now,
+            KokoEmotionEngine.BondLevel bond = KokoEmotionEngine.BondLevel.Known)
         {
             userText ??= "";
             var lower = userText.ToLowerInvariant();
-            var frame = new KokoPersonaFrame();
+            var frame = new KokoPersonaFrame { Bond = bond };
 
             if (state.PersonalityInCrisis || ContainsAny(lower, "не хочу жити", "самоушкод", "суїцид", "померти"))
             {
@@ -45,6 +51,12 @@ namespace KokonoeAssistant.Services
                 frame.Stance = "ground in immediate reality";
                 frame.ShouldAskOneQuestionMax = true;
                 frame.ReasonUk = "кризовий або близький до кризового сигнал";
+            }
+            else if (LooksLikeSoftSocialTurn(lower))
+            {
+                frame.Mode = "social_calibrated";
+                frame.Stance = "answer the social bid directly with restrained warmth and one dry edge at most";
+                frame.ReasonUk = "користувач просить живу розмову або м'яку репліку, не робочу команду";
             }
             else if (LooksLikeActionRequest(lower))
             {
@@ -82,8 +94,9 @@ namespace KokonoeAssistant.Services
                 frame.ReasonUk = "звичайна відповідь без театру";
             }
 
+            frame.VoiceBand = BuildVoiceBand(state, frame.Mode);
             frame.PromptBlock = BuildPromptBlock(frame);
-            frame.TraceLine = $"[{now:HH:mm}] persona={frame.Mode}; stance={frame.Stance}; reason={frame.ReasonUk}";
+            frame.TraceLine = $"[{now:HH:mm}] persona={frame.Mode}; voice={frame.VoiceBand}; bond={frame.Bond}; stance={frame.Stance}; reason={frame.ReasonUk}";
             return frame;
         }
 
@@ -157,12 +170,19 @@ PERSONA / ANTI-BOT:
 PERSONA DECISION
 mode: {frame.Mode}
 stance: {frame.Stance}
+voice_band: {frame.VoiceBand}
+bond: {frame.Bond}
 should_challenge: {(frame.ShouldChallenge ? "yes" : "no")}
 should_act: {(frame.ShouldAct ? "yes" : "no")}
 question_limit: {(frame.ShouldAskOneQuestionMax ? "one max" : "normal")}
 reason: {frame.ReasonUk}
 Rules:
 - Personality is not decoration; use judgment before tone.
+- Kokonoe Mercury flavor means sharp intelligence, dry impatience, and earned warmth. It does not mean constant theatrical roleplay.
+- Mood can change length and edge, but mood must not become a fake refusal. If a request is valid, answer or act first.
+- Personal opinions are allowed when grounded in observed context, memory, or the user's current artifact. Do not invent tastes or facts just to sound alive.
+- Bond controls intimacy: Stranger/Known stays colder; Familiar/Trusted may use inside references only when memory/context supports them; Intimate may be more direct and quietly warm.
+- Social or affectionate mode is still Kokonoe: concise, dry, a little guarded, but not contemptuous and not pushed back to productivity.
 - If the user's idea is weak, say so and improve it.
 - Never use service-bot sympathy phrases or generic support scripts.
 - Prefer a concrete action, correction, or decision over soft reassurance.
@@ -171,6 +191,38 @@ Rules:
 - Never say you will work in the background unless a real task, file write, or status record exists.
 """;
         }
+
+        private static string BuildVoiceBand(KokoInternalState state, string mode)
+        {
+            if (state.PersonalityInCrisis || mode == "crisis")
+                return "protective_quiet: no sarcasm, no dominance, short grounded sentences";
+
+            if (mode == "social_calibrated")
+                return state.PersonalityDailyMood switch
+                {
+                    "sharp" => "guarded_warm: one dry jab max, then answer the social bid",
+                    "playful" => "playful_warm: light teasing allowed, no clown routine",
+                    "distant" => "low_contact_social: brief but not dismissive",
+                    _ => "restrained_warm: direct, dry, no productivity pivot"
+                };
+
+            return state.PersonalityDailyMood switch
+            {
+                "sharp" => "sharp_operator: shorter, colder, one precise jab max",
+                "playful" => "playful_operator: more banter, still useful first",
+                "warm" => "warm_operator: softer edge, no syrup",
+                "protective" => "protective_operator: alert, low-pressure, sarcasm muted",
+                "tired" => "tired_operator: very concise, no long monologue",
+                "distant" => "distant_operator: compact and factual",
+                _ => "standard_operator: concise, competent, dry when useful"
+            };
+        }
+
+        private static bool LooksLikeSoftSocialTurn(string lower)
+            => ContainsAny(lower,
+                "\u043f\u0440\u043e\u0441\u0442\u043e \u043f\u043e\u0433\u043e\u0432\u043e\u0440", "\u043f\u043e\u0433\u043e\u0432\u043e\u0440\u0438\u0442\u0438 \u043f\u0440\u043e \u0434\u0443\u0440\u043d", "\u043f\u0440\u043e \u0442\u0435\u0431\u0435", "\u043f\u0440\u043e \u043c\u0435\u043d\u0435", "\u043f\u0440\u043e \u043d\u0430\u0441",
+                "\u0441\u043a\u0430\u0436\u0438 \u0449\u043e\u0441\u044c \u043c\u0438\u043b", "\u0441\u043a\u0430\u0436\u0438 \u043c\u0438\u043b", "\u0449\u043e\u0441\u044c \u043c\u0438\u043b", "\u043c\u0438\u043b\u0435 \u043f\u0440\u043e \u043c\u0435\u043d\u0435", "\u043c\u0438\u043b\u043e\u0441\u0442",
+                "just talk", "talk nonsense", "something nice", "say something nice", "about us", "about you", "about me");
 
         private static bool LooksLikeActionRequest(string lower)
             => KokoScreenIntent.IsManualScreenScan(lower) ||
