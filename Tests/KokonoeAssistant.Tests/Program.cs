@@ -149,8 +149,12 @@ internal static class Program
             Run("Post reply guard blocks fabricated external facts", PostReplyGuardBlocksFabricatedExternalFacts);
             Run("Post reply guard blocks stale proactive ping on direct topic", PostReplyGuardBlocksStaleProactivePingOnDirectTopic);
             Run("Post reply guard blocks service bot tone", PostReplyGuardBlocksServiceBotTone);
+            Run("Post reply guard blocks AI service phrases", PostReplyGuardBlocksAiServicePhrases);
             Run("Post reply guard blocks punitive network threat", PostReplyGuardBlocksPunitiveNetworkThreat);
             Run("Post reply guard blocks blind agreement", PostReplyGuardBlocksBlindAgreement);
+            Run("Social engine detects flirting without waifu mode", SocialEngineDetectsFlirtingWithoutWaifuMode);
+            Run("Social engine stress mutes sarcasm", SocialEngineStressMutesSarcasm);
+            Run("Neural governor parses response frame JSON", NeuralGovernorParsesResponseFrameJson);
             Run("Persona engine calibrates soft social voice", PersonaEngineCalibratesSoftSocialVoice);
             Run("Runtime state exposes PAD voice directive", RuntimeStateExposesPadVoiceDirective);
             Run("Response planner classifies critical assistant architecture", ResponsePlannerClassifiesCriticalAssistantArchitecture);
@@ -3519,6 +3523,30 @@ internal static class Program
         AssertTrue(result.RepairInstruction.Contains("ANTI-BOT"), "repair should include anti-bot persona rules");
     }
 
+    private static void PostReplyGuardBlocksAiServicePhrases()
+    {
+        var now = DateTime.Today.AddHours(15);
+        var state = new KokoInternalState();
+        var userText = "хто ти?";
+        var messages = new[]
+        {
+            new ChatRepository.ChatMessage { Role = "user", Content = userText, Timestamp = now }
+        };
+        var timeline = new KokoConversationTimelineEngine().Build(messages, state, now, userText);
+
+        var result = new KokoPostReplyGuard().Evaluate(
+            userText,
+            "As an AI language model, how can I help you today?",
+            state,
+            messages,
+            timeline,
+            now);
+
+        AssertTrue(!result.Passed, "guard should reject visible AI/service phrase");
+        AssertTrue(result.Violations.Any(v => v.Contains("AI/service-bot", StringComparison.OrdinalIgnoreCase)), "violation should name AI/service phrasing");
+        AssertTrue(result.ShouldRepair, "AI/service phrasing should be repaired");
+    }
+
     private static void PostReplyGuardBlocksPunitiveNetworkThreat()
     {
         var now = DateTime.Today.AddHours(15).AddMinutes(30);
@@ -3555,6 +3583,86 @@ internal static class Program
         AssertTrue(result.ShouldRepair, "blind agreement should request critical rewrite");
         AssertTrue(result.Violations.Any(v => v.Contains("критичного судження")), "violation should require critical judgment");
         AssertTrue(result.RepairInstruction.Contains("CRITICAL THINKING"), "repair should include critical thinking rules");
+    }
+
+    private static void SocialEngineDetectsFlirtingWithoutWaifuMode()
+    {
+        var now = new DateTime(2026, 6, 9, 1, 20, 0);
+        var messages = new[]
+        {
+            new ChatRepository.ChatMessage { Role = "user", Content = "про тебе, про мене .. хех", Timestamp = now }
+        };
+
+        var frame = new KokoSocialEngine().Analyze(
+            "хм скажи щось миле про мене, тільки без ванілі",
+            new KokoInternalState { PersonalityDailyMood = "playful" },
+            messages,
+            null,
+            now);
+
+        AssertTrue(frame.Subtext is "flirting_or_affectionate_teasing" or "soft_affection", "social engine should detect flirting/affectionate teasing");
+        AssertTrue(frame.SarcasmLevel > 0.55, "flirt mode should keep Kokonoe sharp");
+        AssertTrue(frame.EmpathyLevel > 0.45, "flirt mode should allow guarded warmth");
+        AssertTrue(frame.PromptBlock.Contains("never generic waifu", StringComparison.OrdinalIgnoreCase), "prompt should forbid waifu mode");
+    }
+
+    private static void SocialEngineStressMutesSarcasm()
+    {
+        var now = new DateTime(2026, 6, 9, 10, 0, 0);
+        var wearable = new KokoWearableState
+        {
+            LastSampleUtc = DateTime.UtcNow,
+            CurrentBpm = 118,
+            BaselineBpm = 74,
+            LiveStressScore = 86,
+            SleepState = "awake"
+        };
+
+        var frame = new KokoSocialEngine().Analyze(
+            "терміново не працює build error",
+            new KokoInternalState(),
+            Array.Empty<ChatRepository.ChatMessage>(),
+            wearable,
+            now);
+
+        AssertEqual("urgent_or_stressed", frame.Subtext, "high wearable stress plus urgent text should be urgent/stressed");
+        AssertTrue(frame.SarcasmLevel <= 0.20, "high stress should mute sarcasm");
+        AssertTrue(frame.SeriousnessLevel >= 0.95, "high stress should force seriousness");
+        AssertTrue(frame.ResponseDirective.Contains("protective", StringComparison.OrdinalIgnoreCase), "directive should be protective");
+    }
+
+    private static void NeuralGovernorParsesResponseFrameJson()
+    {
+        var raw = """
+{
+  "intent": "chat",
+  "capability": "conversation",
+  "stance": "playful_sharp",
+  "memory_policy": "do_not_store",
+  "risk": "low",
+  "requires_action": false,
+  "requires_vault_read": false,
+  "requires_tool_use": false,
+  "requires_critique": false,
+  "should_push_back": false,
+  "high_stress_protocol": false,
+  "fatigue_protocol": false,
+  "reason_uk": "соціальний підконтекст: заігрування",
+  "inner_monologue": "User is teasing; match sharply without waifu behavior.",
+  "somatic_context": "stress low",
+  "core_values": ["truthfulness", "health"],
+  "critique_steps": [],
+  "steps": ["answer the social bid directly"],
+  "constraints": ["no generic assistant phrases"]
+}
+""";
+
+        var frame = KokoNeuralGovernorService.ParseFrame(raw);
+        AssertTrue(frame != null, "neural governor should parse JSON frame");
+        AssertEqual("playful_sharp", frame!.Stance, "stance should come from neural JSON");
+        AssertTrue(frame.PromptBlock == "", "parser should not render prompt by itself");
+        frame.PromptBlock = KokoResponsePlannerEngine.BuildPromptBlockForFrame(frame);
+        AssertTrue(frame.PromptBlock.Contains("inner_monologue:", StringComparison.OrdinalIgnoreCase), "rendered neural frame should include inner monologue");
     }
 
     private static void PersonaEngineCalibratesSoftSocialVoice()

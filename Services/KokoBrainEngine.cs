@@ -287,6 +287,8 @@ namespace KokonoeAssistant.Services
         public readonly KokoPostReplyGuard PostReplyGuard;
         public readonly KokoPersonaEngine Persona;
         public readonly KokoResponsePlannerEngine ResponsePlanner;
+        public readonly KokoSocialEngine Social;
+        public readonly KokoNeuralGovernorService NeuralGovernor;
         public readonly KokoMemoryWritePolicyEngine MemoryWritePolicy;
         public readonly KokoContinuityEngine Continuity;
         public readonly KokoStateFreshnessService StateFreshness;
@@ -392,6 +394,8 @@ namespace KokonoeAssistant.Services
             PostReplyGuard = new KokoPostReplyGuard();
             Persona = new KokoPersonaEngine();
             ResponsePlanner = new KokoResponsePlannerEngine();
+            Social = new KokoSocialEngine();
+            NeuralGovernor = new KokoNeuralGovernorService(_llm);
             MemoryWritePolicy = new KokoMemoryWritePolicyEngine();
             Continuity = new KokoContinuityEngine(dataDir);
             StateFreshness = new KokoStateFreshnessService();
@@ -2011,6 +2015,7 @@ Summary: {summary}
                 var somatic = GetSomaticSnapshot();
                 sb.AppendLine(Somatic.BuildPromptBlock(somatic));
                 sb.AppendLine(SelfRegulator.BuildPromptBlock(GetSelfRegulationFrame(somatic)));
+                sb.AppendLine(BuildSocialContextBlock(null, DateTime.Now));
                 sb.AppendLine(Initiative.BuildDebugBlock(_state));
                 sb.AppendLine(Presence.BuildDebugBlock(_state));
                 sb.AppendLine(InternalDay.BuildDebugBlock(_state));
@@ -3499,9 +3504,77 @@ Summary: {summary}
             return frame;
         }
 
+        private KokoSocialFrame BuildSocialFrame(string? userText, DateTime now)
+        {
+            KokoWearableState? wearable = null;
+            try { wearable = ServiceContainer.IsInitialized ? ServiceContainer.WearableTelemetry.State : null; } catch { }
+            return Social.Analyze(userText ?? "", _state, _chatRepo.GetMessages(12), wearable, now);
+        }
+
+        private string BuildSocialContextBlock(string? userText, DateTime now)
+        {
+            try { return BuildSocialFrame(userText, now).PromptBlock; }
+            catch (Exception ex)
+            {
+                KokoSystemLog.Write("SOCIAL", "context failed: " + ex.Message);
+                return "SOCIAL SUBTEXT / PERSONALITY FLUX\nsubtext: unavailable\n";
+            }
+        }
+
+        private KokoResponsePlanFrame BuildGovernedResponsePlan(string userText, DateTime now)
+        {
+            var social = BuildSocialFrame(userText, now);
+            var settings = AppSettings.Load();
+            if (settings.NeuralGovernorEnabled && ServiceContainer.IsInitialized)
+            {
+                try
+                {
+                    using var cts = new CancellationTokenSource(Math.Clamp(settings.NeuralGovernorTimeoutMs, 500, 6000));
+                    KokoWearableState? wearable = null;
+                    try { wearable = ServiceContainer.WearableTelemetry.State; } catch { }
+                    var memoryContext = "";
+                    try
+                    {
+                        if (KokoResponsePlannerEngine.NeedsVaultRead(userText.ToLowerInvariant(), "memory") ||
+                            KokoProfileUpdateService.LooksLikeProfileUpdateRequest(userText.ToLowerInvariant()))
+                            memoryContext = new ObsidianPreflightContextService(_obsidian).Build(userText, now, 1600) ?? "";
+                    }
+                    catch { }
+
+                    var neural = NeuralGovernor.TryBuildFrameAsync(
+                            userText,
+                            _state,
+                            social,
+                            _chatRepo.GetMessages(24),
+                            memoryContext,
+                            _cachedScreenContext,
+                            wearable,
+                            now,
+                            cts.Token)
+                        .GetAwaiter()
+                        .GetResult();
+                    if (neural != null)
+                    {
+                        neural.PromptBlock += "\n" + social.PromptBlock;
+                        return neural;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    KokoSystemLog.Write("NEURAL-GOVERNOR", "sync route failed: " + ex.Message);
+                }
+            }
+
+            var fallback = ResponsePlanner.Build(userText, _state, Cognition, now);
+            fallback.PromptBlock += "\n" + social.PromptBlock;
+            fallback.TraceLine += "; governor=fallback";
+            KokoSystemLog.Write("NEURAL-GOVERNOR", "fallback used: " + fallback.TraceLine);
+            return fallback;
+        }
+
         private KokoResponsePlanFrame RecordResponsePlan(string userText, DateTime now)
         {
-            var frame = ResponsePlanner.Build(userText, _state, Cognition, now);
+            var frame = BuildGovernedResponsePlan(userText, now);
             _state.LastResponsePlan = frame.PromptBlock;
             _state.LastResponsePlanTrace = frame.TraceLine;
             _state.LastResponsePlanAt = now;
@@ -6234,7 +6307,7 @@ Summary: {summary}
             var presence = BuildPresenceFrame(now, autonomyLevel);
             KokoResponsePlanFrame? responsePlan = null;
             if (!string.IsNullOrWhiteSpace(userText))
-                responsePlan = ResponsePlanner.Build(userText, _state, Cognition, now);
+                responsePlan = BuildGovernedResponsePlan(userText, now);
             var active = _state.ShortTermIntents
                 .Where(i => !i.ResolvedAt.HasValue)
                 .OrderBy(i => i.FollowUpAt)

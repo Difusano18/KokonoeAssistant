@@ -104,6 +104,9 @@ namespace KokonoeAssistant
         public int  SpontaneousIntervalMins { get; set; } = 25;
         public int  ProactiveAutonomyLevel  { get; set; } = 2; // 0=тихо, 1=обережно, 2=нормально, 3=живий режим
 
+        public bool NeuralGovernorEnabled   { get; set; } = true;
+        public int  NeuralGovernorTimeoutMs { get; set; } = 1800;
+
         // Screen awareness
         public bool ScreenAwarenessEnabled { get; set; } = true;
         public bool ScreenAwarenessSendComments { get; set; } = true;

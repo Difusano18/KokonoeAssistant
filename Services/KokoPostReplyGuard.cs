@@ -36,6 +36,8 @@ namespace KokonoeAssistant.Services
             else if (LlmService.LooksLikeBrokenVisibleText(reply))
                 violations.Add("відповідь пошкоджена: крапкова/битокодована каша замість читабельного тексту");
 
+            if (LooksLikeForbiddenAiOrServicePhrase(replyLower))
+                violations.Add("visible reply used forbidden AI/service-bot phrasing instead of Kokonoe voice");
             if (LooksLikeVisionTechnicalError(reply))
                 violations.Add("технічну vision-помилку показано користувачу замість нормальної відповіді");
             if (LooksLikeEmptyImageMisread(userLower, replyLower))
@@ -1113,6 +1115,13 @@ Timeline:
             var userUsedDramaticWord = ContainsAny(userLower, "гібернац", "кома", "в кому");
             return deniesSleep || (dramaticSleep && !userUsedDramaticWord);
         }
+
+        private static bool LooksLikeForbiddenAiOrServicePhrase(string replyLower)
+            => ContainsAny(replyLower,
+                "as an ai", "as a language model", "i am an ai", "i'm an ai", "i cannot as an ai",
+                "how can i help", "how may i assist", "i'm here to help", "i am here to help",
+                "як штучний інтелект", "як мовна модель", "чим я можу допомогти", "я тут, щоб допомогти",
+                "СЏРє С€С‚СѓС‡РЅРёР№ С–РЅС‚РµР»РµРєС‚", "СЏРє РјРѕРІРЅР° РјРѕРґРµР»СЊ", "С‡РёРј СЏ РјРѕР¶Сѓ РґРѕРїРѕРјРѕРіС‚Рё");
 
         private static string BuildFoodStateReplacement(string userText, KokoInternalState state)
         {

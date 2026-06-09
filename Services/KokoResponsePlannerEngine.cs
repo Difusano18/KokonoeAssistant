@@ -91,6 +91,9 @@ namespace KokonoeAssistant.Services
             return sb.ToString();
         }
 
+        public static string BuildPromptBlockForFrame(KokoResponsePlanFrame frame)
+            => BuildPromptBlock(frame, cognition: null);
+
         public IReadOnlyList<KokoAgentStep> BuildAgentSteps(KokoResponsePlanFrame frame)
         {
             var steps = new List<KokoAgentStep>
@@ -416,7 +419,7 @@ RESPONSE PLAN REPAIR:
             return constraints;
         }
 
-        private static string BuildPromptBlock(KokoResponsePlanFrame frame, KokoCognitionEngine cognition)
+        private static string BuildPromptBlock(KokoResponsePlanFrame frame, KokoCognitionEngine? cognition)
         {
             var sb = new StringBuilder();
             sb.AppendLine("RESPONSE EXECUTION PLAN");

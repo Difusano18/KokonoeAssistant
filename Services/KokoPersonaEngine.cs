@@ -104,6 +104,8 @@ namespace KokonoeAssistant.Services
         {
             var lower = (reply ?? "").ToLowerInvariant();
             if (string.IsNullOrWhiteSpace(lower)) return false;
+            if (ContainsAny(lower, "as an ai", "as a language model", "how can i help", "how may i assist", "i'm here to help", "i am here to help"))
+                return true;
 
             var hits = BotPhrases.Count(p => lower.Contains(p, StringComparison.OrdinalIgnoreCase));
             if (hits >= 1) return true;
