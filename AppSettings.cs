@@ -139,7 +139,10 @@ namespace KokonoeAssistant
                 {
                     var loaded = JsonConvert.DeserializeObject<AppSettings>(File.ReadAllText(_path))
                                  ?? new AppSettings();
+                    var changed = RecoverMissingSecretsFromLegacySettings(loaded);
                     if (NormalizeDefaults(loaded))
+                        changed = true;
+                    if (changed)
                         loaded.Save();
                     return loaded;
                 }
@@ -147,8 +150,96 @@ namespace KokonoeAssistant
             catch { }
 
             var def = new AppSettings();
+            RecoverMissingSecretsFromLegacySettings(def);
             def.Save();
             return def;
+        }
+
+        private static bool RecoverMissingSecretsFromLegacySettings(AppSettings settings)
+        {
+            var changed = false;
+            foreach (var path in LegacySettingsPaths().Distinct(StringComparer.OrdinalIgnoreCase))
+            {
+                try
+                {
+                    if (string.IsNullOrWhiteSpace(path) ||
+                        string.Equals(Path.GetFullPath(path), Path.GetFullPath(_path), StringComparison.OrdinalIgnoreCase) ||
+                        !File.Exists(path))
+                        continue;
+
+                    var legacy = JsonConvert.DeserializeObject<AppSettings>(File.ReadAllText(path));
+                    if (legacy == null)
+                        continue;
+
+                    if (CopyIfMissing(settings.TelegramToken, legacy.TelegramToken, out var telegramToken))
+                    {
+                        settings.TelegramToken = telegramToken;
+                        changed = true;
+                    }
+                    if (settings.TelegramChatId <= 0 && legacy.TelegramChatId > 0)
+                    {
+                        settings.TelegramChatId = legacy.TelegramChatId;
+                        changed = true;
+                    }
+
+                    if (CopyIfMissing(settings.TgApiHash, legacy.TgApiHash, out var tgApiHash))
+                    {
+                        settings.TgApiHash = tgApiHash;
+                        changed = true;
+                    }
+                    if (CopyIfMissing(settings.TgPhone, legacy.TgPhone, out var tgPhone))
+                    {
+                        settings.TgPhone = tgPhone;
+                        changed = true;
+                    }
+                    if (settings.TgApiId <= 0 && legacy.TgApiId > 0)
+                    {
+                        settings.TgApiId = legacy.TgApiId;
+                        changed = true;
+                    }
+
+                    if (CopyIfMissing(settings.OpenAiApiKey, legacy.OpenAiApiKey, out var openAiApiKey))
+                    {
+                        settings.OpenAiApiKey = openAiApiKey;
+                        changed = true;
+                    }
+                    if (CopyIfMissing(settings.ClaudeApiKey, legacy.ClaudeApiKey, out var claudeApiKey))
+                    {
+                        settings.ClaudeApiKey = claudeApiKey;
+                        changed = true;
+                    }
+                    if (CopyIfMissing(settings.OllamaApiKey, legacy.OllamaApiKey, out var ollamaApiKey))
+                    {
+                        settings.OllamaApiKey = ollamaApiKey;
+                        changed = true;
+                    }
+                }
+                catch
+                {
+                    // Legacy recovery must never block startup.
+                }
+            }
+
+            return changed;
+        }
+
+        private static IEnumerable<string> LegacySettingsPaths()
+        {
+            var cwd = Directory.GetCurrentDirectory();
+            var baseDir = AppContext.BaseDirectory;
+            yield return Path.Combine(cwd, "settings.json");
+            yield return Path.Combine(cwd, "publish", "settings.json");
+            yield return Path.Combine(baseDir, "settings.json");
+            yield return Path.Combine(baseDir, "publish", "settings.json");
+        }
+
+        private static bool CopyIfMissing(string? target, string? source, out string value)
+        {
+            value = target ?? "";
+            if (!string.IsNullOrWhiteSpace(target) || string.IsNullOrWhiteSpace(source))
+                return false;
+            value = source.Trim();
+            return true;
         }
 
         private static bool NormalizeDefaults(AppSettings settings)

@@ -10000,11 +10000,15 @@ tags: [kokonoe, dashboard, live]
             s.LlmProvider = provider;
 
             s.TelegramEnabled    = SP_TgEnabled.IsChecked == true;
-            s.TelegramToken      = SP_TgToken.Text.Trim();
+            var telegramTokenText = SP_TgToken.Text.Trim();
+            if (!string.IsNullOrWhiteSpace(telegramTokenText))
+                s.TelegramToken = telegramTokenText;
             s.TgUserEnabled      = SP_TgUserEnabled.IsChecked == true;
             s.TgDmOnly           = SP_TgDmOnly.IsChecked == true;
             s.VoiceInputEnabled  = SP_Voice.IsChecked == true;
-            s.OpenAiApiKey       = SP_OpenAiKey.Text.Trim();
+            var openAiKeyText = SP_OpenAiKey.Text.Trim();
+            if (!string.IsNullOrWhiteSpace(openAiKeyText))
+                s.OpenAiApiKey = openAiKeyText;
             s.VaultPath          = SP_VaultPath.Text.Trim();
             s.SpontaneousEnabled = SP_Spont.IsChecked == true;
             if (int.TryParse(SP_SpontInterval.Text.Trim(), out var spontMins))

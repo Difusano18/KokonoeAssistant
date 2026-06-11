@@ -128,20 +128,32 @@ namespace KokonoeAssistant
                                                                                   : "lmstudio";
             _settings.LmUrl              = LmUrlBox.Text.Trim();
             _settings.Model              = ModelBox.Text.Trim();
-            _settings.ClaudeApiKey       = ClaudeApiKeyBox.Text.Trim();
+            var claudeApiKeyText = ClaudeApiKeyBox.Text.Trim();
+            if (!string.IsNullOrWhiteSpace(claudeApiKeyText))
+                _settings.ClaudeApiKey = claudeApiKeyText;
             _settings.ClaudeModel        = ClaudeModelBox.Text?.Trim() ?? "claude-sonnet-4-20250514";
-            _settings.OllamaApiKey       = OllamaApiKeyBox.Text.Trim();
+            var ollamaApiKeyText = OllamaApiKeyBox.Text.Trim();
+            if (!string.IsNullOrWhiteSpace(ollamaApiKeyText))
+                _settings.OllamaApiKey = ollamaApiKeyText;
             _settings.OllamaUrl          = string.IsNullOrWhiteSpace(OllamaUrlBox.Text) ? "https://ollama.com/v1/chat/completions" : OllamaUrlBox.Text.Trim();
             _settings.OllamaModel        = string.IsNullOrWhiteSpace(OllamaModelBox.Text)
                                          ? AppSettings.DefaultOllamaCloudModel
                                          : OllamaModelBox.Text.Trim();
-            _settings.OpenAiApiKey       = OpenAiKeyBox.Text.Trim();
+            var openAiKeyText = OpenAiKeyBox.Text.Trim();
+            if (!string.IsNullOrWhiteSpace(openAiKeyText))
+                _settings.OpenAiApiKey = openAiKeyText;
             _settings.VaultPath          = VaultPathBox.Text.Trim();
             _settings.TelegramEnabled    = TgEnabledBox.IsChecked == true;
-            _settings.TelegramToken      = TgTokenBox.Text.Trim();
+            var telegramTokenText = TgTokenBox.Text.Trim();
+            if (!string.IsNullOrWhiteSpace(telegramTokenText))
+                _settings.TelegramToken = telegramTokenText;
             _settings.TgUserEnabled      = TgUserEnabledBox.IsChecked == true;
-            _settings.TgApiHash          = TgApiHashBox.Text.Trim();
-            _settings.TgPhone            = TgPhoneBox.Text.Trim();
+            var tgApiHashText = TgApiHashBox.Text.Trim();
+            if (!string.IsNullOrWhiteSpace(tgApiHashText))
+                _settings.TgApiHash = tgApiHashText;
+            var tgPhoneText = TgPhoneBox.Text.Trim();
+            if (!string.IsNullOrWhiteSpace(tgPhoneText))
+                _settings.TgPhone = tgPhoneText;
             _settings.TgDmOnly           = TgDmOnlyBox.IsChecked == true;
             if (int.TryParse(TgApiIdBox.Text.Trim(), out var apiId))
                 _settings.TgApiId = apiId;
