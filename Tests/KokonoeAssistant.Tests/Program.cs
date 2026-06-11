@@ -164,6 +164,7 @@ internal static class Program
             Run("Emotional memory hydrates raw chat and visual anchor", EmotionalMemoryHydratesRawChatAndVisualAnchor);
             Run("Post reply guard blocks roleplay and pause metrics", PostReplyGuardBlocksRoleplayAndPauseMetrics);
             Run("Post reply guard blocks soul-breaking status report", PostReplyGuardBlocksSoulBreakingStatusReport);
+            Run("Post reply guard blocks conversation mechanics leak", PostReplyGuardBlocksConversationMechanicsLeak);
             Run("Neural governor parses response frame JSON", NeuralGovernorParsesResponseFrameJson);
             Run("Persona engine calibrates soft social voice", PersonaEngineCalibratesSoftSocialVoice);
             Run("Runtime state exposes PAD voice directive", RuntimeStateExposesPadVoiceDirective);
@@ -229,8 +230,10 @@ internal static class Program
             Run("LLM agent key pool exhaustion does not reuse legacy key", LlmAgentKeyPoolExhaustionDoesNotReuseLegacyKey);
             Run("Inspector renders state report", InspectorRendersStateReport);
             Run("Obsidian vault architecture maintenance", ObsidianVaultArchitectureMaintenance);
+            Run("Obsidian excludes profile backups from index", ObsidianExcludesProfileBackupsFromIndex);
             Run("Obsidian unique memory append", ObsidianUniqueMemoryAppend);
             Run("Obsidian profile updater writes neutral profile", ObsidianProfileUpdaterWritesNeutralProfile);
+            Run("Obsidian profile updater throttles backup spam", ObsidianProfileUpdaterThrottlesBackupSpam);
             Run("Autonomous profile curator detects durable facts", AutonomousProfileCuratorDetectsDurableFacts);
             Run("Autonomous profile curator writes synthesized update", AutonomousProfileCuratorWritesSynthesizedUpdate);
             Run("Obsidian rejects paths outside vault", ObsidianRejectsPathsOutsideVault);
@@ -3891,6 +3894,29 @@ Insight: bridge stability and pulse quality are linked.
         AssertTrue(result.RepairInstruction.Contains("debug console", StringComparison.OrdinalIgnoreCase), "repair should force natural dialogue instead of status output");
     }
 
+    private static void PostReplyGuardBlocksConversationMechanicsLeak()
+    {
+        var now = DateTime.Today.AddHours(18);
+        var state = new KokoInternalState();
+        var messages = new[]
+        {
+            new ChatRepository.ChatMessage { Role = "user", Content = "помовчи і роби що сказано", Timestamp = now.AddMinutes(-1) }
+        };
+        var timeline = new KokoConversationTimelineEngine().Build(messages, state, now, messages[0].Content);
+
+        var result = new KokoPostReplyGuard().Evaluate(
+            messages[0].Content,
+            "Добре. Автопінги й старі follow-up прибрала до 00:55. Нарешті команда, а не туман.",
+            state,
+            messages,
+            timeline,
+            now);
+
+        AssertTrue(!result.Passed, "conversation mechanics should not leak into visible replies");
+        AssertTrue(result.Violations.Any(v => v.Contains("conversation mechanics", StringComparison.OrdinalIgnoreCase)), "violation should name conversation mechanics");
+        AssertTrue(result.RepairInstruction.Contains("autopings", StringComparison.OrdinalIgnoreCase), "repair should forbid autopings/follow-up mechanics");
+    }
+
     private static void NeuralGovernorParsesResponseFrameJson()
     {
         var raw = """
@@ -5428,6 +5454,32 @@ Insight: bridge stability and pulse quality are linked.
         }
     }
 
+    private static void ObsidianExcludesProfileBackupsFromIndex()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "KokonoeAssistant.Tests", "vault-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            var obsidian = new ObsidianMcpService(dir);
+            obsidian.WriteNote("Project/Live.md", "# Live\n\nneedle-live");
+            obsidian.WriteNote("Kokonoe/Profile Backups/Profile-20260611-010203.md", "# Backup\n\nneedle-backup-only");
+
+            var notes = obsidian.ListNotes();
+            var search = obsidian.SearchNotes("needle-backup-only", 10);
+            var index = obsidian.GetNoteIndex();
+
+            AssertTrue(notes.Contains("Project/Live.md"), "normal vault note should be listed");
+            AssertTrue(!notes.Any(p => p.Contains("Profile Backups", StringComparison.OrdinalIgnoreCase)), "profile backups should be excluded from note listing");
+            AssertTrue(search.Count == 0, "profile backups should be excluded from search");
+            AssertTrue(!index.Values.Any(p => p.Contains("Profile Backups", StringComparison.OrdinalIgnoreCase)), "profile backups should be excluded from note index");
+            AssertTrue(obsidian.ReadNote("Kokonoe/Profile Backups/Profile-20260611-010203.md") != null, "direct maintenance reads should still work");
+        }
+        finally
+        {
+            try { Directory.Delete(dir, recursive: true); } catch { }
+        }
+    }
+
     private static void ObsidianProfileUpdaterWritesNeutralProfile()
     {
         var dir = Path.Combine(Path.GetTempPath(), "KokonoeAssistant.Tests", "vault-" + Guid.NewGuid().ToString("N"));
@@ -5474,6 +5526,42 @@ type: creator-profile
             AssertTrue(!content.Contains("можеш обновити мій профіль", StringComparison.OrdinalIgnoreCase), "profile should not copy raw user messages");
             AssertTrue(!content.Contains("порушеного когнітивного функціонування"), "profile should remove insulting cognitive framing");
             AssertTrue(!content.Contains("anal", StringComparison.OrdinalIgnoreCase), "profile should remove explicit private tags from main profile");
+        }
+        finally
+        {
+            try { Directory.Delete(dir, recursive: true); } catch { }
+        }
+    }
+
+    private static void ObsidianProfileUpdaterThrottlesBackupSpam()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "KokonoeAssistant.Tests", "vault-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            var obsidian = new ObsidianMcpService(dir);
+            obsidian.WriteNote("Creator/Profile.md", "# Profile\n\nInitial");
+
+            using var chat = new ChatRepository(dir);
+            chat.InsertMessage(new ChatRepository.ChatMessage
+            {
+                Role = "user",
+                Content = "update profile with concrete operating rules",
+                Timestamp = DateTime.Now.AddMinutes(-2)
+            });
+
+            var service = new KokoProfileUpdateService(obsidian, chat);
+            var first = service.UpdateProfileFromRecentContext("update profile");
+            var second = service.UpdateProfileFromRecentContext("update profile again");
+
+            var backupDir = Path.Combine(dir, "Kokonoe", "Profile Backups");
+            var backups = Directory.Exists(backupDir)
+                ? Directory.GetFiles(backupDir, "Profile-*.md", SearchOption.TopDirectoryOnly)
+                : Array.Empty<string>();
+
+            AssertTrue(first.Success && second.Success, "profile updates should both succeed");
+            AssertEqual(first.BackupPath, second.BackupPath, "same-day profile updates should reuse the daily backup");
+            AssertEqual(1, backups.Length, "same-day profile updates should not spam backup files");
         }
         finally
         {

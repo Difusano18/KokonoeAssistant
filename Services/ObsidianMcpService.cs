@@ -12,7 +12,15 @@ namespace KokonoeAssistant.Services
     /// </summary>
     public class ObsidianMcpService
     {
+        private static readonly TimeSpan FileCacheTtl = TimeSpan.FromSeconds(15);
+        private static readonly TimeSpan SearchCacheTtl = TimeSpan.FromSeconds(30);
         private readonly string _vault;
+        private readonly object _cacheLock = new();
+        private List<string>? _cachedMarkdownFiles;
+        private DateTime _cachedMarkdownFilesAt;
+        private Dictionary<string, string>? _cachedNoteIndex;
+        private DateTime _cachedNoteIndexAt;
+        private readonly Dictionary<string, (DateTime At, List<SearchResult> Results)> _searchCache = new(StringComparer.OrdinalIgnoreCase);
         public string VaultPath => _vault;
 
         public ObsidianMcpService(string vaultPath)
@@ -26,10 +34,16 @@ namespace KokonoeAssistant.Services
         {
             var root = subfolder != null ? Path.Combine(_vault, subfolder) : _vault;
             if (!Directory.Exists(root)) return new();
-            return SafeGetFiles(root)
+            var sw = Stopwatch.StartNew();
+            var files = subfolder == null
+                ? GetMarkdownFilesCached()
+                : SafeGetFiles(root).ToList();
+            var notes = files
                 .Select(f => Path.GetRelativePath(_vault, f).Replace('\\', '/'))
                 .OrderBy(f => f)
                 .ToList();
+            LogSlow("list_notes", sw.ElapsedMilliseconds, notes.Count);
+            return notes;
         }
 
         public List<string> ListFolders()
@@ -57,6 +71,7 @@ namespace KokonoeAssistant.Services
             Directory.CreateDirectory(Path.GetDirectoryName(full)!);
             content = NormalizeFrontmatter(content);
             File.WriteAllText(full, content, Encoding.UTF8);
+            InvalidateCaches();
             return full;
         }
 
@@ -88,6 +103,7 @@ tags: [{SanitizeTagsLine(tagsLine)}]
             var full = Resolve(path);
             if (!File.Exists(full)) return "Нотатка не знайдена: " + path;
             File.AppendAllText(full, "\n" + content, Encoding.UTF8);
+            InvalidateCaches();
             return full;
         }
 
@@ -218,6 +234,7 @@ tags: [{SanitizeTagsLine(tagsLine)}]
                 sb.AppendLine($"- [{label}] {item}");
 
             File.AppendAllText(full, sb.ToString(), Encoding.UTF8);
+            InvalidateCaches();
             return accepted.Count;
         }
 
@@ -228,6 +245,7 @@ tags: [{SanitizeTagsLine(tagsLine)}]
             var full = Resolve(path);
             if (!File.Exists(full)) return "Не знайдено";
             File.Delete(full);
+            InvalidateCaches();
             return "Видалено: " + path;
         }
 
@@ -240,6 +258,7 @@ tags: [{SanitizeTagsLine(tagsLine)}]
             var newFull = Resolve(newPath);
             Directory.CreateDirectory(Path.GetDirectoryName(newFull)!);
             File.Move(oldFull, newFull, overwrite: false);
+            InvalidateCaches();
             return $"Переміщено: {oldPath} → {newPath}";
         }
 
@@ -247,6 +266,7 @@ tags: [{SanitizeTagsLine(tagsLine)}]
         {
             var full = Path.Combine(_vault, folderPath.Replace('/', Path.DirectorySeparatorChar));
             Directory.CreateDirectory(full);
+            InvalidateCaches();
             return $"Папка створена: {folderPath}";
         }
 
@@ -266,7 +286,7 @@ tags: [{SanitizeTagsLine(tagsLine)}]
 
             // skip hidden / data dirs
             var dirName = Path.GetFileName(current);
-            if (dirName.StartsWith('.') || dirName == "kokonoe-data") return;
+            if (IsIgnoredDirectory(current)) return;
 
             if (depth > 0) sb.AppendLine($"{indent}📁 {dirName}/");
 
@@ -281,10 +301,26 @@ tags: [{SanitizeTagsLine(tagsLine)}]
 
         public List<SearchResult> SearchNotes(string query, int max = 10)
         {
-            var results = new List<SearchResult>();
-            var words = query.ToLower().Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            var cacheKey = (query ?? "") + "\n" + max;
+            lock (_cacheLock)
+            {
+                if (_searchCache.TryGetValue(cacheKey, out var cached) &&
+                    DateTime.Now - cached.At < SearchCacheTtl)
+                {
+                    KokoSystemLog.Write("OBSIDIAN-PERF", $"search cache hit query='{TrimLog(query, 80)}' results={cached.Results.Count}");
+                    return cached.Results
+                        .Select(CloneSearchResult)
+                        .Take(max)
+                        .ToList();
+                }
+            }
 
-            foreach (var file in SafeGetFiles(_vault))
+            var sw = Stopwatch.StartNew();
+            query ??= "";
+            var results = new List<SearchResult>();
+            var words = query.ToLowerInvariant().Split(' ', StringSplitOptions.RemoveEmptyEntries);
+
+            foreach (var file in GetMarkdownFilesCached())
             {
                 try
                 {
@@ -309,7 +345,13 @@ tags: [{SanitizeTagsLine(tagsLine)}]
                 catch (Exception ex) { Debug.WriteLine($"[ObsidianMcp] SearchNotes failed for {file}: {ex.Message}"); }
             }
 
-            return results.OrderByDescending(r => r.Score).Take(max).ToList();
+            var ordered = results.OrderByDescending(r => r.Score).Take(max).ToList();
+            lock (_cacheLock)
+            {
+                _searchCache[cacheKey] = (DateTime.Now, ordered.Select(CloneSearchResult).ToList());
+            }
+            LogSlow("search_notes '" + TrimLog(query, 80) + "'", sw.ElapsedMilliseconds, ordered.Count);
+            return ordered;
         }
 
         private static int CountOccurrences(string text, string word)
@@ -1476,8 +1518,15 @@ cleanup_empty — видалити порожні нотатки
         /// </summary>
         public Dictionary<string, string> GetNoteIndex()
         {
+            lock (_cacheLock)
+            {
+                if (_cachedNoteIndex != null && DateTime.Now - _cachedNoteIndexAt < FileCacheTtl)
+                    return new Dictionary<string, string>(_cachedNoteIndex, StringComparer.OrdinalIgnoreCase);
+            }
+
+            var sw = Stopwatch.StartNew();
             var index = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-            foreach (var file in SafeGetFiles(_vault))
+            foreach (var file in GetMarkdownFilesCached())
             {
                 var rel   = Path.GetRelativePath(_vault, file).Replace('\\', '/');
                 var title = Path.GetFileNameWithoutExtension(file);
@@ -1490,6 +1539,12 @@ cleanup_empty — видалити порожні нотатки
                 if (!index.ContainsKey(title))
                     index[title] = rel;
             }
+            lock (_cacheLock)
+            {
+                _cachedNoteIndex = new Dictionary<string, string>(index, StringComparer.OrdinalIgnoreCase);
+                _cachedNoteIndexAt = DateTime.Now;
+            }
+            LogSlow("note_index", sw.ElapsedMilliseconds, index.Count);
             return index;
         }
 
@@ -1967,6 +2022,71 @@ cleanup_empty — видалити порожні нотатки
         /// <summary>
         /// Безпечний аналог Directory.GetDirectories з AllDirectories.
         /// </summary>
+        private List<string> GetMarkdownFilesCached()
+        {
+            lock (_cacheLock)
+            {
+                if (_cachedMarkdownFiles != null && DateTime.Now - _cachedMarkdownFilesAt < FileCacheTtl)
+                    return _cachedMarkdownFiles.ToList();
+            }
+
+            var sw = Stopwatch.StartNew();
+            var files = SafeGetFiles(_vault).ToList();
+            lock (_cacheLock)
+            {
+                _cachedMarkdownFiles = files.ToList();
+                _cachedMarkdownFilesAt = DateTime.Now;
+            }
+            LogSlow("file_index_refresh", sw.ElapsedMilliseconds, files.Count);
+            return files;
+        }
+
+        private void InvalidateCaches()
+        {
+            lock (_cacheLock)
+            {
+                _cachedMarkdownFiles = null;
+                _cachedNoteIndex = null;
+                _searchCache.Clear();
+            }
+        }
+
+        private static void LogSlow(string operation, long elapsedMs, int count)
+        {
+            if (elapsedMs >= 50)
+                KokoSystemLog.Write("OBSIDIAN-PERF", $"{operation} ms={elapsedMs} count={count}");
+        }
+
+        private static SearchResult CloneSearchResult(SearchResult result)
+            => new()
+            {
+                Path = result.Path,
+                Title = result.Title,
+                Preview = result.Preview,
+                Score = result.Score
+            };
+
+        private static string TrimLog(string? value, int max)
+        {
+            var text = (value ?? "").Replace("\r", " ").Replace("\n", " ").Trim();
+            return text.Length <= max ? text : text[..max] + "...";
+        }
+
+        private static bool IsIgnoredDirectory(string dir)
+        {
+            var name = Path.GetFileName(dir);
+            if (string.IsNullOrWhiteSpace(name))
+                return false;
+
+            if (name.StartsWith(".", StringComparison.Ordinal) ||
+                name.Equals("kokonoe-data", StringComparison.OrdinalIgnoreCase))
+                return true;
+
+            var parent = Path.GetFileName(Path.GetDirectoryName(dir) ?? "");
+            return name.Equals("Profile Backups", StringComparison.OrdinalIgnoreCase) &&
+                   parent.Equals("Kokonoe", StringComparison.OrdinalIgnoreCase);
+        }
+
         private static IEnumerable<string> SafeGetDirectories(string root)
         {
             var queue = new Queue<string>();
@@ -1975,6 +2095,8 @@ cleanup_empty — видалити порожні нотатки
             while (queue.Count > 0)
             {
                 var dir = queue.Dequeue();
+                if (IsIgnoredDirectory(dir) && !string.Equals(dir, root, StringComparison.OrdinalIgnoreCase))
+                    continue;
 
                 string[] subdirs;
                 try { subdirs = Directory.GetDirectories(dir); }
@@ -1982,6 +2104,8 @@ cleanup_empty — видалити порожні нотатки
 
                 foreach (var sub in subdirs)
                 {
+                    if (IsIgnoredDirectory(sub))
+                        continue;
                     yield return sub;
                     queue.Enqueue(sub);
                 }
@@ -2000,6 +2124,8 @@ cleanup_empty — видалити порожні нотатки
             while (queue.Count > 0)
             {
                 var dir = queue.Dequeue();
+                if (IsIgnoredDirectory(dir))
+                    continue;
 
                 string[] files;
                 try { files = Directory.GetFiles(dir, pattern); }
@@ -2011,7 +2137,11 @@ cleanup_empty — видалити порожні нотатки
                 try { subdirs = Directory.GetDirectories(dir); }
                 catch (Exception ex) { Debug.WriteLine($"[ObsidianMcp] SafeGetFiles skip dirs {dir}: {ex.Message}"); continue; }
 
-                foreach (var sub in subdirs) queue.Enqueue(sub);
+                foreach (var sub in subdirs)
+                {
+                    if (!IsIgnoredDirectory(sub))
+                        queue.Enqueue(sub);
+                }
             }
         }
     }

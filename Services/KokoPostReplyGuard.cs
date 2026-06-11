@@ -42,6 +42,8 @@ namespace KokonoeAssistant.Services
                 violations.Add("visible reply used generic roleplay stage directions instead of dialogue/action");
             if (LooksLikeTechnicalPauseMetric(replyLower))
                 violations.Add("visible reply exposed technical pause metrics instead of emotional time");
+            if (LooksLikeConversationMechanicsLeak(replyLower))
+                violations.Add("visible reply exposed conversation mechanics instead of answering the user");
             if (LooksLikeSoulBreakingStatusReport(userLower, replyLower))
                 violations.Add("visible reply exposed background system status instead of preserving conversational mood");
             if (LooksLikeLazyClarificationLoop(userLower, replyLower))
@@ -311,6 +313,8 @@ Timeline:
                 rules.Add("- Latest user turn is casual, social, or affectionate. Answer that mode directly: restrained warmth is allowed, one dry edge is fine, but do not demand a task, mock the need for warmth, or pivot to productivity.");
             if (violations.Any(v => v.Contains("background system status", StringComparison.OrdinalIgnoreCase)))
                 rules.Add("- The latest turn is normal conversation, not a debug console. Hide scheduler/research/vault/task mechanics; answer the emotional/social turn naturally.");
+            if (violations.Any(v => v.Contains("conversation mechanics", StringComparison.OrdinalIgnoreCase)))
+                rules.Add("- Do not mention autopings, follow-up queues, cooldown windows, silence intents, or scheduler mechanics in the visible reply. Answer the user's actual emotional/command turn in plain dialogue.");
             if (violations.Any(v => v.Contains("one-letter", StringComparison.OrdinalIgnoreCase)))
                 rules.Add("- Stale one-letter ambiguity is not the topic anymore unless the latest user explicitly asks about that exact letter.");
             if (violations.Any(v => v.Contains("vault unavailable", StringComparison.OrdinalIgnoreCase)))
@@ -364,6 +368,18 @@ Timeline:
                 "response plan",
                 "startup greeting",
                 "fallback selected");
+        }
+
+        private static bool LooksLikeConversationMechanicsLeak(string replyLower)
+        {
+            if (ContainsAny(replyLower,
+                    "автопінг", "автопинг", "auto-ping", "autoping",
+                    "silence intent", "pending thought", "proactive ping",
+                    "cooldown", "scheduler:", "task id", "debug id"))
+                return true;
+
+            return replyLower.Contains("follow-up", StringComparison.OrdinalIgnoreCase) &&
+                   ContainsAny(replyLower, "прибрала", "прибрав", "removed", "muted", "старі", "старые", "до 0", "до 1", "до 2");
         }
 
         private static bool LooksLikePulseDataDeflection(string replyLower)

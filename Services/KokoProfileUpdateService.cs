@@ -259,14 +259,78 @@ namespace KokonoeAssistant.Services
 
         private string CreateBackup(string profilePath, string existing)
         {
+            var stem = Path.GetFileNameWithoutExtension(profilePath).Replace(' ', '-');
+            var existingBackup = FindReusableBackup(stem);
+            if (!string.IsNullOrWhiteSpace(existingBackup))
+            {
+                KokoSystemLog.Write("PROFILE", $"backup skipped; reuse={existingBackup}");
+                return existingBackup;
+            }
+
             var stamp = DateTime.Now.ToString("yyyyMMdd-HHmmss");
             var backup = "Kokonoe/Profile Backups/" +
-                         Path.GetFileNameWithoutExtension(profilePath).Replace(' ', '-') +
-                         "-" + stamp + ".md";
+                         stem + "-" + stamp + ".md";
             _obsidian.WriteNote(backup, string.IsNullOrWhiteSpace(existing)
                 ? "# Empty profile backup\n"
                 : existing);
             return backup;
+        }
+
+        private string? FindReusableBackup(string stem)
+        {
+            try
+            {
+                var backupDir = Path.Combine(_obsidian.VaultPath, "Kokonoe", "Profile Backups");
+                if (!Directory.Exists(backupDir))
+                    return null;
+
+                var now = DateTime.Now;
+                var reusable = Directory.GetFiles(backupDir, stem + "-*.md", SearchOption.TopDirectoryOnly)
+                    .Select(path => new
+                    {
+                        FullPath = path,
+                        Stamp = TryParseBackupStamp(Path.GetFileNameWithoutExtension(path), stem),
+                        LastWrite = File.GetLastWriteTime(path)
+                    })
+                    .Where(x => x.Stamp.HasValue)
+                    .OrderByDescending(x => x.Stamp!.Value)
+                    .ThenByDescending(x => x.LastWrite)
+                    .ToList();
+
+                var today = reusable.FirstOrDefault(x => x.Stamp!.Value.Date == now.Date);
+                if (today != null)
+                    return ToVaultRelativePath(today.FullPath);
+
+                var latest = reusable.FirstOrDefault();
+                if (latest != null && now - latest.Stamp!.Value < TimeSpan.FromHours(4))
+                    return ToVaultRelativePath(latest.FullPath);
+            }
+            catch (Exception ex)
+            {
+                KokoSystemLog.Write("PROFILE", "backup reuse check failed: " + ex.Message);
+            }
+
+            return null;
+        }
+
+        private string ToVaultRelativePath(string fullPath)
+            => Path.GetRelativePath(_obsidian.VaultPath, fullPath).Replace('\\', '/');
+
+        private static DateTime? TryParseBackupStamp(string fileNameWithoutExtension, string stem)
+        {
+            var prefix = stem + "-";
+            if (!fileNameWithoutExtension.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                return null;
+
+            var stamp = fileNameWithoutExtension[prefix.Length..];
+            return DateTime.TryParseExact(
+                stamp,
+                "yyyyMMdd-HHmmss",
+                System.Globalization.CultureInfo.InvariantCulture,
+                System.Globalization.DateTimeStyles.AssumeLocal,
+                out var parsed)
+                ? parsed
+                : null;
         }
 
         private static string BuildProfile(

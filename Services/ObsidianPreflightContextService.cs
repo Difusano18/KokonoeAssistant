@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -17,6 +18,7 @@ namespace KokonoeAssistant.Services
 
         public string? Build(string? userText, DateTime? now = null, int maxChars = 2600)
         {
+            var sw = Stopwatch.StartNew();
             try
             {
                 var at = now ?? DateTime.Now;
@@ -54,10 +56,13 @@ namespace KokonoeAssistant.Services
                 AddRelevantRecall(sb, userText);
 
                 var result = SanitizeForLlm(sb.ToString().Trim());
-                return result.Length > 120 ? TruncateAtWordBoundary(result, maxChars) : null;
+                var output = result.Length > 120 ? TruncateAtWordBoundary(result, maxChars) : null;
+                KokoSystemLog.Write("OBSIDIAN-PERF", $"preflight ms={sw.ElapsedMilliseconds} output_chars={output?.Length ?? 0}");
+                return output;
             }
-            catch
+            catch (Exception ex)
             {
+                KokoSystemLog.Write("OBSIDIAN-PERF", $"preflight failed ms={sw.ElapsedMilliseconds}: {ex.Message}");
                 return null;
             }
         }
