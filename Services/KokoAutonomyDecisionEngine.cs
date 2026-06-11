@@ -142,6 +142,56 @@ namespace KokonoeAssistant.Services
                     false);
             }
 
+            if (autonomyLevel >= 2 &&
+                state.LastSemanticVisionAt > DateTime.MinValue &&
+                now - state.LastSemanticVisionAt <= TimeSpan.FromMinutes(18) &&
+                now - state.LastSpontaneousAt > TimeSpan.FromMinutes(20))
+            {
+                var semanticPriority = 0;
+                var trigger = "semantic_observation";
+                var style = "observation";
+                var reason = $"{state.LastSemanticVisionFlow}/{state.LastSemanticVisionIntent}: {state.LastSemanticVisionSummary}";
+                var extra = new StringBuilder();
+                extra.AppendLine("SEMANTIC VISION AUTONOMY");
+                extra.AppendLine($"flow={state.LastSemanticVisionFlow}; intent={state.LastSemanticVisionIntent}; confidence={state.LastSemanticVisionConfidence:F2}");
+                extra.AppendLine($"summary={state.LastSemanticVisionSummary}");
+
+                if (!string.IsNullOrWhiteSpace(state.LastSemanticVisionAssistHint))
+                {
+                    semanticPriority = Math.Max(semanticPriority, 78);
+                    trigger = "semantic_assist";
+                    style = "assist";
+                    extra.AppendLine($"assist_hint={state.LastSemanticVisionAssistHint}");
+                }
+
+                if (!string.IsNullOrWhiteSpace(state.LastSemanticVisionResearchTopic))
+                {
+                    semanticPriority = Math.Max(semanticPriority, autonomyLevel >= 3 ? 84 : 74);
+                    trigger = "curiosity_research";
+                    style = "observation";
+                    extra.AppendLine($"research_topic={state.LastSemanticVisionResearchTopic}");
+                    extra.AppendLine("If speaking, mention one useful concrete next action or ask one precise question. Do not say you are 'monitoring'.");
+                }
+
+                if (state.LastSemanticVisionFlow == "stuck_loop")
+                    semanticPriority += 6;
+                if (somatic.Strain >= 0.70)
+                    semanticPriority += 5;
+
+                if (semanticPriority > 0)
+                {
+                    yield return new Candidate(
+                        "semantic_vision",
+                        trigger,
+                        style,
+                        reason,
+                        extra.ToString(),
+                        ClampPriority(semanticPriority + RhythmBias(rhythm)),
+                        false,
+                        false);
+                }
+            }
+
             if (autonomyLevel >= 3 &&
                 relationship.Protectiveness > 0.55f &&
                 presence.SilenceMinutes > 180 &&

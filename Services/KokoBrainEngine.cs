@@ -184,6 +184,15 @@ namespace KokonoeAssistant.Services
         public string LastScreenSituationBlocker { get; set; } = "";
         public string LastScreenSituationBehavior { get; set; } = "";
         public string LastScreenSituationReason { get; set; } = "";
+        public DateTime LastSemanticVisionAt { get; set; } = DateTime.MinValue;
+        public string LastSemanticVisionFlow { get; set; } = "";
+        public string LastSemanticVisionIntent { get; set; } = "";
+        public string LastSemanticVisionSummary { get; set; } = "";
+        public string LastSemanticVisionOcr { get; set; } = "";
+        public string LastSemanticVisionAssistHint { get; set; } = "";
+        public string LastSemanticVisionResearchTopic { get; set; } = "";
+        public double LastSemanticVisionConfidence { get; set; }
+        public List<string> SemanticVisionTrace { get; set; } = new();
         public Dictionary<string, ScreenPatternStats> ScreenPatterns { get; set; } = new();
         public DateTime LastVisionFailureAt { get; set; } = DateTime.MinValue;
         public DateTime VisionBackoffUntil { get; set; } = DateTime.MinValue;
@@ -198,6 +207,8 @@ namespace KokonoeAssistant.Services
         public DateTime LastDailySelfReviewAt { get; set; } = DateTime.MinValue;
         public string LastDailySelfReviewSummary { get; set; } = "";
         public string CurrentSomaticAutomationMode { get; set; } = "";
+        public string LastSomaticToneDirective { get; set; } = "";
+        public DateTime LastSomaticBreakPromptAt { get; set; } = DateTime.MinValue;
         public DateTime LastWatchActionAt { get; set; } = DateTime.MinValue;
         public string LastWatchAction { get; set; } = "";
         public DateTime ScreenAwarenessObserveOnlyUntil { get; set; } = DateTime.MinValue;
@@ -305,6 +316,7 @@ namespace KokonoeAssistant.Services
         public readonly KokoStateFreshnessService StateFreshness;
         public readonly KokoProactiveContextService ProactiveContext;
         public readonly KokoScreenAwarenessService ScreenAwareness;
+        public readonly KokoSemanticVisionEngine SemanticVision;
 
         // ── Зовнішні сервіси (опціональні) ───────────────────────────
         private EnhancedMemory?    _enhanced;
@@ -413,6 +425,7 @@ namespace KokonoeAssistant.Services
             StateFreshness = new KokoStateFreshnessService();
             ProactiveContext = new KokoProactiveContextService();
             ScreenAwareness = new KokoScreenAwarenessService();
+            SemanticVision = new KokoSemanticVisionEngine();
 
             // Підключити нові сервіси в LLM
             _llm.Memory    = Memory;
@@ -688,6 +701,36 @@ namespace KokonoeAssistant.Services
                     }
                     ServiceContainer.Heartbeat.Update("SOMATIC_MODE", "coach", "workout/running detected");
                     ServiceContainer.Blackboard.Publish("heart-agent", "somatic_mode", "coach mode; nonessential proactive muted", 0.82);
+                }
+
+                var highStrain = state.LiveStressScore >= 78 ||
+                    (state.CurrentBpm > 0 && state.BaselineBpm > 0 && state.CurrentBpm >= state.BaselineBpm + 24);
+                if (highStrain && now - _state.LastSomaticBreakPromptAt > TimeSpan.FromMinutes(25))
+                {
+                    lock (_lock)
+                    {
+                        _state.CurrentSomaticAutomationMode = "quiet_operator";
+                        _state.LastSomaticBreakPromptAt = now;
+                        _state.LastSomaticToneDirective = "quiet_operator: stress rising; concrete help, low noise";
+                        _state.AutonomyDecisionLog.Add($"[{now:HH:mm}] somatic quiet_operator; stress={state.LiveStressScore}/100 bpm={state.CurrentBpm:F0}");
+                        if (_state.AutonomyDecisionLog.Count > 80)
+                            _state.AutonomyDecisionLog.RemoveRange(0, _state.AutonomyDecisionLog.Count - 80);
+                        SaveState();
+                    }
+
+                    try
+                    {
+                        ServiceContainer.WearableBridge.QueueCommand(
+                            "vibrate",
+                            $"Kokonoe: breathe. {state.CurrentBpm:F0} bpm is not a trophy.");
+                    }
+                    catch (Exception ex)
+                    {
+                        Log($"Somatic high-strain vibrate failed: {ex.Message}");
+                    }
+
+                    ServiceContainer.Heartbeat.Update("SOMATIC_MODE", "quiet_operator", $"stress {state.LiveStressScore}/100");
+                    ServiceContainer.Blackboard.Publish("heart-agent", "quiet_operator", state.Summary, 0.88);
                 }
             }
             catch (Exception ex)
@@ -2034,6 +2077,7 @@ Summary: {summary}
                 sb.AppendLine(Presence.BuildDebugBlock(_state));
                 sb.AppendLine(InternalDay.BuildDebugBlock(_state));
                 sb.AppendLine(Autonomy.BuildDebugBlock(_state));
+                sb.AppendLine(BuildSemanticVisionPromptBlock(DateTime.Now));
                 sb.AppendLine(ResponsePlanner.BuildDebugBlock(_state));
                 sb.AppendLine(MemoryWritePolicy.BuildDebugBlock(_state));
                 var foodSleep = BuildFoodSleepContinuityBlock(DateTime.Now);
@@ -4508,6 +4552,8 @@ Summary: {summary}
                 var predictiveWarmup = ProactiveContext.BuildScreenWarmup(analysis, activity, _obsidian, now);
                 if (predictiveWarmup.HasContext)
                     context += "\n\n" + predictiveWarmup.PromptBlock;
+                var semanticFrame = SemanticVision.BuildFrame(analysis, activity, situation, _state, now);
+                context += "\n\n" + semanticFrame.PromptBlock;
 
                 lock (_lock)
                 {
@@ -4522,6 +4568,17 @@ Summary: {summary}
                     _state.LastScreenSituationBlocker = situation.Blocker;
                     _state.LastScreenSituationBehavior = situation.RecommendedBehavior;
                     _state.LastScreenSituationReason = situation.Reason;
+                    SemanticVision.ApplyToState(_state, semanticFrame);
+                    if (semanticFrame.ShouldResearch && !string.IsNullOrWhiteSpace(semanticFrame.ResearchTopic))
+                    {
+                        var curiosity = "[semantic-vision] Research or inspect: " + semanticFrame.ResearchTopic;
+                        if (!_state.CuriosityQueue.Any(q => q.Contains(semanticFrame.ResearchTopic, StringComparison.OrdinalIgnoreCase)))
+                        {
+                            _state.CuriosityQueue.Add(curiosity);
+                            if (_state.CuriosityQueue.Count > 20)
+                                _state.CuriosityQueue.RemoveRange(0, _state.CuriosityQueue.Count - 20);
+                        }
+                    }
                     _state.VisionFailureCount = 0;
                     _state.VisionBackoffUntil = DateTime.MinValue;
                     _state.LastKnownUserActivity = string.IsNullOrWhiteSpace(analysis.SummaryUk)
@@ -4557,6 +4614,8 @@ Summary: {summary}
                         _state.Observations.Add($"screen {now:HH:mm}: {analysis.SummaryUk}");
                         if (!string.IsNullOrWhiteSpace(situation.CurrentTask))
                             _state.Observations.Add($"screen-situation {now:HH:mm}: {situation.CurrentTask}; {situation.Progress}; {situation.RecommendedBehavior}");
+                        if (!string.IsNullOrWhiteSpace(semanticFrame.Summary))
+                            _state.Observations.Add($"semantic-vision {now:HH:mm}: {semanticFrame.FlowState}; {semanticFrame.PrimaryIntent}; {semanticFrame.Summary}");
                         if (_state.Observations.Count > 40)
                             _state.Observations.RemoveRange(0, _state.Observations.Count - 40);
                     }
@@ -6369,6 +6428,29 @@ Summary: {summary}
             return sb.ToString();
         }
 
+        private string BuildSemanticVisionPromptBlock(DateTime now)
+        {
+            if (_state.LastSemanticVisionAt <= DateTime.MinValue ||
+                now - _state.LastSemanticVisionAt > TimeSpan.FromMinutes(45))
+                return "";
+
+            var sb = new StringBuilder();
+            sb.AppendLine("=== SEMANTIC VISION STATE ===");
+            sb.AppendLine($"flow: {NullDash(_state.LastSemanticVisionFlow)}");
+            sb.AppendLine($"intent: {NullDash(_state.LastSemanticVisionIntent)}");
+            sb.AppendLine($"summary: {NullDash(_state.LastSemanticVisionSummary)}");
+            if (!string.IsNullOrWhiteSpace(_state.LastSemanticVisionOcr))
+                sb.AppendLine($"ocr: {_state.LastSemanticVisionOcr}");
+            if (!string.IsNullOrWhiteSpace(_state.LastSemanticVisionAssistHint))
+                sb.AppendLine($"assist: {_state.LastSemanticVisionAssistHint}");
+            if (!string.IsNullOrWhiteSpace(_state.LastSemanticVisionResearchTopic))
+                sb.AppendLine($"research: {_state.LastSemanticVisionResearchTopic}");
+            if (!string.IsNullOrWhiteSpace(_state.LastSomaticToneDirective))
+                sb.AppendLine($"somatic_tone: {_state.LastSomaticToneDirective}");
+            sb.AppendLine("Rule: use screen flow as private grounding. If it reveals a concrete problem, offer a concrete action.");
+            return sb.ToString().Trim();
+        }
+
         private static string NullDash(string? value)
             => string.IsNullOrWhiteSpace(value) ? "-" : value.Trim();
 
@@ -6733,6 +6815,7 @@ Summary: {summary}
             _state.LastSomaticStrain = snapshot.Strain;
             _state.LastSomaticCalm = snapshot.Calm;
             _state.LastSomaticAt = DateTime.Now;
+            _state.LastSomaticToneDirective = KokoSemanticVisionEngine.BuildSomaticToneDirective(snapshot, _state.LastScreenAwarenessMode);
             return snapshot;
         }
 
@@ -7022,11 +7105,35 @@ CHAT:
                 }
 
                 var maintenance = _obsidian.MaintainKokonoeVaultArchitecture(reason);
+                var synthesisSummary = "";
+                try
+                {
+                    var focus = string.Join(" ", new[]
+                    {
+                        _state.LastSemanticVisionResearchTopic,
+                        _state.LastSemanticVisionSummary,
+                        _state.LastKnownUserActivity,
+                        _state.LastAutoVaultSyncSummary
+                    }.Where(s => !string.IsNullOrWhiteSpace(s)));
+                    var synthesis = new KokoObsidianExplorationService().BuildSynthesisPlan(_obsidian, focus, 8);
+                    synthesisSummary = synthesis.Summary;
+                    if (synthesis.HasSignal)
+                    {
+                        _obsidian.WriteNote(
+                            "Kokonoe/Memory/Vault Synthesis.md",
+                            $"---\ntype: vault-synthesis\ntags: [kokonoe, vault, synthesis]\nupdated: {DateTime.Now:O}\n---\n\n# Vault Synthesis\n\n{synthesis.PromptBlock}\n");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    synthesisSummary = "synthesis failed: " + ex.Message;
+                    Log("VaultSynthesis failed: " + ex.Message);
+                }
                 lock (_lock)
                 {
                     _state.LastVaultMaintenanceAt = DateTime.Now;
                     _state.LastVaultMaintenanceReason = reason;
-                    _state.LastVaultMaintenanceSummary = maintenance.ToString();
+                    _state.LastVaultMaintenanceSummary = maintenance + (string.IsNullOrWhiteSpace(synthesisSummary) ? "" : " | " + synthesisSummary);
                     _state.LastVaultMaintenanceError = "";
                     SaveState();
                 }

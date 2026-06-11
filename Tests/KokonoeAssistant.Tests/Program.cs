@@ -86,6 +86,10 @@ internal static class Program
             Run("Post reply guard blocks overbuilt greeting", PostReplyGuardBlocksOverbuiltGreeting);
             Run("Post reply guard blocks repeated fallback loop", PostReplyGuardBlocksRepeatedFallbackLoop);
             Run("Post reply guard rejects dotted garbage", PostReplyGuardRejectsDottedGarbage);
+            Run("Semantic vision detects stuck coding flow", SemanticVisionDetectsStuckCodingFlow);
+            Run("Autonomy reacts to semantic vision research", AutonomyReactsToSemanticVisionResearch);
+            Run("Somatic tone shifts to quiet operator", SomaticToneShiftsToQuietOperator);
+            Run("Vault synthesis suggests note links", VaultSynthesisSuggestsNoteLinks);
             Run("PC intent router routes safe OS commands", PcIntentRouterRoutesSafeOsCommands);
             Run("PC intent router separates screen and destructive commands", PcIntentRouterSeparatesScreenAndDestructiveCommands);
             Run("PC intent router routes full context scan", PcIntentRouterRoutesFullContextScan);
@@ -2445,6 +2449,129 @@ internal static class Program
         AssertTrue(!result.Passed, "guard should reject dotted garbage visible output");
         AssertTrue(result.ShouldRepair, "dotted garbage should be repaired, not shown");
         AssertTrue(result.Violations.Any(v => v.Contains("пошкоджена")), "violation should name broken text");
+    }
+
+    private static void SemanticVisionDetectsStuckCodingFlow()
+    {
+        var now = new DateTime(2026, 6, 11, 10, 0, 0);
+        var state = new KokoInternalState
+        {
+            LastSemanticVisionAt = now.AddMinutes(-10),
+            LastSemanticVisionSummary = "coding: build; progress=moving",
+            LastScreenAwarenessMode = "coding"
+        };
+        var analysis = new KokoScreenAwarenessAnalysis
+        {
+            SummaryUk = "Visual Studio shows build failed with NullReferenceException on line 42",
+            ActivityUk = "active editor and terminal",
+            ScreenMode = "coding",
+            CurrentTask = "fix C# build",
+            Progress = "stuck",
+            Blocker = "NullReferenceException line 42",
+            Importance = 0.82
+        };
+        var activity = new ActivityAnalyzer.ActivityState
+        {
+            IsActive = true,
+            ActiveWindowTitle = "Visual Studio - KokonoeAssistant",
+            PixelDifferencePercentage = 4.5
+        };
+        var situation = new KokoScreenSituation
+        {
+            CurrentTask = "fix C# build",
+            Progress = "stuck",
+            Blocker = "NullReferenceException line 42",
+            RecommendedBehavior = "assist",
+            Reason = "visible error"
+        };
+
+        var frame = new KokoSemanticVisionEngine().BuildFrame(analysis, activity, situation, state, now);
+
+        AssertEqual("stuck_loop", frame.FlowState, "stuck coding should be marked as stuck loop");
+        AssertEqual("debug", frame.PrimaryIntent, "visible exception should infer debug intent");
+        AssertTrue(frame.ShouldAssist, "visible exception should request assistance");
+        AssertTrue(frame.ShouldResearch, "stuck coding issue should request research/inspection");
+        AssertTrue(frame.UiElements.Any(e => e.Kind == "error_panel"), "error panel signal should be extracted");
+    }
+
+    private static void AutonomyReactsToSemanticVisionResearch()
+    {
+        var now = new DateTime(2026, 6, 11, 10, 20, 0);
+        var state = new KokoInternalState
+        {
+            LastSemanticVisionAt = now.AddMinutes(-3),
+            LastSemanticVisionFlow = "stuck_loop",
+            LastSemanticVisionIntent = "debug",
+            LastSemanticVisionSummary = "coding: build failed; progress=stuck; blocker=SocketTimeoutException",
+            LastSemanticVisionAssistHint = "inspect logs and isolate failing endpoint",
+            LastSemanticVisionResearchTopic = "coding issue: SocketTimeoutException bridge timeout",
+            LastSemanticVisionConfidence = 0.86,
+            LastSpontaneousAt = now.AddHours(-1)
+        };
+        var decision = new KokoAutonomyDecisionEngine().Evaluate(
+            now,
+            state,
+            new KokoPresenceFrame { SituationKind = "physically_present", SummaryUk = "present", SilenceMinutes = 20 },
+            new KokoInternalDayFrame { SummaryUk = "work", PromptBlock = "day", ShouldPreferSilence = false },
+            new KokoInitiativeDecision { ShouldAct = false },
+            new KokoRelationshipState(),
+            new KokoSomaticSnapshot { State = "wired", Strain = 0.74, Calm = 0.22 },
+            new KokoPatternEngine.RhythmProfile { CurrentSlotSamples = 1, CurrentSlotActivityRate = 0.5f, Summary = "neutral" },
+            autonomyLevel: 3);
+
+        AssertTrue(decision.ShouldAct, "semantic vision research should become an autonomy candidate");
+        AssertEqual("semantic_vision", decision.Source, "source should be semantic vision");
+        AssertEqual("curiosity_research", decision.Trigger, "research trigger should be explicit");
+        AssertTrue(decision.ExtraContext.Contains("SocketTimeoutException", StringComparison.OrdinalIgnoreCase), "context should carry research topic");
+    }
+
+    private static void SomaticToneShiftsToQuietOperator()
+    {
+        var directive = KokoSemanticVisionEngine.BuildSomaticToneDirective(
+            new KokoSomaticSnapshot
+            {
+                State = "wired",
+                Strain = 0.85,
+                Calm = 0.18,
+                Bpm = 112,
+                BaselineBpm = 74,
+                BpmDelta = 38
+            },
+            "coding");
+
+        AssertTrue(directive.Contains("quiet_operator", StringComparison.OrdinalIgnoreCase), "high strain during coding should force quiet operator tone");
+    }
+
+    private static void VaultSynthesisSuggestsNoteLinks()
+    {
+        var dir = TempDir();
+        try
+        {
+            var obsidian = new ObsidianMcpService(dir);
+            obsidian.WriteNote("Projects/Watch Bridge.md", """
+# Watch Bridge
+
+Telemetry bridge idea for wearable pulse stability, discovery, and Kokonoe automation.
+Pattern: bridge timeout appears when Wi-Fi changes.
+""");
+            obsidian.WriteNote("Health/Pulse Automation.md", """
+# Pulse Automation
+
+Wearable pulse telemetry should drive quiet operator mode and stress prediction.
+Insight: bridge stability and pulse quality are linked.
+""");
+
+            var plan = new KokoObsidianExplorationService().BuildSynthesisPlan(obsidian, "wearable bridge pulse", 6);
+
+            AssertTrue(plan.HasSignal, "vault synthesis should find readable notes");
+            AssertTrue(plan.CandidateNotes.Count >= 2, "vault synthesis should include candidate notes");
+            AssertTrue(plan.SuggestedLinks.Any(l => l.Contains("bridge", StringComparison.OrdinalIgnoreCase) || l.Contains("pulse", StringComparison.OrdinalIgnoreCase)), "vault synthesis should suggest shared concept links");
+            AssertTrue(plan.PromptBlock.Contains("VAULT SYNTHESIS 2.0"), "prompt block should identify synthesis layer");
+        }
+        finally
+        {
+            TryDeleteDir(dir);
+        }
     }
 
     private static void PcIntentRouterRoutesSafeOsCommands()

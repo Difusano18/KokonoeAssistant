@@ -6,6 +6,38 @@ using System.Text.RegularExpressions;
 
 namespace KokonoeAssistant.Services
 {
+    public sealed class KokoVaultSynthesisPlan
+    {
+        public bool HasSignal { get; set; }
+        public string Summary { get; set; } = "";
+        public List<string> CandidateNotes { get; set; } = new();
+        public List<string> SuggestedLinks { get; set; } = new();
+        public List<string> ForgottenIdeas { get; set; } = new();
+
+        public string PromptBlock
+        {
+            get
+            {
+                if (!HasSignal)
+                    return "VAULT SYNTHESIS\nNo strong vault signal right now.";
+
+                var lines = new List<string>
+                {
+                    "VAULT SYNTHESIS 2.0",
+                    $"summary={Summary}"
+                };
+                if (CandidateNotes.Count > 0)
+                    lines.Add("candidate_notes=" + string.Join(" | ", CandidateNotes.Take(6)));
+                if (SuggestedLinks.Count > 0)
+                    lines.Add("suggested_links=" + string.Join(" | ", SuggestedLinks.Take(6)));
+                if (ForgottenIdeas.Count > 0)
+                    lines.Add("forgotten_ideas=" + string.Join(" | ", ForgottenIdeas.Take(5)));
+                lines.Add("Use this for autonomous vault grooming: create links, surface old ideas, or queue a concise note update when low-risk.");
+                return string.Join("\n", lines);
+            }
+        }
+    }
+
     public sealed class KokoObsidianExplorationService
     {
         private static readonly string[] InterestTerms =
@@ -142,6 +174,53 @@ namespace KokonoeAssistant.Services
                    $"\n\nНайцікавіше зараз: `{strongest.Path}`. Там є матеріал, який варто розгорнути, а не ховати під пилом.";
         }
 
+        public KokoVaultSynthesisPlan BuildSynthesisPlan(ObsidianMcpService obsidian, string? focusText, int maxItems = 8)
+        {
+            if (obsidian == null) throw new ArgumentNullException(nameof(obsidian));
+            maxItems = Math.Clamp(maxItems, 2, 12);
+
+            var candidates = BuildCandidates(obsidian, focusText)
+                .OrderByDescending(c => c.Score)
+                .ThenByDescending(c => c.ModifiedAt)
+                .Take(maxItems)
+                .ToList();
+
+            if (candidates.Count == 0)
+            {
+                return new KokoVaultSynthesisPlan
+                {
+                    HasSignal = false,
+                    Summary = "No readable markdown candidates."
+                };
+            }
+
+            var plan = new KokoVaultSynthesisPlan
+            {
+                HasSignal = true,
+                Summary = $"Found {candidates.Count} notes worth grooming; strongest: {candidates[0].Path}."
+            };
+            plan.CandidateNotes.AddRange(candidates.Select(c => c.Path));
+
+            foreach (var group in candidates
+                         .SelectMany(c => ExtractTerms(c.Path + " " + c.Preview).Select(t => (Term: t, c.Path)))
+                         .GroupBy(x => x.Term, StringComparer.OrdinalIgnoreCase)
+                         .Where(g => g.Select(x => x.Path).Distinct(StringComparer.OrdinalIgnoreCase).Count() >= 2)
+                         .Take(6))
+            {
+                var notes = group.Select(x => x.Path).Distinct(StringComparer.OrdinalIgnoreCase).Take(3).ToList();
+                plan.SuggestedLinks.Add($"{group.Key}: " + string.Join(" <-> ", notes));
+            }
+
+            var old = candidates
+                .Where(c => c.ModifiedAt > DateTime.MinValue && c.ModifiedAt < DateTime.Now.AddDays(-14))
+                .Take(5)
+                .Select(c => $"{c.Path}: {c.Preview}")
+                .ToList();
+            plan.ForgottenIdeas.AddRange(old);
+
+            return plan;
+        }
+
         private static IEnumerable<Candidate> BuildCandidates(ObsidianMcpService obsidian, string? userText)
         {
             var semanticBoosts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
@@ -244,6 +323,23 @@ namespace KokonoeAssistant.Services
 
         private static bool ContainsAny(string text, params string[] values)
             => values.Any(v => text.Contains(v, StringComparison.OrdinalIgnoreCase));
+
+        private static IEnumerable<string> ExtractTerms(string text)
+        {
+            foreach (Match match in Regex.Matches(text.ToLowerInvariant(), @"[\p{L}\p{Nd}_-]{4,}"))
+            {
+                var term = match.Value.Trim('-', '_');
+                if (term.Length < 4) continue;
+                if (StopTerms.Contains(term)) continue;
+                yield return term;
+            }
+        }
+
+        private static readonly HashSet<string> StopTerms = new(StringComparer.OrdinalIgnoreCase)
+        {
+            "this", "that", "with", "from", "have", "will", "your", "about", "notes", "note",
+            "type", "tags", "created", "updated", "kokonoe", "assistant", "profile"
+        };
 
         private sealed class Candidate
         {
