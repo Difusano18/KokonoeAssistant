@@ -71,6 +71,7 @@ internal static class Program
             Run("Pattern rhythm profile recommends quiet slot", PatternRhythmProfileRecommendsQuietSlot);
             Run("Self review blocks stale sleep replies", SelfReviewBlocksStaleSleepReplies);
             Run("Timeline summarizes returned state", TimelineSummarizesReturnedState);
+            Run("Timeline uses emotional time", TimelineUsesEmotionalTime);
             Run("Post reply guard blocks stale sleep", PostReplyGuardBlocksStaleSleep);
             Run("Post reply guard blocks stale food claim after ate", PostReplyGuardBlocksStaleFoodClaimAfterAte);
             Run("Post reply guard blocks hibernation framing after slept", PostReplyGuardBlocksHibernationFramingAfterSlept);
@@ -162,6 +163,7 @@ internal static class Program
             Run("Emotional memory records rude exit grudge", EmotionalMemoryRecordsRudeExitGrudge);
             Run("Emotional memory hydrates raw chat and visual anchor", EmotionalMemoryHydratesRawChatAndVisualAnchor);
             Run("Post reply guard blocks roleplay and pause metrics", PostReplyGuardBlocksRoleplayAndPauseMetrics);
+            Run("Post reply guard blocks soul-breaking status report", PostReplyGuardBlocksSoulBreakingStatusReport);
             Run("Neural governor parses response frame JSON", NeuralGovernorParsesResponseFrameJson);
             Run("Persona engine calibrates soft social voice", PersonaEngineCalibratesSoftSocialVoice);
             Run("Runtime state exposes PAD voice directive", RuntimeStateExposesPadVoiceDirective);
@@ -217,6 +219,7 @@ internal static class Program
             Run("Startup greeting prompt uses mood and absence", StartupGreetingPromptUsesMoodAndAbsence);
             Run("Startup greeting sanitizes therapy meta", StartupGreetingSanitizesTherapyMeta);
             Run("Startup greeting fallback does not quote raw latest user text", StartupGreetingFallbackDoesNotQuoteRawLatestUserText);
+            Run("Startup greeting sanitizes system status report", StartupGreetingSanitizesSystemStatusReport);
             Run("Scenario simulation guards temporal continuity", ScenarioSimulationGuardsTemporalContinuity);
             Run("LLM diagnostics snapshot starts idle", LlmDiagnosticsSnapshotStartsIdle);
             Run("LLM extracts reasoning content for vision replies", LlmExtractsReasoningContentForVisionReplies);
@@ -2069,6 +2072,22 @@ internal static class Program
         AssertTrue(frame.PromptBlock.Contains("не старій репліці"), "timeline should warn against stale replies");
     }
 
+    private static void TimelineUsesEmotionalTime()
+    {
+        var now = new DateTime(2026, 5, 7, 10, 30, 0);
+        var state = new KokoInternalState();
+        var messages = new[]
+        {
+            new ChatRepository.ChatMessage { Role = "user", Content = "hello", Timestamp = now.AddHours(-7).AddMinutes(-35) }
+        };
+
+        var frame = new KokoConversationTimelineEngine().Build(messages, state, now, "hello");
+
+        AssertTrue(!frame.PromptBlock.Contains("7 РіРѕРґ", StringComparison.OrdinalIgnoreCase), "timeline prompt should not expose exact hour pause metrics");
+        AssertTrue(!frame.PromptBlock.Contains("35 С…РІ", StringComparison.OrdinalIgnoreCase), "timeline prompt should not expose exact minute pause metrics");
+        AssertTrue(frame.PromptBlock.Contains("CONVERSATION TIMELINE"), "timeline should still render structured context");
+    }
+
     private static void PostReplyGuardBlocksStaleSleep()
     {
         var now = new DateTime(2026, 5, 7, 10, 30, 0);
@@ -3849,6 +3868,29 @@ Insight: bridge stability and pulse quality are linked.
         AssertTrue(metric.Violations.Any(v => v.Contains("pause metrics", StringComparison.OrdinalIgnoreCase)), "violation should name pause metrics");
     }
 
+    private static void PostReplyGuardBlocksSoulBreakingStatusReport()
+    {
+        var now = DateTime.Today.AddHours(15);
+        var state = new KokoInternalState();
+        var messages = new[]
+        {
+            new ChatRepository.ChatMessage { Role = "user", Content = "hello", Timestamp = now.AddMinutes(-2) }
+        };
+        var timeline = new KokoConversationTimelineEngine().Build(messages, state, now, "hello");
+
+        var result = new KokoPostReplyGuard().Evaluate(
+            "hello",
+            "researched 4 topics; findings=2; scheduler: 9d69553ed6; background task complete",
+            state,
+            messages,
+            timeline,
+            now);
+
+        AssertTrue(!result.Passed, "technical status reports should be rejected for normal conversation");
+        AssertTrue(result.Violations.Any(v => v.Contains("background system status", StringComparison.OrdinalIgnoreCase)), "violation should name leaked background status");
+        AssertTrue(result.RepairInstruction.Contains("debug console", StringComparison.OrdinalIgnoreCase), "repair should force natural dialogue instead of status output");
+    }
+
     private static void NeuralGovernorParsesResponseFrameJson()
     {
         var raw = """
@@ -5108,6 +5150,24 @@ Insight: bridge stability and pulse quality are linked.
         AssertTrue(!fallback.Contains("«"), "startup fallback should avoid quote framing");
         AssertTrue(!fallback.Contains("знову тут", StringComparison.OrdinalIgnoreCase), "startup fallback should avoid dead canned opening");
         AssertTrue(!sanitized.Contains(raw, StringComparison.OrdinalIgnoreCase), "sanitized startup reply should not preserve quoted raw user text");
+    }
+
+    private static void StartupGreetingSanitizesSystemStatusReport()
+    {
+        var now = new DateTime(2026, 6, 11, 9, 0, 0);
+        var messages = new[]
+        {
+            new ChatRepository.ChatMessage { Role = "user", Content = "hello", Timestamp = now.AddMinutes(-15) }
+        };
+
+        var service = new KokoStartupGreetingService();
+        var frame = service.BuildFrame(messages, now);
+        var sanitized = service.Sanitize("researched 4 topics; findings=2; scheduler: 9d69553ed6; background task complete", frame);
+
+        AssertTrue(!sanitized.Contains("researched", StringComparison.OrdinalIgnoreCase), "startup sanitizer should hide research mechanics");
+        AssertTrue(!sanitized.Contains("findings=", StringComparison.OrdinalIgnoreCase), "startup sanitizer should hide finding counters");
+        AssertTrue(!sanitized.Contains("scheduler:", StringComparison.OrdinalIgnoreCase), "startup sanitizer should hide scheduler ids");
+        AssertTrue(!string.IsNullOrWhiteSpace(sanitized), "startup sanitizer should replace leaked status with a real greeting");
     }
 
     private static void LlmDiagnosticsSnapshotStartsIdle()

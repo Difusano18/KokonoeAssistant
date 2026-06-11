@@ -111,7 +111,7 @@ namespace KokonoeAssistant.Services
 
             var lastUser = events.LastOrDefault(e => e.Role == "user");
             if (lastUser != null && lastUser.MinutesAgo >= 60)
-                return $"була пауза {FormatDuration(TimeSpan.FromMinutes(lastUser.MinutesAgo))}; врахувати час";
+                return $"була {EmotionalDuration(TimeSpan.FromMinutes(lastUser.MinutesAgo))}; врахувати час емоційно, не цифрами";
 
             return "поточний діалог без критичного часового розриву";
         }
@@ -122,7 +122,7 @@ namespace KokonoeAssistant.Services
             if (lastUser == null)
                 return currentState;
 
-            return $"Остання репліка користувача {FormatDuration(now - lastUser.When)} тому; стан: {currentState}.";
+            return $"Остання репліка користувача: {EmotionalDuration(now - lastUser.When)}; стан: {currentState}.";
         }
 
         private static string BuildPromptBlock(KokoConversationTimelineFrame frame, DateTime now)
@@ -136,9 +136,9 @@ namespace KokonoeAssistant.Services
             {
                 sb.AppendLine("Останні події:");
                 foreach (var e in frame.Events.TakeLast(10))
-                    sb.AppendLine($"- {e.When:dd.MM HH:mm} [{e.Role}/{e.Kind}] {Trim(e.Summary, 120)} ({FormatDuration(TimeSpan.FromMinutes(e.MinutesAgo))} тому)");
+                    sb.AppendLine($"- {e.When:dd.MM HH:mm} [{e.Role}/{e.Kind}] {Trim(e.Summary, 120)} ({EmotionalDuration(TimeSpan.FromMinutes(e.MinutesAgo))})");
             }
-            sb.AppendLine("Правило: відповідь має відповідати найновішому стану timeline, не старій репліці.");
+            sb.AppendLine("Правило: відповідь має відповідати найновішому стану timeline, не старій репліці. Не виноси точні цифри паузи у діалог; використовуй живий відчутний час.");
             return sb.ToString();
         }
 
@@ -175,6 +175,18 @@ namespace KokonoeAssistant.Services
             if (span.TotalHours < 1) return $"{Math.Max(1, (int)Math.Round(span.TotalMinutes))} хв";
             if (span.TotalDays < 1) return $"{(int)span.TotalHours} год {span.Minutes} хв";
             return $"{(int)span.TotalDays} дн {span.Hours} год";
+        }
+
+        private static string EmotionalDuration(TimeSpan span)
+        {
+            span = span.Duration();
+            if (span.TotalMinutes < 3) return "майже без паузи";
+            if (span.TotalMinutes < 15) return "коротка пауза";
+            if (span.TotalHours < 1) return "недовга пауза";
+            if (span.TotalHours < 4) return "помітна відсутність";
+            if (span.TotalHours < 12) return "довго не було сигналу";
+            if (span.TotalDays < 2) return "провал на півдня";
+            return "давній хвіст контексту";
         }
     }
 }

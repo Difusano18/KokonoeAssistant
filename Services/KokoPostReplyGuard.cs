@@ -42,6 +42,8 @@ namespace KokonoeAssistant.Services
                 violations.Add("visible reply used generic roleplay stage directions instead of dialogue/action");
             if (LooksLikeTechnicalPauseMetric(replyLower))
                 violations.Add("visible reply exposed technical pause metrics instead of emotional time");
+            if (LooksLikeSoulBreakingStatusReport(userLower, replyLower))
+                violations.Add("visible reply exposed background system status instead of preserving conversational mood");
             if (LooksLikeLazyClarificationLoop(userLower, replyLower))
                 violations.Add("reply stalled with a generic clarification loop instead of inferring social subtext");
             if (LooksLikeVisionTechnicalError(reply))
@@ -307,6 +309,8 @@ Timeline:
                 rules.Add("- Do not threaten fake OS/network punishment in normal chat. If setting a boundary, answer briefly without claiming you will block access.");
             if (violations.Any(v => v.Contains("soft social", StringComparison.OrdinalIgnoreCase)))
                 rules.Add("- Latest user turn is casual, social, or affectionate. Answer that mode directly: restrained warmth is allowed, one dry edge is fine, but do not demand a task, mock the need for warmth, or pivot to productivity.");
+            if (violations.Any(v => v.Contains("background system status", StringComparison.OrdinalIgnoreCase)))
+                rules.Add("- The latest turn is normal conversation, not a debug console. Hide scheduler/research/vault/task mechanics; answer the emotional/social turn naturally.");
             if (violations.Any(v => v.Contains("one-letter", StringComparison.OrdinalIgnoreCase)))
                 rules.Add("- Stale one-letter ambiguity is not the topic anymore unless the latest user explicitly asks about that exact letter.");
             if (violations.Any(v => v.Contains("vault unavailable", StringComparison.OrdinalIgnoreCase)))
@@ -327,6 +331,40 @@ Timeline:
             => ContainsAny(userLower,
                 "який в мене пульс", "який у мене пульс", "мій пульс", "мой пульс",
                 "какой у меня пульс", "покажи пульс", "серцебит", "heart rate", "bpm");
+
+        private static bool LooksLikeSoulBreakingStatusReport(string userLower, string replyLower)
+        {
+            var personalOrSocial = IsShortGreeting(userLower)
+                || IsShortAffection(userLower)
+                || LooksLikeSoftSocialTurn(userLower)
+                || ContainsAny(userLower,
+                    "hello", "hi", "hey", "talk", "chat", "flirt", "tease", "cute", "sweet",
+                    "\u043f\u043e\u0433\u043e\u0432\u043e\u0440", "\u0434\u0443\u0440\u043d\u0438\u0446", "\u043f\u0440\u043e \u0442\u0435\u0431\u0435", "\u043f\u0440\u043e \u043c\u0435\u043d\u0435", "\u043c\u0438\u043b\u0435", "\u0437\u0430\u0456\u0433\u0440\u0443", "\u0444\u043b\u0456\u0440\u0442",
+                    "РїРѕРіРѕРІРѕСЂ", "РґСѓСЂРЅРёС†", "РїСЂРѕ С‚РµР±Рµ", "РїСЂРѕ РјРµРЅРµ", "РјРёР»Рµ", "Р·Р°С–РіСЂСѓ", "С„Р»С–СЂС‚");
+            if (!personalOrSocial)
+                return false;
+
+            return ContainsAny(replyLower,
+                "researched ",
+                "findings=",
+                "scheduler:",
+                "task id",
+                "debug id",
+                "trace id",
+                "obsidian failed",
+                "vault failed",
+                "background task",
+                "system log",
+                "telemetry service",
+                "bridge started",
+                "service restarted",
+                "queued command",
+                "autonomy decision",
+                "presence frame",
+                "response plan",
+                "startup greeting",
+                "fallback selected");
+        }
 
         private static bool LooksLikePulseDataDeflection(string replyLower)
             => ContainsAny(replyLower,
