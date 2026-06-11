@@ -154,6 +154,10 @@ internal static class Program
             Run("Post reply guard blocks blind agreement", PostReplyGuardBlocksBlindAgreement);
             Run("Social engine detects flirting without waifu mode", SocialEngineDetectsFlirtingWithoutWaifuMode);
             Run("Social engine stress mutes sarcasm", SocialEngineStressMutesSarcasm);
+            Run("Social engine detects dismissive cold tone", SocialEngineDetectsDismissiveColdTone);
+            Run("Emotional memory records rude exit grudge", EmotionalMemoryRecordsRudeExitGrudge);
+            Run("Emotional memory hydrates raw chat and visual anchor", EmotionalMemoryHydratesRawChatAndVisualAnchor);
+            Run("Post reply guard blocks roleplay and pause metrics", PostReplyGuardBlocksRoleplayAndPauseMetrics);
             Run("Neural governor parses response frame JSON", NeuralGovernorParsesResponseFrameJson);
             Run("Persona engine calibrates soft social voice", PersonaEngineCalibratesSoftSocialVoice);
             Run("Runtime state exposes PAD voice directive", RuntimeStateExposesPadVoiceDirective);
@@ -3629,6 +3633,93 @@ internal static class Program
         AssertTrue(frame.SarcasmLevel <= 0.20, "high stress should mute sarcasm");
         AssertTrue(frame.SeriousnessLevel >= 0.95, "high stress should force seriousness");
         AssertTrue(frame.ResponseDirective.Contains("protective", StringComparison.OrdinalIgnoreCase), "directive should be protective");
+    }
+
+    private static void SocialEngineDetectsDismissiveColdTone()
+    {
+        var now = new DateTime(2026, 6, 11, 12, 0, 0);
+        var frame = new KokoSocialEngine().Analyze(
+            "ясно",
+            new KokoInternalState(),
+            Array.Empty<ChatRepository.ChatMessage>(),
+            null,
+            now);
+
+        AssertEqual("dismissive_or_cold", frame.Subtext, "short cold answer should be treated as dismissive social subtext");
+        AssertTrue(frame.EmpathyLevel < 0.30, "dismissive tone should not trigger needy warmth");
+        AssertTrue(frame.ResponseDirective.Contains("restrained irritation", StringComparison.OrdinalIgnoreCase), "directive should mirror chill");
+    }
+
+    private static void EmotionalMemoryRecordsRudeExitGrudge()
+    {
+        var now = new DateTime(2026, 6, 11, 12, 0, 0);
+        var state = new KokoInternalState();
+        var messages = new[]
+        {
+            new ChatRepository.ChatMessage { Role = "user", Content = "онови профіль і не симулюй", Timestamp = now.AddHours(-3) }
+        };
+
+        var service = new KokoEmotionalMemoryService();
+        var frame = service.BuildFrame(state, messages, now, "привіт");
+
+        AssertEqual("abrupt_user_disappearance", frame.ExitStyle, "long gap after user turn should be remembered as abrupt disappearance");
+        AssertEqual("rude_exit_remembered", frame.MannersState, "manners should record rude exit");
+        AssertTrue(frame.GrudgeScore > 0.10, "rude exit should raise grudge score");
+        AssertTrue(frame.PromptBlock.Contains("Carry this mood across sessions", StringComparison.OrdinalIgnoreCase), "prompt should persist emotional state");
+    }
+
+    private static void EmotionalMemoryHydratesRawChatAndVisualAnchor()
+    {
+        var now = new DateTime(2026, 6, 11, 12, 0, 0);
+        var state = new KokoInternalState();
+        var service = new KokoEmotionalMemoryService();
+        service.RememberVisualAnchor(state, "photo showed Galaxy Watch bridge with pulse panel", now.AddMinutes(-5));
+        var messages = Enumerable.Range(1, 32)
+            .Select(i => new ChatRepository.ChatMessage
+            {
+                Role = i % 2 == 0 ? "assistant" : "user",
+                Content = i == 1 ? "oldest-only-marker" : i == 31 ? "про ту фотку з годинником пам'ятаєш?" : $"turn {i}",
+                Timestamp = now.AddMinutes(-40 + i)
+            })
+            .ToArray();
+
+        var block = service.BuildRawHydrationBlock(state, messages, now);
+
+        AssertTrue(block.Contains("RAW CHAT HYDRATION"), "hydration block should be explicit");
+        AssertTrue(block.Contains("visual_anchor"), "hydration should include recent visual anchor");
+        AssertTrue(block.Contains("turn 32"), "hydration should keep latest raw turns");
+        AssertTrue(!block.Contains("oldest-only-marker"), "hydration should cap older raw turns");
+    }
+
+    private static void PostReplyGuardBlocksRoleplayAndPauseMetrics()
+    {
+        var now = DateTime.Today.AddHours(15);
+        var state = new KokoInternalState();
+        var messages = new[]
+        {
+            new ChatRepository.ChatMessage { Role = "user", Content = "привіт", Timestamp = now.AddHours(-7) }
+        };
+        var timeline = new KokoConversationTimelineEngine().Build(messages, state, now, "привіт");
+
+        var roleplay = new KokoPostReplyGuard().Evaluate(
+            "привіт",
+            "*усміхається* Нарешті ти тут.",
+            state,
+            messages,
+            timeline,
+            now);
+        AssertTrue(!roleplay.Passed, "stage roleplay should be rejected");
+        AssertTrue(roleplay.Violations.Any(v => v.Contains("roleplay", StringComparison.OrdinalIgnoreCase)), "violation should name roleplay");
+
+        var metric = new KokoPostReplyGuard().Evaluate(
+            "привіт",
+            "Пауза була 7 год 35 хв, контекст ще тут.",
+            state,
+            messages,
+            timeline,
+            now);
+        AssertTrue(!metric.Passed, "technical pause metric should be rejected in visible social reply");
+        AssertTrue(metric.Violations.Any(v => v.Contains("pause metrics", StringComparison.OrdinalIgnoreCase)), "violation should name pause metrics");
     }
 
     private static void NeuralGovernorParsesResponseFrameJson()

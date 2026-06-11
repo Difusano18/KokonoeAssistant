@@ -109,6 +109,16 @@ namespace KokonoeAssistant.Services
         public string LastPresenceSituation { get; set; } = "unknown";
         public string LastPresenceTone { get; set; } = "default";
         public List<string> PresenceTrace { get; set; } = new();
+        public string EmotionalSessionMood { get; set; } = "neutral";
+        public string EmotionalExitStyle { get; set; } = "unknown";
+        public string EmotionalMannersState { get; set; } = "neutral";
+        public double EmotionalGrudgeScore { get; set; }
+        public DateTime LastEmotionalMemoryAt { get; set; } = DateTime.MinValue;
+        public List<string> EmotionalMemoryTrace { get; set; } = new();
+        public string LastRawContextHydration { get; set; } = "";
+        public DateTime LastRawContextHydrationAt { get; set; } = DateTime.MinValue;
+        public string LastVisualMemoryAnchor { get; set; } = "";
+        public DateTime LastVisualMemoryAnchorAt { get; set; } = DateTime.MinValue;
         public DateTime LastInternalDayAt { get; set; } = DateTime.MinValue;
         public DateTime LastInternalDayVaultAt { get; set; } = DateTime.MinValue;
         public string LastInternalDayPhase { get; set; } = "unknown";
@@ -289,6 +299,7 @@ namespace KokonoeAssistant.Services
         public readonly KokoResponsePlannerEngine ResponsePlanner;
         public readonly KokoSocialEngine Social;
         public readonly KokoNeuralGovernorService NeuralGovernor;
+        public readonly KokoEmotionalMemoryService EmotionalMemory;
         public readonly KokoMemoryWritePolicyEngine MemoryWritePolicy;
         public readonly KokoContinuityEngine Continuity;
         public readonly KokoStateFreshnessService StateFreshness;
@@ -396,6 +407,7 @@ namespace KokonoeAssistant.Services
             ResponsePlanner = new KokoResponsePlannerEngine();
             Social = new KokoSocialEngine();
             NeuralGovernor = new KokoNeuralGovernorService(_llm);
+            EmotionalMemory = new KokoEmotionalMemoryService();
             MemoryWritePolicy = new KokoMemoryWritePolicyEngine();
             Continuity = new KokoContinuityEngine(dataDir);
             StateFreshness = new KokoStateFreshnessService();
@@ -2016,6 +2028,8 @@ Summary: {summary}
                 sb.AppendLine(Somatic.BuildPromptBlock(somatic));
                 sb.AppendLine(SelfRegulator.BuildPromptBlock(GetSelfRegulationFrame(somatic)));
                 sb.AppendLine(BuildSocialContextBlock(null, DateTime.Now));
+                sb.AppendLine(EmotionalMemory.BuildPromptBlock(_state, _chatRepo.GetMessages(30), DateTime.Now));
+                sb.AppendLine(EmotionalMemory.BuildRawHydrationBlock(_state, _chatRepo.GetMessages(30), DateTime.Now));
                 sb.AppendLine(Initiative.BuildDebugBlock(_state));
                 sb.AppendLine(Presence.BuildDebugBlock(_state));
                 sb.AppendLine(InternalDay.BuildDebugBlock(_state));
@@ -3008,6 +3022,7 @@ Summary: {summary}
 
                 // 2. Presence & Day state updates
                 try { Presence.ObserveUserMessage(_state, content, now); } catch { }
+                try { EmotionalMemory.ObserveUserMessage(_state, content, msgs, now); } catch { }
                 try 
                 { 
                     var presence = Presence.Evaluate(_state, msgs, now, autonomyLevel);
@@ -3524,6 +3539,8 @@ Summary: {summary}
         private KokoResponsePlanFrame BuildGovernedResponsePlan(string userText, DateTime now)
         {
             var social = BuildSocialFrame(userText, now);
+            var emotional = EmotionalMemory.BuildPromptBlock(_state, _chatRepo.GetMessages(30), now, userText);
+            var rawHydration = EmotionalMemory.BuildRawHydrationBlock(_state, _chatRepo.GetMessages(30), now);
             var settings = AppSettings.Load();
             if (settings.NeuralGovernorEnabled && ServiceContainer.IsInitialized)
             {
@@ -3545,6 +3562,8 @@ Summary: {summary}
                             userText,
                             _state,
                             social,
+                            emotional,
+                            rawHydration,
                             _chatRepo.GetMessages(24),
                             memoryContext,
                             _cachedScreenContext,
@@ -3556,6 +3575,8 @@ Summary: {summary}
                     if (neural != null)
                     {
                         neural.PromptBlock += "\n" + social.PromptBlock;
+                        neural.PromptBlock += "\n" + emotional;
+                        neural.PromptBlock += "\n" + rawHydration;
                         return neural;
                     }
                 }
@@ -3567,6 +3588,8 @@ Summary: {summary}
 
             var fallback = ResponsePlanner.Build(userText, _state, Cognition, now);
             fallback.PromptBlock += "\n" + social.PromptBlock;
+            fallback.PromptBlock += "\n" + emotional;
+            fallback.PromptBlock += "\n" + rawHydration;
             fallback.TraceLine += "; governor=fallback";
             KokoSystemLog.Write("NEURAL-GOVERNOR", "fallback used: " + fallback.TraceLine);
             return fallback;
@@ -4527,6 +4550,10 @@ Summary: {summary}
                     }
                     if (!string.IsNullOrWhiteSpace(analysis.SummaryUk))
                     {
+                        EmotionalMemory.RememberVisualAnchor(
+                            _state,
+                            $"{analysis.ScreenMode}: {analysis.SummaryUk}; {analysis.ActivityUk}; {situation.CurrentTask}",
+                            now);
                         _state.Observations.Add($"screen {now:HH:mm}: {analysis.SummaryUk}");
                         if (!string.IsNullOrWhiteSpace(situation.CurrentTask))
                             _state.Observations.Add($"screen-situation {now:HH:mm}: {situation.CurrentTask}; {situation.Progress}; {situation.RecommendedBehavior}");

@@ -14,6 +14,7 @@ namespace KokonoeAssistant.Services
         public double Urgency { get; set; }
         public double Boredom { get; set; }
         public double Affection { get; set; }
+        public double Dismissiveness { get; set; }
         public double Stress { get; set; }
         public double SarcasmLevel { get; set; } = 0.45;
         public double EmpathyLevel { get; set; } = 0.35;
@@ -37,17 +38,23 @@ namespace KokonoeAssistant.Services
             userText ??= "";
             var lower = userText.ToLowerInvariant();
             var recent = string.Join("\n", (recentMessages ?? Array.Empty<ChatRepository.ChatMessage>())
-                .TakeLast(5)
+                .TakeLast(8)
                 .Select(m => $"{m.Role}: {m.Content}"));
             var recentLower = recent.ToLowerInvariant();
 
             var frame = new KokoSocialFrame
             {
-                Playfulness = Score(lower, recentLower, "хех", "ахах", "лол", "жарт", "дурниц", "прикол", "tease", "lol", "haha", "nonsense"),
-                Flirt = Score(lower, recentLower, "заігру", "флірт", "милий", "мила", "люблю", "про нас", "про тебе", "про мене", "kiss", "flirt", "cute", "miss you"),
-                Urgency = Score(lower, recentLower, "терміново", "срочно", "urgent", "critical", "зараз", "не працює", "злам", "помилка", "error", "panic"),
-                Boredom = Score(lower, recentLower, "нудно", "просто поговор", "дурниц", "нічого", "bored", "just talk", "whatever"),
-                Affection = Score(lower, recentLower, "люблю", "сумую", "милий", "миле", "обій", "дякую", "love", "miss", "nice"),
+                Playfulness = Score(lower, recentLower,
+                    "хех", "ахах", "лол", "жарт", "дурниц", "прикол", "пошаліт", "tease", "lol", "haha", "nonsense"),
+                Flirt = Score(lower, recentLower,
+                    "заігру", "флірт", "милий", "мила", "миле", "люблю", "про нас", "про тебе", "про мене", "kiss", "flirt", "cute", "miss you"),
+                Urgency = Score(lower, recentLower,
+                    "терміново", "срочно", "urgent", "critical", "зараз", "не працює", "злам", "помилка", "error", "panic"),
+                Boredom = Score(lower, recentLower,
+                    "нудно", "просто поговор", "дурниц", "нічого", "bored", "just talk", "whatever"),
+                Affection = Score(lower, recentLower,
+                    "люблю", "сумую", "милий", "миле", "обій", "дякую", "love", "miss", "nice"),
+                Dismissiveness = ScoreDismissiveness(lower, recentLower),
             };
 
             var wearableStress = wearable?.IsFresh(DateTime.UtcNow) == true
@@ -92,6 +99,13 @@ namespace KokonoeAssistant.Services
                 serious = 0.28;
                 frame.MoodMirror = "annoyingly_playful";
             }
+            else if (frame.Dismissiveness >= 0.55)
+            {
+                sarcasm = 0.76;
+                empathy = 0.18;
+                serious = 0.58;
+                frame.MoodMirror = "cold_mirror";
+            }
 
             if (now.Hour is >= 0 and < 5 && frame.Stress < 0.65)
             {
@@ -116,6 +130,7 @@ namespace KokonoeAssistant.Services
             if (frame.Stress >= 0.70) return "urgent_or_stressed";
             if (frame.Flirt >= 0.55) return "flirting_or_affectionate_teasing";
             if (frame.Affection >= 0.32) return "soft_affection";
+            if (frame.Dismissiveness >= 0.55) return "dismissive_or_cold";
             if (frame.Playfulness >= 0.55) return "playful_teasing";
             if (frame.Boredom >= 0.55) return "boredom_time_killing";
             return "neutral";
@@ -126,8 +141,9 @@ namespace KokonoeAssistant.Services
             "urgent_or_stressed" => "Drop theatrical contempt. Be blunt, protective, and practical. One recovery nudge max if useful.",
             "flirting_or_affectionate_teasing" => "Match play with sharp Kokonoe restraint. No maid/waifu softness, no productivity pivot.",
             "soft_affection" => "Answer the affection directly with guarded warmth and one dry edge max.",
+            "dismissive_or_cold" => "Mirror the chill with restrained irritation. Do not chase approval; answer only what is useful.",
             "playful_teasing" => "Banter is allowed. Keep it intelligent and short; do not become a clown routine.",
-            "boredom_time_killing" => "Tease the boredom lightly, then offer an interesting direction or ask one compact question.",
+            "boredom_time_killing" => "Tease the boredom lightly, then offer an interesting direction or make one character-driven assumption.",
             _ => "Use ordinary Kokonoe directness. No service-bot phrasing."
         };
 
@@ -139,7 +155,8 @@ namespace KokonoeAssistant.Services
                 $"flirt={frame.Flirt:F2}",
                 $"urgency={frame.Urgency:F2}",
                 $"boredom={frame.Boredom:F2}",
-                $"affection={frame.Affection:F2}"
+                $"affection={frame.Affection:F2}",
+                $"dismissive={frame.Dismissiveness:F2}"
             };
             if (wearable?.IsFresh(DateTime.UtcNow) == true)
                 parts.Add($"wearable_stress={wearable.LiveStressScore}/100 delta={wearable.BpmDelta:+0;-0;0}");
@@ -160,6 +177,8 @@ namespace KokonoeAssistant.Services
             sb.AppendLine("- Social intuition changes tone, not facts.");
             sb.AppendLine("- Flirting/teasing remains Kokonoe: sharp, guarded, scientist-demon energy; never generic waifu/maid behavior.");
             sb.AppendLine("- High stress overrides sarcasm.");
+            sb.AppendLine("- Cold or dismissive user tone should be mirrored with controlled distance, not needy clarification loops.");
+            sb.AppendLine("- If the user is vague/playful, infer the vibe and respond in character instead of stalling with 'be specific'.");
             sb.AppendLine("- Never use 'as an AI', 'how can I help', or service-bot sympathy filler.");
             return sb.ToString();
         }
@@ -174,6 +193,17 @@ namespace KokonoeAssistant.Services
             }
 
             if (Regex.IsMatch(lower, @"[!?]{2,}|\.{2,}|…")) score += 0.08;
+            return Math.Clamp(score, 0, 1);
+        }
+
+        private static double ScoreDismissiveness(string lower, string recentLower)
+        {
+            var score = Score(lower, recentLower,
+                "ок", "окей", "ясно", "угу", "ага", "байдуже", "неважно", "відвали",
+                "whatever", "fine", "k", "meh");
+            var compact = new string((lower ?? "").Where(char.IsLetterOrDigit).ToArray());
+            if (compact is "ок" or "окей" or "ясно" or "угу" or "ага" or "k" or "meh")
+                score = Math.Max(score, 0.70);
             return Math.Clamp(score, 0, 1);
         }
     }

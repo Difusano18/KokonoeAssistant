@@ -22,6 +22,8 @@ namespace KokonoeAssistant.Services
             string userText,
             KokoInternalState state,
             KokoSocialFrame social,
+            string emotionalContext,
+            string rawConversationContext,
             IReadOnlyList<ChatRepository.ChatMessage> recentMessages,
             string memoryContext,
             string screenContext,
@@ -34,7 +36,7 @@ namespace KokonoeAssistant.Services
 
             try
             {
-                var prompt = BuildGovernorPrompt(userText, state, social, recentMessages, memoryContext, screenContext, wearable, now);
+                var prompt = BuildGovernorPrompt(userText, state, social, emotionalContext, rawConversationContext, recentMessages, memoryContext, screenContext, wearable, now);
                 var raw = await _llm.SendSystemQueryAsync(prompt, useTools: false, ct: ct, agentId: "governor").ConfigureAwait(false);
                 var frame = ParseFrame(raw);
                 if (frame == null)
@@ -105,6 +107,8 @@ namespace KokonoeAssistant.Services
             string userText,
             KokoInternalState state,
             KokoSocialFrame social,
+            string emotionalContext,
+            string rawConversationContext,
             IReadOnlyList<ChatRepository.ChatMessage> recentMessages,
             string memoryContext,
             string screenContext,
@@ -113,18 +117,23 @@ namespace KokonoeAssistant.Services
         {
             var sb = new StringBuilder();
             sb.AppendLine("You are Kokonoe's private Neural Governor. Produce ONLY valid JSON. No markdown.");
-            sb.AppendLine("Task: generate the complete response plan frame from context. Do not use keyword matching; infer intent from meaning, subtext, physiology, screen, memory, and recent conversation.");
+            sb.AppendLine("Task: generate the complete response plan frame from context. Do not use keyword matching; infer intent from meaning, subtext, physiology, screen, memory, emotional residue, and raw recent conversation.");
             sb.AppendLine("Core values: efficiency, health, long-term growth, truthfulness.");
             sb.AppendLine("Fields required:");
             sb.AppendLine("{ intent, capability, stance, memory_policy, risk, requires_action, requires_vault_read, requires_tool_use, requires_critique, should_push_back, high_stress_protocol, fatigue_protocol, reason_uk, inner_monologue, somatic_context, core_values[], critique_steps[], steps[], constraints[] }");
             sb.AppendLine("Valid stance examples: high_efficiency_operator, critical_operator, protective_deescalation, grumpy_concerned, playful_sharp, guarded_warm, direct.");
             sb.AppendLine("If the user is flirting/teasing, keep Kokonoe sharp and guarded, not generic waifu. If stress is high, reduce sarcasm and prioritize de-escalation. If the premise is weak, push back.");
+            sb.AppendLine("Visible dialogue constraints: no asterisk stage directions, no exact pause metrics like '7h 35m', no generic companion cliches, no 'as an AI', no 'how can I help'. Use emotional time instead.");
             sb.AppendLine();
             sb.AppendLine($"LOCAL_TIME: {now:yyyy-MM-dd HH:mm}");
             sb.AppendLine($"USER_TEXT: {userText}");
             sb.AppendLine($"LAST_PRESENCE: {state.LastPresenceSituation} / {state.LastPresenceSummary}");
             sb.AppendLine($"LAST_ACTIVITY: {state.LastKnownUserActivity}");
             sb.AppendLine($"SOCIAL_FRAME:\n{social.PromptBlock}");
+            if (!string.IsNullOrWhiteSpace(emotionalContext))
+                sb.AppendLine("EMOTIONAL_CONTEXT:\n" + Trim(emotionalContext, 1600));
+            if (!string.IsNullOrWhiteSpace(rawConversationContext))
+                sb.AppendLine("RAW_CONVERSATION_CONTEXT:\n" + Trim(rawConversationContext, 2600));
             if (wearable != null)
                 sb.AppendLine($"WEARABLE: fresh={wearable.IsFresh(DateTime.UtcNow)} bpm={wearable.CurrentBpm:F0} baseline={wearable.BaselineBpm:F0} delta={wearable.BpmDelta:+0;-0;0} stress={wearable.LiveStressScore}/100 sleep={wearable.SleepState} motion={(wearable.Motion.HasValue ? wearable.Motion.Value.ToString("F2") : "-")}");
             if (!string.IsNullOrWhiteSpace(screenContext))
@@ -132,7 +141,7 @@ namespace KokonoeAssistant.Services
             if (!string.IsNullOrWhiteSpace(memoryContext))
                 sb.AppendLine("MEMORY_CONTEXT:\n" + Trim(memoryContext, 1800));
             sb.AppendLine("RECENT_MESSAGES:");
-            foreach (var m in recentMessages.TakeLast(5))
+            foreach (var m in recentMessages.TakeLast(12))
                 sb.AppendLine($"- {m.Role}: {Trim(m.Content, 260)}");
             return sb.ToString();
         }

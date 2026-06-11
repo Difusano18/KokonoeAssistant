@@ -977,7 +977,7 @@ tags: [kokonoe, live-core, diagnostics]
 
                 // Беремо останні повідомлення З timestamp
                 var recent = new List<Services.ChatRepository.ChatMessage>();
-                try { recent = ServiceContainer.ChatRepository.GetMessages(12).OrderBy(x => x.Timestamp).TakeLast(8).ToList(); }
+                try { recent = ServiceContainer.ChatRepository.GetMessages(40).OrderBy(x => x.Timestamp).TakeLast(30).ToList(); }
                 catch { }
 
                 var frame = service.BuildFrame(recent, now);
@@ -990,7 +990,14 @@ tags: [kokonoe, live-core, diagnostics]
                     var st = ServiceContainer.BrainEngine.State;
                     moodContext =
                         $"brainMood={st.PersonalityDailyMood}; moodScore={st.MoodScore:F2}; irritation={st.PersonalityIrritation:F2}; " +
-                        $"lastUserTone={st.LastUserEmotionalTone}; lastPresence={st.LastPresenceSummary}; situation={st.LastPresenceSituation}; tone={st.LastPresenceTone}";
+                        $"lastUserTone={st.LastUserEmotionalTone}; lastPresence={st.LastPresenceSummary}; situation={st.LastPresenceSituation}; tone={st.LastPresenceTone}; " +
+                        $"emotionalMood={st.EmotionalSessionMood}; exit={st.EmotionalExitStyle}; manners={st.EmotionalMannersState}; grudge={st.EmotionalGrudgeScore:F2}";
+                    try
+                    {
+                        var emotionalBlock = ServiceContainer.BrainEngine.EmotionalMemory.BuildPromptBlock(st, recent, now);
+                        moodContext += "\n" + emotionalBlock;
+                    }
+                    catch { }
                     presenceContext = string.Join(" | ", st.PresenceTrace.TakeLast(4));
                     if (st.Observations.Any())
                         brainObs = $"Твоє останнє спостереження: {st.Observations.TakeLast(2).Last()}\n";

@@ -64,6 +64,7 @@ namespace KokonoeAssistant.Services
                 return BuildContextualFallback(frame);
 
             var topic = DescribeTopic(frame.LastConcreteTopic);
+            var gapFeel = EmotionalGap(frame.GapMinutes);
             var quick = frame.GapMinutes.HasValue && frame.GapMinutes.Value < 10;
             var shortGap = frame.GapMinutes.HasValue && frame.GapMinutes.Value < 60;
             var mediumGap = frame.GapMinutes.HasValue && frame.GapMinutes.Value < 240;
@@ -102,21 +103,21 @@ namespace KokonoeAssistant.Services
 
             if (shortGap)
                 return Pick(frame, "topic-short",
-                    $"Минуло {frame.GapTextUk}. Контекст про {topic} пам'ятаю, бо хтось тут має пам'ять не як друшляк.",
-                    $"Пауза {frame.GapTextUk}. Добре, повертаємось до {topic} або кажи, що вже встиг зламати нове.",
-                    $"Пауза {frame.GapTextUk}. Тема про {topic} не втекла; твоя увага, звісно, намагалася.");
+                    $"{gapFeel}. Контекст про {topic} пам'ятаю, бо хтось тут має пам'ять не як друшляк.",
+                    $"{gapFeel}. Добре, повертаємось до {topic} або кажи, що вже встиг зламати нове.",
+                    $"{gapFeel}. Тема про {topic} не втекла; твоя увага, звісно, намагалася.");
 
             if (mediumGap)
                 return Pick(frame, "topic-medium",
-                    $"Перерва {frame.GapTextUk}. Останнім був контекст про {topic}; я тримаю нитку, не дякуй.",
-                    $"Тебе не було {frame.GapTextUk}. Якщо {topic} ще актуальне, продовжуй. Якщо ні — кидай нову пожежу.",
-                    $"За {frame.GapTextUk} світ не став розумнішим. Контекст про {topic} лишився на місці.");
+                    $"{gapFeel}. Останнім був контекст про {topic}; я тримаю нитку, не дякуй.",
+                    $"{gapFeel}. Якщо {topic} ще актуальне, продовжуй. Якщо ні - кидай нову пожежу.",
+                    $"{gapFeel}. Світ не став розумнішим. Контекст про {topic} лишився на місці.");
 
             if (longGap)
                 return Pick(frame, "topic-long",
-                    $"Довга пауза: {frame.GapTextUk}. Останній нормальний слід був про {topic}. А тепер кажи, що змінилось.",
-                    $"Минуло {frame.GapTextUk}. Контекст про {topic} на місці, що вже більше, ніж можна сказати про більшість планів.",
-                    $"Повернення після {frame.GapTextUk}. {topic} лежить у пам'яті; або піднімаємо це, або ріжемо нову проблему.");
+                    $"{gapFeel}. Останній нормальний слід був про {topic}. А тепер кажи, що змінилось.",
+                    $"{gapFeel}. Контекст про {topic} на місці, що вже більше, ніж можна сказати про більшість планів.",
+                    $"{gapFeel}. {topic} лежить у пам'яті; або піднімаємо це, або ріжемо нову проблему.");
 
             return Pick(frame, "topic-unknown",
                 $"Я тут. Остання нормальна тема була про {topic}. Продовжуй.",
@@ -144,6 +145,7 @@ namespace KokonoeAssistant.Services
         private static string BuildContextualFallback(KokoStartupGreetingFrame frame)
         {
             var topic = DescribeTopic(frame.LastConcreteTopic);
+            var gapFeel = EmotionalGap(frame.GapMinutes);
             var hasTopic = !string.IsNullOrWhiteSpace(frame.LastConcreteTopic);
             var quick = frame.GapMinutes.HasValue && frame.GapMinutes.Value < 10;
             var longGap = frame.GapMinutes.HasValue && frame.GapMinutes.Value >= 240;
@@ -167,7 +169,7 @@ namespace KokonoeAssistant.Services
                     ? $"Привіт. Швидко повернувся; контекст про {topic} ще тут. Що робимо?"
                     : "Привіт. Швидко повернувся. Добре, без фанфар: що робимо?",
                 _ when quick => "Привіт. Ти майже не зникав. Кажи коротко, що треба.",
-                _ when hasTopic && longGap => $"Привіт. Пауза була {frame.GapTextUk}; останній робочий контекст - {topic}. Він ще живий?",
+                _ when hasTopic && longGap => $"{gapFeel}. Останній робочий контекст - {topic}. Він ще живий?",
                 _ when hasTopic => $"Привіт. Контекст про {topic} ще на столі. Продовжуємо чи міняємо ціль?",
                 _ => "Привіт. Я на місці. Кажи, що робимо."
             };
@@ -216,6 +218,10 @@ namespace KokonoeAssistant.Services
                 return BuildFallback(frame);
 
             var lower = text.ToLowerInvariant();
+            if (System.Text.RegularExpressions.Regex.IsMatch(text, @"(^|\n)\s*\*[^*\n]{3,120}\*") ||
+                (System.Text.RegularExpressions.Regex.IsMatch(lower, @"\b\d+\s*(год|годин|хв|хвилин|hours?|mins?|minutes?)\b") &&
+                 ContainsAny(lower, "пауза", "перерва", "минуло", "від останньої", "absence", "pause")))
+                return BuildFallback(frame);
             if (lower.Contains("знову тут") ||
                 lower.Contains("повернувся. останній хвіст") ||
                 lower.Contains("останній хвіст") ||
@@ -440,6 +446,16 @@ Presence/continuity: {NullDash(frame.PresenceContext)}
             if (minutes.Value < 60) return $"{(int)minutes.Value} хв";
             if (minutes.Value < 1440) return $"{(int)(minutes.Value / 60)} год {(int)(minutes.Value % 60)} хв";
             return $"{(int)(minutes.Value / 1440)} дн {(int)((minutes.Value % 1440) / 60)} год";
+        }
+
+        private static string EmotionalGap(double? minutes)
+        {
+            if (!minutes.HasValue) return "Знову старт без нормального сліду";
+            if (minutes.Value < 10) return "Ти майже не зникав";
+            if (minutes.Value < 90) return "Відійшов ненадовго";
+            if (minutes.Value < 360) return "Тебе не було помітно довго";
+            if (minutes.Value < 1440) return "Нарешті повернувся після довгої тиші";
+            return "О, живий. Зникнення було вже майже окремим жанром";
         }
     }
 }

@@ -38,6 +38,12 @@ namespace KokonoeAssistant.Services
 
             if (LooksLikeForbiddenAiOrServicePhrase(replyLower))
                 violations.Add("visible reply used forbidden AI/service-bot phrasing instead of Kokonoe voice");
+            if (LooksLikeGenericRoleplaySyntax(reply))
+                violations.Add("visible reply used generic roleplay stage directions instead of dialogue/action");
+            if (LooksLikeTechnicalPauseMetric(replyLower))
+                violations.Add("visible reply exposed technical pause metrics instead of emotional time");
+            if (LooksLikeLazyClarificationLoop(userLower, replyLower))
+                violations.Add("reply stalled with a generic clarification loop instead of inferring social subtext");
             if (LooksLikeVisionTechnicalError(reply))
                 violations.Add("технічну vision-помилку показано користувачу замість нормальної відповіді");
             if (LooksLikeEmptyImageMisread(userLower, replyLower))
@@ -1122,6 +1128,23 @@ Timeline:
                 "how can i help", "how may i assist", "i'm here to help", "i am here to help",
                 "як штучний інтелект", "як мовна модель", "чим я можу допомогти", "я тут, щоб допомогти",
                 "СЏРє С€С‚СѓС‡РЅРёР№ С–РЅС‚РµР»РµРєС‚", "СЏРє РјРѕРІРЅР° РјРѕРґРµР»СЊ", "С‡РёРј СЏ РјРѕР¶Сѓ РґРѕРїРѕРјРѕРіС‚Рё");
+
+        private static bool LooksLikeGenericRoleplaySyntax(string reply)
+            => System.Text.RegularExpressions.Regex.IsMatch(reply ?? "", @"(^|\n)\s*\*[^*\n]{3,120}\*", System.Text.RegularExpressions.RegexOptions.CultureInvariant);
+
+        private static bool LooksLikeTechnicalPauseMetric(string replyLower)
+            => System.Text.RegularExpressions.Regex.IsMatch(replyLower ?? "", @"\b\d+\s*(год|годин|хв|хвилин|hours?|mins?|minutes?)\b", System.Text.RegularExpressions.RegexOptions.CultureInvariant) &&
+               ContainsAny(replyLower ?? "", "пауза", "перерва", "минуло", "від останньої", "absence", "pause");
+
+        private static bool LooksLikeLazyClarificationLoop(string userLower, string replyLower)
+        {
+            var socialOrVague = userLower.Length < 140 &&
+                ContainsAny(userLower, "дурниц", "просто поговор", "про тебе", "про мене", "миле", "заігру", "пошаліт", "хм", "ну типу", "щось");
+            if (!socialOrVague) return false;
+            return ContainsAny(replyLower,
+                "що саме ти маєш на увазі", "будь конкретнішим", "уточни", "be more specific",
+                "what do you mean", "can you clarify", "please clarify");
+        }
 
         private static string BuildFoodStateReplacement(string userText, KokoInternalState state)
         {
