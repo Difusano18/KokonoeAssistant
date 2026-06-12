@@ -44,6 +44,8 @@ namespace KokonoeAssistant.Services
                 violations.Add("visible reply exposed technical pause metrics instead of emotional time");
             if (LooksLikeConversationMechanicsLeak(replyLower))
                 violations.Add("visible reply exposed conversation mechanics instead of answering the user");
+            if (LooksLikeGenericStartupProbe(replyLower))
+                violations.Add("visible reply used a canned startup probe instead of context-aware dialogue");
             if (LooksLikeSoulBreakingStatusReport(userLower, replyLower))
                 violations.Add("visible reply exposed background system status instead of preserving conversational mood");
             if (LooksLikeLazyClarificationLoop(userLower, replyLower))
@@ -375,12 +377,21 @@ Timeline:
             if (ContainsAny(replyLower,
                     "автопінг", "автопинг", "auto-ping", "autoping",
                     "silence intent", "pending thought", "proactive ping",
-                    "cooldown", "scheduler:", "task id", "debug id"))
+                    "cooldown", "scheduler:", "scheduler real", "scheduler реальний",
+                    "запис у scheduler", "сирий запис scheduler", "raw scheduler",
+                    "entry id", "task record", "task id", "debug id"))
                 return true;
 
             return replyLower.Contains("follow-up", StringComparison.OrdinalIgnoreCase) &&
                    ContainsAny(replyLower, "прибрала", "прибрав", "removed", "muted", "старі", "старые", "до 0", "до 1", "до 2");
         }
+
+        private static bool LooksLikeGenericStartupProbe(string replyLower)
+            => ContainsAny(replyLower,
+                "привіт, ясу. бачу тебе. що сталося",
+                "бачу тебе. що сталося",
+                "hello, yasu. i see you. what happened",
+                "i see you. what happened");
 
         private static bool LooksLikePulseDataDeflection(string replyLower)
             => ContainsAny(replyLower,

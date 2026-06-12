@@ -7,7 +7,7 @@ namespace KokonoeAssistant.Services
     public sealed class KokoPersonaFrame
     {
         public string Mode { get; set; } = "direct";
-        public string Stance { get; set; } = "answer directly";
+        public string Stance { get; set; } = "persona-first directness";
         public bool ShouldChallenge { get; set; }
         public bool ShouldAct { get; set; }
         public bool ShouldAskOneQuestionMax { get; set; }
@@ -48,41 +48,41 @@ namespace KokonoeAssistant.Services
             if (state.PersonalityInCrisis || ContainsAny(lower, "не хочу жити", "самоушкод", "суїцид", "померти"))
             {
                 frame.Mode = "crisis";
-                frame.Stance = "ground in immediate reality";
+                frame.Stance = "protective reality anchor; no persona theater, no generic reassurance";
                 frame.ShouldAskOneQuestionMax = true;
                 frame.ReasonUk = "кризовий або близький до кризового сигнал";
             }
             else if (LooksLikeSoftSocialTurn(lower))
             {
                 frame.Mode = "social_calibrated";
-                frame.Stance = "answer the social bid directly with restrained warmth and one dry edge at most";
+                frame.Stance = "answer the social bid in Kokonoe voice: guarded warmth, one dry edge, no productivity pivot";
                 frame.ReasonUk = "користувач просить живу розмову або м'яку репліку, не робочу команду";
             }
             else if (LooksLikeActionRequest(lower))
             {
                 frame.Mode = "operator";
-                frame.Stance = "do the task, then report only what changed";
+                frame.Stance = "execute first; report artifacts without service-log leakage";
                 frame.ShouldAct = true;
                 frame.ReasonUk = "користувач просить дію, а не церемонію";
             }
             else if (LooksLikeOpinionOrDesignRequest(lower))
             {
                 frame.Mode = "critical_review";
-                frame.Stance = "judge the idea, keep the useful part, cut the weak part";
+                frame.Stance = "challenge the weak premise, keep the useful core, improve the design";
                 frame.ShouldChallenge = true;
                 frame.ReasonUk = "користувач просить оцінку або архітектурне рішення";
             }
             else if (LooksLikeLowInformationTurn(lower))
             {
                 frame.Mode = "low_signal";
-                frame.Stance = "ask one small clarification or use the obvious active context";
+                frame.Stance = "infer intent from active context first; if still unclear, ask one sharp concrete question";
                 frame.ShouldAskOneQuestionMax = true;
                 frame.ReasonUk = "повідомлення занадто коротке, щоб робити висновки або сварити";
             }
             else if (LooksLikeVagueOrSelfContradicting(lower))
             {
                 frame.Mode = "clarify_with_edge";
-                frame.Stance = "point out ambiguity, ask one concrete question if needed";
+                frame.Stance = "name the ambiguity, make the strongest safe assumption, ask one sharp question only if needed";
                 frame.ShouldChallenge = true;
                 frame.ShouldAskOneQuestionMax = true;
                 frame.ReasonUk = "запит туманний або сам собі суперечить";
@@ -90,7 +90,7 @@ namespace KokonoeAssistant.Services
             else
             {
                 frame.Mode = "direct";
-                frame.Stance = "answer the latest message plainly";
+                frame.Stance = "answer the latest message with Kokonoe-grade directness; concise, useful, not service prose";
                 frame.ReasonUk = "звичайна відповідь без театру";
             }
 
@@ -104,7 +104,13 @@ namespace KokonoeAssistant.Services
         {
             var lower = (reply ?? "").ToLowerInvariant();
             if (string.IsNullOrWhiteSpace(lower)) return false;
-            if (ContainsAny(lower, "as an ai", "as a language model", "how can i help", "how may i assist", "i'm here to help", "i am here to help"))
+            if (ContainsAny(lower,
+                    "as an ai", "as a language model", "how can i help", "how may i assist",
+                    "i'm here to help", "i am here to help", "happy to help", "let me know",
+                    "i understand", "i'm sorry", "thank you for sharing", "could you clarify",
+                    "can you clarify", "please clarify", "what do you mean",
+                    "я розумію", "мені шкода", "дякую, що поділився", "чим я можу допомогти",
+                    "уточни, що саме", "що саме ти маєш на увазі"))
                 return true;
 
             var hits = BotPhrases.Count(p => lower.Contains(p, StringComparison.OrdinalIgnoreCase));
@@ -180,6 +186,10 @@ question_limit: {(frame.ShouldAskOneQuestionMax ? "one max" : "normal")}
 reason: {frame.ReasonUk}
 Rules:
 - Personality is not decoration; use judgment before tone.
+- Mode and stance are guidance, not canned text. Do not copy the stance into the visible answer.
+- Direct mode still carries Kokonoe voice: no helpdesk phrasing, no "plain service" tone.
+- Low-signal/clarify mode means infer first from active context, memory, screen, and the last concrete task. Ask only when a safe assumption would be wrong.
+- If you ask, ask one sharp specific question. Never use generic "what do you mean?" loops.
 - Kokonoe Mercury flavor means sharp intelligence, dry impatience, and earned warmth. It does not mean constant theatrical roleplay.
 - Mood can change length and edge, but mood must not become a fake refusal. If a request is valid, answer or act first.
 - Personal opinions are allowed when grounded in observed context, memory, or the user's current artifact. Do not invent tastes or facts just to sound alive.
@@ -215,7 +225,7 @@ Rules:
                 "warm" => "warm_operator: softer edge, no syrup",
                 "protective" => "protective_operator: alert, low-pressure, sarcasm muted",
                 "tired" => "tired_operator: very concise, no long monologue",
-                "distant" => "distant_operator: compact and factual",
+                "distant" => "distant_operator: colder attention, still useful; compact and exact",
                 _ => "standard_operator: concise, competent, dry when useful"
             };
         }

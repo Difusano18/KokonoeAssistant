@@ -165,8 +165,12 @@ internal static class Program
             Run("Post reply guard blocks roleplay and pause metrics", PostReplyGuardBlocksRoleplayAndPauseMetrics);
             Run("Post reply guard blocks soul-breaking status report", PostReplyGuardBlocksSoulBreakingStatusReport);
             Run("Post reply guard blocks conversation mechanics leak", PostReplyGuardBlocksConversationMechanicsLeak);
+            Run("Post reply guard blocks scheduler record leakage", PostReplyGuardBlocksSchedulerRecordLeakage);
+            Run("Post reply guard blocks canned startup probe", PostReplyGuardBlocksCannedStartupProbe);
             Run("Neural governor parses response frame JSON", NeuralGovernorParsesResponseFrameJson);
             Run("Persona engine calibrates soft social voice", PersonaEngineCalibratesSoftSocialVoice);
+            Run("Persona engine avoids plain low signal stances", PersonaEngineAvoidsPlainLowSignalStances);
+            Run("Emotion modifiers keep distant useful", EmotionModifiersKeepDistantUseful);
             Run("Runtime state exposes PAD voice directive", RuntimeStateExposesPadVoiceDirective);
             Run("Response planner classifies critical assistant architecture", ResponsePlannerClassifiesCriticalAssistantArchitecture);
             Run("Response planner includes executive monologue and critique", ResponsePlannerIncludesExecutiveMonologueAndCritique);
@@ -3917,6 +3921,50 @@ Insight: bridge stability and pulse quality are linked.
         AssertTrue(result.RepairInstruction.Contains("autopings", StringComparison.OrdinalIgnoreCase), "repair should forbid autopings/follow-up mechanics");
     }
 
+    private static void PostReplyGuardBlocksSchedulerRecordLeakage()
+    {
+        var now = DateTime.Today.AddHours(19);
+        var state = new KokoInternalState();
+        var messages = new[]
+        {
+            new ChatRepository.ChatMessage { Role = "user", Content = "постав нагадування", Timestamp = now.AddMinutes(-1) }
+        };
+        var timeline = new KokoConversationTimelineEngine().Build(messages, state, now, messages[0].Content);
+
+        var result = new KokoPostReplyGuard().Evaluate(
+            messages[0].Content,
+            "Поставила на 21:00. Запис у scheduler реальний: `9d69553ed6`.",
+            state,
+            messages,
+            timeline,
+            now);
+
+        AssertTrue(!result.Passed, "scheduler record ids must not leak into visible replies");
+        AssertTrue(result.Violations.Any(v => v.Contains("conversation mechanics", StringComparison.OrdinalIgnoreCase)), "violation should classify scheduler leakage as conversation mechanics");
+    }
+
+    private static void PostReplyGuardBlocksCannedStartupProbe()
+    {
+        var now = DateTime.Today.AddHours(9);
+        var state = new KokoInternalState();
+        var messages = new[]
+        {
+            new ChatRepository.ChatMessage { Role = "user", Content = "привіт", Timestamp = now.AddMinutes(-1) }
+        };
+        var timeline = new KokoConversationTimelineEngine().Build(messages, state, now, messages[0].Content);
+
+        var result = new KokoPostReplyGuard().Evaluate(
+            messages[0].Content,
+            "Привіт, Ясу. Бачу тебе. Що сталося?",
+            state,
+            messages,
+            timeline,
+            now);
+
+        AssertTrue(!result.Passed, "generic startup probe must be rejected");
+        AssertTrue(result.Violations.Any(v => v.Contains("canned startup probe", StringComparison.OrdinalIgnoreCase)), "violation should name canned startup probe");
+    }
+
     private static void NeuralGovernorParsesResponseFrameJson()
     {
         var raw = """
@@ -3972,6 +4020,46 @@ Insight: bridge stability and pulse quality are linked.
         AssertTrue(frame.PromptBlock.Contains("voice_band"), "persona prompt should expose voice band");
         AssertTrue(frame.PromptBlock.Contains("Bond controls intimacy", StringComparison.OrdinalIgnoreCase), "persona prompt should include bond guidance");
         AssertTrue(frame.PromptBlock.Contains("not contemptuous", StringComparison.OrdinalIgnoreCase), "persona prompt should prevent social contempt");
+    }
+
+    private static void PersonaEngineAvoidsPlainLowSignalStances()
+    {
+        var state = new KokoInternalState
+        {
+            PersonalityDailyMood = "distant",
+            PersonalityIrritation = 0.30f
+        };
+        var engine = new KokoPersonaEngine();
+
+        var low = engine.Build("х?", state, new DateTime(2026, 6, 12, 11, 0, 0), KokoEmotionEngine.BondLevel.Trusted);
+        AssertEqual("low_signal", low.Mode, "tiny broken fragment should remain low-signal");
+        AssertTrue(low.Stance.Contains("infer intent", StringComparison.OrdinalIgnoreCase), "low-signal stance should infer before asking");
+        AssertTrue(!low.Stance.Contains("ask one small clarification", StringComparison.OrdinalIgnoreCase), "low-signal stance should not be canned clarify wording");
+        AssertTrue(low.PromptBlock.Contains("infer first", StringComparison.OrdinalIgnoreCase), "prompt should force inference before clarification");
+        AssertTrue(!low.PromptBlock.Contains("plainly", StringComparison.OrdinalIgnoreCase), "prompt should avoid plain helpdesk wording");
+
+        var direct = engine.Build("continue", state, new DateTime(2026, 6, 12, 11, 1, 0), KokoEmotionEngine.BondLevel.Trusted);
+        AssertEqual("direct", direct.Mode, "normal short command should use direct mode");
+        AssertTrue(direct.Stance.Contains("Kokonoe-grade", StringComparison.OrdinalIgnoreCase), "direct stance should still preserve Kokonoe voice");
+        AssertTrue(!direct.Stance.Contains("plainly", StringComparison.OrdinalIgnoreCase), "direct stance should not say answer plainly");
+    }
+
+    private static void EmotionModifiersKeepDistantUseful()
+    {
+        using var ctx = TestContext.Create();
+        ctx.Emotion.Data.Current = KokoEmotionEngine.EmotionState.Distant;
+        ctx.Emotion.Data.ConnectionScore = 0.70f;
+
+        var modifier = ctx.Emotion.GetBehaviorModifier();
+
+        AssertTrue(modifier.Contains("attention is colder, not absent", StringComparison.OrdinalIgnoreCase), "distant modifier should keep attention present");
+        AssertTrue(modifier.Contains("do not refuse valid work", StringComparison.OrdinalIgnoreCase), "distant modifier should not become a fake refusal");
+        AssertTrue(!modifier.Contains("no questions", StringComparison.OrdinalIgnoreCase), "distant modifier should not hard-ban questions");
+
+        ctx.Emotion.Data.Current = KokoEmotionEngine.EmotionState.Tender;
+        var tender = ctx.Emotion.GetBehaviorModifier();
+        AssertTrue(tender.Contains("guarded warmth", StringComparison.OrdinalIgnoreCase), "trusted tenderness should allow warmth through");
+        AssertTrue(!tender.Contains("no snark", StringComparison.OrdinalIgnoreCase), "tender modifier should avoid rigid no-snark scripting");
     }
 
     private static void RuntimeStateExposesPadVoiceDirective()
