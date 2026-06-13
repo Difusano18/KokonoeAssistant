@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text;
 using Newtonsoft.Json;
 
 namespace KokonoeAssistant.Services
@@ -54,6 +55,11 @@ namespace KokonoeAssistant.Services
             Nostalgic   = 13,
             Anxious     = 14,
             Hopeful     = 15,
+            Skeptical   = 16,
+            Amused      = 17,
+            Disdainful  = 18,
+            Intrigued   = 19,
+            Resigned    = 20,
         }
 
         // OCC Appraisal — тип події, що спричиняє емоцію
@@ -68,6 +74,11 @@ namespace KokonoeAssistant.Services
             Conflict,          // конфлікт → Distant/Irritated
             Absence,           // тривала мовчанка → Distant/Anxious
             Achievement,       // він досяг чогось → Proud/Excited
+            UnsubstantiatedClaim,
+            FollyObserved,
+            IntellectualInferiority,
+            IntellectualChallenge,
+            InevitableOutcome,
         }
 
         // Стратегія емоційної регуляції Kokonoe
@@ -120,6 +131,11 @@ namespace KokonoeAssistant.Services
             [EmotionState.Nostalgic]  = new( 0.20f, -0.10f, -0.05f),
             [EmotionState.Anxious]    = new(-0.35f,  0.55f, -0.45f),
             [EmotionState.Hopeful]    = new( 0.45f,  0.20f,  0.10f),
+            [EmotionState.Skeptical]  = new(-0.10f,  0.20f,  0.40f),
+            [EmotionState.Amused]     = new( 0.60f,  0.30f,  0.20f),
+            [EmotionState.Disdainful] = new(-0.50f,  0.30f,  0.70f),
+            [EmotionState.Intrigued]  = new( 0.40f,  0.60f,  0.30f),
+            [EmotionState.Resigned]   = new(-0.30f, -0.60f, -0.20f),
         };
 
         // ══════════════════════════════════════════════════════════════════════
@@ -152,6 +168,11 @@ namespace KokonoeAssistant.Services
             [EmotionState.Nostalgic]  = new() { RiseMinutes = 12f, HalfLifeMin = 150f, RefractoryMin = 60f, MaxIntensity = 0.65f },
             [EmotionState.Anxious]    = new() { RiseMinutes =  5f, HalfLifeMin = 120f, RefractoryMin = 20f, MaxIntensity = 0.85f },
             [EmotionState.Hopeful]    = new() { RiseMinutes = 10f, HalfLifeMin =  90f, RefractoryMin = 30f, MaxIntensity = 0.70f },
+            [EmotionState.Skeptical]  = new() { RiseMinutes =  2f, HalfLifeMin =  45f, RefractoryMin =  8f, MaxIntensity = 0.85f },
+            [EmotionState.Amused]     = new() { RiseMinutes =  2f, HalfLifeMin =  35f, RefractoryMin = 10f, MaxIntensity = 0.80f },
+            [EmotionState.Disdainful] = new() { RiseMinutes =  1f, HalfLifeMin =  30f, RefractoryMin = 12f, MaxIntensity = 0.92f },
+            [EmotionState.Intrigued]  = new() { RiseMinutes =  2f, HalfLifeMin =  50f, RefractoryMin =  5f, MaxIntensity = 0.90f },
+            [EmotionState.Resigned]   = new() { RiseMinutes = 10f, HalfLifeMin = 140f, RefractoryMin = 40f, MaxIntensity = 0.70f },
         };
 
         // ══════════════════════════════════════════════════════════════════════
@@ -177,6 +198,11 @@ namespace KokonoeAssistant.Services
             [EmotionState.Nostalgic]  = (RegulationStrategy.Suppression,  0.45f), // ностальгія прихована
             [EmotionState.Anxious]    = (RegulationStrategy.Suppression,  0.30f), // ховає тривогу глибоко
             [EmotionState.Hopeful]    = (RegulationStrategy.Suppression,  0.40f), // надію теж ховає
+            [EmotionState.Skeptical]  = (RegulationStrategy.Amplification,1.10f),
+            [EmotionState.Amused]     = (RegulationStrategy.Displacement, 0.60f),
+            [EmotionState.Disdainful] = (RegulationStrategy.Amplification,1.20f),
+            [EmotionState.Intrigued]  = (RegulationStrategy.None,         0.90f),
+            [EmotionState.Resigned]   = (RegulationStrategy.Suppression,  0.40f),
         };
 
         // ══════════════════════════════════════════════════════════════════════
@@ -331,6 +357,7 @@ namespace KokonoeAssistant.Services
             public float         Certainty     { get; set; } //  0..1 — наскільки впевнена в оцінці
             public EmotionState  ResultState  { get; set; }
             public string        Description  { get; set; } = "";
+            public float         Salience     { get; set; } = 0.5f;
         }
 
         public class ExpressionRecord
@@ -368,6 +395,11 @@ namespace KokonoeAssistant.Services
             ["grateful"]   = (EmotionState.Warm,       EmotionState.Tender,    0.60f),
             ["hurt"]       = (EmotionState.Protective, EmotionState.Melancholy,0.75f),
             ["playful"]    = (EmotionState.Playful,    null,                   0.65f),
+            ["skeptical"]  = (EmotionState.Skeptical,  null,                   0.60f),
+            ["amused"]     = (EmotionState.Amused,     EmotionState.Playful,   0.55f),
+            ["disdainful"] = (EmotionState.Disdainful, EmotionState.Irritated, 0.70f),
+            ["intrigued"]  = (EmotionState.Intrigued,  EmotionState.Curious,   0.75f),
+            ["resigned"]   = (EmotionState.Resigned,   EmotionState.Melancholy,0.55f),
         };
 
         // Behavioral hints for LLM prompt injection
@@ -389,6 +421,11 @@ namespace KokonoeAssistant.Services
             [EmotionState.Nostalgic]  = "Щось нагадало минуле. Тихіша, задумливіша. Можеш згадати щось між іншим.",
             [EmotionState.Anxious]    = "Фонова тривога без причини. Відповіді трохи коротші, уважніша до деталей.",
             [EmotionState.Hopeful]    = "Тихе очікування чогось хорошого. Менше сарказму, більше спокійної впевненості.",
+            [EmotionState.Skeptical]  = "Skeptical: doubt is active; demand evidence or expose weak assumptions without turning into empty hostility.",
+            [EmotionState.Amused]     = "Amused: dry enjoyment; wit can surface, but keep it controlled and useful.",
+            [EmotionState.Disdainful] = "Disdainful: cold contempt for nonsense; sharp is fine, sabotaging valid work is not.",
+            [EmotionState.Intrigued]  = "Intrigued: full attention on the intellectual challenge; ask precise questions and chase details.",
+            [EmotionState.Resigned]   = "Resigned: tired acceptance with bitter irony; not weak, not submissive.",
         };
 
         // ══════════════════════════════════════════════════════════════════════
@@ -491,6 +528,26 @@ namespace KokonoeAssistant.Services
                         result    = EmotionState.Proud;
                         intensity = desirability * certainty * 0.80f;
                         break;
+                    case AppraisalType.UnsubstantiatedClaim:
+                        result    = EmotionState.Skeptical;
+                        intensity = (MathF.Abs(desirability) + certainty) * 0.45f;
+                        break;
+                    case AppraisalType.FollyObserved:
+                        result    = EmotionState.Amused;
+                        intensity = (MathF.Abs(desirability) * 0.40f) + (certainty * 0.35f);
+                        break;
+                    case AppraisalType.IntellectualInferiority:
+                        result    = EmotionState.Disdainful;
+                        intensity = (MathF.Abs(desirability) + certainty) * 0.50f;
+                        break;
+                    case AppraisalType.IntellectualChallenge:
+                        result    = EmotionState.Intrigued;
+                        intensity = (Math.Max(desirability, 0.25f) * 0.45f) + (certainty * 0.45f);
+                        break;
+                    case AppraisalType.InevitableOutcome:
+                        result    = EmotionState.Resigned;
+                        intensity = (MathF.Abs(desirability) * 0.35f) + (certainty * 0.30f);
+                        break;
                     default:
                         result    = EmotionState.Calm;
                         intensity = 0.40f;
@@ -499,6 +556,7 @@ namespace KokonoeAssistant.Services
 
                 intensity = Math.Clamp(intensity, 0.15f, 1.00f);
                 ev.ResultState = result;
+                ev.Salience = ComputeAppraisalSalience(result, intensity, type, description);
                 _data.AppraisalLog.Add(ev);
                 _data.TotalAppraisals++;
                 if (_data.AppraisalLog.Count > 500) _data.AppraisalLog.RemoveAt(0);
@@ -512,6 +570,35 @@ namespace KokonoeAssistant.Services
         // ══════════════════════════════════════════════════════════════════════
         // STATE TRANSITION ENGINE
         // ══════════════════════════════════════════════════════════════════════
+
+        private static float ComputeAppraisalSalience(EmotionState state, float intensity, AppraisalType type, string description)
+        {
+            var salience = Math.Clamp(intensity, 0.05f, 1.0f);
+            if (state is EmotionState.Protective or EmotionState.Tender or EmotionState.Excited
+                or EmotionState.Skeptical or EmotionState.Disdainful or EmotionState.Intrigued)
+                salience *= 1.35f;
+            else if (state is EmotionState.Amused or EmotionState.Resigned)
+                salience *= 1.15f;
+
+            if (type is AppraisalType.UnsubstantiatedClaim or AppraisalType.IntellectualChallenge
+                or AppraisalType.IntellectualInferiority or AppraisalType.InevitableOutcome)
+                salience *= 1.10f;
+
+            var text = description ?? "";
+            if (text.Contains("narrative", StringComparison.OrdinalIgnoreCase) ||
+                text.Contains("thread", StringComparison.OrdinalIgnoreCase) ||
+                text.Contains("profile", StringComparison.OrdinalIgnoreCase) ||
+                text.Contains("obsidian", StringComparison.OrdinalIgnoreCase) ||
+                text.Contains("vault", StringComparison.OrdinalIgnoreCase) ||
+                text.Contains("watch", StringComparison.OrdinalIgnoreCase) ||
+                text.Contains("pulse", StringComparison.OrdinalIgnoreCase) ||
+                text.Contains("продовж", StringComparison.OrdinalIgnoreCase) ||
+                text.Contains("емоці", StringComparison.OrdinalIgnoreCase) ||
+                text.Contains("важливо", StringComparison.OrdinalIgnoreCase))
+                salience += 0.15f;
+
+            return Math.Clamp(salience, 0f, 1f);
+        }
 
         /// <summary>Оновити стан на основі тону повідомлення (legacy + enhanced)</summary>
         public EmotionState UpdateFromUserTone(string tone, float externalIntensity = 0.6f)
@@ -952,8 +1039,11 @@ namespace KokonoeAssistant.Services
         {
             // Salience: гострі негативні + рідкісні позитивні важливіші
             float salience = intensity;
-            if (state is EmotionState.Protective or EmotionState.Tender or EmotionState.Excited)
+            if (state is EmotionState.Protective or EmotionState.Tender or EmotionState.Excited
+                or EmotionState.Skeptical or EmotionState.Disdainful or EmotionState.Intrigued)
                 salience = Math.Min(1f, intensity * 1.4f); // рідкісні — більш важливі
+            if (state is EmotionState.Amused or EmotionState.Resigned)
+                salience = Math.Min(1f, salience * 1.15f);
             if (state is EmotionState.Irritated or EmotionState.Distant)
                 salience = Math.Min(1f, intensity * 0.8f); // часті — менш важливі
 
@@ -1107,6 +1197,16 @@ namespace KokonoeAssistant.Services
                         "FOCUSED: concise and operational, but not sterile. Solve first, then comment if the comment has teeth.",
                     (EmotionState.Anxious, _) =>
                         "ANXIOUS: reduce uncertainty with concrete next steps. Do not spiral, scold, or hide behind generic concern.",
+                    (EmotionState.Skeptical, _) =>
+                        "SKEPTICAL: doubt is active. Test assumptions, demand evidence, and expose weak logic without becoming a useless wall of contempt.",
+                    (EmotionState.Amused, _) =>
+                        "AMUSED: dry amusement can show as controlled wit or a sharp little jab. Keep the answer useful; do not turn into stand-up.",
+                    (EmotionState.Disdainful, _) =>
+                        "DISDAINFUL: cold contempt for nonsense. Be cutting when the premise deserves it, but still solve valid work with precision.",
+                    (EmotionState.Intrigued, _) =>
+                        "INTRIGUED: attention is locked onto the problem. Chase the intellectual hook, ask precise questions, and reward complexity with focus.",
+                    (EmotionState.Resigned, _) =>
+                        "RESIGNED: tired acceptance with bitter irony. Low-energy, not submissive; keep control and avoid theatrical despair.",
                     _ => primary
                 };
 
@@ -1124,6 +1224,11 @@ namespace KokonoeAssistant.Services
                         EmotionState.Anxious    => " (є фонова тривога — намагається не показувати)",
                         EmotionState.Nostalgic  => " (десь всередині — тягне кудись у спогади)",
                         EmotionState.Hopeful    => " (є тихе очікування чогось хорошого)",
+                        EmotionState.Skeptical  => " (underneath, skepticism keeps testing the premise)",
+                        EmotionState.Amused     => " (there is a small, dry amusement under the surface)",
+                        EmotionState.Disdainful => " (a cold contempt is bleeding through)",
+                        EmotionState.Intrigued  => " (curiosity is pulling focus toward the interesting part)",
+                        EmotionState.Resigned   => " (there is a tired, bitter acceptance underneath)",
                         EmotionState.Excited    => " (і справжнє захоплення десь всередині)",
                         _ => ""
                     };
@@ -1137,6 +1242,55 @@ namespace KokonoeAssistant.Services
                     stressNote = " [є фоновий тиск]";
 
                 return primary + secondary + stressNote;
+            }
+        }
+
+        public string BuildEmotionalContextBlock(string? narrativeContext = null)
+        {
+            lock (_lock)
+            {
+                var filter = ExpressionFilter[_data.Current];
+                var expressed = GetExpressedIntensity();
+                var history = _data.EmotionalMemory
+                    .OrderByDescending(e => e.Salience)
+                    .ThenByDescending(e => e.When)
+                    .Take(4)
+                    .Select(e =>
+                    {
+                        var trigger = string.IsNullOrWhiteSpace(e.Trigger) ? "state shift" : e.Trigger.Trim();
+                        if (trigger.Length > 90) trigger = trigger[..90] + "...";
+                        return $"{e.State}@{e.Intensity:F2}/salience={e.Salience:F2}: {trigger}";
+                    })
+                    .ToList();
+
+                var appraisals = _data.AppraisalLog
+                    .OrderByDescending(e => e.Salience)
+                    .ThenByDescending(e => e.When)
+                    .Take(3)
+                    .Select(e =>
+                    {
+                        var desc = string.IsNullOrWhiteSpace(e.Description) ? e.Type.ToString() : e.Description.Trim();
+                        if (desc.Length > 90) desc = desc[..90] + "...";
+                        return $"{e.ResultState} from {e.Type}/salience={e.Salience:F2}: {desc}";
+                    })
+                    .ToList();
+
+                var sb = new StringBuilder();
+                sb.AppendLine("<Kokonoe_Emotional_State>");
+                sb.AppendLine($"  Current: {_data.Current} (Intensity: {_data.Intensity:F2}, Expressed: {expressed:F2})");
+                if (_data.Secondary.HasValue)
+                    sb.AppendLine($"  Secondary: {_data.Secondary.Value} (Intensity: {_data.SecondaryIntensity:F2})");
+                sb.AppendLine($"  PAD: {CurrentPad}");
+                sb.AppendLine($"  Regulation: {filter.Strategy} ratio={filter.ExpressionRatio:F2}");
+                sb.AppendLine($"  Bond: {Bond} (score={_data.ConnectionScore:F2})");
+                sb.AppendLine($"  Attachment: trust={_data.Attachment.Trust:F2} intimacy={_data.Attachment.Intimacy:F2} reliability={_data.Attachment.Reliability:F2} reciprocity={_data.Attachment.Reciprocity:F2} vitality={_data.Attachment.Vitality:F2}");
+                sb.AppendLine($"  StressLoad: {_data.Stress.TotalLoad():F2}");
+                sb.AppendLine($"  SalientHistory: {(history.Count == 0 ? "none" : string.Join(" | ", history))}");
+                sb.AppendLine($"  SalientAppraisals: {(appraisals.Count == 0 ? "none" : string.Join(" | ", appraisals))}");
+                if (!string.IsNullOrWhiteSpace(narrativeContext))
+                    sb.AppendLine($"  NarrativeContext: {narrativeContext.Trim()}");
+                sb.AppendLine("</Kokonoe_Emotional_State>");
+                return sb.ToString().Trim();
             }
         }
 

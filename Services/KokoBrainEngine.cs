@@ -2055,6 +2055,7 @@ Summary: {summary}
             var behaviorMod = Emotion.GetBehaviorModifier();
             if (!string.IsNullOrEmpty(behaviorMod))
                 sb.AppendLine(behaviorMod);
+            try { sb.AppendLine(Emotion.BuildEmotionalContextBlock(BuildNarrativeThreadSummary(DateTime.Now))); } catch { }
 
             try
             {
@@ -3279,6 +3280,39 @@ Summary: {summary}
             }
 
             return sb.ToString();
+        }
+
+        private string BuildNarrativeThreadSummary(DateTime now)
+        {
+            try
+            {
+                var recent = _chatRepo.GetMessages(10)
+                    .OrderBy(m => m.Timestamp)
+                    .Where(m => !LooksLikeInternalStatusLeak(m.Content))
+                    .TakeLast(5)
+                    .Select(m =>
+                    {
+                        var role = m.Role == "user" ? "user" : "Kokonoe";
+                        var text = TrimStateMention(m.Content ?? "");
+                        if (text.Length > 120) text = text[..120] + "...";
+                        return $"{role}@{m.Timestamp:HH:mm}: {text}";
+                    })
+                    .Where(s => !string.IsNullOrWhiteSpace(s))
+                    .ToList();
+
+                if (recent.Count == 0)
+                    return $"no active narrative thread as of {now:HH:mm}";
+
+                var screenSummary = TrimStateMention(_state.LastScreenAwarenessSummary);
+                var screen = string.IsNullOrWhiteSpace(screenSummary)
+                    ? ""
+                    : $" | screen={screenSummary[..Math.Min(120, screenSummary.Length)]}";
+                return string.Join(" || ", recent) + screen;
+            }
+            catch
+            {
+                return $"narrative thread unavailable as of {now:HH:mm}";
+            }
         }
 
         private static bool LooksLikeInternalStatusLeak(string? text)
@@ -6498,6 +6532,7 @@ Summary: {summary}
             sb.AppendLine($"screen: {NullDash(_state.LastScreenAwarenessSummary)}");
             sb.AppendLine($"last_activity: {NullDash(_state.LastKnownUserActivity)}");
             sb.AppendLine($"active_intents: {(active.Length == 0 ? "none" : string.Join("; ", active))}");
+            try { sb.AppendLine(Emotion.BuildEmotionalContextBlock(BuildNarrativeThreadSummary(now))); } catch { }
             sb.AppendLine("Use this as private continuity only. Do not quote labels.");
             if (responsePlan != null)
             {

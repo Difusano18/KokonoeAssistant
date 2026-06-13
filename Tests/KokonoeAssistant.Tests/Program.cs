@@ -171,6 +171,8 @@ internal static class Program
             Run("Persona engine calibrates soft social voice", PersonaEngineCalibratesSoftSocialVoice);
             Run("Persona engine avoids plain low signal stances", PersonaEngineAvoidsPlainLowSignalStances);
             Run("Emotion modifiers keep distant useful", EmotionModifiersKeepDistantUseful);
+            Run("Emotion engine supports expanded states", EmotionEngineSupportsExpandedStates);
+            Run("Emotion context exposes PAD and salient history", EmotionContextExposesPadAndSalientHistory);
             Run("Runtime state exposes PAD voice directive", RuntimeStateExposesPadVoiceDirective);
             Run("Response planner classifies critical assistant architecture", ResponsePlannerClassifiesCriticalAssistantArchitecture);
             Run("Response planner includes executive monologue and critique", ResponsePlannerIncludesExecutiveMonologueAndCritique);
@@ -4066,6 +4068,54 @@ Insight: bridge stability and pulse quality are linked.
         var tender = ctx.Emotion.GetBehaviorModifier();
         AssertTrue(tender.Contains("guarded warmth", StringComparison.OrdinalIgnoreCase), "trusted tenderness should allow warmth through");
         AssertTrue(!tender.Contains("no snark", StringComparison.OrdinalIgnoreCase), "tender modifier should avoid rigid no-snark scripting");
+    }
+
+    private static void EmotionEngineSupportsExpandedStates()
+    {
+        using var ctx = TestContext.Create();
+
+        var skeptical = ctx.Emotion.AppraisalEvaluate(
+            KokoEmotionEngine.AppraisalType.UnsubstantiatedClaim,
+            -0.40f,
+            0.90f,
+            "unsupported claim in active narrative thread");
+
+        AssertEqual(KokoEmotionEngine.EmotionState.Skeptical, skeptical, "unsubstantiated claims should produce skeptical appraisal");
+        var skepticalModifier = ctx.Emotion.GetBehaviorModifier();
+        AssertTrue(skepticalModifier.Contains("SKEPTICAL", StringComparison.OrdinalIgnoreCase), "skeptical modifier should be explicit");
+        AssertTrue(skepticalModifier.Contains("demand evidence", StringComparison.OrdinalIgnoreCase), "skeptical modifier should push evidence, not canned attitude");
+
+        var intrigued = ctx.Emotion.AppraisalEvaluate(
+            KokoEmotionEngine.AppraisalType.IntellectualChallenge,
+            0.80f,
+            0.90f,
+            "hard architecture problem");
+
+        AssertEqual(KokoEmotionEngine.EmotionState.Intrigued, intrigued, "intellectual challenge should produce intrigued appraisal");
+        var intriguedModifier = ctx.Emotion.GetBehaviorModifier();
+        AssertTrue(intriguedModifier.Contains("INTRIGUED", StringComparison.OrdinalIgnoreCase), "intrigued modifier should be explicit");
+        AssertTrue(intriguedModifier.Contains("intellectual hook", StringComparison.OrdinalIgnoreCase), "intrigued modifier should chase concrete complexity");
+    }
+
+    private static void EmotionContextExposesPadAndSalientHistory()
+    {
+        using var ctx = TestContext.Create();
+
+        ctx.Emotion.AppraisalEvaluate(
+            KokoEmotionEngine.AppraisalType.IntellectualChallenge,
+            0.90f,
+            0.90f,
+            "narrative thread: vault design");
+        ctx.Emotion.RecordEmotionalEvent("vault design became interesting", "conversation");
+
+        var block = ctx.Emotion.BuildEmotionalContextBlock("thread=continue Kokonoe conversation");
+
+        AssertTrue(block.Contains("<Kokonoe_Emotional_State>", StringComparison.Ordinal), "context block should expose emotional state tag");
+        AssertTrue(block.Contains("Current: Intrigued", StringComparison.Ordinal), "context block should expose current expanded state");
+        AssertTrue(block.Contains("PAD:", StringComparison.Ordinal), "context block should expose PAD vector");
+        AssertTrue(block.Contains("SalientHistory:", StringComparison.Ordinal), "context block should expose emotional memory salience");
+        AssertTrue(block.Contains("SalientAppraisals:", StringComparison.Ordinal), "context block should expose appraisal salience");
+        AssertTrue(block.Contains("NarrativeContext: thread=continue", StringComparison.Ordinal), "context block should carry narrative grounding");
     }
 
     private static void RuntimeStateExposesPadVoiceDirective()
