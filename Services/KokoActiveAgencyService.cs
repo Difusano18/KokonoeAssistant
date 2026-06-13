@@ -199,8 +199,7 @@ namespace KokonoeAssistant.Services
 
             settings.Save();
             _state.LastSelfThrottleAt = now;
-            var message = $"[ACTION:resource_self_throttle] Kokonoe process memory {workingSetMb:F0} MB; screen scan interval raised to {settings.ScreenAwarenessIntervalMins}m and comment cooldown to {settings.ScreenAwarenessCommentCooldownMins}m.";
-            AppendActionMessage(message);
+            var message = $"resource_self_throttle; memory={workingSetMb:F0}MB; screen_scan_interval={settings.ScreenAwarenessIntervalMins}m; comment_cooldown={settings.ScreenAwarenessCommentCooldownMins}m";
             _blackboard.Publish("resource-agent", "self_throttle", message, 0.82);
             _heartbeat.Update("ACTIVE_AGENCY", "self_throttle", $"{workingSetMb:F0} MB");
             KokoSystemLog.Write("ACTIVE_AGENCY", message);
@@ -212,8 +211,7 @@ namespace KokonoeAssistant.Services
                 result.RequiresConfirmation ? "pending_confirmation" :
                 result.Blocked ? "blocked" : "failed";
             var actionId = string.IsNullOrWhiteSpace(result.PendingActionId) ? result.ActionId : "pc:" + result.PendingActionId;
-            var message = $"[ACTION:{kind}] {status}; id={actionId}; reason={reason}; result={Trim(result.Message, 260)}";
-            AppendActionMessage(message);
+            var message = $"action={kind}; status={status}; id={actionId}; reason={reason}; result={Trim(result.Message, 260)}";
             _blackboard.Publish("pc-agent", kind, message, result.Succeeded ? 0.85 : result.RequiresConfirmation ? 0.65 : 0.35);
             _heartbeat.Update("ACTIVE_AGENCY", status, kind);
             KokoSystemLog.Write("ACTIVE_AGENCY", message);
@@ -223,14 +221,9 @@ namespace KokonoeAssistant.Services
         {
             try
             {
-                _chat.InsertMessage(new ChatRepository.ChatMessage
-                {
-                    Role = "assistant",
-                    Author = "Kokonoe",
-                    Content = message,
-                    Timestamp = DateTime.Now
-                });
-                EventBus.PublishChatMessage(message, "assistant");
+                if (string.IsNullOrWhiteSpace(message)) return;
+                _blackboard.Publish("active-agency", "internal_action", message, 0.55);
+                KokoSystemLog.Write("ACTIVE_AGENCY", "internal action suppressed from chat: " + Trim(message, 260));
             }
             catch { }
         }

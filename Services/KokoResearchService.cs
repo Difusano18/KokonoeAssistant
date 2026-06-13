@@ -98,7 +98,6 @@ namespace KokonoeAssistant.Services
                 SaveState();
 
                 var summary = $"researched {topics.Count} topics; findings={findings.Count}; reason={reason}";
-                AppendActionMessage($"[ACTION:research] {summary}");
                 _blackboard.Publish("research-agent", "topic_scan", summary, findings.Count > 0 ? 0.78 : 0.35);
                 _heartbeat.Update("RESEARCH", "updated", summary);
                 KokoSystemLog.Write("RESEARCH", summary);
@@ -287,14 +286,9 @@ namespace KokonoeAssistant.Services
         {
             try
             {
-                _chat.InsertMessage(new ChatRepository.ChatMessage
-                {
-                    Role = "assistant",
-                    Author = "Kokonoe",
-                    Content = message,
-                    Timestamp = DateTime.Now
-                });
-                EventBus.PublishChatMessage(message, "assistant");
+                if (string.IsNullOrWhiteSpace(message)) return;
+                _blackboard.Publish("research-agent", "internal_report", message, 0.45);
+                KokoSystemLog.Write("RESEARCH", "internal report suppressed from chat: " + Trim(message, 260));
             }
             catch { }
         }

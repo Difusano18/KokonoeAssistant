@@ -203,6 +203,10 @@ internal static class Program
             Run("Proactive fallback never exposes technical silence wording", ProactiveFallbackNeverExposesTechnicalSilenceWording);
             Run("Proactive fallback does not quote last user text", ProactiveFallbackDoesNotQuoteLastUserText);
             Run("User quiet command mutes proactive followups", UserQuietCommandMutesProactiveFollowups);
+            Run("User quiet command reply hides mechanics", UserQuietCommandReplyHidesMechanics);
+            Run("Reminder scheduled reply hides scheduler ids", ReminderScheduledReplyHidesSchedulerIds);
+            Run("Active agency action reports stay internal", ActiveAgencyActionReportsStayInternal);
+            Run("Research action reports stay internal", ResearchActionReportsStayInternal);
             Run("Short acknowledgement resolves stale intent", ShortAcknowledgementResolvesStaleIntent);
             Run("Screen awareness parses vision JSON", ScreenAwarenessParsesVisionJson);
             Run("Screen awareness suppresses repeated comments", ScreenAwarenessSuppressesRepeatedComments);
@@ -4756,7 +4760,79 @@ Insight: bridge stability and pulse quality are linked.
         AssertTrue(brain.State.ProactiveMutedUntil > DateTime.Now, "proactive should be muted");
         AssertTrue(brain.State.PendingTriggers.Count == 0, "quiet command should clear stale followups");
         AssertTrue(brain.State.ShortTermIntents.All(i => i.ResolvedAt.HasValue), "quiet command should resolve active intents");
-        AssertTrue(reply.Contains("Автопінги") || reply.Contains("follow-up"), "reply should confirm mode change");
+        AssertTrue(reply.Contains("нагадування") || reply.Contains("Мовчу"), "reply should confirm mode change without internal mechanics");
+    }
+
+    private static void UserQuietCommandReplyHidesMechanics()
+    {
+        using var ctx = TestContext.Create();
+        using var health = new HealthService(ctx.TestDir);
+        using var brain = new KokoBrainEngine(new LlmService(), health, new ObsidianMcpService(ctx.TestDir), ctx.Chat, ctx.TestDir);
+
+        var handled = brain.TryApplyUserControlCommand("Мяв, іди відпочинь", out var reply);
+
+        AssertTrue(handled, "natural quiet command should be handled");
+        AssertTrue(!reply.Contains("autoping", StringComparison.OrdinalIgnoreCase), "reply should hide autoping mechanics");
+        AssertTrue(!reply.Contains("автоп", StringComparison.OrdinalIgnoreCase), "reply should hide Ukrainian autoping mechanics");
+        AssertTrue(!reply.Contains("follow-up", StringComparison.OrdinalIgnoreCase), "reply should hide follow-up mechanics");
+        AssertTrue(!reply.Contains("scheduler", StringComparison.OrdinalIgnoreCase), "reply should hide scheduler mechanics");
+    }
+
+    private static void ReminderScheduledReplyHidesSchedulerIds()
+    {
+        var method = typeof(LlmService).GetMethod("BuildReminderScheduledReply", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+        AssertTrue(method != null, "reminder reply builder should exist");
+        var reminder = new ReminderCommand
+        {
+            FireAt = new DateTime(2026, 6, 13, 21, 5, 0),
+            Prompt = "перевірити нотатку",
+            IsWake = false,
+            UsedAssumedLater = false
+        };
+
+        var reply = (string)method!.Invoke(null, new object[] { reminder, "9d69553ed6" })!;
+
+        AssertTrue(reply.Contains("21:05"), "reply should include scheduled time");
+        AssertTrue(!reply.Contains("scheduler", StringComparison.OrdinalIgnoreCase), "visible reminder reply should not expose scheduler");
+        AssertTrue(!reply.Contains("9d69553ed6", StringComparison.OrdinalIgnoreCase), "visible reminder reply should not expose record id");
+    }
+
+    private static void ActiveAgencyActionReportsStayInternal()
+    {
+        using var ctx = TestContext.Create();
+        var service = new KokoActiveAgencyService(
+            ctx.TestDir,
+            new PcControlService(),
+            ctx.Chat,
+            new KokoInternalBlackboardService(ctx.TestDir),
+            new KokoServiceHeartbeatService(ctx.TestDir),
+            () => null,
+            () => null);
+        var method = typeof(KokoActiveAgencyService).GetMethod("AppendActionMessage", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+        AssertTrue(method != null, "active agency internal report method should exist");
+
+        method!.Invoke(service, new object[] { "[ACTION:test] should stay internal" });
+
+        AssertTrue(!ctx.Chat.GetMessages(10).Any(m => m.Content.Contains("[ACTION:", StringComparison.OrdinalIgnoreCase)), "active agency reports should not be inserted into chat");
+    }
+
+    private static void ResearchActionReportsStayInternal()
+    {
+        using var ctx = TestContext.Create();
+        var service = new KokoResearchService(
+            ctx.TestDir,
+            new SearchService(ctx.Chat, ctx.TestDir),
+            ctx.Chat,
+            new ObsidianMcpService(ctx.TestDir),
+            new KokoInternalBlackboardService(ctx.TestDir),
+            new KokoServiceHeartbeatService(ctx.TestDir),
+            () => null);
+        var method = typeof(KokoResearchService).GetMethod("AppendActionMessage", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+        AssertTrue(method != null, "research internal report method should exist");
+
+        method!.Invoke(service, new object[] { "[ACTION:research] should stay internal" });
+
+        AssertTrue(!ctx.Chat.GetMessages(10).Any(m => m.Content.Contains("[ACTION:", StringComparison.OrdinalIgnoreCase)), "research reports should not be inserted into chat");
     }
 
     private static void ShortAcknowledgementResolvesStaleIntent()

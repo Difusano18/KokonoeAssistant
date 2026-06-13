@@ -3199,7 +3199,7 @@ namespace KokonoeAssistant.Services
                 ? " «Пізніше/потім» взяла як +30 хв. Бо, на жаль, розклад не читається з астралу."
                 : "";
             var kind = reminder.IsWake ? "будильник" : "нагадування";
-            return $"Поставила {kind} на {reminder.FireAt:dd.MM HH:mm}.{assumption} Запис у scheduler реальний: `{entryId}`.";
+            return $"Поставила {kind} на {reminder.FireAt:dd.MM HH:mm}.{assumption}";
         }
 
         public static string RepairMojibake(string text)

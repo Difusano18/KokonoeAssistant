@@ -3158,8 +3158,8 @@ Summary: {summary}
             if (ApplyUserControlCommand(content, now))
             {
                 reply = _state.ProactiveMutedUntil > now
-                    ? $"Добре. Автопінги й старі follow-up прибрала до {_state.ProactiveMutedUntil:HH:mm}. Нарешті команда, а не туман."
-                    : "Автопінги знову дозволені. Подивимось, чи цього разу система не вдаватиме чайник.";
+                    ? $"Добре. Я прибрала зайві нагадування до {_state.ProactiveMutedUntil:HH:mm}. Мовчу, поки ти сам не смикнеш мене."
+                    : "Добре. Можеш знову смикати мене, якщо зовсім знудишся.";
                 SaveState();
                 return true;
             }
