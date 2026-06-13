@@ -50,6 +50,8 @@ namespace KokonoeAssistant.Services
                 violations.Add("visible reply exposed background system status instead of preserving conversational mood");
             if (LooksLikeLazyClarificationLoop(userLower, replyLower))
                 violations.Add("reply stalled with a generic clarification loop instead of inferring social subtext");
+            if (LooksLikeConversationReviewDeflection(userLower, replyLower))
+                violations.Add("conversation review request was deflected into generic clarification instead of reading recent context");
             if (LooksLikeVisionTechnicalError(reply))
                 violations.Add("технічну vision-помилку показано користувачу замість нормальної відповіді");
             if (LooksLikeEmptyImageMisread(userLower, replyLower))
@@ -321,6 +323,8 @@ Timeline:
                 rules.Add("- The latest turn is normal conversation, not a debug console. Hide scheduler/research/vault/task mechanics; answer the emotional/social turn naturally.");
             if (violations.Any(v => v.Contains("conversation mechanics", StringComparison.OrdinalIgnoreCase)))
                 rules.Add("- Do not mention autopings, follow-up queues, cooldown windows, silence intents, or scheduler mechanics in the visible reply. Answer the user's actual emotional/command turn in plain dialogue.");
+            if (violations.Any(v => v.Contains("conversation review", StringComparison.OrdinalIgnoreCase)))
+                rules.Add("- User asked to re-read the recent conversation. Inspect the latest thread and give a concrete correction or summary; do not ask 'what exactly?' unless there is literally no recent context.");
             if (violations.Any(v => v.Contains("one-letter", StringComparison.OrdinalIgnoreCase)))
                 rules.Add("- Stale one-letter ambiguity is not the topic anymore unless the latest user explicitly asks about that exact letter.");
             if (violations.Any(v => v.Contains("vault unavailable", StringComparison.OrdinalIgnoreCase)))
@@ -1236,6 +1240,27 @@ Timeline:
             return ContainsAny(replyLower,
                 "що саме ти маєш на увазі", "будь конкретнішим", "уточни", "be more specific",
                 "what do you mean", "can you clarify", "please clarify");
+        }
+
+        private static bool LooksLikeConversationReviewDeflection(string userLower, string replyLower)
+        {
+            if (string.IsNullOrWhiteSpace(userLower) || string.IsNullOrWhiteSpace(replyLower)) return false;
+            var asksReview = ContainsAny(userLower,
+                "\u043f\u043e\u0434\u0438\u0432\u0438\u0441\u044c \u0443\u0432\u0430\u0436\u043d",
+                "\u043f\u043e\u0434\u0438\u0432\u0438\u0441\u044c \u0440\u043e\u0437\u043c\u043e\u0432",
+                "\u043f\u0435\u0440\u0435\u0447\u0438\u0442\u0430\u0439 \u0440\u043e\u0437\u043c\u043e\u0432",
+                "\u0443\u0432\u0430\u0436\u043d\u0456\u0448\u0435 \u0440\u043e\u0437\u043c\u043e\u0432",
+                "\u0443\u0432\u0430\u0436\u043d\u0456\u0448\u0435 \u0434\u0456\u0430\u043b\u043e\u0433",
+                "look closer at the conversation",
+                "read the conversation");
+            if (!asksReview) return false;
+            return ContainsAny(replyLower,
+                "\u0449\u043e \u0441\u0430\u043c\u0435",
+                "\u043a\u043e\u043d\u043a\u0440\u0435\u0442\u0438\u0437\u0443\u0439",
+                "\u0443\u0442\u043e\u0447\u043d\u0438",
+                "what exactly",
+                "be more specific",
+                "clarify");
         }
 
         private static string BuildFoodStateReplacement(string userText, KokoInternalState state)

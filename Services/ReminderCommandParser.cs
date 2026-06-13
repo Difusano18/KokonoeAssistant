@@ -23,6 +23,9 @@ namespace KokonoeAssistant.Services
             var wantsReminder = ContainsAny(lower, "нагад", "нагадай", "нагадати", "remind", "напиши", "пінгани", "пінг",
                 "нагад", "напиши");
             if (!wantsWake && !wantsReminder) return false;
+            if (LooksLikeLaterConversationStatus(lower) &&
+                !ContainsAny(lower, "\u043d\u0430\u0433\u0430\u0434", "\u043d\u0430\u0433\u0430\u0434\u0430\u0439", "remind", "\u043d\u0430\u043f\u0438\u0448\u0438", "\u043f\u0456\u043d\u0433"))
+                return false;
 
             if (!TryParseFireAt(lower, now, out var fireAt, out var assumedLater))
                 return false;
@@ -89,6 +92,26 @@ namespace KokonoeAssistant.Services
             }
 
             return false;
+        }
+
+        private static bool LooksLikeLaterConversationStatus(string lower)
+        {
+            if (string.IsNullOrWhiteSpace(lower)) return false;
+            var saysContinueLater = ContainsAny(lower,
+                "\u043f\u043e\u0442\u0456\u043c \u043f\u0440\u043e\u0434\u043e\u0432\u0436",
+                "\u043f\u0456\u0437\u043d\u0456\u0448\u0435 \u043f\u0440\u043e\u0434\u043e\u0432\u0436",
+                "later continue",
+                "continue later");
+            var saysAway = ContainsAny(lower,
+                "\u044f \u0432\u0438\u0439\u0448\u043e\u0432",
+                "\u044f \u0432\u0438\u0439\u0448\u043b\u0430",
+                "\u0432\u0438\u0439\u0448\u043e\u0432 \u043d\u0430 \u043f\u0440\u043e\u0433\u0443\u043b",
+                "\u043f\u0456\u0448\u043e\u0432 \u043d\u0430 \u043f\u0440\u043e\u0433\u0443\u043b",
+                "\u0432\u0438\u0439\u0448\u043e\u0432 \u0437 \u0434\u0440\u0443\u0433",
+                "\u043f\u0456\u0448\u043e\u0432 \u0437 \u0434\u0440\u0443\u0433",
+                "i went out",
+                "going for a walk");
+            return saysContinueLater || (ContainsAny(lower, "\u043f\u043e\u0442\u0456\u043c", "\u043f\u0456\u0437\u043d\u0456\u0448\u0435", "later") && saysAway);
         }
 
         private static bool ContainsAny(string text, params string[] values)

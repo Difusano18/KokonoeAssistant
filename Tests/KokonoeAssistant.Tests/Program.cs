@@ -149,6 +149,7 @@ internal static class Program
             Run("Post reply guard repairs blamey answer explanation", PostReplyGuardRepairsBlameyAnswerExplanation);
             Run("Post reply guard blocks assistant-owned reminder schedule", PostReplyGuardBlocksAssistantOwnedReminderSchedule);
             Run("Post reply guard blocks follow-up after conversation close", PostReplyGuardBlocksFollowupAfterConversationClose);
+            Run("Post reply guard blocks conversation review deflection", PostReplyGuardBlocksConversationReviewDeflection);
             Run("Post reply guard protects short apology", PostReplyGuardProtectsShortApology);
             Run("Post reply guard deescalates tone boundary", PostReplyGuardDeescalatesToneBoundary);
             Run("Post reply guard grounds pulse questions", PostReplyGuardGroundsPulseQuestions);
@@ -298,6 +299,7 @@ internal static class Program
             Run("Scheduler drops stale user reminders", SchedulerDropsStaleUserReminders);
             Run("Reminder parser handles relative and vague time", ReminderParserHandlesRelativeAndVagueTime);
             Run("Reminder parser handles wake and absolute time", ReminderParserHandlesWakeAndAbsoluteTime);
+            Run("Reminder parser ignores later continuation status", ReminderParserIgnoresLaterContinuationStatus);
 
             Console.WriteLine($"PASS {_passed} tests");
             return 0;
@@ -337,6 +339,20 @@ internal static class Program
         AssertTrue(ReminderCommandParser.TryParse("нагадай об 21:05 глянути Vault", now, out var reminder),
             "absolute reminder should parse");
         AssertEqual(new DateTime(2026, 5, 19, 21, 5, 0), reminder.FireAt, "future absolute time should stay today");
+    }
+
+    private static void ReminderParserIgnoresLaterContinuationStatus()
+    {
+        var now = new DateTime(2026, 6, 13, 22, 48, 0);
+
+        AssertTrue(
+            !ReminderCommandParser.TryParse("\u041f\u043e\u0442\u0456\u043c \u043f\u0440\u043e\u0434\u043e\u0432\u0436\u0438\u043c\u043e, \u044f \u0432\u0438\u0439\u0448\u043e\u0432 \u043d\u0430 \u043f\u0440\u043e\u0433\u0443\u043b\u044f\u043d\u043a\u0443 \u0437 \u0434\u0440\u0443\u0433\u043e\u043c", now, out _),
+            "later continuation plus away status should not become a +30m reminder");
+
+        AssertTrue(
+            ReminderCommandParser.TryParse("\u043d\u0430\u043f\u0438\u0448\u0438 \u043c\u0435\u043d\u0456 \u044f\u043a\u043e\u0441\u044c \u043f\u043e\u0442\u0456\u043c \u043f\u0440\u043e \u0432\u043e\u0434\u0443", now, out var reminder),
+            "explicit write/remind later request should still parse");
+        AssertTrue(reminder.UsedAssumedLater, "explicit vague later reminder should still mark assumed later");
     }
 
     private static void SomaticWiredFromPulseSpike()
@@ -3568,6 +3584,27 @@ Insight: bridge stability and pulse quality are linked.
         AssertTrue(result.Violations.Any(v => v.Contains("conversation-close")), "violation should name the conversation boundary");
         AssertTrue(result.RepairInstruction.Contains("until morning") || result.RepairInstruction.Contains("до ранку"),
             "repair should preserve the do-not-follow-up-until-morning boundary");
+    }
+
+    private static void PostReplyGuardBlocksConversationReviewDeflection()
+    {
+        var now = new DateTime(2026, 6, 13, 19, 22, 0);
+        var state = new KokoInternalState();
+        var userText = "\u041d\u0443 \u043f\u043e\u0434\u0438\u0432\u0438\u0441\u044c \u0443\u0432\u0430\u0436\u043d\u0456\u0448\u0435 \u0440\u043e\u0437\u043c\u043e\u0432\u0443";
+        var badReply = "\u0414\u0438\u0432\u043b\u044e\u0441\u044c. \u0429\u043e \u0441\u0430\u043c\u0435 \u0442\u0443\u0442 \u043c\u0430\u0454 \u0431\u0443\u0442\u0438 \u00ab\u0443\u0432\u0430\u0436\u043d\u0456\u0448\u0435\u00bb? \u041a\u043e\u043d\u043a\u0440\u0435\u0442\u0438\u0437\u0443\u0439, \u0431\u043e \u044f \u043d\u0435 \u0431\u0430\u0447\u0443 \u0436\u043e\u0434\u043d\u043e\u0433\u043e \u043f\u0440\u0438\u0432\u043e\u0434\u0443 \u0434\u043b\u044f \u0440\u0435\u0444\u043b\u0435\u043a\u0441\u0456\u0457.";
+        var messages = new[]
+        {
+            new ChatRepository.ChatMessage { Role = "assistant", Content = "\u041f\u043e\u043f\u0435\u0440\u0435\u0434\u043d\u044f \u0432\u0456\u0434\u043f\u043e\u0432\u0456\u0434\u044c \u0431\u0443\u043b\u0430 \u0437\u0430\u043d\u0430\u0434\u0442\u043e \u0441\u043a\u0440\u0438\u043f\u0442\u043e\u0432\u0430\u043d\u0430.", Timestamp = now.AddMinutes(-4) },
+            new ChatRepository.ChatMessage { Role = "user", Content = userText, Timestamp = now }
+        };
+        var timeline = new KokoConversationTimelineEngine().Build(messages, state, now, userText);
+
+        var result = new KokoPostReplyGuard().Evaluate(userText, badReply, state, messages, timeline, now);
+
+        AssertTrue(!result.Passed, "guard should reject generic clarification after a conversation review request");
+        AssertTrue(result.ShouldRepair, "conversation review deflection should be repaired by the model");
+        AssertTrue(result.Violations.Any(v => v.Contains("conversation review", StringComparison.OrdinalIgnoreCase)), "violation should name conversation review");
+        AssertTrue(result.RepairInstruction.Contains("re-read", StringComparison.OrdinalIgnoreCase), "repair should force recent-thread review");
     }
 
     private static void PostReplyGuardProtectsShortApology()
