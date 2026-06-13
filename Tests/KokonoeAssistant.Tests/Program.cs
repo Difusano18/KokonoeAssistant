@@ -207,6 +207,8 @@ internal static class Program
             Run("Reminder scheduled reply hides scheduler ids", ReminderScheduledReplyHidesSchedulerIds);
             Run("Active agency action reports stay internal", ActiveAgencyActionReportsStayInternal);
             Run("Research action reports stay internal", ResearchActionReportsStayInternal);
+            Run("Narrative continue stays conversational", NarrativeContinueStaysConversational);
+            Run("Narrative continue context ignores internal status", NarrativeContinueContextIgnoresInternalStatus);
             Run("Short acknowledgement resolves stale intent", ShortAcknowledgementResolvesStaleIntent);
             Run("Screen awareness parses vision JSON", ScreenAwarenessParsesVisionJson);
             Run("Screen awareness suppresses repeated comments", ScreenAwarenessSuppressesRepeatedComments);
@@ -4833,6 +4835,55 @@ Insight: bridge stability and pulse quality are linked.
         method!.Invoke(service, new object[] { "[ACTION:research] should stay internal" });
 
         AssertTrue(!ctx.Chat.GetMessages(10).Any(m => m.Content.Contains("[ACTION:", StringComparison.OrdinalIgnoreCase)), "research reports should not be inserted into chat");
+    }
+
+    private static void NarrativeContinueStaysConversational()
+    {
+        using var ctx = TestContext.Create();
+        using var health = new HealthService(ctx.TestDir);
+        using var brain = new KokoBrainEngine(new LlmService(), health, new ObsidianMcpService(ctx.TestDir), ctx.Chat, ctx.TestDir);
+        brain.State.ProactiveMutedUntil = DateTime.Now.AddHours(2);
+
+        var handled = brain.TryApplyUserControlCommand("продовжуй", out var reply);
+
+        AssertTrue(!handled, "bare continue should not be stolen by proactive resume control");
+        AssertTrue(string.IsNullOrWhiteSpace(reply), "bare continue should go to the conversational LLM path");
+        AssertTrue(brain.State.ProactiveMutedUntil > DateTime.Now, "bare continue should not clear proactive mute state");
+    }
+
+    private static void NarrativeContinueContextIgnoresInternalStatus()
+    {
+        using var ctx = TestContext.Create();
+        using var health = new HealthService(ctx.TestDir);
+        using var brain = new KokoBrainEngine(new LlmService(), health, new ObsidianMcpService(ctx.TestDir), ctx.Chat, ctx.TestDir);
+        var now = DateTime.Now;
+        ctx.Chat.InsertMessage(new ChatRepository.ChatMessage
+        {
+            Role = "user",
+            Content = "хочу просто поговорити про нас",
+            Timestamp = now.AddMinutes(-3)
+        });
+        ctx.Chat.InsertMessage(new ChatRepository.ChatMessage
+        {
+            Role = "assistant",
+            Author = "Kokonoe",
+            Content = "Не вдавай, що це лабораторний звіт. Говори нормально.",
+            Timestamp = now.AddMinutes(-2)
+        });
+        ctx.Chat.InsertMessage(new ChatRepository.ChatMessage
+        {
+            Role = "assistant",
+            Author = "Kokonoe",
+            Content = "[ACTION:research] researched 4 topics; scheduler: 9d69553ed6",
+            Timestamp = now.AddMinutes(-1)
+        });
+
+        var context = brain.BuildUnifiedExternalContext("telegram", "продовжуй");
+
+        AssertTrue(context.Contains("CONTINUATION OVERRIDE", StringComparison.OrdinalIgnoreCase), "continue should add an explicit thread continuation block");
+        AssertTrue(context.Contains("хочу просто поговорити", StringComparison.OrdinalIgnoreCase), "continuation block should carry the recent human thread");
+        AssertTrue(!context.Contains("[ACTION:research]", StringComparison.OrdinalIgnoreCase), "continuation block should ignore internal status reports");
+        AssertTrue(context.Contains("Do not mention autoping", StringComparison.OrdinalIgnoreCase), "continuation block should forbid technical status leakage");
     }
 
     private static void ShortAcknowledgementResolvesStaleIntent()

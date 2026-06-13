@@ -1766,6 +1766,10 @@ Summary: {summary}
                         sb.AppendLine($"[{m.Timestamp:HH:mm}] {(m.Role == "user" ? "Він" : "Kokonoe")}: {m.Content[..Math.Min(200, m.Content.Length)]}");
                 }
 
+                var continuationBlock = BuildNarrativeContinuationBlock(query);
+                if (!string.IsNullOrWhiteSpace(continuationBlock))
+                    sb.AppendLine(continuationBlock);
+
                 var lastMsg = msgs.LastOrDefault(m => m.Role == "user");
                 if (lastMsg != null)
                 {
@@ -2071,8 +2075,9 @@ Summary: {summary}
                 sb.AppendLine(Somatic.BuildPromptBlock(somatic));
                 sb.AppendLine(SelfRegulator.BuildPromptBlock(GetSelfRegulationFrame(somatic)));
                 sb.AppendLine(BuildSocialContextBlock(null, DateTime.Now));
-                sb.AppendLine(EmotionalMemory.BuildPromptBlock(_state, _chatRepo.GetMessages(30), DateTime.Now));
-                sb.AppendLine(EmotionalMemory.BuildRawHydrationBlock(_state, _chatRepo.GetMessages(30), DateTime.Now));
+                var recentForContext = _chatRepo.GetMessages(30);
+                sb.AppendLine(EmotionalMemory.BuildPromptBlock(_state, recentForContext, DateTime.Now));
+                sb.AppendLine(EmotionalMemory.BuildRawHydrationBlock(_state, recentForContext, DateTime.Now));
                 sb.AppendLine(Initiative.BuildDebugBlock(_state));
                 sb.AppendLine(Presence.BuildDebugBlock(_state));
                 sb.AppendLine(InternalDay.BuildDebugBlock(_state));
@@ -3175,9 +3180,7 @@ Summary: {summary}
                 "замовкни", "мовчи", "не пиши", "не чіпай", "не турбуй", "не нагадуй",
                 "зупинись", "зупиняємось", "стоп", "пауза",
                 "мовчи", "не пиши", "не чіпай", "зупинись");
-            var resume = ContainsAny(lower,
-                "повернись", "можеш писати", "продовжуй", "розбудись", "активуйся", "слухай далі",
-                "повернись", "можеш писати", "продовжуй");
+            var resume = LooksLikeExplicitResumeControl(lower);
 
             if (resume)
             {
@@ -3206,6 +3209,88 @@ Summary: {summary}
             _state.SilenceLevel3At = now;
             _state.LastSpontaneousAt = now;
             return true;
+        }
+
+        private bool LooksLikeExplicitResumeControl(string lower)
+        {
+            if (string.IsNullOrWhiteSpace(lower)) return false;
+
+            if (ContainsAny(lower,
+                    "повернись", "можеш писати", "можеш знову писати", "пиши знову",
+                    "розбудись", "активуйся", "слухай далі", "вернись",
+                    "повертайся", "виходь з паузи", "зніми паузу",
+                    "можешь писать", "пиши снова", "активируйся"))
+                return true;
+
+            if (_state.ProactiveMutedUntil <= DateTime.Now)
+                return false;
+
+            return ContainsAny(lower,
+                "продовжуй писати", "продовжуй нагадувати", "продовжуй пінгувати",
+                "continue messaging", "resume messaging", "resume reminders");
+        }
+
+        private static bool LooksLikeNarrativeContinuationCommand(string? text)
+        {
+            var lower = (text ?? "").Trim().ToLowerInvariant();
+            if (string.IsNullOrWhiteSpace(lower)) return false;
+
+            var compact = new string(lower.Where(c => char.IsLetterOrDigit(c) || char.IsWhiteSpace(c)).ToArray());
+            while (compact.Contains("  ", StringComparison.Ordinal))
+                compact = compact.Replace("  ", " ");
+            compact = compact.Trim();
+
+            if (compact is "продовжуй" or "продовж" or "далі" or "дальше" or "продолжай" or "continue" or "go on")
+                return true;
+
+            return compact.StartsWith("продовжуй ", StringComparison.Ordinal) ||
+                   compact.StartsWith("продовж ", StringComparison.Ordinal) ||
+                   compact.StartsWith("давай далі", StringComparison.Ordinal) ||
+                   compact.StartsWith("давай дальше", StringComparison.Ordinal) ||
+                   compact.StartsWith("continue ", StringComparison.Ordinal) ||
+                   compact.StartsWith("go on", StringComparison.Ordinal);
+        }
+
+        private string BuildNarrativeContinuationBlock(string? userText)
+        {
+            if (!LooksLikeNarrativeContinuationCommand(userText))
+                return "";
+
+            var recent = _chatRepo.GetMessages(8)
+                .OrderBy(m => m.Timestamp)
+                .Where(m => !LooksLikeInternalStatusLeak(m.Content))
+                .TakeLast(6)
+                .ToList();
+
+            var sb = new StringBuilder();
+            sb.AppendLine();
+            sb.AppendLine("=== CONTINUATION OVERRIDE ===");
+            sb.AppendLine("Latest user message is a continuation command. Treat it as conversational/narrative continuation, not as a system resume, autoping, scheduler, or background-task status request.");
+            sb.AppendLine("Priority: continue the latest active human thread from recent chat. If no coherent thread exists, ask one sharp concrete question. Do not mention autoping, follow-up queues, scheduler ids, or background mechanics.");
+            if (recent.Count > 0)
+            {
+                sb.AppendLine("Recent thread to continue:");
+                foreach (var m in recent)
+                {
+                    var role = m.Role == "user" ? "user" : "Kokonoe";
+                    var content = TrimStateMention(m.Content);
+                    sb.AppendLine($"- [{m.Timestamp:HH:mm}] {role}: {content}");
+                }
+            }
+
+            return sb.ToString();
+        }
+
+        private static bool LooksLikeInternalStatusLeak(string? text)
+        {
+            var lower = (text ?? "").ToLowerInvariant();
+            return string.IsNullOrWhiteSpace(lower) ||
+                   lower.Contains("[action:", StringComparison.OrdinalIgnoreCase) ||
+                   lower.Contains("autoping", StringComparison.OrdinalIgnoreCase) ||
+                   lower.Contains("автоп", StringComparison.OrdinalIgnoreCase) ||
+                   lower.Contains("follow-up", StringComparison.OrdinalIgnoreCase) ||
+                   lower.Contains("scheduler:", StringComparison.OrdinalIgnoreCase) ||
+                   lower.Contains("запис у scheduler", StringComparison.OrdinalIgnoreCase);
         }
 
         private void ObserveFoodSleepState(string content, DateTime now)
@@ -3583,8 +3668,11 @@ Summary: {summary}
         private KokoResponsePlanFrame BuildGovernedResponsePlan(string userText, DateTime now)
         {
             var social = BuildSocialFrame(userText, now);
-            var emotional = EmotionalMemory.BuildPromptBlock(_state, _chatRepo.GetMessages(30), now, userText);
-            var rawHydration = EmotionalMemory.BuildRawHydrationBlock(_state, _chatRepo.GetMessages(30), now);
+            var recentForPlanning = _chatRepo.GetMessages(30);
+            if (LooksLikeNarrativeContinuationCommand(userText))
+                recentForPlanning = recentForPlanning.Where(m => !LooksLikeInternalStatusLeak(m.Content)).ToList();
+            var emotional = EmotionalMemory.BuildPromptBlock(_state, recentForPlanning, now, userText);
+            var rawHydration = EmotionalMemory.BuildRawHydrationBlock(_state, recentForPlanning, now);
             var settings = AppSettings.Load();
             if (settings.NeuralGovernorEnabled && ServiceContainer.IsInitialized)
             {
@@ -3608,7 +3696,7 @@ Summary: {summary}
                             social,
                             emotional,
                             rawHydration,
-                            _chatRepo.GetMessages(24),
+                            recentForPlanning.Take(24).ToList(),
                             memoryContext,
                             _cachedScreenContext,
                             wearable,
@@ -6415,6 +6503,12 @@ Summary: {summary}
             {
                 sb.AppendLine();
                 sb.AppendLine(responsePlan.PromptBlock);
+            }
+            var continuationBlock = BuildNarrativeContinuationBlock(userText);
+            if (!string.IsNullOrWhiteSpace(continuationBlock))
+            {
+                sb.AppendLine();
+                sb.AppendLine(continuationBlock);
             }
             if (responsePlan?.RequiresVaultRead == true || responsePlan?.Capability == "vault_memory")
             {
