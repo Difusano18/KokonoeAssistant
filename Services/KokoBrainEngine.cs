@@ -170,6 +170,12 @@ namespace KokonoeAssistant.Services
         public string LastVaultMaintenanceError { get; set; } = "";
         public DateTime LastBackgroundVaultScanAt { get; set; } = DateTime.MinValue;
         public string LastBackgroundVaultScanSummary { get; set; } = "";
+        public List<KokoPromiseRecord> PromiseLedger { get; set; } = new();
+        public DateTime LastPromiseAuditAt { get; set; } = DateTime.MinValue;
+        public string LastPromiseAuditSummary { get; set; } = "";
+        public List<string> ActionJournal { get; set; } = new();
+        public DateTime LastActionJournalAt { get; set; } = DateTime.MinValue;
+        public string LastActionJournalSummary { get; set; } = "";
         public List<ShortTermIntent> ShortTermIntents { get; set; } = new();
         public DateTime LastScreenAwarenessAt { get; set; } = DateTime.MinValue;
         public DateTime LastScreenAwarenessCommentAt { get; set; } = DateTime.MinValue;
@@ -260,6 +266,23 @@ namespace KokonoeAssistant.Services
         public DateTime FollowUpAt { get; set; } = DateTime.Now.AddHours(1);
         public DateTime? ResolvedAt { get; set; }
         public string ResolutionText { get; set; } = "";
+    }
+
+    public class KokoPromiseRecord
+    {
+        public string Id { get; set; } = Guid.NewGuid().ToString("N")[..8];
+        public string Source { get; set; } = "chat";
+        public string Summary { get; set; } = "";
+        public string SourceUserText { get; set; } = "";
+        public string SourceAssistantText { get; set; } = "";
+        public DateTime CreatedAt { get; set; } = DateTime.Now;
+        public DateTime DueAt { get; set; } = DateTime.Now.AddHours(2);
+        public string Status { get; set; } = "open";
+        public DateTime? CompletedAt { get; set; }
+        public DateTime? LastAuditAt { get; set; }
+        public string Evidence { get; set; } = "";
+        public string FailureReason { get; set; } = "";
+        public bool UserVisible { get; set; }
     }
 
     public class ScreenPatternStats
@@ -788,7 +811,12 @@ Wearable: {state.Summary}
         {
             try
             {
-                lock (_lock) { SaveState(); }
+                lock (_lock)
+                {
+                    AuditPromiseLedgerLocked("heartbeat");
+                    SaveState();
+                }
+                TrySelfHealWearableBridge("heartbeat");
                 ServiceContainer.Heartbeat.Update("BRAIN", "online", $"mood={_state.CurrentMood}; thoughts={_state.PendingThoughts.Count}; autonomy={TrimForLog(_state.LastAutonomyDecision, 80)}");
                 ServiceContainer.Heartbeat.Update("VISION", _screenAwarenessInFlight == 1 ? "scanning" : "idle", $"last={FormatAge(_state.LastScreenAwarenessAt)}; failures={_state.VisionFailureCount}");
                 ServiceContainer.Heartbeat.Update("WATCH", ServiceContainer.WearableBridge.GetConnectionSnapshot().State, ServiceContainer.WearableTelemetry.State.Summary);
@@ -798,6 +826,46 @@ Wearable: {state.Summary}
             catch (Exception ex)
             {
                 Log($"CheckpointStateAndHeartbeat: {ex.Message}");
+            }
+        }
+
+        private void TrySelfHealWearableBridge(string reason)
+        {
+            try
+            {
+                var now = DateTime.Now;
+                var bridge = ServiceContainer.WearableBridge;
+                var diagnostics = bridge.Diagnostics;
+                var connection = bridge.GetConnectionSnapshot();
+                if (bridge.IsRunning)
+                {
+                    if (!string.IsNullOrWhiteSpace(diagnostics.LastError) &&
+                        !connection.IsLinked &&
+                        now - _state.LastBridgeSelfHealAt > TimeSpan.FromMinutes(10))
+                    {
+                        lock (_lock)
+                        {
+                            _state.LastBridgeSelfHealAt = now;
+                            AppendActionJournalLocked("self-heal.bridge.observe", diagnostics.LastError, "attention", reason);
+                            SaveState();
+                        }
+                    }
+                    return;
+                }
+
+                lock (_lock)
+                {
+                    if (now - _state.LastBridgeSelfHealAt < TimeSpan.FromMinutes(5))
+                        return;
+                    _state.LastBridgeSelfHealAt = now;
+                    AppendActionJournalLocked("self-heal.bridge.restart", "wearable bridge was stopped; attempting Start()", "started", reason);
+                    SaveState();
+                }
+                bridge.Start();
+            }
+            catch (Exception ex)
+            {
+                KokoSystemLog.Write("SELF_HEAL", "wearable bridge heal failed: " + ex.Message);
             }
         }
 
@@ -7101,6 +7169,7 @@ tags: [kokonoe, somatic, pulse, self-regulation]
 
             lock (_lock)
             {
+                ObservePromiseFromExchangeLocked(userText, assistantText);
                 _state.PendingVaultExchangeCount++;
                 _state.PendingVaultExchangeBuffer.Add($"""
 [{DateTime.Now:yyyy-MM-dd HH:mm}]
@@ -7109,11 +7178,184 @@ KOKONOE: {TrimForVaultBuffer(assistantText, 900)}
 """);
                 if (_state.PendingVaultExchangeBuffer.Count > 12)
                     _state.PendingVaultExchangeBuffer.RemoveRange(0, _state.PendingVaultExchangeBuffer.Count - 12);
+                AuditPromiseLedgerLocked("new-exchange");
                 SaveState();
             }
 
             EnsureVaultSyncFreshness("new-exchange");
         }
+
+        private void ObservePromiseFromExchangeLocked(string userText, string assistantText)
+        {
+            if (string.IsNullOrWhiteSpace(assistantText)) return;
+            var assistant = assistantText.ToLowerInvariant();
+            var user = (userText ?? "").ToLowerInvariant();
+
+            var promisedAction = ContainsAny(assistant,
+                "зроблю", "зробим", "виконаю", "оновлю", "обновлю", "запишу", "додам", "дороблю",
+                "перевірю", "протестую", "закомічу", "запушу", "напишу коли", "i will", "i'll", "will do");
+            var concreteUserAsk = ContainsAny(user,
+                "зроби", "онови", "обнови", "дороби", "закоміть", "закоміти", "запуш", "обсидіан", "obsidian",
+                "профіль", "profile", "пам'ять", "память", "тести", "commit", "push", "виконай");
+            if (!promisedAction || !concreteUserAsk)
+                return;
+
+            var summary = BuildPromiseSummary(userText, assistantText);
+            if (string.IsNullOrWhiteSpace(summary)) return;
+
+            var canonical = NormalizePromise(summary);
+            var duplicate = _state.PromiseLedger.Any(p =>
+                !string.Equals(p.Status, "completed", StringComparison.OrdinalIgnoreCase) &&
+                NormalizePromise(p.Summary) == canonical &&
+                DateTime.Now - p.CreatedAt < TimeSpan.FromHours(12));
+            if (duplicate) return;
+
+            var now = DateTime.Now;
+            var promise = new KokoPromiseRecord
+            {
+                Source = "chat",
+                Summary = summary,
+                SourceUserText = TrimForVaultBuffer(userText, 420),
+                SourceAssistantText = TrimForVaultBuffer(assistantText, 420),
+                CreatedAt = now,
+                DueAt = EstimatePromiseDueAt(now, canonical),
+                Status = "open",
+                UserVisible = true
+            };
+            _state.PromiseLedger.Add(promise);
+            TrimPromiseLedgerLocked();
+            AppendActionJournalLocked("promise.opened", promise.Summary, "open", $"due={promise.DueAt:yyyy-MM-dd HH:mm}");
+        }
+
+        private void AuditPromiseLedgerLocked(string reason)
+        {
+            var now = DateTime.Now;
+            if (_state.LastPromiseAuditAt > DateTime.MinValue && now - _state.LastPromiseAuditAt < TimeSpan.FromMinutes(5))
+                return;
+
+            var open = _state.PromiseLedger
+                .Where(p => !string.Equals(p.Status, "completed", StringComparison.OrdinalIgnoreCase) &&
+                            !string.Equals(p.Status, "cancelled", StringComparison.OrdinalIgnoreCase))
+                .OrderBy(p => p.DueAt)
+                .ToList();
+            var completed = 0;
+            var overdue = 0;
+
+            foreach (var promise in open)
+            {
+                promise.LastAuditAt = now;
+                var canonical = NormalizePromise(promise.Summary + " " + promise.SourceUserText);
+                if (LooksLikeVaultPromise(canonical) &&
+                    ((_state.LastAutoVaultSyncAt > promise.CreatedAt && !string.IsNullOrWhiteSpace(_state.LastAutoVaultSyncSummary)) ||
+                     (_state.LastVaultMaintenanceAt > promise.CreatedAt && string.IsNullOrWhiteSpace(_state.LastVaultMaintenanceError))))
+                {
+                    promise.Status = "completed";
+                    promise.CompletedAt = now;
+                    promise.Evidence = string.IsNullOrWhiteSpace(_state.LastAutoVaultSyncSummary)
+                        ? _state.LastVaultMaintenanceSummary
+                        : _state.LastAutoVaultSyncSummary;
+                    completed++;
+                    AppendActionJournalLocked("promise.completed", promise.Summary, "completed", TrimForVaultBuffer(promise.Evidence, 220));
+                    continue;
+                }
+
+                if (now > promise.DueAt)
+                {
+                    promise.Status = "overdue";
+                    promise.FailureReason = "deadline passed without matching action evidence";
+                    overdue++;
+                }
+            }
+
+            _state.LastPromiseAuditAt = now;
+            _state.LastPromiseAuditSummary = $"reason={reason}; open={open.Count}; completed={completed}; overdue={overdue}";
+            AppendActionJournalLocked("promise.audit", _state.LastPromiseAuditSummary, overdue > 0 ? "attention" : "ok", "");
+            WritePromiseAuditNoteLocked(open, reason);
+        }
+
+        private void WritePromiseAuditNoteLocked(List<KokoPromiseRecord> open, string reason)
+        {
+            try
+            {
+                var sb = new StringBuilder();
+                sb.AppendLine("---");
+                sb.AppendLine("type: automation-status");
+                sb.AppendLine($"updated: {DateTime.Now:yyyy-MM-dd HH:mm}");
+                sb.AppendLine("managed-by: KokoBrainEngine.PromiseLedger");
+                sb.AppendLine("tags: [kokonoe, automation, promises]");
+                sb.AppendLine("---");
+                sb.AppendLine();
+                sb.AppendLine("# Promise Ledger");
+                sb.AppendLine();
+                sb.AppendLine($"- reason: {reason}");
+                sb.AppendLine($"- summary: {_state.LastPromiseAuditSummary}");
+                sb.AppendLine();
+                sb.AppendLine("## Open / Overdue");
+                foreach (var p in open.Take(20))
+                    sb.AppendLine($"- [{p.Status}] {p.DueAt:yyyy-MM-dd HH:mm} - {p.Summary} ({p.Evidence}{p.FailureReason})");
+                sb.AppendLine();
+                sb.AppendLine("## Recent Actions");
+                foreach (var line in _state.ActionJournal.TakeLast(20))
+                    sb.AppendLine("- " + line);
+                _obsidian.WriteNote("Kokonoe/Automation/Promise Ledger.md", sb.ToString());
+            }
+            catch (Exception ex)
+            {
+                KokoSystemLog.Write("PROMISE", "audit note failed: " + ex.Message);
+            }
+        }
+
+        private void AppendActionJournalLocked(string kind, string summary, string status, string evidence)
+        {
+            var line = $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} [{kind}] {status}: {TrimForVaultBuffer(summary, 240)}";
+            if (!string.IsNullOrWhiteSpace(evidence))
+                line += " | " + TrimForVaultBuffer(evidence, 220);
+            _state.ActionJournal.Add(line);
+            if (_state.ActionJournal.Count > 240)
+                _state.ActionJournal.RemoveRange(0, _state.ActionJournal.Count - 240);
+            _state.LastActionJournalAt = DateTime.Now;
+            _state.LastActionJournalSummary = line;
+            KokoSystemLog.Write("ACTION", line);
+        }
+
+        private void TrimPromiseLedgerLocked()
+        {
+            if (_state.PromiseLedger.Count <= 80) return;
+            _state.PromiseLedger = _state.PromiseLedger
+                .OrderByDescending(p => !string.Equals(p.Status, "completed", StringComparison.OrdinalIgnoreCase))
+                .ThenByDescending(p => p.CreatedAt)
+                .Take(80)
+                .OrderBy(p => p.CreatedAt)
+                .ToList();
+        }
+
+        private static string BuildPromiseSummary(string? userText, string? assistantText)
+        {
+            var user = TrimForVaultBuffer(userText, 170);
+            var assistant = TrimForVaultBuffer(assistantText, 170);
+            if (string.IsNullOrWhiteSpace(user)) return assistant;
+            if (string.IsNullOrWhiteSpace(assistant)) return user;
+            return $"{user} -> {assistant}";
+        }
+
+        private static DateTime EstimatePromiseDueAt(DateTime now, string canonical)
+        {
+            if (ContainsAny(canonical, "commit", "push", "коміт", "заком", "запуш"))
+                return now.AddMinutes(45);
+            if (ContainsAny(canonical, "obsidian", "vault", "обсид", "profile", "профіл", "памят", "память"))
+                return now.AddMinutes(30);
+            if (ContainsAny(canonical, "test", "тест", "build", "білд"))
+                return now.AddHours(1);
+            return now.AddHours(2);
+        }
+
+        private static bool LooksLikeVaultPromise(string canonical)
+            => ContainsAny(canonical, "obsidian", "vault", "обсид", "profile", "профіл", "памят", "память", "нотат", "note");
+
+        private static string NormalizePromise(string value)
+            => new string((value ?? "").ToLowerInvariant().Where(c => char.IsLetterOrDigit(c) || char.IsWhiteSpace(c)).ToArray())
+                .Replace("  ", " ")
+                .Trim();
 
         private async Task AutoSyncVaultBatchAsync(bool force = false, string reason = "batch")
         {

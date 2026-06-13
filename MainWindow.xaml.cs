@@ -1529,14 +1529,18 @@ tags: [kokonoe, live-core, diagnostics]
                     PulseSideBpmText.Text = wearableCur > 0 ? $"{wearableCur:0}" : "--";
 
                     PulseTabStateLabel.Text = verified ? "LIVE VERIFIED" : FormatBridgeState(connection.State);
-                    PulseSideStateText.Text = verified ? $"last {lastLocal} / {wearable.PresenceState}" : VerifiedWearableBlockReason(connection, diagnostics, wearable);
+                    var blockedReason = VerifiedWearableBlockReason(connection, diagnostics, wearable);
+                    PulseSideStateText.Text = verified ? $"last {lastLocal} / {wearable.PresenceState}" : blockedReason;
                     UpdatePulseBridgeStrip(bridge, diagnostics, connection, wearable, fresh);
 
                     var vitalRows = new List<object>
                     {
                         new { TimeStr = "pulse", BpmStr = wearableCur > 0 ? $"{wearableCur:0} bpm" : "--" },
                         new { TimeStr = "last measured", BpmStr = lastLocal },
-                        new { TimeStr = "authority", BpmStr = verified ? "verified Galaxy Watch" : "blocked / unverified" },
+                        new { TimeStr = "authority", BpmStr = verified ? "verified Galaxy Watch" : blockedReason },
+                        new { TimeStr = "trust state", BpmStr = verified ? "verified" : NullDash(wearable.TrustState) },
+                        new { TimeStr = "source", BpmStr = NullDash(wearable.SampleSource) },
+                        new { TimeStr = "trust reason", BpmStr = verified ? "bridge pair + fresh sample" : NullDash(wearable.TrustReason) },
                         new { TimeStr = "freshness", BpmStr = verified ? "fresh" : "not trusted" },
                         new { TimeStr = "link", BpmStr = FormatBridgeState(connection.State).ToLowerInvariant() },
                         new { TimeStr = "watch app", BpmStr = connection.IsPaired ? NullDash(diagnostics.LastPairedDeviceId) : "not paired" },

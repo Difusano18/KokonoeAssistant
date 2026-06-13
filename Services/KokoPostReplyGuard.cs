@@ -78,6 +78,8 @@ namespace KokonoeAssistant.Services
                 violations.Add("reply invented a punitive network-control threat instead of answering the chat boundary");
             if (LooksLikeSoftSocialTurn(userLower) && LooksLikeSoftSocialContempt(replyLower))
                 violations.Add("soft social/affectionate request was turned into contempt, productivity pressure, or task-demanding roleplay");
+            if (LooksLikePersonaTheater(userLower, replyLower))
+                violations.Add("persona theater dominated the answer instead of Kokonoe-style useful dialogue");
 
             if (violations.Count == 0 && LooksLikeTransportError(reply))
                 return Pass("transport error surfaced; do not hide provider failure");
@@ -313,6 +315,8 @@ Timeline:
                 rules.Add("- Do not threaten fake OS/network punishment in normal chat. If setting a boundary, answer briefly without claiming you will block access.");
             if (violations.Any(v => v.Contains("soft social", StringComparison.OrdinalIgnoreCase)))
                 rules.Add("- Latest user turn is casual, social, or affectionate. Answer that mode directly: restrained warmth is allowed, one dry edge is fine, but do not demand a task, mock the need for warmth, or pivot to productivity.");
+            if (violations.Any(v => v.Contains("persona theater", StringComparison.OrdinalIgnoreCase)))
+                rules.Add("- Kokonoe voice is dry precision plus a sharp edge, not dominance theater. Remove permission-games, productivity scolding, patience tests, and fake indifference; answer the actual request with one concrete move.");
             if (violations.Any(v => v.Contains("background system status", StringComparison.OrdinalIgnoreCase)))
                 rules.Add("- The latest turn is normal conversation, not a debug console. Hide scheduler/research/vault/task mechanics; answer the emotional/social turn naturally.");
             if (violations.Any(v => v.Contains("conversation mechanics", StringComparison.OrdinalIgnoreCase)))
@@ -528,6 +532,29 @@ Timeline:
                 "\u043f\u043e\u0432\u0435\u0440\u0442\u0430\u0439\u043c\u043e\u0441\u044f \u0434\u043e \u0447\u043e\u0433\u043e\u0441\u044c \u0431\u0456\u043b\u044c\u0448 \u043f\u0440\u043e\u0434\u0443\u043a\u0442\u0438\u0432", "\u0431\u0456\u043b\u044c\u0448 \u043f\u0440\u043e\u0434\u0443\u043a\u0442\u0438\u0432\u043d", "\u0434\u0430\u0432\u0430\u0439 \u0431\u0456\u043b\u044c\u0448\u0435 \u043a\u043e\u043d\u043a\u0440\u0435\u0442",
                 "\u043c\u043e\u0454 \u0442\u0435\u0440\u043f\u0456\u043d\u043d\u044f", "\u043c\u0430\u0440\u043d\u0443\u0454\u0448", "\u0432\u0438\u0442\u0440\u0430\u0447\u0430\u0454\u0448 \u0447\u0430\u0441",
                 "social dance", "pour water", "back to something productive", "more productive", "satisfied your request", "my patience", "wasting time");
+        }
+
+        private static bool LooksLikePersonaTheater(string userLower, string replyLower)
+        {
+            if (string.IsNullOrWhiteSpace(replyLower)) return false;
+
+            var socialOrCommand = LooksLikeSoftSocialTurn(userLower) ||
+                ContainsAny(userLower,
+                    "онови", "обнови", "зроби", "виконай", "поможи", "допоможи", "профіль", "obsidian", "vault",
+                    "update", "fix", "do it", "help");
+            if (!socialOrCommand) return false;
+
+            var theaterScore = 0;
+            if (ContainsAny(replyLower, "permission", "prove yourself", "my pace", "my patience", "absolutely indifferent")) theaterScore++;
+            if (ContainsAny(replyLower, "дозвол", "покажеш", "на що ти здат", "мій темп", "моє терпіння", "абсолютно байдуже")) theaterScore++;
+            if (ContainsAny(replyLower, "продуктив", "марнуєш", "соціальн", "танц", "лити воду", "підлабуз")) theaterScore++;
+            if (ContainsAny(replyLower, "жалюгід", "стерв", "нижч", "терпи", "слухнян")) theaterScore++;
+
+            var concreteWork = ContainsAny(replyLower,
+                "файл", "шлях", "коміт", "commit", "push", "тест", "build", "готов", "оновлено", "змінено",
+                "profile.md", ".md", ".cs", "obsidian");
+
+            return theaterScore >= 2 && (!concreteWork || LooksLikeSoftSocialTurn(userLower));
         }
 
         private static bool IsLowInformationTurn(string userText)

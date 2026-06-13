@@ -134,6 +134,11 @@ namespace KokonoeAssistant.Services
             var text = ((userText ?? "") + "\n" + (assistantText ?? "")).ToLowerInvariant();
             if (string.IsNullOrWhiteSpace(text)) return false;
 
+            if (ContainsAny(text,
+                "promise", "promised", "ledger", "obligation", "autonomy", "roleplay", "scripted",
+                "обіц", "обещ", "викона", "зроблю", "зроби все", "сама контрол", "оновлюй обсидіан", "онови профіль"))
+                return true;
+
             return ContainsAny(text,
                 "запам", "запиши", "пам'ят", "память", "факт",
                 "профіль", "профиль", "obsidian", "vault",
@@ -187,6 +192,8 @@ namespace KokonoeAssistant.Services
             sb.AppendLine("Decide whether the user's Obsidian profile should be updated now.");
             sb.AppendLine("Return ONLY JSON: {\"shouldUpdate\":true|false,\"reason\":\"...\",\"instruction\":\"...\"}");
             sb.AppendLine("Update only for durable facts, explicit preferences, project priorities, operating rules, active obligations, or important wearable/system integration changes.");
+            sb.AppendLine("Active obligations include promises Kokonoe made to actually edit files, update Obsidian, run tests, commit, push, or report artifacts.");
+            sb.AppendLine("Prefer synthesized facts and operating rules. Never store persona theater, dominance/flirting filler, insults, or raw chat as profile facts.");
             sb.AppendLine("Do not update for greetings, transient mood, raw sexual/private lines, or noise.");
             sb.AppendLine("If updating, instruction must say what durable synthesis to write, not raw chat lines.");
             sb.AppendLine("Trigger reason: " + reason);

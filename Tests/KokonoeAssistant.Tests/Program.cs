@@ -24,6 +24,7 @@ internal static class Program
             Run("Wearable telemetry raises stress spike event", WearableTelemetryRaisesStressSpikeEvent);
             Run("Wearable telemetry ignores duplicate sample ids", WearableTelemetryIgnoresDuplicateSampleIds);
             Run("Wearable telemetry reloads recent sample ids", WearableTelemetryReloadsRecentSampleIds);
+            Run("Wearable telemetry marks diagnostic trust state", WearableTelemetryMarksDiagnosticTrustState);
             Run("Heart engine prefers fresh wearable bpm", HeartEnginePrefersFreshWearableBpm);
             Run("Wearable bridge ingests authorized sample", WearableBridgeIngestsAuthorizedSample);
             Run("Wearable bridge rejects unpaired sample", WearableBridgeRejectsUnpairedSample);
@@ -83,6 +84,7 @@ internal static class Program
             Run("Post reply guard protects short affection", PostReplyGuardProtectsShortAffection);
             Run("Post reply guard protects soft social talk", PostReplyGuardProtectsSoftSocialTalk);
             Run("Post reply guard blocks affection productivity pivot", PostReplyGuardBlocksAffectionProductivityPivot);
+            Run("Post reply guard blocks persona theater", PostReplyGuardBlocksPersonaTheater);
             Run("Post reply guard protects short greeting", PostReplyGuardProtectsShortGreeting);
             Run("Post reply guard blocks overbuilt greeting", PostReplyGuardBlocksOverbuiltGreeting);
             Run("Post reply guard blocks repeated fallback loop", PostReplyGuardBlocksRepeatedFallbackLoop);
@@ -247,6 +249,7 @@ internal static class Program
             Run("Obsidian profile updater writes neutral profile", ObsidianProfileUpdaterWritesNeutralProfile);
             Run("Obsidian profile updater throttles backup spam", ObsidianProfileUpdaterThrottlesBackupSpam);
             Run("Autonomous profile curator detects durable facts", AutonomousProfileCuratorDetectsDurableFacts);
+            Run("Autonomous profile curator detects promise obligations", AutonomousProfileCuratorDetectsPromiseObligations);
             Run("Autonomous profile curator writes synthesized update", AutonomousProfileCuratorWritesSynthesizedUpdate);
             Run("Obsidian rejects paths outside vault", ObsidianRejectsPathsOutsideVault);
             Run("LLM vault tool routing avoids accidental writes", LlmVaultToolRoutingAvoidsAccidentalWrites);
@@ -441,6 +444,33 @@ internal static class Program
             var prompt = service.BuildPromptBlock(start.AddMinutes(15));
             AssertTrue(prompt.Contains("stress=", StringComparison.OrdinalIgnoreCase), "prompt should expose stress score");
             AssertTrue(prompt.Contains("initiative=suggest_short_break", StringComparison.OrdinalIgnoreCase), "prompt should expose initiative");
+        }
+        finally { TryDeleteDir(dir); }
+    }
+
+    private static void WearableTelemetryMarksDiagnosticTrustState()
+    {
+        var dir = TempDir();
+        try
+        {
+            var service = new KokoWearableTelemetryService(dir);
+            var result = service.IngestDetailed(new KokoWearableSample
+            {
+                SampleId = "smoke-hr-1",
+                TimestampUtc = DateTime.UtcNow,
+                DeviceId = "live-smoke-watch-b",
+                Source = "diagnostic-smoke",
+                HeartRateBpm = 103,
+                Motion = 0.42,
+                OnWrist = true,
+                Note = "smoke test sample"
+            });
+
+            AssertTrue(result.Accepted, "diagnostic sample can be accepted for logs");
+            AssertTrue(result.State.IsDiagnosticSample, "diagnostic sample should be stamped as diagnostic");
+            AssertEqual("diagnostic_blocked", result.State.TrustState, "diagnostic sample should not look trusted");
+            AssertTrue(result.State.TrustReason.Contains("diagnostic", StringComparison.OrdinalIgnoreCase), "trust reason should explain diagnostic source");
+            AssertTrue(service.BuildPromptBlock(DateTime.UtcNow).Contains("diagnostic_sample=True", StringComparison.OrdinalIgnoreCase), "prompt should expose diagnostic flag");
         }
         finally { TryDeleteDir(dir); }
     }
@@ -2388,6 +2418,26 @@ internal static class Program
         AssertTrue(!result.Passed, "guard should reject affection replies that end in productivity pressure");
         AssertTrue(result.ShouldRepair, "affection request should be repaired naturally");
         AssertTrue(result.Violations.Any(v => v.Contains("productivity", StringComparison.OrdinalIgnoreCase)), "violation should mention productivity pressure");
+    }
+
+    private static void PostReplyGuardBlocksPersonaTheater()
+    {
+        var now = new DateTime(2026, 6, 9, 18, 55, 0);
+        var state = new KokoInternalState();
+        var userText = "поможи і роби що сказано";
+        var badReply = "Нарешті-то ти сформулював конкретний запит. Якщо я стану стервом, я не буду питати твого дозволу і мені буде абсолютно байдуже, чи ти встигаєш за моїм темпом. Покажеш, на що ти здатний.";
+        var messages = new[]
+        {
+            new ChatRepository.ChatMessage { Role = "user", Content = userText, Timestamp = now }
+        };
+        var timeline = new KokoConversationTimelineEngine().Build(messages, state, now, userText);
+
+        var result = new KokoPostReplyGuard().Evaluate(userText, badReply, state, messages, timeline, now);
+
+        AssertTrue(!result.Passed, "guard should reject dominance-theater replies to direct work requests");
+        AssertTrue(result.ShouldRepair, "persona theater should be repaired through context-aware reply");
+        AssertTrue(result.Violations.Any(v => v.Contains("persona theater", StringComparison.OrdinalIgnoreCase)), "violation should name persona theater");
+        AssertTrue(result.RepairInstruction.Contains("dry precision", StringComparison.OrdinalIgnoreCase), "repair should explain Kokonoe voice without dominance theater");
     }
 
     private static void PostReplyGuardProtectsShortGreeting()
@@ -5851,6 +5901,21 @@ type: creator-profile
         AssertTrue(
             !KokoAutonomousProfileCuratorService.ShouldTriggerFromExchange("hi", "hello"),
             "curator should ignore low-signal greetings");
+    }
+
+    private static void AutonomousProfileCuratorDetectsPromiseObligations()
+    {
+        AssertTrue(
+            KokoAutonomousProfileCuratorService.ShouldTriggerFromExchange(
+                "онови профіль і зроби все нормально",
+                "Зроблю: оновлю Obsidian, прожену тести, потім закомічу і запушу."),
+            "curator should wake on concrete promises and obligations");
+
+        AssertTrue(
+            KokoAutonomousProfileCuratorService.ShouldTriggerFromExchange(
+                "I need you to control this yourself from now on.",
+                "Promise ledger will track the obligation instead of leaving a chat-only promise."),
+            "curator should wake on promise ledger language");
     }
 
     private static void AutonomousProfileCuratorWritesSynthesizedUpdate()

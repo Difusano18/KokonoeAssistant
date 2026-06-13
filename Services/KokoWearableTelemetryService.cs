@@ -37,6 +37,10 @@ namespace KokonoeAssistant.Services
     {
         public DateTime LastSampleUtc { get; set; } = DateTime.MinValue;
         public string DeviceId { get; set; } = "";
+        public string SampleSource { get; set; } = "";
+        public bool IsDiagnosticSample { get; set; }
+        public string TrustState { get; set; } = "unverified";
+        public string TrustReason { get; set; } = "no wearable sample accepted yet";
         public double CurrentBpm { get; set; }
         public double BaselineBpm { get; set; }
         public double BpmDelta => CurrentBpm > 0 && BaselineBpm > 0 ? CurrentBpm - BaselineBpm : 0;
@@ -225,7 +229,8 @@ namespace KokonoeAssistant.Services
             return $"""
 WEARABLE TELEMETRY
 freshness={freshness}
-device={NullDash(state.DeviceId)} on_wrist={state.OnWrist}
+device={NullDash(state.DeviceId)} source={NullDash(state.SampleSource)} on_wrist={state.OnWrist}
+trust_state={NullDash(state.TrustState)} trust_reason={NullDash(state.TrustReason)} diagnostic_sample={state.IsDiagnosticSample}
 {heartLine}
 sleep={state.SleepState} confidence={state.SleepConfidence:F2}
 stress={state.StressScore:F2} live_stress_score={state.LiveStressScore}/100 recovery={state.RecoveryState} initiative={NullDash(state.SuggestedInitiative)}
@@ -255,6 +260,16 @@ rule: wearable telemetry is context, not a medical diagnosis. Use it to reduce d
             var nowUtc = sample.TimestampUtc;
             _state.LastSampleUtc = nowUtc;
             _state.DeviceId = sample.DeviceId;
+            _state.SampleSource = sample.Source;
+            _state.IsDiagnosticSample = LooksLikeDiagnosticTelemetry(sample.DeviceId) ||
+                                        LooksLikeDiagnosticTelemetry(sample.Source) ||
+                                        LooksLikeDiagnosticTelemetry(sample.Note);
+            _state.TrustState = _state.IsDiagnosticSample
+                ? "diagnostic_blocked"
+                : "accepted_pending_pair_verification";
+            _state.TrustReason = _state.IsDiagnosticSample
+                ? "diagnostic/mock/smoke telemetry source; do not treat as real Galaxy Watch data"
+                : "sample accepted by telemetry service; desktop bridge pair verification still decides UI authority";
             _state.OnWrist = sample.OnWrist ?? _state.OnWrist;
             _state.Activity = string.IsNullOrWhiteSpace(sample.Activity) ? _state.Activity : sample.Activity.Trim();
             _state.SemanticLocation = string.IsNullOrWhiteSpace(sample.SemanticLocation) ? _state.SemanticLocation : sample.SemanticLocation.Trim();
