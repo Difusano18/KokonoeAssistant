@@ -28,5 +28,8 @@ namespace KokonoeAssistant.Services
             var voice = KokoTemperamentEngine.BuildVoiceDirective(mood);
             return $"TEMPERAMENT LENGTH: {mood}. {voice} Energy={state.PersonaEnergyLevel.ToString("F2", CultureInfo.InvariantCulture)}; patience={state.PersonaPatienceLevel.ToString("F2", CultureInfo.InvariantCulture)}.";
         }
+
+        public static string BuildLivingConversationDirective(KokoInternalState state)
+            => KokoLivingConversationEngine.BuildDirective(state);
     }
 }

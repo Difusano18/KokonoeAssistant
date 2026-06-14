@@ -50,6 +50,8 @@ namespace KokonoeAssistant.Services
                 violations.Add("visible reply exposed background system status instead of preserving conversational mood");
             if (LooksLikeLazyClarificationLoop(userLower, replyLower))
                 violations.Add("reply stalled with a generic clarification loop instead of inferring social subtext");
+            if (LooksLikeRoboticSupportTone(userLower, replyLower))
+                violations.Add("visible reply used robotic helpdesk tone instead of living Kokonoe dialogue");
             if (LooksLikeConversationReviewDeflection(userLower, replyLower))
                 violations.Add("conversation review request was deflected into generic clarification instead of reading recent context");
             if (LooksLikeVisionTechnicalError(reply))
@@ -1240,6 +1242,28 @@ Timeline:
             return ContainsAny(replyLower,
                 "що саме ти маєш на увазі", "будь конкретнішим", "уточни", "be more specific",
                 "what do you mean", "can you clarify", "please clarify");
+        }
+
+        private static bool LooksLikeRoboticSupportTone(string userLower, string replyLower)
+        {
+            if (string.IsNullOrWhiteSpace(replyLower)) return false;
+
+            var canned = ContainsAny(replyLower,
+                "i understand", "i get it", "happy to help", "let me know", "how can i help", "how may i assist",
+                "\u044f \u0440\u043e\u0437\u0443\u043c\u0456\u044e", "\u044f \u043f\u043e\u043d\u0456\u043c\u0430\u044e", "\u0447\u0438\u043c \u043c\u043e\u0436\u0443 \u0434\u043e\u043f\u043e\u043c\u043e\u0433\u0442\u0438", "\u044f\u043a \u044f \u043c\u043e\u0436\u0443 \u0434\u043e\u043f\u043e\u043c\u043e\u0433\u0442\u0438",
+                "\u0431\u0443\u0434\u044c \u043b\u0430\u0441\u043a\u0430, \u0443\u0442\u043e\u0447\u043d", "\u0431\u0443\u0434\u044c \u043b\u0430\u0441\u043a\u0430 \u0443\u0442\u043e\u0447\u043d", "\u0434\u044f\u043a\u0443\u044e, \u0449\u043e \u043f\u043e\u0434\u0456\u043b\u0438\u0432", "\u0440\u0430\u0434\u0438\u0439 \u0434\u043e\u043f\u043e\u043c\u043e\u0433\u0442\u0438",
+                "\u044f \u043f\u043e\u043d\u0438\u043c\u0430\u044e", "\u0447\u0435\u043c \u043c\u043e\u0433\u0443 \u043f\u043e\u043c\u043e\u0447\u044c", "\u0431\u0443\u0434\u044c \u0434\u043e\u0431\u0440, \u0443\u0442\u043e\u0447\u043d", "\u0440\u0430\u0434 \u043f\u043e\u043c\u043e\u0447\u044c");
+            if (!canned) return false;
+
+            var socialOrLowSignal = userLower.Length < 180 && ContainsAny(userLower,
+                "\u043f\u0440\u043e\u0441\u0442\u043e \u043f\u043e\u0433\u043e\u0432\u043e\u0440", "\u0434\u0443\u0440\u043d\u0438\u0446", "\u043f\u0440\u043e \u0442\u0435\u0431\u0435", "\u043f\u0440\u043e \u043c\u0435\u043d\u0435", "\u043c\u0438\u043b\u0435", "\u0437\u0430\u0456\u0433\u0440", "\u0444\u043b\u0456\u0440\u0442", "\u0449\u043e\u0441\u044c", "\u043d\u0443 \u0442\u0438\u043f\u0443",
+                "just talk", "flirt", "something", "whatever");
+            var concrete = ContainsAny(replyLower,
+                "file", "line", "commit", "test", "build", "diff", "log", "sensor", "watch",
+                "\u0444\u0430\u0439\u043b", "\u0440\u044f\u0434\u043e\u043a", "\u043a\u043e\u043c\u0456\u0442", "\u0442\u0435\u0441\u0442", "\u043b\u043e\u0433", "\u043f\u043e\u043c\u0438\u043b\u043a", "\u0434\u0430\u0442\u0447\u0438\u043a", "\u043f\u0443\u043b\u044c\u0441", "\u0447\u0430\u0441\u0438")
+                || replyLower.Contains("```", StringComparison.Ordinal);
+
+            return socialOrLowSignal || !concrete;
         }
 
         private static bool LooksLikeConversationReviewDeflection(string userLower, string replyLower)

@@ -82,6 +82,11 @@ namespace KokonoeAssistant.Services
         public string LastPersonaInterjection { get; set; } = "";
         public int PersonaFavorDebt { get; set; }
         public string PersonaFocusTopic { get; set; } = "";
+        public string LastLivingConversationMode { get; set; } = "steady";
+        public string LastLivingConversationTrace { get; set; } = "";
+        public DateTime LastLivingConversationAt { get; set; } = DateTime.MinValue;
+        public double LivingConversationVariability { get; set; } = 0.35;
+        public List<string> RecentConversationMoves { get; set; } = new();
 
         // Динаміка тиші — окремі cooldown рівні
         public DateTime SilenceLevel1At    { get; set; } = DateTime.MinValue; // 1h jab
@@ -340,6 +345,7 @@ namespace KokonoeAssistant.Services
         public readonly KokoPostReplyGuard PostReplyGuard;
         public readonly KokoPersonaEngine Persona;
         public readonly KokoTemperamentEngine Temperament;
+        public readonly KokoLivingConversationEngine LivingConversation;
         public readonly KokoResponsePlannerEngine ResponsePlanner;
         public readonly KokoSocialEngine Social;
         public readonly KokoNeuralGovernorService NeuralGovernor;
@@ -450,6 +456,7 @@ namespace KokonoeAssistant.Services
             PostReplyGuard = new KokoPostReplyGuard();
             Persona = new KokoPersonaEngine();
             Temperament = new KokoTemperamentEngine();
+            LivingConversation = new KokoLivingConversationEngine();
             ResponsePlanner = new KokoResponsePlannerEngine();
             Social = new KokoSocialEngine();
             NeuralGovernor = new KokoNeuralGovernorService(_llm);
@@ -2134,6 +2141,14 @@ Summary: {summary}
             var behaviorMod = Emotion.GetBehaviorModifier();
             if (!string.IsNullOrEmpty(behaviorMod))
                 sb.AppendLine(behaviorMod);
+
+            try
+            {
+                var living = LivingConversation.BuildPromptBlock(_state, Emotion, DateTime.Now);
+                if (!string.IsNullOrWhiteSpace(living))
+                    sb.AppendLine(living);
+            }
+            catch { }
             try { sb.AppendLine(Emotion.BuildEmotionalContextBlock(BuildNarrativeThreadSummary(DateTime.Now))); } catch { }
 
             try
@@ -3750,15 +3765,20 @@ Summary: {summary}
         {
             var frame = Persona.Build(userText, _state, now, Emotion.Bond);
             var temperament = Temperament.Update(_state, userText, frame.Mode, now);
-            _state.LastPersonaDecision = frame.PromptBlock + "\n" + temperament.PromptBlock;
+            var social = BuildSocialFrame(userText, now);
+            var living = LivingConversation.Update(_state, userText, frame.Mode, Emotion, social, now);
+            _state.LastPersonaDecision = frame.PromptBlock + "\n" + temperament.PromptBlock + "\n" + social.PromptBlock + "\n" + living.PromptBlock;
             _state.LastPersonaDecisionAt = now;
             _state.PersonaDecisionLog.Add(frame.TraceLine);
             _state.PersonaDecisionLog.Add(temperament.TraceLine);
+            _state.PersonaDecisionLog.Add(social.TraceLine);
+            _state.PersonaDecisionLog.Add(living.TraceLine);
             if (_state.PersonaDecisionLog.Count > 40)
                 _state.PersonaDecisionLog.RemoveRange(0, _state.PersonaDecisionLog.Count - 40);
 
             _state.InnerMonologues.Add($"[persona/{frame.Mode}] {frame.Stance}. {frame.ReasonUk}");
             _state.InnerMonologues.Add($"[temperament/{temperament.MoodState}] energy={temperament.EnergyLevel:F2}; patience={temperament.PatienceLevel:F2}");
+            _state.InnerMonologues.Add($"[living/{living.Mode}] move={living.CurrentMove}; color={living.EmotionalColor}; {living.Reason}");
             if (_state.InnerMonologues.Count > 80)
                 _state.InnerMonologues.RemoveRange(0, _state.InnerMonologues.Count - 80);
 
@@ -6533,6 +6553,7 @@ Summary: {summary}
             sb.AppendLine(KokoNaturalSynthesisPolicy.PromptRules);
             sb.AppendLine(KokoResponseStyleEngine.BuildEmotionLengthDirective(Emotion.Current));
             sb.AppendLine(KokoResponseStyleEngine.BuildTemperamentDirective(_state));
+            sb.AppendLine(KokoResponseStyleEngine.BuildLivingConversationDirective(_state));
             return sb.ToString().Trim();
         }
 

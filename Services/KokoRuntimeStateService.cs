@@ -61,6 +61,7 @@ namespace KokonoeAssistant.Services
             sb.AppendLine($"stress: acute={emotion.Stress.AcuteStress:F2} chronic={emotion.Stress.ChronicStress:F2} fatigue={emotion.Stress.Fatigue:F2}");
             sb.AppendLine($"personality: daily={state.PersonalityDailyMood} irritation={state.PersonalityIrritation:F2} warmth={state.PersonalityWarmth:F2}");
             sb.AppendLine($"temperament: state={state.PersonaTemperamentState} energy={Fmt(state.PersonaEnergyLevel)} patience={Fmt(state.PersonaPatienceLevel)} favor_debt={state.PersonaFavorDebt}");
+            sb.AppendLine($"conversation: mode={state.LastLivingConversationMode} variability={Fmt(state.LivingConversationVariability)} recent_moves={string.Join(",", state.RecentConversationMoves.TakeLast(3))}");
             sb.AppendLine($"user_tone: {state.LastUserEmotionalTone} mood_score={state.MoodScore:F2}");
             sb.AppendLine($"pad: P={emotion.CurrentPad.P:+0.00;-0.00;0.00} A={emotion.CurrentPad.A:+0.00;-0.00;0.00} D={emotion.CurrentPad.D:+0.00;-0.00;0.00}");
             sb.AppendLine($"voice: {BuildVoiceDirective(state, emotion, mode)}");
@@ -87,6 +88,7 @@ namespace KokonoeAssistant.Services
             sb.AppendLine("- Use this state as behavior control, not as text to reveal.");
             sb.AppendLine("- If mode=work, be sharper and task-first; if mode=care, reduce sarcasm; if mode=idle, short observation is enough.");
             sb.AppendLine("- Sarcasm is seasoning, not the meal: one precise jab is enough unless the user is explicitly bantering.");
+            sb.AppendLine("- Living conversation mode overrides robotic phrasing: social bids first, task execution first for work, no repeated helpdesk openings.");
             sb.AppendLine("- Do not refuse useful work just because mood is sharp; push back only on weak premises, missing facts, or unsafe/destructive actions.");
             sb.AppendLine("- Initiative should affect whether you ask a concrete follow-up or stay quiet.");
             return sb.ToString();

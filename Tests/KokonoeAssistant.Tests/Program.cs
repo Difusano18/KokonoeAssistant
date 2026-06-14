@@ -159,6 +159,7 @@ internal static class Program
             Run("Post reply guard blocks fabricated external facts", PostReplyGuardBlocksFabricatedExternalFacts);
             Run("Post reply guard blocks stale proactive ping on direct topic", PostReplyGuardBlocksStaleProactivePingOnDirectTopic);
             Run("Post reply guard blocks service bot tone", PostReplyGuardBlocksServiceBotTone);
+            Run("Post reply guard blocks robotic support tone", PostReplyGuardBlocksRoboticSupportTone);
             Run("Post reply guard blocks AI service phrases", PostReplyGuardBlocksAiServicePhrases);
             Run("Post reply guard blocks punitive network threat", PostReplyGuardBlocksPunitiveNetworkThreat);
             Run("Post reply guard blocks blind agreement", PostReplyGuardBlocksBlindAgreement);
@@ -178,11 +179,15 @@ internal static class Program
             Run("Temperament classifies exhausted hostile", TemperamentClassifiesExhaustedHostile);
             Run("Temperament recovers from favor", TemperamentRecoversFromFavor);
             Run("Temperament prompt prevents theater", TemperamentPromptPreventsTheater);
+            Run("Living conversation shifts to quiet operator", LivingConversationShiftsToQuietOperator);
+            Run("Living conversation preserves social bids", LivingConversationPreservesSocialBids);
+            Run("Living conversation avoids repeated moves", LivingConversationAvoidsRepeatedMoves);
             Run("Emotion modifiers keep distant useful", EmotionModifiersKeepDistantUseful);
             Run("Emotion engine supports expanded states", EmotionEngineSupportsExpandedStates);
             Run("Emotion context exposes PAD and salient history", EmotionContextExposesPadAndSalientHistory);
             Run("Runtime state exposes PAD voice directive", RuntimeStateExposesPadVoiceDirective);
             Run("Runtime state exposes temperament", RuntimeStateExposesTemperament);
+            Run("Runtime state exposes living conversation", RuntimeStateExposesLivingConversation);
             Run("Response planner classifies critical assistant architecture", ResponsePlannerClassifiesCriticalAssistantArchitecture);
             Run("Response planner includes executive monologue and critique", ResponsePlannerIncludesExecutiveMonologueAndCritique);
             Run("Response planner fatigue pushes back after midnight", ResponsePlannerFatiguePushesBackAfterMidnight);
@@ -3863,6 +3868,30 @@ Insight: bridge stability and pulse quality are linked.
         AssertTrue(result.ShouldRepair, "AI/service phrasing should be repaired");
     }
 
+    private static void PostReplyGuardBlocksRoboticSupportTone()
+    {
+        var now = DateTime.Today.AddHours(19);
+        var state = new KokoInternalState();
+        var userText = "хочу просто поговорити про тебе і мене";
+        var messages = new[]
+        {
+            new ChatRepository.ChatMessage { Role = "user", Content = userText, Timestamp = now }
+        };
+        var timeline = new KokoConversationTimelineEngine().Build(messages, state, now, userText);
+
+        var result = new KokoPostReplyGuard().Evaluate(
+            userText,
+            "Я розумію. Будь ласка, уточни, чим я можу допомогти.",
+            state,
+            messages,
+            timeline,
+            now);
+
+        AssertTrue(!result.Passed, "guard should reject robotic helpdesk tone on social bids");
+        AssertTrue(result.ShouldRepair, "robotic support tone should be repaired");
+        AssertTrue(result.Violations.Any(v => v.Contains("helpdesk", StringComparison.OrdinalIgnoreCase)), "violation should name helpdesk tone");
+    }
+
     private static void PostReplyGuardBlocksPunitiveNetworkThreat()
     {
         var now = DateTime.Today.AddHours(15).AddMinutes(30);
@@ -4265,6 +4294,80 @@ Insight: bridge stability and pulse quality are linked.
         AssertTrue(style.Contains("hyper-focused", StringComparison.OrdinalIgnoreCase), "style directive should reflect temperament");
     }
 
+    private static void LivingConversationShiftsToQuietOperator()
+    {
+        using var ctx = TestContext.Create();
+        var now = new DateTime(2026, 6, 14, 3, 10, 0);
+        var state = new KokoInternalState
+        {
+            LastSomaticStrain = 0.82,
+            LastSomaticCalm = 0.05,
+            PersonaPatienceLevel = 0.60
+        };
+        ctx.Emotion.UpdateStressAcute(0.90f);
+
+        var frame = new KokoLivingConversationEngine().Update(
+            state,
+            "продовжуй фіксити білд, але без води",
+            "operator",
+            ctx.Emotion,
+            new KokoSocialFrame { Subtext = "urgent_or_stressed" },
+            now);
+
+        AssertEqual("quiet_operator", frame.Mode, "high somatic stress should force quiet operator mode");
+        AssertTrue(frame.EmotionalColor.Contains("protective", StringComparison.OrdinalIgnoreCase), "quiet operator should lower noise and protect");
+        AssertTrue(frame.PromptBlock.Contains("No random mood whiplash", StringComparison.OrdinalIgnoreCase), "prompt should ban random emotional changes");
+        AssertTrue(state.LastLivingConversationMode == "quiet_operator", "state should persist living mode");
+    }
+
+    private static void LivingConversationPreservesSocialBids()
+    {
+        using var ctx = TestContext.Create();
+        var now = new DateTime(2026, 6, 14, 22, 30, 0);
+        var state = new KokoInternalState
+        {
+            LastSomaticCalm = 0.70,
+            PersonaPatienceLevel = 0.65
+        };
+
+        var frame = new KokoLivingConversationEngine().Update(
+            state,
+            "хочу просто поговорити про тебе і мене",
+            "relationship",
+            ctx.Emotion,
+            new KokoSocialFrame { Subtext = "soft_affection" },
+            now);
+
+        AssertEqual("warm_guarded", frame.Mode, "soft social bids should become guarded warmth, not productivity mode");
+        AssertEqual("answer_social_bid", frame.CurrentMove, "social bid should be answered first");
+        AssertTrue(frame.PromptBlock.Contains("Social bids get a real social reply first", StringComparison.OrdinalIgnoreCase), "prompt should protect social bids");
+        AssertTrue(frame.Variability > 0.35, "social mode should allow more living variation");
+    }
+
+    private static void LivingConversationAvoidsRepeatedMoves()
+    {
+        using var ctx = TestContext.Create();
+        var now = new DateTime(2026, 6, 14, 23, 0, 0);
+        var state = new KokoInternalState
+        {
+            RecentConversationMoves = new() { "dry_banter_then_signal", "dry_banter_then_signal", "dry_banter_then_signal" },
+            LastSomaticCalm = 0.80,
+            PersonaPatienceLevel = 0.70
+        };
+
+        var frame = new KokoLivingConversationEngine().Update(
+            state,
+            "поговоримо про дурниці",
+            "chat",
+            ctx.Emotion,
+            new KokoSocialFrame { Subtext = "playful_teasing" },
+            now);
+
+        AssertTrue(frame.CurrentMove != "dry_banter_then_signal", "engine should rotate away from repeated move");
+        AssertTrue(frame.AvoidMoves.Contains("dry_banter_then_signal", StringComparison.OrdinalIgnoreCase), "frame should expose recent moves to avoid");
+        AssertTrue(state.RecentConversationMoves.Count <= 10, "recent move buffer should stay capped");
+    }
+
     private static void EmotionModifiersKeepDistantUseful()
     {
         using var ctx = TestContext.Create();
@@ -4381,6 +4484,25 @@ Insight: bridge stability and pulse quality are linked.
         AssertTrue(block.Contains("energy=0.66", StringComparison.OrdinalIgnoreCase), "runtime prompt should expose energy");
         AssertTrue(block.Contains("patience=0.33", StringComparison.OrdinalIgnoreCase), "runtime prompt should expose patience");
         AssertTrue(style.Contains("cynical but tolerant", StringComparison.OrdinalIgnoreCase), "style directive should use temperament voice");
+    }
+
+    private static void RuntimeStateExposesLivingConversation()
+    {
+        using var ctx = TestContext.Create();
+        var state = new KokoInternalState
+        {
+            LastLivingConversationMode = "playful_edge",
+            LivingConversationVariability = 0.68,
+            RecentConversationMoves = new() { "direct_answer", "dry_banter_then_signal" }
+        };
+        using var health = new HealthService(ctx.TestDir);
+
+        var block = new KokoRuntimeStateService().BuildPromptBlock(state, ctx.Emotion, health, ctx.Chat);
+        var style = KokoResponseStyleEngine.BuildLivingConversationDirective(state);
+
+        AssertTrue(block.Contains("conversation: mode=playful_edge", StringComparison.OrdinalIgnoreCase), "runtime prompt should expose living conversation mode");
+        AssertTrue(block.Contains("variability=0.68", StringComparison.OrdinalIgnoreCase), "runtime prompt should expose variability");
+        AssertTrue(style.Contains("Avoid helpdesk openings", StringComparison.OrdinalIgnoreCase), "style directive should ban helpdesk openings");
     }
 
     private static void ResponsePlannerClassifiesCriticalAssistantArchitecture()
