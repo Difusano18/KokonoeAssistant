@@ -383,6 +383,7 @@ namespace KokonoeAssistant
                 var selfReg = brain.GetSelfRegulationFrame(somatic);
                 var telemetry = brain.BuildTelemetrySnapshot();
                 var hasWearablePulse = TryGetVerifiedWearablePulse(out var wearableBpm, out var wearableBaseline);
+                var uiState = ResolveCurrentRuntimeUiState();
 
                 LiveCoreEmotionText.Text = $"емоція: {DashboardEmotionLabel(emotion.Current)}".ToUpper();
                 LiveCoreEmotionText.Foreground = DashMakeBrush(emotion.Current);
@@ -412,7 +413,7 @@ namespace KokonoeAssistant
                 if (!string.IsNullOrWhiteSpace(telemetry.ScenarioHealth))
                     LiveCoreVaultText.Text += $" | {telemetry.ScenarioHealth}";
                 LiveCoreCompactText.Text =
-                    $"Kokonoe · {DashboardEmotionLabel(emotion.Current).ToLowerInvariant()} · {DashboardSomaticLabel(somatic.State).ToLowerInvariant()} {somatic.Strain:F2} · " +
+                    $"Kokonoe · {uiState.Primary.ToLowerInvariant()} · {uiState.Emotion.ToLowerInvariant()} · {uiState.Body.ToLowerInvariant()} {somatic.Strain:F2} · " +
                     $"{(hasWearablePulse ? $"{wearableBpm:0} bpm" : "-- bpm")} · vault {state.PendingVaultExchangeCount}/5 · " +
                     $"vision {BuildVisionStatusLabel(state, DateTime.Now).ToLowerInvariant()}";
                 if (RightPanel.Visibility == Visibility.Visible)
@@ -4407,6 +4408,37 @@ tags: []
             catch { return ""; }
         }
 
+        private (string Primary, string Emotion, string Body, string Kind, string Detail) ResolveCurrentRuntimeUiState()
+        {
+            try
+            {
+                var brain = ServiceContainer.BrainEngine;
+                var emotion = brain.Emotion;
+                var state = brain.State;
+                var somatic = brain.GetSomaticSnapshot();
+                var condition = ResolveKokoCondition(
+                    emotion.Current,
+                    emotion.Data.Intensity,
+                    state.MoodScore,
+                    state.PersonalityDailyMood,
+                    somatic.Strain,
+                    somatic.State);
+
+                var emotionLabel = DashboardEmotionLabel(emotion.Current);
+                var bodyLabel = DashboardSomaticLabel(somatic.State);
+                var primary = condition.Kind == "stable"
+                    ? emotionLabel
+                    : condition.Label;
+                var detail = $"{condition.Kind} · severity {condition.Severity:F2} · {emotionLabel} · {bodyLabel} · {state.PersonalityDailyMood}";
+
+                return (primary, emotionLabel, bodyLabel, condition.Kind, detail);
+            }
+            catch
+            {
+                return ("UNKNOWN", "unknown", "unknown", "unknown", "state unavailable");
+            }
+        }
+
         private static (string Kind, string Label, double Severity) ResolveKokoCondition(
             KokoEmotionEngine.EmotionState emotion,
             float intensity,
@@ -6517,13 +6549,17 @@ tags: []
         {
             try
             {
-                var emotion = ServiceContainer.EmotionEngine;
+                var brain = ServiceContainer.BrainEngine;
+                var emotion = brain.Emotion;
                 var cur = emotion.Current;
+                var uiState = ResolveCurrentRuntimeUiState();
 
-                DashCurrentMoodDisplay.Text = $"СТАН: {DashboardEmotionLabel(cur)}".ToUpper();
-                DashCurrentMoodDisplay.Foreground = DashMakeBrush(cur);
+                DashCurrentMoodDisplay.Text = $"СТАН: {uiState.Primary}".ToUpperInvariant();
+                DashCurrentMoodDisplay.Foreground = uiState.Kind == "stable"
+                    ? DashMakeBrush(cur)
+                    : new SolidColorBrush(MediaColor.FromRgb(0xFF, 0xB0, 0x20));
 
-                DashMoodSubtext.Text = cur switch
+                var emotionSubtext = cur switch
                 {
                     KokoEmotionEngine.EmotionState.Calm       => "Нічого не зламано. Поки що.",
                     KokoEmotionEngine.EmotionState.Curious    => "Ти щось цікаве робиш...",
@@ -6543,6 +6579,9 @@ tags: []
                     KokoEmotionEngine.EmotionState.Hopeful    => "Тихе очікування.",
                     _                                         => "Все в межах норми."
                 };
+                DashMoodSubtext.Text = uiState.Kind == "stable"
+                    ? emotionSubtext
+                    : $"{uiState.Emotion} · {uiState.Body} · {uiState.Detail}";
 
                 DashEmotionValue.Text = DashboardEmotionLabel(cur).ToUpper();
                 DashEmotionValue.Foreground = DashMakeBrush(cur);
@@ -7219,15 +7258,14 @@ tags: []
                 var somatic = brain.GetSomaticSnapshot();
                 var telemetry = brain.BuildTelemetrySnapshot();
                 var hasWearablePulse = TryGetVerifiedWearablePulse(out var wearableBpm, out var wearableBaseline);
+                var uiState = ResolveCurrentRuntimeUiState();
 
-                RightEmotionText.Text = $"{DashboardEmotionLabel(emotion.Current).ToUpperInvariant()} · mood {state.MoodScore:F2}";
+                RightEmotionText.Text = $"{uiState.Emotion.ToUpperInvariant()} · mood {state.MoodScore:F2}";
                 RightBodyText.Text = $"{DashboardSomaticLabel(somatic.State).ToUpperInvariant()} · strain {somatic.Strain:F2}";
                 RightPulseText.Text = hasWearablePulse ? $"{wearableBpm:0} bpm · {wearableBpm - wearableBaseline:+0;-0;0}" : "-- bpm";
                 RightVaultSyncText.Text = $"sync {state.PendingVaultExchangeCount}/5 · mem {_liveCoreMemoryItems} · tasks {_liveCoreOpenTasks}";
-                var condition = ResolveKokoCondition(emotion.Current, emotion.Data.Intensity, state.MoodScore, state.PersonalityDailyMood, somatic.Strain, somatic.State);
-                RightKokoConditionText.Text = condition.Label;
-                RightKokoConditionDetailText.Text =
-                    $"{condition.Kind} · severity {condition.Severity:F2} · {DashboardEmotionLabel(emotion.Current).ToLowerInvariant()} · {state.PersonalityDailyMood}";
+                RightKokoConditionText.Text = uiState.Primary.ToUpperInvariant();
+                RightKokoConditionDetailText.Text = uiState.Detail;
                 RightAutonomyDetailText.Text = TrimOpsLine(telemetry.AutonomyDebug, 130);
 
                 RightScreenModeText.Text = string.IsNullOrWhiteSpace(state.LastScreenAwarenessMode)
