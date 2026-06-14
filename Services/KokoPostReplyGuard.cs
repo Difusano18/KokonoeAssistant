@@ -58,6 +58,8 @@ namespace KokonoeAssistant.Services
                 violations.Add("технічну vision-помилку показано користувачу замість нормальної відповіді");
             if (LooksLikeEmptyImageMisread(userLower, replyLower))
                 violations.Add("image-only повідомлення помилково прочитано як порожній спам");
+            if (LooksLikeImageIdentityCorrectionIgnored(userLower, replyLower))
+                violations.Add("image identity correction was ignored by stale startup/presence fallback");
             if (KokoScreenIntent.IsManualScreenScan(userText) && KokoScreenIntent.LooksLikeScreenCapabilityDenial(reply))
                 violations.Add("screen request was answered with capability denial instead of local screenshot route");
             if (IsLowInformationTurn(userText) && LooksLikeLowInformationScold(replyLower))
@@ -307,6 +309,8 @@ Timeline:
                 rules.Add("- Latest user turn is low-information noise, not an excuse for a lecture. Ask one compact clarification or map it to the active context.");
             if (HasImageMarker(userText) || LooksLikeContextualExplainQuestion(userText))
                 rules.Add("- Latest user asks for explanation/context. Explain the current visible/chat context; do not keep punishing an older one-letter message.");
+            if (violations.Any(v => v.Contains("image identity correction", StringComparison.OrdinalIgnoreCase)))
+                rules.Add("- Latest user is correcting the image identity. Acknowledge the correction directly: this is Kokonoe/Kokonoe-style art, update the visual label, and do not answer with a startup/presence ping.");
             if (IsWhyPreviousReplyQuestion((userText ?? "").ToLowerInvariant()))
                 rules.Add("- User asks why the previous answer happened. State the likely routing/context mistake neutrally, then give the corrected answer path.");
             if (violations.Any(v => v.Contains("own schedule", StringComparison.OrdinalIgnoreCase)))
@@ -494,6 +498,24 @@ Timeline:
                 "пиши щось конкретне",
                 "припиняй цей спам",
                 "продовжуєш кидати порожні");
+        }
+
+        private static bool LooksLikeImageIdentityCorrectionIgnored(string userLower, string replyLower)
+        {
+            if (string.IsNullOrWhiteSpace(userLower) || string.IsNullOrWhiteSpace(replyLower)) return false;
+
+            var correctsKokonoe = ContainsAny(userLower,
+                "це ж kokonoe", "це kokonoe", "це коконое", "це ж коконое", "це ти", "це ж ти",
+                "\u0446\u0435 \u0436 kokonoe", "\u0446\u0435 kokonoe", "\u0446\u0435 \u043a\u043e\u043a\u043e\u043d\u043e\u0435", "\u0446\u0435 \u0436 \u043a\u043e\u043a\u043e\u043d\u043e\u0435", "\u0446\u0435 \u0442\u0438", "\u0446\u0435 \u0436 \u0442\u0438");
+            if (!correctsKokonoe) return false;
+
+            var stalePresencePing = ContainsAny(replyLower,
+                "\u044f \u0442\u0443\u0442", "\u0449\u043e\u0441\u044c \u0442\u0440\u0430\u043f\u0438\u043b\u043e\u0441\u044f", "\u0447\u0438 \u0442\u0438 \u043f\u0440\u043e\u0441\u0442\u043e \u0432\u0438\u0440\u0456\u0448\u0438\u0432 \u043f\u0435\u0440\u0435\u0432\u0456\u0440\u0438\u0442\u0438", "\u044f \u0449\u0435 \u043d\u0435 \u0437\u0430\u0441\u043d\u0443\u043b\u0430",
+                "i am here", "i'm here", "what happened", "checking if i am still awake");
+            var acknowledgesCorrection = ContainsAny(replyLower,
+                "kokonoe", "\u043a\u043e\u043a\u043e\u043d\u043e\u0435", "\u0432\u0438\u043f\u0440\u0430\u0432", "\u043c\u0456\u0442\u043a", "\u0456\u0434\u0435\u043d\u0442\u0438\u0447");
+
+            return stalePresencePing && !acknowledgesCorrection;
         }
 
         private static bool LooksLikePunitiveNetworkThreat(string userLower, string replyLower)

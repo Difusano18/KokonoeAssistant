@@ -146,6 +146,7 @@ internal static class Program
             Run("Post reply guard repairs vision technical error", PostReplyGuardRepairsVisionTechnicalError);
             Run("Post reply guard protects image only prompt", PostReplyGuardProtectsImageOnlyPrompt);
             Run("Post reply guard duplicate image prompt avoids stale repeat text", PostReplyGuardDuplicateImagePromptAvoidsStaleRepeatText);
+            Run("Post reply guard repairs Kokonoe image correction fallback", PostReplyGuardRepairsKokonoeImageCorrectionFallback);
             Run("Post reply guard softens one-letter Telegram ambiguity", PostReplyGuardSoftensOneLetterTelegramAmbiguity);
             Run("Post reply guard prioritizes image caption over stale one-letter context", PostReplyGuardPrioritizesImageCaptionOverStaleOneLetterContext);
             Run("Post reply guard repairs blamey answer explanation", PostReplyGuardRepairsBlameyAnswerExplanation);
@@ -3541,6 +3542,33 @@ Insight: bridge stability and pulse quality are linked.
         AssertTrue(result.ShouldRepair, "duplicate image prompt should be repaired through the model");
         AssertTrue(string.IsNullOrWhiteSpace(result.HardReplacement), "duplicate image prompt should not use stale scripted replacement");
         AssertTrue(result.RepairInstruction.Contains("не цитуй дослівно"), "repair should forbid stale quote echo");
+    }
+
+    private static void PostReplyGuardRepairsKokonoeImageCorrectionFallback()
+    {
+        var now = new DateTime(2026, 6, 14, 18, 51, 0);
+        var state = new KokoInternalState();
+        var userText = "це ж Kokonoe..";
+        var messages = new[]
+        {
+            new ChatRepository.ChatMessage { Role = "user", Content = "[image] колаж", Timestamp = now.AddMinutes(-6) },
+            new ChatRepository.ChatMessage { Role = "assistant", Content = "Це колаж із кількох артів із персонажем, що дуже нагадує мене в аніме-стилі.", Timestamp = now.AddMinutes(-4) },
+            new ChatRepository.ChatMessage { Role = "user", Content = userText, Timestamp = now }
+        };
+        var timeline = new KokoConversationTimelineEngine().Build(messages, state, now, userText);
+
+        var result = new KokoPostReplyGuard().Evaluate(
+            userText,
+            "Я тут. Щось трапилося, чи ти просто вирішив перевірити, чи я ще не заснула?",
+            state,
+            messages,
+            timeline,
+            now);
+
+        AssertTrue(!result.Passed, "guard should reject stale startup fallback after Kokonoe image correction");
+        AssertTrue(result.ShouldRepair, "image identity correction should be repaired through model context");
+        AssertTrue(result.Violations.Any(v => v.Contains("image identity correction", StringComparison.OrdinalIgnoreCase)), "violation should name image identity correction");
+        AssertTrue(result.RepairInstruction.Contains("Kokonoe-style art", StringComparison.OrdinalIgnoreCase), "repair should force direct acknowledgement of Kokonoe image identity");
     }
 
     private static void PostReplyGuardSoftensOneLetterTelegramAmbiguity()
