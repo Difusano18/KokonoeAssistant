@@ -183,12 +183,15 @@ internal static class Program
             Run("Living conversation shifts to quiet operator", LivingConversationShiftsToQuietOperator);
             Run("Living conversation preserves social bids", LivingConversationPreservesSocialBids);
             Run("Living conversation avoids repeated moves", LivingConversationAvoidsRepeatedMoves);
+            Run("Subconscious frame accepts corrections", SubconsciousFrameAcceptsCorrections);
+            Run("Subconscious frame routes action requests", SubconsciousFrameRoutesActionRequests);
             Run("Emotion modifiers keep distant useful", EmotionModifiersKeepDistantUseful);
             Run("Emotion engine supports expanded states", EmotionEngineSupportsExpandedStates);
             Run("Emotion context exposes PAD and salient history", EmotionContextExposesPadAndSalientHistory);
             Run("Runtime state exposes PAD voice directive", RuntimeStateExposesPadVoiceDirective);
             Run("Runtime state exposes temperament", RuntimeStateExposesTemperament);
             Run("Runtime state exposes living conversation", RuntimeStateExposesLivingConversation);
+            Run("Runtime state exposes subconscious frame", RuntimeStateExposesSubconsciousFrame);
             Run("Response planner classifies critical assistant architecture", ResponsePlannerClassifiesCriticalAssistantArchitecture);
             Run("Response planner includes executive monologue and critique", ResponsePlannerIncludesExecutiveMonologueAndCritique);
             Run("Response planner fatigue pushes back after midnight", ResponsePlannerFatiguePushesBackAfterMidnight);
@@ -4396,6 +4399,59 @@ Insight: bridge stability and pulse quality are linked.
         AssertTrue(state.RecentConversationMoves.Count <= 10, "recent move buffer should stay capped");
     }
 
+    private static void SubconsciousFrameAcceptsCorrections()
+    {
+        using var ctx = TestContext.Create();
+        var now = new DateTime(2026, 6, 15, 1, 0, 0);
+        var state = new KokoInternalState
+        {
+            LastVisualMemoryAnchor = "Kokonoe-style collage was just discussed.",
+            LastVisualMemoryAnchorAt = now.AddMinutes(-5),
+            LastLivingConversationMode = "alive_direct"
+        };
+
+        var frame = new KokoSubconsciousMonologueEngine().Update(
+            state,
+            "це ж Kokonoe..",
+            ctx.Emotion,
+            new KokoSocialFrame { Subtext = "neutral" },
+            new KokoLivingConversationFrame { Mode = "alive_direct" },
+            Array.Empty<ChatRepository.ChatMessage>(),
+            now);
+
+        AssertEqual("context_correction", frame.Mode, "image/persona correction should become context correction");
+        AssertEqual("accept_correction", frame.IntentImpulse, "correction should produce accept-correction impulse");
+        AssertEqual("update_context_label", frame.ActionBias, "correction should bias toward context label update");
+        AssertTrue(frame.PromptBlock.Contains("acknowledge the correction", StringComparison.OrdinalIgnoreCase), "prompt should force correction acknowledgement");
+        AssertTrue(state.LastSubconsciousMode == "context_correction", "state should persist subconscious mode");
+    }
+
+    private static void SubconsciousFrameRoutesActionRequests()
+    {
+        using var ctx = TestContext.Create();
+        var now = new DateTime(2026, 6, 15, 1, 5, 0);
+        var state = new KokoInternalState
+        {
+            PersonaPatienceLevel = 0.55,
+            LastLivingConversationMode = "alive_direct"
+        };
+
+        var frame = new KokoSubconsciousMonologueEngine().Update(
+            state,
+            "зроби тести і коміт без оновлення exe",
+            ctx.Emotion,
+            new KokoSocialFrame { Subtext = "neutral" },
+            new KokoLivingConversationFrame { Mode = "alive_direct" },
+            Array.Empty<ChatRepository.ChatMessage>(),
+            now);
+
+        AssertEqual("operator_planning", frame.Mode, "technical action request should become operator planning");
+        AssertEqual("act_or_plan", frame.IntentImpulse, "action request should produce act-or-plan impulse");
+        AssertEqual("tool_or_code_action", frame.ActionBias, "action request should bias toward tool/code action");
+        AssertTrue(frame.AttentionScore > 0.60, "action request should raise attention");
+        AssertTrue(state.SubconsciousSignals.Count > 0, "subconscious signals should be recorded");
+    }
+
     private static void EmotionModifiersKeepDistantUseful()
     {
         using var ctx = TestContext.Create();
@@ -4531,6 +4587,28 @@ Insight: bridge stability and pulse quality are linked.
         AssertTrue(block.Contains("conversation: mode=playful_edge", StringComparison.OrdinalIgnoreCase), "runtime prompt should expose living conversation mode");
         AssertTrue(block.Contains("variability=0.68", StringComparison.OrdinalIgnoreCase), "runtime prompt should expose variability");
         AssertTrue(style.Contains("Avoid helpdesk openings", StringComparison.OrdinalIgnoreCase), "style directive should ban helpdesk openings");
+    }
+
+    private static void RuntimeStateExposesSubconsciousFrame()
+    {
+        using var ctx = TestContext.Create();
+        var state = new KokoInternalState
+        {
+            LastSubconsciousMode = "operator_planning",
+            LastSubconsciousIntent = "act_or_plan",
+            LastSubconsciousActionBias = "tool_or_code_action",
+            SubconsciousAttentionScore = 0.74,
+            SubconsciousSignals = new() { "01:05 operator_planning/act_or_plan attention=0.74 technical_problem" }
+        };
+        using var health = new HealthService(ctx.TestDir);
+
+        var block = new KokoRuntimeStateService().BuildPromptBlock(state, ctx.Emotion, health, ctx.Chat);
+        var directive = KokoSubconsciousMonologueEngine.BuildDirective(state);
+
+        AssertTrue(block.Contains("subconscious: mode=operator_planning", StringComparison.OrdinalIgnoreCase), "runtime prompt should expose subconscious mode");
+        AssertTrue(block.Contains("bias=tool_or_code_action", StringComparison.OrdinalIgnoreCase), "runtime prompt should expose action bias");
+        AssertTrue(directive.Contains("SUBCONSCIOUS DIRECTIVE", StringComparison.OrdinalIgnoreCase), "directive should expose private steering label");
+        AssertTrue(directive.Contains("never expose", StringComparison.OrdinalIgnoreCase), "directive should forbid visible mechanics");
     }
 
     private static void ResponsePlannerClassifiesCriticalAssistantArchitecture()
