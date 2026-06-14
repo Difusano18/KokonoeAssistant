@@ -36,6 +36,8 @@ internal static class Program
             Run("Wearable bridge emulates dual real-time pulse clients", WearableBridgeEmulatesDualRealtimePulseClients);
             Run("Wearable bridge pairs and rejects bad tokens", WearableBridgePairsAndRejectsBadTokens);
             Run("Wearable bridge keeps stable token and pc id", WearableBridgeKeepsStableTokenAndPcId);
+            Run("Wearable bridge restores paired device id", WearableBridgeRestoresPairedDeviceId);
+            Run("Wearable bridge migrates paired device from telemetry", WearableBridgeMigratesPairedDeviceFromTelemetry);
             Run("Wearable bridge accepts watch action endpoint", WearableBridgeAcceptsWatchActionEndpoint);
             Run("Heartbeat dashboard writes markdown and html", HeartbeatDashboardWritesMarkdownAndHtml);
             Run("Semantic cache returns similar cached answer", SemanticCacheReturnsSimilarCachedAnswer);
@@ -1127,6 +1129,64 @@ internal static class Program
             using var bridge2 = new KokoWearableBridgeService(telemetry, dir, 23000 + Random.Shared.Next(1000));
             AssertEqual(token1, bridge2.Token, "token should persist across bridge instances");
             AssertEqual(pcId1, bridge2.PcId, "pc id should persist across bridge instances");
+        }
+        finally { TryDeleteDir(dir); }
+    }
+
+    private static void WearableBridgeRestoresPairedDeviceId()
+    {
+        var dir = TempDir();
+        var port1 = 23500 + Random.Shared.Next(400);
+        var port2 = 23900 + Random.Shared.Next(400);
+        try
+        {
+            var telemetry = new KokoWearableTelemetryService(dir);
+            using (var bridge1 = new KokoWearableBridgeService(telemetry, dir, port1))
+            {
+                bridge1.Start();
+                AssertTrue(bridge1.IsRunning, $"bridge should start; error={bridge1.LastError}");
+                using var client = new System.Net.Http.HttpClient();
+                var pair = client.PostAsync(
+                        $"http://localhost:{port1}/api/wearable/v1/pair",
+                        new System.Net.Http.StringContent("""{"deviceId":"galaxy-watch-8-lte"}""", System.Text.Encoding.UTF8, "application/json"))
+                    .GetAwaiter().GetResult();
+                AssertTrue(pair.IsSuccessStatusCode, "pair should succeed before restart");
+                AssertEqual("galaxy-watch-8-lte", bridge1.Diagnostics.LastPairedDeviceId, "first bridge should remember paired device");
+            }
+
+            using var bridge2 = new KokoWearableBridgeService(telemetry, dir, port2);
+            AssertEqual("galaxy-watch-8-lte", bridge2.Diagnostics.LastPairedDeviceId, "paired device should persist across bridge restart");
+
+            bridge2.Start();
+            using var client2 = new System.Net.Http.HttpClient();
+            client2.DefaultRequestHeaders.Add("X-Koko-Bridge-Token", bridge2.Token);
+            var sample = client2.PostAsync(
+                    $"http://localhost:{port2}/api/wearable/v1/sample",
+                    new System.Net.Http.StringContent("""{"deviceId":"galaxy-watch-8-lte","heartRateBpm":81,"onWrist":true}""", System.Text.Encoding.UTF8, "application/json"))
+                .GetAwaiter().GetResult();
+            AssertTrue(sample.IsSuccessStatusCode, $"sample should be accepted after restart: {(int)sample.StatusCode}");
+            AssertTrue(Math.Abs(telemetry.State.CurrentBpm - 81) < 0.1, "restored pairing should allow telemetry ingest");
+        }
+        finally { TryDeleteDir(dir); }
+    }
+
+    private static void WearableBridgeMigratesPairedDeviceFromTelemetry()
+    {
+        var dir = TempDir();
+        try
+        {
+            var telemetry = new KokoWearableTelemetryService(dir);
+            telemetry.IngestDetailed(new KokoWearableSample
+            {
+                DeviceId = "galaxy-watch-8-lte",
+                HeartRateBpm = 79,
+                OnWrist = true,
+                TimestampUtc = DateTime.UtcNow
+            });
+
+            using var bridge = new KokoWearableBridgeService(telemetry, dir, 24300 + Random.Shared.Next(400));
+            AssertEqual("galaxy-watch-8-lte", bridge.Diagnostics.LastPairedDeviceId, "bridge should migrate paired device from persisted wearable state");
+            AssertTrue(File.Exists(Path.Combine(dir, "wearable-bridge-paired-device.txt")), "migration should create paired device file");
         }
         finally { TryDeleteDir(dir); }
     }

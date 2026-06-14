@@ -1130,8 +1130,8 @@
                                         <RowDefinition Height="*"/>
                                         <RowDefinition Height="8"/>
                                         <RowDefinition Height="170"/>
-                                        <RowDefinition Height="8"/>
-                                        <RowDefinition Height="160"/>
+                                        <RowDefinition Height="0"/>
+                                        <RowDefinition Height="0"/>
                                     </Grid.RowDefinitions>
 
                                     <Grid Grid.Row="0">
@@ -1447,7 +1447,7 @@
                                     </Grid>
 
                                     <!-- HEART: BPM timeline + stats -->
-                                    <Grid Grid.Row="10">
+                                    <Grid Grid.Row="10" Visibility="Collapsed">
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="2*"/>
                                             <ColumnDefinition Width="6"/>

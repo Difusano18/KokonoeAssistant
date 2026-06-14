@@ -379,10 +379,10 @@ namespace KokonoeAssistant
                 var brain = ServiceContainer.BrainEngine;
                 var emotion = brain.Emotion;
                 var state = brain.State;
-                var heart = ServiceContainer.Heart;
                 var somatic = brain.GetSomaticSnapshot();
                 var selfReg = brain.GetSelfRegulationFrame(somatic);
                 var telemetry = brain.BuildTelemetrySnapshot();
+                var hasWearablePulse = TryGetVerifiedWearablePulse(out var wearableBpm, out var wearableBaseline);
 
                 LiveCoreEmotionText.Text = $"емоція: {DashboardEmotionLabel(emotion.Current)}".ToUpper();
                 LiveCoreEmotionText.Foreground = DashMakeBrush(emotion.Current);
@@ -392,8 +392,8 @@ namespace KokonoeAssistant
                 LiveCoreBodyText.Text = $"{DashboardSomaticLabel(somatic.State).ToUpper()} | напруга {somatic.Strain:F2}";
                 LiveCoreRegulationText.Text = $"{DashboardRegulationLabel(selfReg.Reaction)} -> {DashboardRegulationLabel(selfReg.Regulation)} | контроль {selfReg.Control:F2}";
 
-                LiveCorePulseText.Text = heart.CurrentBpm > 0
-                    ? $"{heart.CurrentBpm:0} bpm | зміна {heart.BpmDelta:+0;-0;0}"
+                LiveCorePulseText.Text = hasWearablePulse
+                    ? $"{wearableBpm:0} bpm | watch {wearableBpm - wearableBaseline:+0;-0;0}"
                     : "-- bpm";
                 LiveCoreStrainBar.Value = Math.Clamp(somatic.Strain * 100.0, 0, 100);
 
@@ -413,7 +413,7 @@ namespace KokonoeAssistant
                     LiveCoreVaultText.Text += $" | {telemetry.ScenarioHealth}";
                 LiveCoreCompactText.Text =
                     $"Kokonoe · {DashboardEmotionLabel(emotion.Current).ToLowerInvariant()} · {DashboardSomaticLabel(somatic.State).ToLowerInvariant()} {somatic.Strain:F2} · " +
-                    $"{(heart.CurrentBpm > 0 ? $"{heart.CurrentBpm:0} bpm" : "-- bpm")} · vault {state.PendingVaultExchangeCount}/5 · " +
+                    $"{(hasWearablePulse ? $"{wearableBpm:0} bpm" : "-- bpm")} · vault {state.PendingVaultExchangeCount}/5 · " +
                     $"vision {BuildVisionStatusLabel(state, DateTime.Now).ToLowerInvariant()}";
                 if (RightPanel.Visibility == Visibility.Visible)
                     RefreshRightOpsPanel();
@@ -507,10 +507,10 @@ tags: [kokonoe, live-core, diagnostics]
             var brain = ServiceContainer.BrainEngine;
             var emotion = brain.Emotion;
             var state = brain.State;
-            var heart = ServiceContainer.Heart;
             var somatic = brain.GetSomaticSnapshot();
             var selfReg = brain.GetSelfRegulationFrame(somatic);
             var telemetry = brain.BuildTelemetrySnapshot();
+            var hasWearablePulse = TryGetVerifiedWearablePulse(out var wearableBpm, out var wearableBaseline);
             var sb = new StringBuilder();
 
             sb.AppendLine($"## {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
@@ -523,7 +523,9 @@ tags: [kokonoe, live-core, diagnostics]
                 sb.AppendLine($"| Вторинна емоція | {emotion.Secondary.Value} / {emotion.SecondaryIntensity:F2} |");
             sb.AppendLine($"| Настрій | {state.CurrentMood} / оцінка {state.MoodScore:F2} / база {state.BaselineMood:F2} |");
             sb.AppendLine($"| Тіло | {somatic.State} / {somatic.Label} |");
-            sb.AppendLine($"| Пульс | {heart.CurrentBpm:F0} bpm / база {heart.BaselineBpm:F0} / зміна {heart.BpmDelta:+0;-0;0} |");
+            sb.AppendLine(hasWearablePulse
+                ? $"| Пульс | {wearableBpm:F0} bpm / wearable baseline {wearableBaseline:F0} / watch {wearableBpm - wearableBaseline:+0;-0;0} |"
+                : "| Пульс | -- / wearable telemetry not verified |");
             sb.AppendLine($"| Соматичне навантаження | strain {somatic.Strain:F2} / calm {somatic.Calm:F2} / volatility {somatic.Volatility:F2} |");
             sb.AppendLine($"| Саморегуляція | {LiveCoreCodeLabel(selfReg.Reaction)} -> {LiveCoreCodeLabel(selfReg.Regulation)} / контроль {selfReg.Control:F2} / імпульс {selfReg.Drive:F2} |");
             sb.AppendLine($"| Автономність | {telemetry.Autonomy.Replace("|", "/")} |");
@@ -602,11 +604,18 @@ tags: [kokonoe, live-core, diagnostics]
                 var heart = ServiceContainer.Heart;
                 heart.BpmChanged += bpm => Dispatcher.InvokeAsync(() =>
                 {
-                    HeartBpmText.Text = $"{bpm:0} bpm";
-                    _ecgLastBpm = bpm;
-                    PushHeartSample(bpm);
-                    DrawHeartBpmGraph();
-                    UpdateHeartStats(bpm);
+                    if (TryGetVerifiedWearablePulse(out var wearableBpm, out _))
+                    {
+                        HeartBpmText.Text = $"{wearableBpm:0} bpm";
+                        _ecgLastBpm = wearableBpm;
+                        PushHeartSample(wearableBpm);
+                        DrawHeartBpmGraph();
+                        UpdateHeartStats(wearableBpm);
+                    }
+                    else
+                    {
+                        HeartBpmText.Text = "-- bpm";
+                    }
                     if (PulseTab.Visibility == Visibility.Visible)
                         UpdatePulseTabNumbers();
                 });
@@ -1636,6 +1645,29 @@ tags: [kokonoe, live-core, diagnostics]
                 return false;
 
             return !LooksLikeDiagnosticWearable(device) && !LooksLikeDiagnosticWearable(diagnostics.LastAcceptedSampleId);
+        }
+
+        private static bool TryGetVerifiedWearablePulse(out double bpm, out double baseline)
+        {
+            bpm = 0;
+            baseline = 0;
+            try
+            {
+                var wearable = ServiceContainer.WearableTelemetry.State;
+                var bridge = ServiceContainer.WearableBridge;
+                var diagnostics = bridge.Diagnostics;
+                var connection = bridge.GetConnectionSnapshot(wearable);
+                if (!IsVerifiedWearableTelemetry(connection, diagnostics, wearable) || wearable.CurrentBpm <= 0)
+                    return false;
+
+                bpm = wearable.CurrentBpm;
+                baseline = wearable.BaselineBpm > 0 ? wearable.BaselineBpm : wearable.CurrentBpm;
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
         }
 
         private static bool LooksLikeDiagnosticWearable(string? value)
@@ -3571,12 +3603,12 @@ Full PC context:
             // 2.1 Пульс — завжди в контексті щоб Kokonoe реагувала на зміни
             try
             {
-                var heart = ServiceContainer.Heart;
-                var bpm = heart.CurrentBpm;
-                var baseline = heart.BaselineBpm;
-                var diff = bpm - baseline;
-                var bpmNote = diff > 15 ? " ↑ підвищений" : diff < -10 ? " ↓ нижче базового" : "";
-                parts.Add(($"=== ПУЛЬС ===\nПоточний: {bpm:0.0} bpm{bpmNote} | Базовий: {baseline:0.0} bpm", 2));
+                if (TryGetVerifiedWearablePulse(out var bpm, out var baseline))
+                {
+                    var diff = bpm - baseline;
+                    var bpmNote = diff > 15 ? " ↑ підвищений" : diff < -10 ? " ↓ нижче базового" : "";
+                    parts.Add(($"=== ПУЛЬС ===\nДжерело: verified Galaxy Watch | Поточний: {bpm:0.0} bpm{bpmNote} | Базовий: {baseline:0.0} bpm", 2));
+                }
             }
             catch { }
 
@@ -7185,12 +7217,12 @@ tags: []
                 var now = DateTime.Now;
                 var emotion = brain.Emotion;
                 var somatic = brain.GetSomaticSnapshot();
-                var heart = ServiceContainer.Heart;
                 var telemetry = brain.BuildTelemetrySnapshot();
+                var hasWearablePulse = TryGetVerifiedWearablePulse(out var wearableBpm, out var wearableBaseline);
 
                 RightEmotionText.Text = $"{DashboardEmotionLabel(emotion.Current).ToUpperInvariant()} · mood {state.MoodScore:F2}";
                 RightBodyText.Text = $"{DashboardSomaticLabel(somatic.State).ToUpperInvariant()} · strain {somatic.Strain:F2}";
-                RightPulseText.Text = heart.CurrentBpm > 0 ? $"{heart.CurrentBpm:0} bpm · {heart.BpmDelta:+0;-0;0}" : "-- bpm";
+                RightPulseText.Text = hasWearablePulse ? $"{wearableBpm:0} bpm · {wearableBpm - wearableBaseline:+0;-0;0}" : "-- bpm";
                 RightVaultSyncText.Text = $"sync {state.PendingVaultExchangeCount}/5 · mem {_liveCoreMemoryItems} · tasks {_liveCoreOpenTasks}";
                 var condition = ResolveKokoCondition(emotion.Current, emotion.Data.Intensity, state.MoodScore, state.PersonalityDailyMood, somatic.Strain, somatic.State);
                 RightKokoConditionText.Text = condition.Label;

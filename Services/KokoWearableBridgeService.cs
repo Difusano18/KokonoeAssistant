@@ -21,6 +21,7 @@ namespace KokonoeAssistant.Services
         private readonly string _dataDir;
         private readonly string _tokenPath;
         private readonly string _pcIdPath;
+        private readonly string _pairedDevicePath;
         private readonly IReadOnlyList<string> _externalUrls;
         private readonly object _lock = new();
         private TcpListener? _listener;
@@ -75,8 +76,10 @@ namespace KokonoeAssistant.Services
             Directory.CreateDirectory(_dataDir);
             _tokenPath = Path.Combine(_dataDir, "wearable-bridge-token.txt");
             _pcIdPath = Path.Combine(_dataDir, "wearable-bridge-pc-id.txt");
+            _pairedDevicePath = Path.Combine(_dataDir, "wearable-bridge-paired-device.txt");
             Token = LoadOrCreateToken();
             PcId = LoadOrCreatePcId();
+            _lastPairedDeviceId = LoadPairedDeviceId();
         }
 
         public int Port { get; }
@@ -569,6 +572,7 @@ namespace KokonoeAssistant.Services
                 _totalPairRequests++;
                 _lastPairAtUtc = DateTime.UtcNow;
                 _lastPairedDeviceId = string.IsNullOrWhiteSpace(deviceId) ? "unknown" : deviceId.Trim();
+                SavePairedDeviceIdLocked(_lastPairedDeviceId);
                 RecordRemoteLocked(req);
             }
             LogBridge($"pair device={deviceId} remote={req.RemoteEndpoint}");
@@ -1083,6 +1087,54 @@ namespace KokonoeAssistant.Services
             {
                 return "pc-" + Guid.NewGuid().ToString("N")[..16];
             }
+        }
+
+        private string LoadPairedDeviceId()
+        {
+            try
+            {
+                if (File.Exists(_pairedDevicePath))
+                {
+                    var existing = File.ReadAllText(_pairedDevicePath).Trim();
+                    if (IsUsableDeviceId(existing)) return existing;
+                }
+            }
+            catch { }
+
+            try
+            {
+                var migrated = (_telemetry.State.DeviceId ?? "").Trim();
+                if (IsUsableDeviceId(migrated))
+                {
+                    File.WriteAllText(_pairedDevicePath, migrated);
+                    LogBridge($"migrated paired device from wearable state: {migrated}");
+                    return migrated;
+                }
+            }
+            catch { }
+
+            return "";
+        }
+
+        private void SavePairedDeviceIdLocked(string deviceId)
+        {
+            try
+            {
+                if (IsUsableDeviceId(deviceId))
+                    File.WriteAllText(_pairedDevicePath, deviceId.Trim());
+            }
+            catch (Exception ex)
+            {
+                LogBridge($"paired device save failed: {ex.Message}");
+            }
+        }
+
+        private static bool IsUsableDeviceId(string? deviceId)
+        {
+            var value = (deviceId ?? "").Trim();
+            return value.Length >= 3 &&
+                   !value.Equals("unknown", StringComparison.OrdinalIgnoreCase) &&
+                   !value.Equals("--", StringComparison.OrdinalIgnoreCase);
         }
 
         private static string TrimForLog(string? value, int max)
