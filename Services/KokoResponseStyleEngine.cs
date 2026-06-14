@@ -1,5 +1,7 @@
 namespace KokonoeAssistant.Services
 {
+    using System.Globalization;
+
     public static class KokoResponseStyleEngine
     {
         public static string BuildEmotionLengthDirective(KokoEmotionEngine.EmotionState emotion)
@@ -16,5 +18,15 @@ namespace KokonoeAssistant.Services
                 _ =>
                     "EMOTIONAL LENGTH: stable. Prefer concise, concrete replies; expand only when the task needs it."
             };
+
+        public static string BuildTemperamentDirective(KokoInternalState state)
+        {
+            var mood = string.IsNullOrWhiteSpace(state.PersonaTemperamentState)
+                ? "standard_cranky"
+                : state.PersonaTemperamentState;
+
+            var voice = KokoTemperamentEngine.BuildVoiceDirective(mood);
+            return $"TEMPERAMENT LENGTH: {mood}. {voice} Energy={state.PersonaEnergyLevel.ToString("F2", CultureInfo.InvariantCulture)}; patience={state.PersonaPatienceLevel.ToString("F2", CultureInfo.InvariantCulture)}.";
+        }
     }
 }

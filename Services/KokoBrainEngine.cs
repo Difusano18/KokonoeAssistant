@@ -73,6 +73,15 @@ namespace KokonoeAssistant.Services
         public bool    PersonalityInCrisis  { get; set; } = false;
         public string  PersonalityLastReaction { get; set; } = "";
         public DateTime PersonalityShiftAt  { get; set; } = DateTime.MinValue;
+        public double PersonaEnergyLevel { get; set; } = 0.62;
+        public double PersonaPatienceLevel { get; set; } = 0.58;
+        public string PersonaTemperamentState { get; set; } = "standard_cranky";
+        public DateTime LastTemperamentAt { get; set; } = DateTime.MinValue;
+        public string LastTemperamentTrace { get; set; } = "";
+        public DateTime LastPersonaInterjectionAt { get; set; } = DateTime.MinValue;
+        public string LastPersonaInterjection { get; set; } = "";
+        public int PersonaFavorDebt { get; set; }
+        public string PersonaFocusTopic { get; set; } = "";
 
         // Динаміка тиші — окремі cooldown рівні
         public DateTime SilenceLevel1At    { get; set; } = DateTime.MinValue; // 1h jab
@@ -330,6 +339,7 @@ namespace KokonoeAssistant.Services
         public readonly KokoConversationTimelineEngine Timeline;
         public readonly KokoPostReplyGuard PostReplyGuard;
         public readonly KokoPersonaEngine Persona;
+        public readonly KokoTemperamentEngine Temperament;
         public readonly KokoResponsePlannerEngine ResponsePlanner;
         public readonly KokoSocialEngine Social;
         public readonly KokoNeuralGovernorService NeuralGovernor;
@@ -439,6 +449,7 @@ namespace KokonoeAssistant.Services
             Timeline = new KokoConversationTimelineEngine();
             PostReplyGuard = new KokoPostReplyGuard();
             Persona = new KokoPersonaEngine();
+            Temperament = new KokoTemperamentEngine();
             ResponsePlanner = new KokoResponsePlannerEngine();
             Social = new KokoSocialEngine();
             NeuralGovernor = new KokoNeuralGovernorService(_llm);
@@ -2144,6 +2155,7 @@ Summary: {summary}
                 sb.AppendLine(Somatic.BuildPromptBlock(somatic));
                 sb.AppendLine(SelfRegulator.BuildPromptBlock(GetSelfRegulationFrame(somatic)));
                 sb.AppendLine(BuildSocialContextBlock(null, DateTime.Now));
+                sb.AppendLine(Temperament.BuildPromptBlock(_state, DateTime.Now));
                 var recentForContext = _chatRepo.GetMessages(30);
                 sb.AppendLine(EmotionalMemory.BuildPromptBlock(_state, recentForContext, DateTime.Now));
                 sb.AppendLine(EmotionalMemory.BuildRawHydrationBlock(_state, recentForContext, DateTime.Now));
@@ -3737,13 +3749,16 @@ Summary: {summary}
         private KokoPersonaFrame RecordPersonaDecision(string userText, DateTime now)
         {
             var frame = Persona.Build(userText, _state, now, Emotion.Bond);
-            _state.LastPersonaDecision = frame.PromptBlock;
+            var temperament = Temperament.Update(_state, userText, frame.Mode, now);
+            _state.LastPersonaDecision = frame.PromptBlock + "\n" + temperament.PromptBlock;
             _state.LastPersonaDecisionAt = now;
             _state.PersonaDecisionLog.Add(frame.TraceLine);
+            _state.PersonaDecisionLog.Add(temperament.TraceLine);
             if (_state.PersonaDecisionLog.Count > 40)
                 _state.PersonaDecisionLog.RemoveRange(0, _state.PersonaDecisionLog.Count - 40);
 
             _state.InnerMonologues.Add($"[persona/{frame.Mode}] {frame.Stance}. {frame.ReasonUk}");
+            _state.InnerMonologues.Add($"[temperament/{temperament.MoodState}] energy={temperament.EnergyLevel:F2}; patience={temperament.PatienceLevel:F2}");
             if (_state.InnerMonologues.Count > 80)
                 _state.InnerMonologues.RemoveRange(0, _state.InnerMonologues.Count - 80);
 
@@ -6517,6 +6532,7 @@ Summary: {summary}
                 sb.AppendLine(stagnation);
             sb.AppendLine(KokoNaturalSynthesisPolicy.PromptRules);
             sb.AppendLine(KokoResponseStyleEngine.BuildEmotionLengthDirective(Emotion.Current));
+            sb.AppendLine(KokoResponseStyleEngine.BuildTemperamentDirective(_state));
             return sb.ToString().Trim();
         }
 

@@ -1,4 +1,5 @@
 using System;
+using System.Globalization;
 using System.Linq;
 using System.Text;
 
@@ -59,6 +60,7 @@ namespace KokonoeAssistant.Services
             sb.AppendLine($"bond: {emotion.Bond} connection={emotion.ConnectionScore:F2}");
             sb.AppendLine($"stress: acute={emotion.Stress.AcuteStress:F2} chronic={emotion.Stress.ChronicStress:F2} fatigue={emotion.Stress.Fatigue:F2}");
             sb.AppendLine($"personality: daily={state.PersonalityDailyMood} irritation={state.PersonalityIrritation:F2} warmth={state.PersonalityWarmth:F2}");
+            sb.AppendLine($"temperament: state={state.PersonaTemperamentState} energy={Fmt(state.PersonaEnergyLevel)} patience={Fmt(state.PersonaPatienceLevel)} favor_debt={state.PersonaFavorDebt}");
             sb.AppendLine($"user_tone: {state.LastUserEmotionalTone} mood_score={state.MoodScore:F2}");
             sb.AppendLine($"pad: P={emotion.CurrentPad.P:+0.00;-0.00;0.00} A={emotion.CurrentPad.A:+0.00;-0.00;0.00} D={emotion.CurrentPad.D:+0.00;-0.00;0.00}");
             sb.AppendLine($"voice: {BuildVoiceDirective(state, emotion, mode)}");
@@ -196,5 +198,6 @@ namespace KokonoeAssistant.Services
 
         private static bool ContainsAny(string text, params string[] needles) => needles.Any(text.Contains);
         private static float Clamp01(float value) => Math.Clamp(value, 0f, 1f);
+        private static string Fmt(double value) => value.ToString("F2", CultureInfo.InvariantCulture);
     }
 }

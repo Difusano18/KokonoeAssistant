@@ -173,10 +173,14 @@ internal static class Program
             Run("Neural governor parses response frame JSON", NeuralGovernorParsesResponseFrameJson);
             Run("Persona engine calibrates soft social voice", PersonaEngineCalibratesSoftSocialVoice);
             Run("Persona engine avoids plain low signal stances", PersonaEngineAvoidsPlainLowSignalStances);
+            Run("Temperament classifies exhausted hostile", TemperamentClassifiesExhaustedHostile);
+            Run("Temperament recovers from favor", TemperamentRecoversFromFavor);
+            Run("Temperament prompt prevents theater", TemperamentPromptPreventsTheater);
             Run("Emotion modifiers keep distant useful", EmotionModifiersKeepDistantUseful);
             Run("Emotion engine supports expanded states", EmotionEngineSupportsExpandedStates);
             Run("Emotion context exposes PAD and salient history", EmotionContextExposesPadAndSalientHistory);
             Run("Runtime state exposes PAD voice directive", RuntimeStateExposesPadVoiceDirective);
+            Run("Runtime state exposes temperament", RuntimeStateExposesTemperament);
             Run("Response planner classifies critical assistant architecture", ResponsePlannerClassifiesCriticalAssistantArchitecture);
             Run("Response planner includes executive monologue and critique", ResponsePlannerIncludesExecutiveMonologueAndCritique);
             Run("Response planner fatigue pushes back after midnight", ResponsePlannerFatiguePushesBackAfterMidnight);
@@ -4139,6 +4143,68 @@ Insight: bridge stability and pulse quality are linked.
         AssertTrue(!direct.Stance.Contains("plainly", StringComparison.OrdinalIgnoreCase), "direct stance should not say answer plainly");
     }
 
+    private static void TemperamentClassifiesExhaustedHostile()
+    {
+        var now = new DateTime(2026, 6, 14, 2, 0, 0);
+        var state = new KokoInternalState
+        {
+            PersonaEnergyLevel = 0.25,
+            PersonaPatienceLevel = 0.30,
+            LastTemperamentAt = now.AddMinutes(-5)
+        };
+
+        var frame = new KokoTemperamentEngine().Update(
+            state,
+            "знову зроби все ідеально, чому нічого не працює",
+            "operator",
+            now);
+
+        AssertEqual("exhausted_hostile", frame.MoodState, "low energy and low patience should classify as exhausted hostile");
+        AssertTrue(frame.VoiceDirective.Contains("valid work still gets done", StringComparison.OrdinalIgnoreCase), "hostile temperament must not become refusal");
+        AssertTrue(frame.PromptBlock.Contains("Temperament controls pacing", StringComparison.OrdinalIgnoreCase), "prompt should describe temperament as control layer");
+        AssertTrue(frame.PromptBlock.Contains("No visible stage directions", StringComparison.OrdinalIgnoreCase), "prompt should prevent theater");
+    }
+
+    private static void TemperamentRecoversFromFavor()
+    {
+        var now = new DateTime(2026, 6, 14, 12, 0, 0);
+        var state = new KokoInternalState
+        {
+            PersonaEnergyLevel = 0.40,
+            PersonaPatienceLevel = 0.38,
+            PersonaFavorDebt = 2,
+            LastTemperamentAt = now.AddMinutes(-10)
+        };
+
+        var beforeEnergy = state.PersonaEnergyLevel;
+        var beforePatience = state.PersonaPatienceLevel;
+        var frame = new KokoTemperamentEngine().Update(state, "приніс тобі coffee і silvervine", "chat", now);
+
+        AssertTrue(state.PersonaEnergyLevel > beforeEnergy, "favor should restore energy");
+        AssertTrue(state.PersonaPatienceLevel > beforePatience, "favor should restore patience");
+        AssertTrue(state.PersonaFavorDebt < 2, "favor should reduce debt");
+        AssertTrue(frame.PromptBlock.Contains("favor_debt", StringComparison.OrdinalIgnoreCase), "prompt should expose favor debt");
+    }
+
+    private static void TemperamentPromptPreventsTheater()
+    {
+        var now = new DateTime(2026, 6, 14, 18, 0, 0);
+        var state = new KokoInternalState
+        {
+            PersonaEnergyLevel = 0.80,
+            PersonaPatienceLevel = 0.70,
+            PersonaTemperamentState = "hyper_focused"
+        };
+
+        var block = new KokoTemperamentEngine().BuildPromptBlock(state, now);
+        var style = KokoResponseStyleEngine.BuildTemperamentDirective(state);
+
+        AssertTrue(block.Contains("Kokonoe vocabulary is spice", StringComparison.OrdinalIgnoreCase), "prompt should avoid catchphrase spam");
+        AssertTrue(block.Contains("fake actions", StringComparison.OrdinalIgnoreCase), "prompt should block fake roleplay actions");
+        AssertTrue(block.Contains("If the request is valid, do the work first", StringComparison.OrdinalIgnoreCase), "prompt should make useful work primary");
+        AssertTrue(style.Contains("hyper-focused", StringComparison.OrdinalIgnoreCase), "style directive should reflect temperament");
+    }
+
     private static void EmotionModifiersKeepDistantUseful()
     {
         using var ctx = TestContext.Create();
@@ -4233,6 +4299,28 @@ Insight: bridge stability and pulse quality are linked.
         AssertTrue(block.Contains("one targeted jab max", StringComparison.OrdinalIgnoreCase), "runtime prompt should bound sarcasm");
         AssertTrue(block.Contains("Do not refuse useful work just because mood is sharp", StringComparison.OrdinalIgnoreCase), "runtime prompt should forbid mood-based fake refusal");
         AssertTrue(block.Contains("heart: bpm=112", StringComparison.OrdinalIgnoreCase), "runtime prompt should keep somatic context");
+    }
+
+    private static void RuntimeStateExposesTemperament()
+    {
+        using var ctx = TestContext.Create();
+        var state = new KokoInternalState
+        {
+            PersonalityDailyMood = "sharp",
+            PersonaTemperamentState = "cynical_tolerant",
+            PersonaEnergyLevel = 0.66,
+            PersonaPatienceLevel = 0.33,
+            PersonaFavorDebt = 1
+        };
+        using var health = new HealthService(ctx.TestDir);
+
+        var block = new KokoRuntimeStateService().BuildPromptBlock(state, ctx.Emotion, health, ctx.Chat);
+        var style = KokoResponseStyleEngine.BuildTemperamentDirective(state);
+
+        AssertTrue(block.Contains("temperament: state=cynical_tolerant", StringComparison.OrdinalIgnoreCase), "runtime prompt should expose temperament state");
+        AssertTrue(block.Contains("energy=0.66", StringComparison.OrdinalIgnoreCase), "runtime prompt should expose energy");
+        AssertTrue(block.Contains("patience=0.33", StringComparison.OrdinalIgnoreCase), "runtime prompt should expose patience");
+        AssertTrue(style.Contains("cynical but tolerant", StringComparison.OrdinalIgnoreCase), "style directive should use temperament voice");
     }
 
     private static void ResponsePlannerClassifiesCriticalAssistantArchitecture()
