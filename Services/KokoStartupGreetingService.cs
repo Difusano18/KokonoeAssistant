@@ -19,16 +19,18 @@ namespace KokonoeAssistant.Services
         public string ReturnModeUk { get; set; } = "";
         public string DepartureKind { get; set; } = "unknown";
         public string EmotionalResidueUk { get; set; } = "";
+        public string TemporalPresenceContext { get; set; } = "";
         public string PromptBlock { get; set; } = "";
     }
 
     public sealed class KokoStartupGreetingService
     {
-        public KokoStartupGreetingFrame BuildFrame(IReadOnlyList<ChatRepository.ChatMessage> messages, DateTime now)
+        public KokoStartupGreetingFrame BuildFrame(IReadOnlyList<ChatRepository.ChatMessage> messages, DateTime now, KokoInternalState? state = null)
         {
             var recent = messages.OrderBy(m => m.Timestamp).TakeLast(8).ToList();
             var last = recent.LastOrDefault();
             var gap = last == null ? (double?)null : Math.Max(0, (now - last.Timestamp).TotalMinutes);
+            var temporal = new KokoTemporalPresenceAwarenessEngine().Build(recent, state, now);
 
             var frame = new KokoStartupGreetingFrame
             {
@@ -41,7 +43,8 @@ namespace KokonoeAssistant.Services
                 AbsenceReadUk = InferAbsenceRead(gap, now.Hour, recent),
                 ReturnModeUk = InferReturnMode(gap),
                 DepartureKind = InferDepartureKind(recent, gap),
-                EmotionalResidueUk = InferEmotionalResidue(recent)
+                EmotionalResidueUk = InferEmotionalResidue(recent),
+                TemporalPresenceContext = temporal.PromptBlock
             };
             frame.PromptBlock = BuildPromptBlock(frame, now);
             return frame;
@@ -274,6 +277,8 @@ STARTUP GREETING CONTEXT
 Емоційний слід: {NullDash(frame.EmotionalResidueUk)}
 Настрій/стан Kokonoe: {NullDash(frame.MoodContext)}
 Presence/continuity: {NullDash(frame.PresenceContext)}
+Temporal presence:
+{NullDash(frame.TemporalPresenceContext)}
 Директива генерації: напиши свіжу LLM-репліку саме під цей вхід, не копію fallback. Вибери один живий кут: тривалість паузи, час доби, її настрій або останню конкретну тему. Без психологічного мета-театру, без "через екран", без вигаданих прихованих страхів, без сервісного звіту.
 Зараз: {now:dd.MM.yyyy HH:mm}
 Частина доби: {frame.DayPartUk}

@@ -187,6 +187,8 @@ internal static class Program
             Run("Subconscious frame routes action requests", SubconsciousFrameRoutesActionRequests);
             Run("Async personality snapshot prioritizes corrections", AsyncPersonalitySnapshotPrioritizesCorrections);
             Run("Async personality snapshot quiets high stress", AsyncPersonalitySnapshotQuietsHighStress);
+            Run("Temporal presence classifies abrupt absence", TemporalPresenceClassifiesAbruptAbsence);
+            Run("Temporal presence records planned farewell", TemporalPresenceRecordsPlannedFarewell);
             Run("Emotion modifiers keep distant useful", EmotionModifiersKeepDistantUseful);
             Run("Emotion engine supports expanded states", EmotionEngineSupportsExpandedStates);
             Run("Emotion context exposes PAD and salient history", EmotionContextExposesPadAndSalientHistory);
@@ -195,6 +197,7 @@ internal static class Program
             Run("Runtime state exposes living conversation", RuntimeStateExposesLivingConversation);
             Run("Runtime state exposes subconscious frame", RuntimeStateExposesSubconsciousFrame);
             Run("Runtime state exposes async personality", RuntimeStateExposesAsyncPersonality);
+            Run("Runtime state exposes temporal presence", RuntimeStateExposesTemporalPresence);
             Run("Response planner classifies critical assistant architecture", ResponsePlannerClassifiesCriticalAssistantArchitecture);
             Run("Response planner includes executive monologue and critique", ResponsePlannerIncludesExecutiveMonologueAndCritique);
             Run("Response planner fatigue pushes back after midnight", ResponsePlannerFatiguePushesBackAfterMidnight);
@@ -251,6 +254,7 @@ internal static class Program
             Run("Startup greeting classifies abrupt exit", StartupGreetingClassifiesAbruptExit);
             Run("Startup greeting classifies conflict residue", StartupGreetingClassifiesConflictResidue);
             Run("Startup greeting prompt uses mood and absence", StartupGreetingPromptUsesMoodAndAbsence);
+            Run("Startup greeting prompt includes temporal presence", StartupGreetingPromptIncludesTemporalPresence);
             Run("Startup greeting sanitizes therapy meta", StartupGreetingSanitizesTherapyMeta);
             Run("Startup greeting fallback does not quote raw latest user text", StartupGreetingFallbackDoesNotQuoteRawLatestUserText);
             Run("Startup greeting sanitizes system status report", StartupGreetingSanitizesSystemStatusReport);
@@ -4526,6 +4530,57 @@ Insight: bridge stability and pulse quality are linked.
         AssertTrue(snapshot.ResponseReadiness > 0.60, "high-priority stress frame should still be response-ready");
     }
 
+    private static void TemporalPresenceClassifiesAbruptAbsence()
+    {
+        var now = new DateTime(2026, 6, 15, 14, 0, 0);
+        var messages = new[]
+        {
+            new ChatRepository.ChatMessage
+            {
+                Role = "user",
+                Content = "перевір потім цей модуль пам'яті",
+                Timestamp = now.AddHours(-3)
+            }
+        };
+        var state = new KokoInternalState
+        {
+            PersonaPatienceLevel = 0.30,
+            PersonaEnergyLevel = 0.50,
+            PersonalityDailyMood = "sharp"
+        };
+
+        var frame = new KokoTemporalPresenceAwarenessEngine().Build(messages, state, now);
+
+        AssertEqual("abrupt_unannounced", frame.UserLastExitType, "unfinished user turn should classify as abrupt absence");
+        AssertEqual("noticeable", frame.AbsenceClass, "three-hour absence should be noticeable");
+        AssertEqual("irritated_continuity", frame.GreetingMood, "low patience after abrupt absence should color greeting");
+        AssertTrue(frame.ContinuityDirective.Contains("interrupted continuity", StringComparison.OrdinalIgnoreCase), "directive should preserve interrupted continuity");
+        AssertTrue(frame.PromptBlock.Contains("TEMPORAL PRESENCE AWARENESS", StringComparison.OrdinalIgnoreCase), "prompt block should expose temporal awareness privately");
+    }
+
+    private static void TemporalPresenceRecordsPlannedFarewell()
+    {
+        var now = new DateTime(2026, 6, 15, 9, 0, 0);
+        var messages = new[]
+        {
+            new ChatRepository.ChatMessage
+            {
+                Role = "user",
+                Content = "добраніч, до завтра",
+                Timestamp = now.AddHours(-8)
+            }
+        };
+        var state = new KokoInternalState { PersonaEnergyLevel = 0.40 };
+
+        var frame = new KokoTemporalPresenceAwarenessEngine().Build(messages, state, now);
+
+        AssertEqual("planned_farewell", frame.UserLastExitType, "explicit farewell should be planned");
+        AssertEqual("long_day", frame.AbsenceClass, "eight-hour daytime return should be long day");
+        AssertEqual("settled_dry", frame.GreetingMood, "planned farewell should not become irritated");
+        AssertEqual("planned_farewell", state.LastTemporalPresenceExitType, "state should persist exit type");
+        AssertTrue(state.LastTemporalPresenceDirective.Contains("Do not dramatize", StringComparison.OrdinalIgnoreCase), "state directive should avoid fake drama");
+    }
+
     private static void EmotionModifiersKeepDistantUseful()
     {
         using var ctx = TestContext.Create();
@@ -4709,6 +4764,29 @@ Insight: bridge stability and pulse quality are linked.
         AssertTrue(block.Contains("Async personality snapshot is private fast-path steering", StringComparison.OrdinalIgnoreCase), "runtime behavior should hide async mechanics");
         AssertTrue(directive.Contains("ASYNC PERSONALITY DIRECTIVE", StringComparison.OrdinalIgnoreCase), "directive should expose async private steering label");
         AssertTrue(directive.Contains("never leak mechanics", StringComparison.OrdinalIgnoreCase), "directive should forbid module leakage");
+    }
+
+    private static void RuntimeStateExposesTemporalPresence()
+    {
+        using var ctx = TestContext.Create();
+        var state = new KokoInternalState
+        {
+            LastTemporalPresenceExitType = "abrupt_unannounced",
+            LastTemporalPresenceAbsenceClass = "noticeable",
+            LastTemporalPresenceGapText = "3h 0m",
+            LastTemporalPresenceGreetingMood = "irritated_continuity",
+            LastTemporalPresenceDirective = "Acknowledge interrupted continuity once."
+        };
+        using var health = new HealthService(ctx.TestDir);
+
+        var block = new KokoRuntimeStateService().BuildPromptBlock(state, ctx.Emotion, health, ctx.Chat);
+        var directive = KokoTemporalPresenceAwarenessEngine.BuildDirective(state);
+
+        AssertTrue(block.Contains("temporal_presence: exit=abrupt_unannounced", StringComparison.OrdinalIgnoreCase), "runtime prompt should expose temporal exit type");
+        AssertTrue(block.Contains("greeting=irritated_continuity", StringComparison.OrdinalIgnoreCase), "runtime prompt should expose greeting mood");
+        AssertTrue(block.Contains("Temporal presence is private continuity steering", StringComparison.OrdinalIgnoreCase), "runtime behavior should hide temporal mechanics");
+        AssertTrue(directive.Contains("TEMPORAL PRESENCE DIRECTIVE", StringComparison.OrdinalIgnoreCase), "directive should expose temporal private steering label");
+        AssertTrue(directive.Contains("fake mind-reading", StringComparison.OrdinalIgnoreCase), "directive should ban fake absence reasons");
     }
 
     private static void ResponsePlannerClassifiesCriticalAssistantArchitecture()
@@ -5919,6 +5997,29 @@ Insight: bridge stability and pulse quality are linked.
         AssertTrue(frame.PromptBlock.Contains(frame.ReturnModeUk) || frame.PromptBlock.Contains("STARTUP GREETING CONTEXT"), "startup prompt should include return mode");
         AssertTrue(frame.PromptBlock.Contains("жив"), "startup prompt should demand a live generated reply");
         AssertTrue(!string.IsNullOrWhiteSpace(frame.AbsenceReadUk), "startup frame should infer absence context");
+    }
+
+    private static void StartupGreetingPromptIncludesTemporalPresence()
+    {
+        var now = new DateTime(2026, 6, 15, 14, 0, 0);
+        var messages = new[]
+        {
+            new ChatRepository.ChatMessage { Role = "user", Content = "перевір потім цей модуль пам'яті", Timestamp = now.AddHours(-3) }
+        };
+        var state = new KokoInternalState
+        {
+            PersonaPatienceLevel = 0.30,
+            PersonaEnergyLevel = 0.50,
+            PersonalityDailyMood = "sharp"
+        };
+
+        var service = new KokoStartupGreetingService();
+        var frame = service.BuildFrame(messages, now, state);
+
+        AssertTrue(frame.TemporalPresenceContext.Contains("TEMPORAL PRESENCE AWARENESS", StringComparison.OrdinalIgnoreCase), "startup frame should include temporal presence prompt");
+        AssertTrue(frame.PromptBlock.Contains("Temporal presence:", StringComparison.OrdinalIgnoreCase), "startup prompt should include temporal presence section");
+        AssertTrue(frame.PromptBlock.Contains("user_last_exit_type: abrupt_unannounced", StringComparison.OrdinalIgnoreCase), "startup prompt should pass normalized exit type");
+        AssertEqual("abrupt_unannounced", state.LastTemporalPresenceExitType, "startup frame should update temporal presence state when state is provided");
     }
 
     private static void StartupGreetingClassifiesCleanGoodbye()

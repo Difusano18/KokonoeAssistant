@@ -104,6 +104,12 @@ namespace KokonoeAssistant.Services
         public double AsyncPersonalityReadiness { get; set; } = 0.50;
         public double AsyncPersonalityCacheFreshness { get; set; }
         public List<string> AsyncPersonalityTrace { get; set; } = new();
+        public DateTime LastTemporalPresenceAt { get; set; } = DateTime.MinValue;
+        public string LastTemporalPresenceExitType { get; set; } = "unknown";
+        public string LastTemporalPresenceAbsenceClass { get; set; } = "unknown";
+        public string LastTemporalPresenceGapText { get; set; } = "";
+        public string LastTemporalPresenceGreetingMood { get; set; } = "neutral_return";
+        public string LastTemporalPresenceDirective { get; set; } = "";
 
         // Динаміка тиші — окремі cooldown рівні
         public DateTime SilenceLevel1At    { get; set; } = DateTime.MinValue; // 1h jab
@@ -365,6 +371,7 @@ namespace KokonoeAssistant.Services
         public readonly KokoLivingConversationEngine LivingConversation;
         public readonly KokoSubconsciousMonologueEngine Subconscious;
         public readonly KokoAsyncPersonalityEngine AsyncPersonality;
+        public readonly KokoTemporalPresenceAwarenessEngine TemporalPresence;
         public readonly KokoResponsePlannerEngine ResponsePlanner;
         public readonly KokoSocialEngine Social;
         public readonly KokoNeuralGovernorService NeuralGovernor;
@@ -478,6 +485,7 @@ namespace KokonoeAssistant.Services
             LivingConversation = new KokoLivingConversationEngine();
             Subconscious = new KokoSubconsciousMonologueEngine();
             AsyncPersonality = new KokoAsyncPersonalityEngine();
+            TemporalPresence = new KokoTemporalPresenceAwarenessEngine();
             ResponsePlanner = new KokoResponsePlannerEngine();
             Social = new KokoSocialEngine();
             NeuralGovernor = new KokoNeuralGovernorService(_llm);
@@ -2182,6 +2190,13 @@ Summary: {summary}
                 var asyncPersonality = AsyncPersonality.BuildPromptBlock(_state, DateTime.Now);
                 if (!string.IsNullOrWhiteSpace(asyncPersonality))
                     sb.AppendLine(asyncPersonality);
+            }
+            catch { }
+            try
+            {
+                var temporal = TemporalPresence.BuildPromptBlock(_state, DateTime.Now);
+                if (!string.IsNullOrWhiteSpace(temporal))
+                    sb.AppendLine(temporal);
             }
             catch { }
             try { sb.AppendLine(Emotion.BuildEmotionalContextBlock(BuildNarrativeThreadSummary(DateTime.Now))); } catch { }
@@ -3889,6 +3904,7 @@ Summary: {summary}
                         neural.PromptBlock += "\n" + rawHydration;
                         neural.PromptBlock += "\n" + Subconscious.BuildPromptBlock(_state, Emotion, now);
                         neural.PromptBlock += "\n" + AsyncPersonality.BuildPromptBlock(_state, now);
+                        neural.PromptBlock += "\n" + TemporalPresence.BuildPromptBlock(_state, now);
                         return neural;
                     }
                 }
@@ -3904,6 +3920,7 @@ Summary: {summary}
             fallback.PromptBlock += "\n" + rawHydration;
             fallback.PromptBlock += "\n" + Subconscious.BuildPromptBlock(_state, Emotion, now);
             fallback.PromptBlock += "\n" + AsyncPersonality.BuildPromptBlock(_state, now);
+            fallback.PromptBlock += "\n" + TemporalPresence.BuildPromptBlock(_state, now);
             fallback.TraceLine += "; governor=fallback";
             KokoSystemLog.Write("NEURAL-GOVERNOR", "fallback used: " + fallback.TraceLine);
             return fallback;
@@ -6601,6 +6618,7 @@ Summary: {summary}
             sb.AppendLine(KokoResponseStyleEngine.BuildLivingConversationDirective(_state));
             sb.AppendLine(KokoSubconsciousMonologueEngine.BuildDirective(_state));
             sb.AppendLine(KokoAsyncPersonalityEngine.BuildDirective(_state));
+            sb.AppendLine(KokoTemporalPresenceAwarenessEngine.BuildDirective(_state));
             return sb.ToString().Trim();
         }
 
