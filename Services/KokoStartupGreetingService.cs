@@ -101,7 +101,7 @@ namespace KokonoeAssistant.Services
             if (quick)
                 return Pick(frame, "topic-quick",
                     $"Швидко вернувся. Тема про {topic} ще тепла, тож продовжуй без вступної опери.",
-                    $"О, без довгої паузи. Контекст про {topic} ще на столі; не змушуй мене знову збирати його ложкою.",
+                    $"О, без довгої паузи. {topic} ще тримається в пам'яті; не змушуй мене збирати його ложкою.",
                     $"Ти майже не зникав. Продовжуємо {topic}, тільки цього разу конкретніше.");
 
             if (shortGap)
@@ -169,13 +169,46 @@ namespace KokonoeAssistant.Services
                     ? $"Привіт. Ти обірвався без нормального закриття; останній корисний хвіст був про {topic}. Піднімаємо його чи нову задачу?"
                     : "Привіт. Ти зник без нормального закриття. Не смертельно, просто не вдавай, що це була стратегія.",
                 "quick_return" => hasTopic
-                    ? $"Привіт. Швидко повернувся; контекст про {topic} ще тут. Що робимо?"
-                    : "Привіт. Швидко повернувся. Добре, без фанфар: що робимо?",
+                    ? Pick(frame, "quick-live-topic",
+                        $"Швидко. {topic} ще не встиг охолонути, тож кидай наступний шматок.",
+                        $"Ти майже не зникав. {topic} лишився в буфері; давай без повторного запуску ритуалу.",
+                        $"Повернення зараховано. {topic} ще актуальний, якщо ти не встиг придумати нову пожежу.")
+                    : Pick(frame, "quick-live-empty",
+                        "Швидко повернувся. Добре, без фанфар: що горить?",
+                        "Майже не зникав. Кажи коротко, що робимо.",
+                        "О, швидкий цикл. Давай задачу, поки контекст не скис."),
                 _ when quick => "Привіт. Ти майже не зникав. Кажи коротко, що треба.",
-                _ when hasTopic && longGap => $"{gapFeel}. Останній робочий контекст - {topic}. Він ще живий?",
-                _ when hasTopic => $"Привіт. Контекст про {topic} ще на столі. Продовжуємо чи міняємо ціль?",
-                _ => "Привіт. Я на місці. Кажи, що робимо."
+                _ when hasTopic && longGap => Pick(frame, "long-live-topic",
+                    $"{gapFeel}. {topic} не стерся, але я не буду робити вигляд, що він сам себе пояснить. Піднімаємо чи ріжемо?",
+                    $"{gapFeel}. Нитка {topic} збережена. Тепер або даєш новий факт, або міняємо фронт.",
+                    $"{gapFeel}. {topic} ще можна витягнути з пам'яті. Не змушуй мене вгадувати, навіщо."),
+                _ when hasTopic => BuildLiveTopicReturnFallback(frame, topic, gapFeel),
+                _ => Pick(frame, "empty-live-return",
+                    "Я тут. Давай без церемонії: що саме рухаємо?",
+                    "Запустилась. Якщо це знову хаос, хоча б назви його нормально.",
+                    "На місці. Кидай задачу, поки я ще вдаю терпіння.")
             };
+        }
+
+        private static string BuildLiveTopicReturnFallback(KokoStartupGreetingFrame frame, string topic, string gapFeel)
+        {
+            var temporal = (frame.TemporalPresenceContext ?? "").ToLowerInvariant();
+            if (temporal.Contains("abrupt_unannounced") || temporal.Contains("irritated_continuity"))
+                return Pick(frame, "topic-abrupt-return",
+                    $"Ти обірвався на {topic}. Я нитку не викинула; кажи, тягнемо її далі чи ріжемо.",
+                    $"{gapFeel}. {topic} залишився відкритим. Дай наступний крок, а не туман.",
+                    $"Минулого разу {topic} не отримав нормального закриття. Виправляємо чи переключаєшся?");
+
+            if (temporal.Contains("planned_farewell") || frame.DepartureKind == "clean_goodbye")
+                return Pick(frame, "topic-planned-return",
+                    $"Минулого разу ти нормально закрив розмову. {topic} лишився як опція, не як борг.",
+                    $"{topic} можна підняти знову, якщо воно ще потрібно. Якщо ні — кидай нову ціль.",
+                    $"Повернення без драми. {topic} пам'ятаю; тепер вирішуй, чи воно ще живе.");
+
+            return Pick(frame, "topic-natural-return",
+                $"Я тримаю {topic} в буфері. Якщо це ще актуально — давай наступний факт.",
+                $"Нитка {topic} не загубилась. Дай новий сигнал, і без канцеляриту.",
+                $"{gapFeel}. {topic} ще можна підняти; або кидай свіжу проблему, тільки конкретну.");
         }
 
         private static string InferDepartureKind(IReadOnlyList<ChatRepository.ChatMessage> recent, double? gap)
@@ -230,6 +263,8 @@ namespace KokonoeAssistant.Services
                 lower.Contains("останній хвіст") ||
                 lower.Contains("повернувся. де тебе носило") ||
                 lower.Contains("щось недороблено") ||
+                lower.Contains("контекст про") && lower.Contains("ще на столі") ||
+                lower.Contains("продовжуємо чи міняємо ціль") ||
                 lower.Contains("тема «привіт") ||
                 lower.Contains("тема \"привіт"))
                 return BuildFallback(frame);
@@ -242,6 +277,9 @@ namespace KokonoeAssistant.Services
                 "останній хвіст",
                 "Повернувся. де тебе носило",
                 "щось недороблено",
+                "Контекст про",
+                "ще на столі",
+                "Продовжуємо чи міняємо ціль",
                 "тема «привіт",
                 "тема \"привіт"))
                 return BuildFallback(frame);
@@ -251,6 +289,8 @@ namespace KokonoeAssistant.Services
                 lower.Contains("останній хвіст") ||
                 lower.Contains("повернувся. де тебе носило") ||
                 lower.Contains("щось недороблено") ||
+                lower.Contains("контекст про") && lower.Contains("ще на столі") ||
+                lower.Contains("продовжуємо чи міняємо ціль") ||
                 lower.Contains("тема «привіт") ||
                 lower.Contains("тема \"привіт"))
                 return BuildFallback(frame);

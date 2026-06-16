@@ -253,6 +253,7 @@ internal static class Program
             Run("Startup greeting classifies clean goodbye", StartupGreetingClassifiesCleanGoodbye);
             Run("Startup greeting classifies abrupt exit", StartupGreetingClassifiesAbruptExit);
             Run("Startup greeting classifies conflict residue", StartupGreetingClassifiesConflictResidue);
+            Run("Startup greeting rejects stale context table fallback", StartupGreetingRejectsStaleContextTableFallback);
             Run("Startup greeting prompt uses mood and absence", StartupGreetingPromptUsesMoodAndAbsence);
             Run("Startup greeting prompt includes temporal presence", StartupGreetingPromptIncludesTemporalPresence);
             Run("Startup greeting sanitizes therapy meta", StartupGreetingSanitizesTherapyMeta);
@@ -6051,7 +6052,8 @@ Insight: bridge stability and pulse quality are linked.
         var fallback = service.BuildFallback(frame);
 
         AssertEqual("abrupt_exit", frame.DepartureKind, "unfinished user turn should be treated as abrupt exit");
-        AssertTrue(fallback.Contains("обірвався") || fallback.Contains("зник"), "greeting should mention the interrupted continuity");
+        AssertTrue(fallback.Contains("обірвався") || fallback.Contains("зник") || fallback.Contains("відкритим") || fallback.Contains("закриття"),
+            "greeting should mention the interrupted continuity");
     }
 
     private static void StartupGreetingClassifiesConflictResidue()
@@ -6069,6 +6071,34 @@ Insight: bridge stability and pulse quality are linked.
         AssertEqual("conflict_or_hurt", frame.DepartureKind, "hurt/conflict tail should be classified");
         AssertTrue(frame.EmotionalResidueUk.Contains("конфлікту") || frame.EmotionalResidueUk.Contains("образи"), "emotional residue should be explicit");
         AssertTrue(fallback.Contains("криво") || fallback.Contains("помітила"), "greeting should acknowledge residue without theatrical apology");
+    }
+
+    private static void StartupGreetingRejectsStaleContextTableFallback()
+    {
+        var now = new DateTime(2026, 6, 16, 3, 16, 0);
+        var messages = new[]
+        {
+            new ChatRepository.ChatMessage { Role = "user", Content = "більше фактів ... чим не подобаюсь .. що дратує", Timestamp = now.AddMinutes(-92) }
+        };
+        var service = new KokoStartupGreetingService();
+        var frame = service.BuildFrame(messages, now, new KokoInternalState
+        {
+            PersonaPatienceLevel = 0.44,
+            PersonalityDailyMood = "sharp"
+        });
+
+        var fallback = service.BuildFallback(frame);
+        var sanitized = service.Sanitize("Привіт. Контекст про останню задачу ще на столі. Продовжуємо чи міняємо ціль?", frame);
+
+        AssertTrue(!fallback.Contains("Контекст про", StringComparison.OrdinalIgnoreCase), "fallback should avoid canned context-table phrasing");
+        AssertTrue(!fallback.Contains("ще на столі", StringComparison.OrdinalIgnoreCase), "fallback should not say context is on the table");
+        AssertTrue(!fallback.Contains("Продовжуємо чи міняємо ціль", StringComparison.OrdinalIgnoreCase), "fallback should avoid stale continue-or-switch prompt");
+        AssertTrue(!sanitized.Contains("Контекст про", StringComparison.OrdinalIgnoreCase), "sanitizer should reject canned context-table phrasing");
+        AssertTrue(!sanitized.Contains("Продовжуємо чи міняємо ціль", StringComparison.OrdinalIgnoreCase), "sanitizer should reject exact stale line");
+        AssertTrue(sanitized.Contains("факт", StringComparison.OrdinalIgnoreCase) ||
+                   sanitized.Contains("задач", StringComparison.OrdinalIgnoreCase) ||
+                   sanitized.Contains("нитк", StringComparison.OrdinalIgnoreCase),
+            "replacement should still preserve context");
     }
 
     private static void StartupGreetingSanitizesTherapyMeta()
