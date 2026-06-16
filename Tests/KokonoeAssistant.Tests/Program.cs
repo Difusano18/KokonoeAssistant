@@ -185,6 +185,8 @@ internal static class Program
             Run("Living conversation avoids repeated moves", LivingConversationAvoidsRepeatedMoves);
             Run("Subconscious frame accepts corrections", SubconsciousFrameAcceptsCorrections);
             Run("Subconscious frame routes action requests", SubconsciousFrameRoutesActionRequests);
+            Run("Async personality snapshot prioritizes corrections", AsyncPersonalitySnapshotPrioritizesCorrections);
+            Run("Async personality snapshot quiets high stress", AsyncPersonalitySnapshotQuietsHighStress);
             Run("Emotion modifiers keep distant useful", EmotionModifiersKeepDistantUseful);
             Run("Emotion engine supports expanded states", EmotionEngineSupportsExpandedStates);
             Run("Emotion context exposes PAD and salient history", EmotionContextExposesPadAndSalientHistory);
@@ -192,6 +194,7 @@ internal static class Program
             Run("Runtime state exposes temperament", RuntimeStateExposesTemperament);
             Run("Runtime state exposes living conversation", RuntimeStateExposesLivingConversation);
             Run("Runtime state exposes subconscious frame", RuntimeStateExposesSubconsciousFrame);
+            Run("Runtime state exposes async personality", RuntimeStateExposesAsyncPersonality);
             Run("Response planner classifies critical assistant architecture", ResponsePlannerClassifiesCriticalAssistantArchitecture);
             Run("Response planner includes executive monologue and critique", ResponsePlannerIncludesExecutiveMonologueAndCritique);
             Run("Response planner fatigue pushes back after midnight", ResponsePlannerFatiguePushesBackAfterMidnight);
@@ -4452,6 +4455,77 @@ Insight: bridge stability and pulse quality are linked.
         AssertTrue(state.SubconsciousSignals.Count > 0, "subconscious signals should be recorded");
     }
 
+    private static void AsyncPersonalitySnapshotPrioritizesCorrections()
+    {
+        using var ctx = TestContext.Create();
+        var now = new DateTime(2026, 6, 15, 1, 10, 0);
+        var state = new KokoInternalState
+        {
+            LastAsyncPersonalityMode = "fast_cached",
+            LastAsyncPersonalityFastIntent = "answer",
+            LastAsyncPersonalityAt = now.AddMinutes(-2)
+        };
+
+        var snapshot = new KokoAsyncPersonalityEngine().UpdateSnapshot(
+            state,
+            ctx.Emotion,
+            new KokoSocialFrame { Subtext = "neutral", SeriousnessLevel = 0.50 },
+            new KokoLivingConversationFrame { Mode = "alive_direct", CurrentMove = "direct_answer" },
+            new KokoSubconsciousFrame
+            {
+                Mode = "context_correction",
+                IntentImpulse = "accept_correction",
+                ActionBias = "update_context_label",
+                AttentionScore = 0.82
+            },
+            Array.Empty<ChatRepository.ChatMessage>(),
+            now,
+            "test");
+
+        AssertEqual("priority_refresh", snapshot.CrmMode, "correction should force a priority refresh");
+        AssertEqual("accept_correction", snapshot.FastIntent, "fast intent should keep correction impulse");
+        AssertEqual("context_correction", snapshot.PrioritySignal, "priority should name correction signal");
+        AssertTrue(snapshot.StyleDirective.Contains("acknowledge the correction", StringComparison.OrdinalIgnoreCase), "style should force correction acknowledgement");
+        AssertTrue(state.AsyncPersonalityVersion == 1, "state should increment async personality version");
+        AssertTrue(state.AsyncPersonalityTrace.Count == 1, "state should retain async trace");
+        AssertTrue(snapshot.PromptBlock.Contains("ASYNC PERSONALITY SNAPSHOT", StringComparison.OrdinalIgnoreCase), "prompt should expose async snapshot to internal prompt");
+    }
+
+    private static void AsyncPersonalitySnapshotQuietsHighStress()
+    {
+        using var ctx = TestContext.Create();
+        var now = new DateTime(2026, 6, 15, 1, 15, 0);
+        var state = new KokoInternalState
+        {
+            LastSomaticStrain = 0.86,
+            LastLivingConversationMode = "quiet_operator",
+            PersonaPatienceLevel = 0.60
+        };
+        ctx.Emotion.UpdateStressAcute(0.90f);
+
+        var snapshot = new KokoAsyncPersonalityEngine().UpdateSnapshot(
+            state,
+            ctx.Emotion,
+            new KokoSocialFrame { Subtext = "urgent_or_crisis", Urgency = 0.75, SeriousnessLevel = 0.90 },
+            new KokoLivingConversationFrame { Mode = "quiet_operator", CurrentMove = "short_stabilize" },
+            new KokoSubconsciousFrame
+            {
+                Mode = "survival_focus",
+                IntentImpulse = "stabilize_then_answer",
+                ActionBias = "reply",
+                AttentionScore = 0.90
+            },
+            Array.Empty<ChatRepository.ChatMessage>(),
+            now,
+            "somatic_spike");
+
+        AssertEqual("quiet_operator", snapshot.CrmMode, "high somatic stress should move CRM into quiet operator");
+        AssertEqual("high_body_load", snapshot.PrioritySignal, "priority should expose high body load");
+        AssertTrue(snapshot.StyleDirective.Contains("low-noise", StringComparison.OrdinalIgnoreCase), "style should reduce noise under stress");
+        AssertTrue(snapshot.StyleDirective.Contains("sarcasm suppressed", StringComparison.OrdinalIgnoreCase), "stress should suppress sarcasm");
+        AssertTrue(snapshot.ResponseReadiness > 0.60, "high-priority stress frame should still be response-ready");
+    }
+
     private static void EmotionModifiersKeepDistantUseful()
     {
         using var ctx = TestContext.Create();
@@ -4609,6 +4683,32 @@ Insight: bridge stability and pulse quality are linked.
         AssertTrue(block.Contains("bias=tool_or_code_action", StringComparison.OrdinalIgnoreCase), "runtime prompt should expose action bias");
         AssertTrue(directive.Contains("SUBCONSCIOUS DIRECTIVE", StringComparison.OrdinalIgnoreCase), "directive should expose private steering label");
         AssertTrue(directive.Contains("never expose", StringComparison.OrdinalIgnoreCase), "directive should forbid visible mechanics");
+    }
+
+    private static void RuntimeStateExposesAsyncPersonality()
+    {
+        using var ctx = TestContext.Create();
+        var state = new KokoInternalState
+        {
+            AsyncPersonalityVersion = 7,
+            LastAsyncPersonalityMode = "fast_cached",
+            LastAsyncPersonalityFastIntent = "act_or_plan",
+            LastAsyncPersonalityPrioritySignal = "none",
+            LastAsyncPersonalityStyle = "operator: do the work first",
+            AsyncPersonalityReadiness = 0.81,
+            AsyncPersonalityCacheFreshness = 0.66,
+            AsyncPersonalityTrace = new() { "01:20 v7 fast_cached/act_or_plan priority=none readiness=0.81 reason=test" }
+        };
+        using var health = new HealthService(ctx.TestDir);
+
+        var block = new KokoRuntimeStateService().BuildPromptBlock(state, ctx.Emotion, health, ctx.Chat);
+        var directive = KokoAsyncPersonalityEngine.BuildDirective(state);
+
+        AssertTrue(block.Contains("async_personality: v=7 mode=fast_cached", StringComparison.OrdinalIgnoreCase), "runtime prompt should expose async personality mode");
+        AssertTrue(block.Contains("intent=act_or_plan", StringComparison.OrdinalIgnoreCase), "runtime prompt should expose async fast intent");
+        AssertTrue(block.Contains("Async personality snapshot is private fast-path steering", StringComparison.OrdinalIgnoreCase), "runtime behavior should hide async mechanics");
+        AssertTrue(directive.Contains("ASYNC PERSONALITY DIRECTIVE", StringComparison.OrdinalIgnoreCase), "directive should expose async private steering label");
+        AssertTrue(directive.Contains("never leak mechanics", StringComparison.OrdinalIgnoreCase), "directive should forbid module leakage");
     }
 
     private static void ResponsePlannerClassifiesCriticalAssistantArchitecture()

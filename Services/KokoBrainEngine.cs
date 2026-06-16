@@ -94,6 +94,16 @@ namespace KokonoeAssistant.Services
         public DateTime LastSubconsciousAt { get; set; } = DateTime.MinValue;
         public double SubconsciousAttentionScore { get; set; } = 0.45;
         public List<string> SubconsciousSignals { get; set; } = new();
+        public long AsyncPersonalityVersion { get; set; }
+        public DateTime LastAsyncPersonalityAt { get; set; } = DateTime.MinValue;
+        public string LastAsyncPersonalityMode { get; set; } = "cold_start";
+        public string LastAsyncPersonalityFastIntent { get; set; } = "answer";
+        public string LastAsyncPersonalityStyle { get; set; } = "";
+        public string LastAsyncPersonalityDelta { get; set; } = "";
+        public string LastAsyncPersonalityPrioritySignal { get; set; } = "none";
+        public double AsyncPersonalityReadiness { get; set; } = 0.50;
+        public double AsyncPersonalityCacheFreshness { get; set; }
+        public List<string> AsyncPersonalityTrace { get; set; } = new();
 
         // Динаміка тиші — окремі cooldown рівні
         public DateTime SilenceLevel1At    { get; set; } = DateTime.MinValue; // 1h jab
@@ -354,6 +364,7 @@ namespace KokonoeAssistant.Services
         public readonly KokoTemperamentEngine Temperament;
         public readonly KokoLivingConversationEngine LivingConversation;
         public readonly KokoSubconsciousMonologueEngine Subconscious;
+        public readonly KokoAsyncPersonalityEngine AsyncPersonality;
         public readonly KokoResponsePlannerEngine ResponsePlanner;
         public readonly KokoSocialEngine Social;
         public readonly KokoNeuralGovernorService NeuralGovernor;
@@ -466,6 +477,7 @@ namespace KokonoeAssistant.Services
             Temperament = new KokoTemperamentEngine();
             LivingConversation = new KokoLivingConversationEngine();
             Subconscious = new KokoSubconsciousMonologueEngine();
+            AsyncPersonality = new KokoAsyncPersonalityEngine();
             ResponsePlanner = new KokoResponsePlannerEngine();
             Social = new KokoSocialEngine();
             NeuralGovernor = new KokoNeuralGovernorService(_llm);
@@ -2165,6 +2177,13 @@ Summary: {summary}
                     sb.AppendLine(subconscious);
             }
             catch { }
+            try
+            {
+                var asyncPersonality = AsyncPersonality.BuildPromptBlock(_state, DateTime.Now);
+                if (!string.IsNullOrWhiteSpace(asyncPersonality))
+                    sb.AppendLine(asyncPersonality);
+            }
+            catch { }
             try { sb.AppendLine(Emotion.BuildEmotionalContextBlock(BuildNarrativeThreadSummary(DateTime.Now))); } catch { }
 
             try
@@ -3784,13 +3803,15 @@ Summary: {summary}
             var social = BuildSocialFrame(userText, now);
             var living = LivingConversation.Update(_state, userText, frame.Mode, Emotion, social, now);
             var subconscious = Subconscious.Update(_state, userText, Emotion, social, living, _chatRepo.GetMessages(20), now);
-            _state.LastPersonaDecision = frame.PromptBlock + "\n" + temperament.PromptBlock + "\n" + social.PromptBlock + "\n" + living.PromptBlock + "\n" + subconscious.PromptBlock;
+            var asyncPersonality = AsyncPersonality.UpdateSnapshot(_state, Emotion, social, living, subconscious, _chatRepo.GetMessages(24), now);
+            _state.LastPersonaDecision = frame.PromptBlock + "\n" + temperament.PromptBlock + "\n" + social.PromptBlock + "\n" + living.PromptBlock + "\n" + subconscious.PromptBlock + "\n" + asyncPersonality.PromptBlock;
             _state.LastPersonaDecisionAt = now;
             _state.PersonaDecisionLog.Add(frame.TraceLine);
             _state.PersonaDecisionLog.Add(temperament.TraceLine);
             _state.PersonaDecisionLog.Add(social.TraceLine);
             _state.PersonaDecisionLog.Add(living.TraceLine);
             _state.PersonaDecisionLog.Add(subconscious.TraceLine);
+            _state.PersonaDecisionLog.Add(asyncPersonality.TraceLine);
             if (_state.PersonaDecisionLog.Count > 40)
                 _state.PersonaDecisionLog.RemoveRange(0, _state.PersonaDecisionLog.Count - 40);
 
@@ -3798,6 +3819,7 @@ Summary: {summary}
             _state.InnerMonologues.Add($"[temperament/{temperament.MoodState}] energy={temperament.EnergyLevel:F2}; patience={temperament.PatienceLevel:F2}");
             _state.InnerMonologues.Add($"[living/{living.Mode}] move={living.CurrentMove}; color={living.EmotionalColor}; {living.Reason}");
             _state.InnerMonologues.Add($"[subconscious/{subconscious.Mode}] impulse={subconscious.IntentImpulse}; bias={subconscious.ActionBias}; attention={subconscious.AttentionScore:F2}");
+            _state.InnerMonologues.Add($"[async/{asyncPersonality.CrmMode}] intent={asyncPersonality.FastIntent}; priority={asyncPersonality.PrioritySignal}; readiness={asyncPersonality.ResponseReadiness:F2}");
             if (_state.InnerMonologues.Count > 80)
                 _state.InnerMonologues.RemoveRange(0, _state.InnerMonologues.Count - 80);
 
@@ -3866,6 +3888,7 @@ Summary: {summary}
                         neural.PromptBlock += "\n" + emotional;
                         neural.PromptBlock += "\n" + rawHydration;
                         neural.PromptBlock += "\n" + Subconscious.BuildPromptBlock(_state, Emotion, now);
+                        neural.PromptBlock += "\n" + AsyncPersonality.BuildPromptBlock(_state, now);
                         return neural;
                     }
                 }
@@ -3880,6 +3903,7 @@ Summary: {summary}
             fallback.PromptBlock += "\n" + emotional;
             fallback.PromptBlock += "\n" + rawHydration;
             fallback.PromptBlock += "\n" + Subconscious.BuildPromptBlock(_state, Emotion, now);
+            fallback.PromptBlock += "\n" + AsyncPersonality.BuildPromptBlock(_state, now);
             fallback.TraceLine += "; governor=fallback";
             KokoSystemLog.Write("NEURAL-GOVERNOR", "fallback used: " + fallback.TraceLine);
             return fallback;
@@ -6576,6 +6600,7 @@ Summary: {summary}
             sb.AppendLine(KokoResponseStyleEngine.BuildTemperamentDirective(_state));
             sb.AppendLine(KokoResponseStyleEngine.BuildLivingConversationDirective(_state));
             sb.AppendLine(KokoSubconsciousMonologueEngine.BuildDirective(_state));
+            sb.AppendLine(KokoAsyncPersonalityEngine.BuildDirective(_state));
             return sb.ToString().Trim();
         }
 
