@@ -98,6 +98,8 @@ namespace KokonoeAssistant
         // Коконое відповідає тільки на DM (false = і групи теж)
         public bool   TgDmOnly        { get; set; } = false;
         public bool   TgRespondToOutgoing { get; set; } = true;
+        public bool   TgFastReplyEnabled { get; set; } = true;
+        public int    TgFastReplyMaxChars { get; set; } = 360;
 
         // Spontaneous messages
         public bool SpontaneousEnabled      { get; set; } = true;

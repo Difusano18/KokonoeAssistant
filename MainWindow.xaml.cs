@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Runtime.CompilerServices;
@@ -990,22 +991,28 @@ tags: [kokonoe, live-core, diagnostics]
                 try { recent = ServiceContainer.ChatRepository.GetMessages(40).OrderBy(x => x.Timestamp).TakeLast(30).ToList(); }
                 catch { }
 
-                var frame = service.BuildFrame(recent, now);
+                Services.KokoInternalState? startupState = null;
+                try { startupState = ServiceContainer.BrainEngine?.State; } catch { }
+                var frame = service.BuildFrame(recent, now, startupState);
 
                 var brainObs = "";
                 var moodContext = "";
                 var presenceContext = "";
                 try
                 {
-                    var st = ServiceContainer.BrainEngine.State;
+                    var brain = ServiceContainer.BrainEngine;
+                    var st = startupState ?? brain?.State;
+                    if (st == null)
+                        throw new InvalidOperationException("Brain state unavailable for startup greeting.");
                     moodContext =
                         $"brainMood={st.PersonalityDailyMood}; moodScore={st.MoodScore:F2}; irritation={st.PersonalityIrritation:F2}; " +
                         $"lastUserTone={st.LastUserEmotionalTone}; lastPresence={st.LastPresenceSummary}; situation={st.LastPresenceSituation}; tone={st.LastPresenceTone}; " +
                         $"emotionalMood={st.EmotionalSessionMood}; exit={st.EmotionalExitStyle}; manners={st.EmotionalMannersState}; grudge={st.EmotionalGrudgeScore:F2}";
                     try
                     {
-                        var emotionalBlock = ServiceContainer.BrainEngine.EmotionalMemory.BuildPromptBlock(st, recent, now);
-                        moodContext += "\n" + emotionalBlock;
+                        var emotionalBlock = brain?.EmotionalMemory.BuildPromptBlock(st, recent, now);
+                        if (!string.IsNullOrWhiteSpace(emotionalBlock))
+                            moodContext += "\n" + emotionalBlock;
                     }
                     catch { }
                     presenceContext = string.Join(" | ", st.PresenceTrace.TakeLast(4));
@@ -1033,6 +1040,14 @@ tags: [kokonoe, live-core, diagnostics]
 Напиши стартову репліку повністю через модель. Вона має відчуватись як жива реакція Kokonoe на повернення користувача: врахуй час, паузу, mood, presence і останню тему.
 Не пояснюй правила. Не пиши службовий статус. Тільки текст.";
 
+                prompt = $@"{frame.PromptBlock}
+{brainObs}
+Напиши одну стартову репліку повністю через модель.
+Вона має звучати як жива реакція Kokonoe на повернення користувача: врахуй час, довжину паузи, настрій, presence і останню реальну тему.
+Не пояснюй правила. Не пиши службовий статус. Не використовуй фрази на кшталт ""Привіт. Контекст про останню задачу..."", ""продовжуємо чи міняємо ціль"", ""я тут якщо щось зламаєш"".
+Не називай модулі, prompt, контекст, кеш, state або аналіз. Тільки природний текст.
+1-2 речення українською, сухо, живо, без театру.";
+
                 var task = _llm.SendSystemQueryAsync(prompt, ct: CancellationToken.None);
                 var completed = await Task.WhenAny(task, Task.Delay(9000));
                 if (completed != task)
@@ -1049,7 +1064,9 @@ tags: [kokonoe, live-core, diagnostics]
             {
                 var recent = ServiceContainer.ChatRepository.GetMessages(8);
                 var service = new Services.KokoStartupGreetingService();
-                return service.BuildFallback(service.BuildFrame(recent, DateTime.Now));
+                Services.KokoInternalState? startupState = null;
+                try { startupState = ServiceContainer.BrainEngine?.State; } catch { }
+                return service.BuildFallback(service.BuildFrame(recent, DateTime.Now, startupState));
             }
             catch
             {
@@ -3770,6 +3787,122 @@ Full PC context:
             return result;
         }
 
+        private bool ShouldUseFastTelegramReply(string? text)
+        {
+            var settings = AppSettings.Load();
+            if (!settings.TgFastReplyEnabled)
+                return false;
+
+            var trimmed = text?.Trim() ?? "";
+            if (trimmed.Length == 0)
+                return true;
+
+            var maxChars = Math.Clamp(settings.TgFastReplyMaxChars, 80, 1200);
+            if (trimmed.Length > maxChars)
+                return false;
+
+            var lower = trimmed.ToLowerInvariant();
+            var heavyMarkers = new[]
+            {
+                "obsidian", "vault", "profile", "memory", "note", "file", "folder",
+                "code", "build", "test", "error", "exception", "commit", "push",
+                "github", "screen", "screenshot", "image", "photo", "plan", "analyze",
+                "research", "search", "watch", "wear", "settings", "token"
+            };
+
+            return !heavyMarkers.Any(m => lower.Contains(m, StringComparison.OrdinalIgnoreCase));
+        }
+
+        private string BuildFastTelegramContext(string channel, string? userText)
+        {
+            const int maxChars = 2400;
+            var parts = new List<string>();
+
+            try
+            {
+                var temporal = BuildTemporalAwarenessContext(userText);
+                if (!string.IsNullOrWhiteSpace(temporal))
+                    parts.Add(TrimForPrompt(temporal, 520));
+            }
+            catch { }
+
+            try { parts.Add(BuildLiveResponseStyleContext(userText)); } catch { }
+
+            try
+            {
+                var condition = BuildKokoConditionContext();
+                if (!string.IsNullOrWhiteSpace(condition))
+                    parts.Add(TrimForPrompt(condition, 520));
+            }
+            catch { }
+
+            try
+            {
+                if (TryGetVerifiedWearablePulse(out var bpm, out var baseline))
+                {
+                    var diff = bpm - baseline;
+                    parts.Add($"=== VERIFIED SOMATIC ===\nsource: Galaxy Watch; bpm={bpm:0.0}; baseline={baseline:0.0}; delta={diff:+0.0;-0.0;0.0}");
+                }
+            }
+            catch { }
+
+            try
+            {
+                var brain = ServiceContainer.BrainEngine;
+                var state = brain?.State;
+                if (state != null)
+                {
+                    var compact = new List<string>();
+                    if (!string.IsNullOrWhiteSpace(state.LastScreenAwarenessMode))
+                        compact.Add("screen=" + state.LastScreenAwarenessMode);
+                    if (!string.IsNullOrWhiteSpace(state.LastScreenAwarenessSummary))
+                        compact.Add("screen_summary=" + TrimForPrompt(state.LastScreenAwarenessSummary, 240));
+                    if (!string.IsNullOrWhiteSpace(state.LastKnownUserActivity))
+                        compact.Add("activity=" + TrimForPrompt(state.LastKnownUserActivity, 180));
+                    if (compact.Count > 0)
+                        parts.Add("=== LIGHT CONTINUITY ===\n" + string.Join("\n", compact));
+                }
+            }
+            catch { }
+
+            try
+            {
+                var recent = ServiceContainer.ChatRepository.GetMessages(6)
+                    .Select(m => $"{m.Role}: {TrimForPrompt(m.Content, 160)}")
+                    .ToArray();
+                if (recent.Length > 0)
+                    parts.Add("=== RECENT CHAT ===\n" + string.Join("\n", recent));
+            }
+            catch { }
+
+            var result = "=== FAST TELEGRAM CONTEXT ===\n" +
+                         $"channel: {channel}\n" +
+                         "route: fast; no vault scan; no neural governor; keep answer natural and current-message-first.\n\n" +
+                         string.Join("\n\n", parts.Where(p => !string.IsNullOrWhiteSpace(p)));
+
+            return result.Length <= maxChars
+                ? result
+                : TruncateAtWordBoundary(result, maxChars);
+        }
+
+        private string BuildTelegramReplyContext(string channel, string? userText, out bool fastRoute, out long elapsedMs)
+        {
+            var sw = Stopwatch.StartNew();
+            fastRoute = ShouldUseFastTelegramReply(userText);
+            try
+            {
+                return fastRoute
+                    ? BuildFastTelegramContext(channel, userText)
+                    : (channel.Equals("telegram", StringComparison.OrdinalIgnoreCase)
+                        ? (ServiceContainer.BrainEngine?.BuildUnifiedExternalContext(channel, userText) ?? "")
+                        : BuildContext(userText));
+            }
+            finally
+            {
+                elapsedMs = sw.ElapsedMilliseconds;
+            }
+        }
+
         private static string BuildLiveResponseStyleContext(string? userText)
         {
             var trimmed = userText?.Trim() ?? "";
@@ -4276,7 +4409,8 @@ tags: []
             string userText,
             string reply,
             string? context,
-            CancellationToken ct)
+            CancellationToken ct,
+            bool allowLlmRepair = true)
         {
             using var guardCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
             guardCts.CancelAfter(TimeSpan.FromSeconds(10));
@@ -4303,6 +4437,10 @@ tags: []
                     return GuardTemporalReply(userText, reply);
                 if (guard.Passed) return reply;
                 if (!guard.ShouldRepair || string.IsNullOrWhiteSpace(guard.RepairInstruction))
+                    return !string.IsNullOrWhiteSpace(guard.HardReplacement)
+                        ? guard.HardReplacement!
+                        : GuardTemporalReply(userText, reply);
+                if (!allowLlmRepair)
                     return !string.IsNullOrWhiteSpace(guard.HardReplacement)
                         ? guard.HardReplacement!
                         : GuardTemporalReply(userText, reply);
@@ -8686,14 +8824,27 @@ tags: [kokonoe, dashboard, live]
                 {
                     try { ServiceContainer.BrainEngine?.ProcessUserMessage(text); } catch { }
                 }, ct);
-                var tgContext = await Task.Run(() => BuildContext(text), ct);
+                var tgTotalWatch = Stopwatch.StartNew();
+                var tgContextResult = await Task.Run(() =>
+                {
+                    var context = BuildTelegramReplyContext("telegram-bot", text, out var fastRoute, out var contextMs);
+                    return (Context: context, FastRoute: fastRoute, ContextMs: contextMs);
+                }, ct);
+                var tgContext = tgContextResult.Context;
+                var tgFastRoute = tgContextResult.FastRoute;
+                var tgContextMs = tgContextResult.ContextMs;
+                KokoSystemLog.Write("TG_LATENCY", $"bot context route={(tgFastRoute ? "fast" : "full")} ms={tgContextMs} chars={tgContext.Length}");
                 var tgPrompt =
                     $"Telegram direct message from {from}:\n" +
                     $"{text}\n\n" +
                     "Answer only to this latest message. Do not continue old proactive pings, food reminders, work reminders, or \"are you there\" checks unless this latest message asks about them. " +
                     "If the user asks what you meant, briefly reset the context and answer the current question. Ukrainian only, concise, natural.";
+                var tgLlmWatch = Stopwatch.StartNew();
                 var reply = await _llm.SendAsync(tgPrompt, null, "image/jpeg", tgContext, ct, agentId: "chat");
-                reply = await GuardAndRepairReplyAsync(text, reply, tgContext, ct);
+                var tgLlmMs = tgLlmWatch.ElapsedMilliseconds;
+                var tgGuardWatch = Stopwatch.StartNew();
+                reply = await GuardAndRepairReplyAsync(text, reply, tgContext, ct, allowLlmRepair: !tgFastRoute);
+                KokoSystemLog.Write("TG_LATENCY", $"bot total route={(tgFastRoute ? "fast" : "full")} total_ms={tgTotalWatch.ElapsedMilliseconds} llm_ms={tgLlmMs} guard_ms={tgGuardWatch.ElapsedMilliseconds}");
                 await Dispatcher.InvokeAsync(() =>
                 {
                     _tgMessages.Add($"[Kokonoe]: {reply}");
@@ -9446,11 +9597,24 @@ tags: [kokonoe, dashboard, live]
                     return;
                 }
 
-                var sharedContext = ServiceContainer.BrainEngine?.BuildUnifiedExternalContext("telegram", msg.Text) ?? "";
+                var tgTotalWatch = Stopwatch.StartNew();
+                var tgContextResult = await Task.Run(() =>
+                {
+                    var context = BuildTelegramReplyContext("telegram", msg.Text, out var fastRoute, out var contextMs);
+                    return (Context: context, FastRoute: fastRoute, ContextMs: contextMs);
+                }, _tgUserCts.Token);
+                var sharedContext = tgContextResult.Context;
+                var tgFastRoute = tgContextResult.FastRoute;
+                var tgContextMs = tgContextResult.ContextMs;
+                KokoSystemLog.Write("TG_LATENCY", $"user context route={(tgFastRoute ? "fast" : "full")} ms={tgContextMs} chars={sharedContext.Length}");
+                var tgLlmWatch = Stopwatch.StartNew();
                 var raw = await _llm.SendTgAsync(prompt, sharedContext, _tgUserCts.Token);
                 if (string.IsNullOrWhiteSpace(raw)) return;
+                var tgLlmMs = tgLlmWatch.ElapsedMilliseconds;
                 var reply = CleanTgReply(raw);
-                reply = await GuardAndRepairReplyAsync(msg.Text, reply, sharedContext, _tgUserCts.Token);
+                var tgGuardWatch = Stopwatch.StartNew();
+                reply = await GuardAndRepairReplyAsync(msg.Text, reply, sharedContext, _tgUserCts.Token, allowLlmRepair: !tgFastRoute);
+                KokoSystemLog.Write("TG_LATENCY", $"user total route={(tgFastRoute ? "fast" : "full")} total_ms={tgTotalWatch.ElapsedMilliseconds} llm_ms={tgLlmMs} guard_ms={tgGuardWatch.ElapsedMilliseconds}");
 
                 // Показуємо відповідь в UI
                 await Dispatcher.InvokeAsync(() =>
