@@ -13,6 +13,11 @@
     <StartupObject>KokonoeAssistant.Program</StartupObject>
     <ApplicationIcon>Logo\Logo_icon.ico</ApplicationIcon>
   </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)' == 'Debug'">
+    <EnableKokonoePreBuildKill Condition="'$(EnableKokonoePreBuildKill)' == ''">true</EnableKokonoePreBuildKill>
+  </PropertyGroup>
+
   <ItemGroup>
     <Resource Include="Logo\Logo.png" />
     <Resource Include="Logo\Logo.ico" />
@@ -59,7 +64,12 @@
     <PackageReference Include="Markdig" Version="0.38.0" />
   </ItemGroup>
 
-  <Target Name="StopRunningKokonoeAssistant" BeforeTargets="BeforeBuild" Condition="'$(SkipKokonoePreBuildKill)' != 'true'">
+  <!--
+    Debug-only development guard: closes a stuck local instance before build.
+    Disable with: /p:EnableKokonoePreBuildKill=false or /p:SkipKokonoePreBuildKill=true
+  -->
+  <Target Name="StopRunningKokonoeAssistant" BeforeTargets="BeforeBuild" Condition="'$(Configuration)' == 'Debug' and '$(EnableKokonoePreBuildKill)' == 'true' and '$(SkipKokonoePreBuildKill)' != 'true'">
+    <Message Importance="high" Text="Stopping existing KokonoeAssistant.exe process before Debug build. Set EnableKokonoePreBuildKill=false to disable." />
     <Exec Command="taskkill /IM KokonoeAssistant.exe /F /T &gt;nul 2&gt;nul" IgnoreExitCode="true" />
   </Target>
 </Project>
