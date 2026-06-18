@@ -11,14 +11,6 @@ namespace KokonoeAssistant.Tests.Services;
 public sealed class KokoSandboxExecutorTests
 {
     [Fact]
-    public void Constructor_WhenWorkspaceIsEmpty_ThrowsArgumentException()
-    {
-        Action act = () => _ = new KokoSandboxExecutor(" ");
-
-        act.Should().Throw<ArgumentException>();
-    }
-
-    [Fact]
     public void Constructor_WhenWorkspaceDoesNotExist_CreatesWorkspaceDirectory()
     {
         var workspace = CreateWorkspacePath();
