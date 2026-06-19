@@ -35,7 +35,7 @@ namespace KokonoeAssistant
         public const string DefaultVisionModel = "gemma4:31b-cloud";
         public const string FallbackVisionModel = "";
 
-        // LLM Provider: "lmstudio" | "claude" | "ollama-cloud"
+        // LLM Provider: "lmstudio" | "ollama" | "claude" | "ollama-cloud"
         public string LlmProvider { get; set; } = "lmstudio";
 
         // LM Studio
@@ -116,6 +116,12 @@ namespace KokonoeAssistant
         public int  ScreenAwarenessCommentCooldownMins { get; set; } = 15;
         public int  GameScreenAwarenessIntervalMins { get; set; } = 5;
         public int  GameScreenAwarenessCommentCooldownMins { get; set; } = 10;
+
+        // System Overlord / local metadata fabric
+        public bool SystemOverlordEnabled { get; set; } = true;
+        public string SystemOverlordRoots { get; set; } = "%USERPROFILE%\\Downloads\r\n%USERPROFILE%\\Pictures";
+        public int SystemOverlordMaxFiles { get; set; } = 700;
+        public bool SystemOverlordCloudAnalysisEnabled { get; set; } = false;
 
         // System
         public bool MinimizeToTray      { get; set; } = true;
@@ -293,9 +299,27 @@ namespace KokonoeAssistant
                 changed = true;
             }
 
+            if (string.IsNullOrWhiteSpace(settings.SystemOverlordRoots))
+            {
+                settings.SystemOverlordRoots = "%USERPROFILE%\\Downloads\r\n%USERPROFILE%\\Pictures";
+                changed = true;
+            }
+
+            var normalizedOverlordMax = Math.Clamp(settings.SystemOverlordMaxFiles, 50, 5000);
+            if (settings.SystemOverlordMaxFiles != normalizedOverlordMax)
+            {
+                settings.SystemOverlordMaxFiles = normalizedOverlordMax;
+                changed = true;
+            }
+
             settings.AgentLlmProfiles ??= new Dictionary<string, KokoAgentLlmProfile>(StringComparer.OrdinalIgnoreCase);
             changed |= EnsureAgentProfile(settings.AgentLlmProfiles, "chat", 0.85);
             changed |= EnsureAgentProfile(settings.AgentLlmProfiles, "coder", 0.35);
+            changed |= EnsureAgentProfile(settings.AgentLlmProfiles, "system", 0.25);
+            changed |= EnsureAgentProfile(settings.AgentLlmProfiles, "research", 0.45);
+            changed |= EnsureAgentProfile(settings.AgentLlmProfiles, "obsidian", 0.35);
+            changed |= EnsureAgentProfile(settings.AgentLlmProfiles, "vision-observer", 0.40);
+            changed |= EnsureAgentProfile(settings.AgentLlmProfiles, "system-overlord", 0.25);
 
             return changed;
         }

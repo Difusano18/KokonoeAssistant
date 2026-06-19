@@ -413,6 +413,8 @@ namespace KokonoeAssistant.Services
             sb.AppendLine("If the user asks to scan, analyze, inspect the screen/tabs, use Vault, update profile, or run a system action, the visible reply must be grounded in the tool/context result. Do not roleplay helplessness.");
             sb.AppendLine($"Current role: {role}.");
             sb.AppendLine();
+            sb.AppendLine(KokoPersonaGuardDirective.Compact);
+            sb.AppendLine();
             sb.AppendLine("Available capabilities when the host exposes them:");
             sb.AppendLine("- Obsidian/Vault tools: list, search, read, write, append notes, daily notes, backlinks, graph and vault maintenance.");
             sb.AppendLine("- Sandbox: execute short Python probes for calculations or safe local checks.");
@@ -833,6 +835,8 @@ namespace KokonoeAssistant.Services
         {
             if (IsClaude) return "Claude";
             if (IsOllamaCloud) return "Ollama Cloud";
+            if (IsOllamaLocal) return "Ollama Local";
+            if (_provider.Equals("lmstudio", StringComparison.OrdinalIgnoreCase)) return "LM Studio";
             return string.IsNullOrWhiteSpace(_provider) ? "OpenAI-compatible" : _provider;
         }
 
@@ -945,6 +949,7 @@ namespace KokonoeAssistant.Services
         }
 
         private bool IsOllamaCloud => _provider.Equals("ollama-cloud", StringComparison.OrdinalIgnoreCase);
+        private bool IsOllamaLocal => _provider.Equals("ollama", StringComparison.OrdinalIgnoreCase);
         private bool IsClaude => _provider.Equals("claude", StringComparison.OrdinalIgnoreCase);
 
         private static string NormalizeVisionModel(AppSettings settings)

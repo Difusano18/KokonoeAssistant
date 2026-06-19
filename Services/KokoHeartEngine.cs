@@ -12,6 +12,7 @@ namespace KokonoeAssistant.Services
     {
         private readonly KokoEmotionEngine _emotion;
         private readonly KokoWearableTelemetryService? _wearable;
+        private readonly Func<KokoWearableState, bool>? _wearableVerifier;
         private readonly string _statePath;
         private readonly Random _rng = new();
 
@@ -35,10 +36,15 @@ namespace KokonoeAssistant.Services
         public event Action<double>? Beat;
         public event Action<double>? BpmChanged;
 
-        public KokoHeartEngine(KokoEmotionEngine emotion, string dataDir, KokoWearableTelemetryService? wearable = null)
+        public KokoHeartEngine(
+            KokoEmotionEngine emotion,
+            string dataDir,
+            KokoWearableTelemetryService? wearable = null,
+            Func<KokoWearableState, bool>? wearableVerifier = null)
         {
             _emotion = emotion;
             _wearable = wearable;
+            _wearableVerifier = wearableVerifier;
             Directory.CreateDirectory(dataDir);
             _statePath = Path.Combine(dataDir, "koko-heart.json");
         }
@@ -129,6 +135,8 @@ namespace KokonoeAssistant.Services
             var wearable = _wearable.State;
             if (!wearable.IsFresh(DateTime.UtcNow) || wearable.CurrentBpm <= 0)
                 return false;
+            if (_wearableVerifier != null && !_wearableVerifier(wearable))
+                return false;
 
             _currentBpm += (wearable.CurrentBpm - _currentBpm) * 0.35;
             if (wearable.BaselineBpm > 0)
@@ -157,6 +165,8 @@ namespace KokonoeAssistant.Services
 
             if (!state.IsFresh(now) || recent.Count == 0)
                 return new KokoWearableStressFrame { State = "stale", PromptHint = "ignore wearable stress until fresh samples return" };
+            if (_wearableVerifier != null && !_wearableVerifier(state))
+                return new KokoWearableStressFrame { State = "unverified", PromptHint = "ignore wearable stress until bridge pairing and sample freshness are verified" };
 
             var bpmValues = recent.Where(s => s.HeartRateBpm.HasValue).Select(s => s.HeartRateBpm!.Value).ToList();
             var hrvValues = recent.Where(s => s.HrvRmssdMs.HasValue).Select(s => s.HrvRmssdMs!.Value).ToList();

@@ -256,6 +256,7 @@ namespace KokonoeAssistant.Services
             var cleanTimeline = CleanPromptText(timeline.PromptBlock);
             var personaRules = CleanPromptText(KokoPersonaEngine.BuildRepairRules(userText));
             var planRules = CleanPromptText(KokoResponsePlannerEngine.BuildRepairRules(state.LastResponsePlan));
+            var guardRules = CleanPromptText(KokoPersonaGuardDirective.BuildRepairRule());
             var situationRules = CleanPromptText(BuildSituationRepairRules(userText, violations));
 
             return $"""
@@ -271,6 +272,7 @@ Timeline:
 
 {personaRules}
 {planRules}
+{guardRules}
 {situationRules}
 
 Перепиши відповідь через міркування, не через шаблон.

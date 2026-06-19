@@ -110,6 +110,9 @@ namespace KokonoeAssistant.Services
         public string LastTemporalPresenceGapText { get; set; } = "";
         public string LastTemporalPresenceGreetingMood { get; set; } = "neutral_return";
         public string LastTemporalPresenceDirective { get; set; } = "";
+        public DateTime LastCollectiveMindAt { get; set; } = DateTime.MinValue;
+        public string LastCollectiveMindDecision { get; set; } = "";
+        public string LastCollectiveMindTrace { get; set; } = "";
 
         // Динаміка тиші — окремі cooldown рівні
         public DateTime SilenceLevel1At    { get; set; } = DateTime.MinValue; // 1h jab
@@ -382,6 +385,7 @@ namespace KokonoeAssistant.Services
         public readonly KokoProactiveContextService ProactiveContext;
         public readonly KokoScreenAwarenessService ScreenAwareness;
         public readonly KokoSemanticVisionEngine SemanticVision;
+        public readonly KokoCollectiveMindService CollectiveMind;
 
         // ── Зовнішні сервіси (опціональні) ───────────────────────────
         private EnhancedMemory?    _enhanced;
@@ -496,6 +500,7 @@ namespace KokonoeAssistant.Services
             ProactiveContext = new KokoProactiveContextService();
             ScreenAwareness = new KokoScreenAwarenessService();
             SemanticVision = new KokoSemanticVisionEngine();
+            CollectiveMind = new KokoCollectiveMindService();
 
             // Підключити нові сервіси в LLM
             _llm.Memory    = Memory;
@@ -1947,7 +1952,14 @@ Summary: {summary}
                 sb.AppendLine(dayFrame.PromptBlock);
                 sb.AppendLine(Somatic.BuildPromptBlock(somatic));
                 if (AppSettings.Load().WearBridgeIncludePromptContext)
-                    sb.AppendLine(ServiceContainer.WearableTelemetry.BuildPromptBlock(now.ToUniversalTime()));
+                {
+                    var wearable = ServiceContainer.WearableTelemetry.State;
+                    var bridge = ServiceContainer.WearableBridge;
+                    sb.AppendLine(ServiceContainer.WearableTelemetry.BuildPromptBlock(
+                        now.ToUniversalTime(),
+                        bridge.GetConnectionSnapshot(wearable, now.ToUniversalTime()),
+                        bridge.Diagnostics));
+                }
             }
             catch { }
 
@@ -3243,6 +3255,7 @@ Summary: {summary}
                 try { RuntimeState.ObserveUserMessage(_state, Emotion, content); } catch { }
                 try { Relationship.ObserveUserTone(_state.LastUserEmotionalTone, _state.PersonalityInCrisis); } catch { }
                 try { GetSelfRegulationFrame(); } catch { }
+                try { RecordCollectiveMind(content, "user-turn", now, publish: true, recentMessages: msgs); } catch { }
 
                 // Шукати факти в повідомленні і зберегти в пам'ять
                 _ = Task.Run(() => ExtractAndRememberFacts(content));
@@ -6612,6 +6625,7 @@ Summary: {summary}
             var stagnation = KokoConversationStagnationGuard.BuildPromptBlock(_state);
             if (!string.IsNullOrWhiteSpace(stagnation))
                 sb.AppendLine(stagnation);
+            sb.AppendLine(KokoPersonaGuardDirective.Compact);
             sb.AppendLine(KokoNaturalSynthesisPolicy.PromptRules);
             sb.AppendLine(KokoResponseStyleEngine.BuildEmotionLengthDirective(Emotion.Current));
             sb.AppendLine(KokoResponseStyleEngine.BuildTemperamentDirective(_state));
@@ -6619,7 +6633,66 @@ Summary: {summary}
             sb.AppendLine(KokoSubconsciousMonologueEngine.BuildDirective(_state));
             sb.AppendLine(KokoAsyncPersonalityEngine.BuildDirective(_state));
             sb.AppendLine(KokoTemporalPresenceAwarenessEngine.BuildDirective(_state));
+            sb.AppendLine(KokoCollectiveMindService.BuildDirective(_state));
             return sb.ToString().Trim();
+        }
+
+        public string BuildCollectiveMindDirective(string? userText = null)
+            => KokoCollectiveMindService.BuildDirective(_state);
+
+        public string BuildCollectiveMindContext(string? userText = null, string channel = "runtime", bool publish = false)
+        {
+            try
+            {
+                var now = DateTime.Now;
+                IReadOnlyList<ChatRepository.ChatMessage> recentMessages;
+                try { recentMessages = _chatRepo.GetMessages(12).OrderBy(m => m.Timestamp).ToList(); }
+                catch { recentMessages = Array.Empty<ChatRepository.ChatMessage>(); }
+
+                var frame = RecordCollectiveMind(userText ?? "", channel, now, publish, recentMessages);
+                var sb = new StringBuilder();
+                sb.AppendLine(frame.PromptBlock);
+                var recentBlackboard = ServiceContainer.Blackboard.BuildPromptBlock(6);
+                if (!string.IsNullOrWhiteSpace(recentBlackboard))
+                {
+                    sb.AppendLine();
+                    sb.AppendLine(recentBlackboard);
+                }
+                return sb.ToString().Trim();
+            }
+            catch (Exception ex)
+            {
+                Log($"BuildCollectiveMindContext failed: {ex.Message}");
+                return "COLLECTIVE MIND BLACKBOARD (private): unavailable; answer current request from verified context and avoid scripted filler.";
+            }
+        }
+
+        private KokoCollectiveMindFrame RecordCollectiveMind(
+            string userText,
+            string channel,
+            DateTime now,
+            bool publish,
+            IReadOnlyList<ChatRepository.ChatMessage>? recentMessages = null)
+        {
+            recentMessages ??= Array.Empty<ChatRepository.ChatMessage>();
+            var recentEvents = ServiceContainer.Blackboard.Recent(12);
+            var frame = CollectiveMind.Build(userText, _state, recentMessages, recentEvents, channel, now);
+            var shouldPublish = publish && ShouldPublishCollectiveFrame(now, frame.Decision);
+            _state.LastCollectiveMindAt = now;
+            _state.LastCollectiveMindDecision = frame.Decision;
+            _state.LastCollectiveMindTrace = frame.TraceLine;
+            if (shouldPublish)
+                KokoCollectiveMindService.PublishFrame(ServiceContainer.Blackboard, frame);
+            return frame;
+        }
+
+        private bool ShouldPublishCollectiveFrame(DateTime now, string decision)
+        {
+            if (_state.LastCollectiveMindAt <= DateTime.MinValue)
+                return true;
+            if (now - _state.LastCollectiveMindAt > TimeSpan.FromSeconds(45))
+                return true;
+            return !string.Equals(_state.LastCollectiveMindDecision, decision, StringComparison.Ordinal);
         }
 
         public string BuildResponsePlanContext(string? userText = null)
@@ -6704,6 +6777,12 @@ Summary: {summary}
             sb.AppendLine($"active_intents: {(active.Length == 0 ? "none" : string.Join("; ", active))}");
             try { sb.AppendLine(Emotion.BuildEmotionalContextBlock(BuildNarrativeThreadSummary(now))); } catch { }
             sb.AppendLine("Use this as private continuity only. Do not quote labels.");
+            var collective = BuildCollectiveMindContext(userText, channel, publish: false);
+            if (!string.IsNullOrWhiteSpace(collective))
+            {
+                sb.AppendLine();
+                sb.AppendLine(collective);
+            }
             if (responsePlan != null)
             {
                 sb.AppendLine();
@@ -6794,6 +6873,20 @@ Summary: {summary}
             var scenarioPassed = scenarioResults.Count(r => r.Passed);
             var timeline = Timeline.Build(_chatRepo.GetMessages(60), _state, now, userText);
             var wearable = ServiceContainer.WearableTelemetry.State;
+            string wearableStatus;
+            try
+            {
+                var bridge = ServiceContainer.WearableBridge;
+                var connection = bridge.GetConnectionSnapshot(wearable, now.ToUniversalTime());
+                var diagnostics = bridge.Diagnostics;
+                wearableStatus = KokoWearableTrust.IsVerified(connection, diagnostics, wearable)
+                    ? $"{wearable.SleepState} / {wearable.CurrentBpm:F0} bpm / {wearable.PresenceState}"
+                    : $"{connection.State.ToLowerInvariant()} / {KokoWearableTrust.BlockReason(connection, diagnostics, wearable)}";
+            }
+            catch (Exception ex)
+            {
+                wearableStatus = "unavailable / " + ex.Message;
+            }
 
             return new KokoTelemetrySnapshot
             {
@@ -6803,9 +6896,7 @@ Summary: {summary}
                 MoodScore = _state.MoodScore,
                 Mood = _state.PersonalityDailyMood,
                 Somatic = $"{somatic.State} / strain {somatic.Strain:F2} / calm {somatic.Calm:F2}",
-                Wearable = wearable.IsFresh(now.ToUniversalTime())
-                    ? $"{wearable.SleepState} / {wearable.CurrentBpm:F0} bpm / {wearable.PresenceState}"
-                    : "stale",
+                Wearable = wearableStatus,
                 SelfRegulation = $"{selfReg.Reaction} -> {selfReg.Regulation} / control {selfReg.Control:F2}",
                 Presence = presence.SummaryUk,
                 InternalDay = internalDay.SummaryUk,

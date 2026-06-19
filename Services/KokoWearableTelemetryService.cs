@@ -215,13 +215,25 @@ namespace KokonoeAssistant.Services
             return result;
         }
 
-        public string BuildPromptBlock(DateTime? nowUtc = null)
+        public string BuildPromptBlock(
+            DateTime? nowUtc = null,
+            KokoWearableBridgeService.WearableBridgeConnectionSnapshot? connection = null,
+            KokoWearableBridgeService.WearableBridgeDiagnostics? diagnostics = null)
         {
             var now = nowUtc ?? DateTime.UtcNow;
             KokoWearableState state;
             lock (_lock) state = CloneState(_state);
 
-            var verifiedFresh = state.IsFresh(now) && !LooksLikeDiagnosticTelemetry(state.DeviceId);
+            var hasBridgeTruth = connection != null && diagnostics != null;
+            var verifiedFresh = hasBridgeTruth
+                ? KokoWearableTrust.IsVerified(connection!, diagnostics!, state)
+                : state.IsFresh(now) && !LooksLikeDiagnosticTelemetry(state.DeviceId);
+            var verificationState = hasBridgeTruth
+                ? (verifiedFresh ? "verified" : "blocked")
+                : "telemetry_only";
+            var verificationReason = hasBridgeTruth
+                ? (verifiedFresh ? "bridge pair + fresh matching sample" : KokoWearableTrust.BlockReason(connection!, diagnostics!, state))
+                : "bridge verification unavailable to this caller";
             var freshness = verifiedFresh ? "fresh" : "stale";
             var heartLine = verifiedFresh && state.CurrentBpm > 0
                 ? $"heart={state.CurrentBpm:F0} bpm baseline={state.BaselineBpm:F0} delta={state.BpmDelta:+0;-0;0}"
@@ -231,6 +243,7 @@ WEARABLE TELEMETRY
 freshness={freshness}
 device={NullDash(state.DeviceId)} source={NullDash(state.SampleSource)} on_wrist={state.OnWrist}
 trust_state={NullDash(state.TrustState)} trust_reason={NullDash(state.TrustReason)} diagnostic_sample={state.IsDiagnosticSample}
+verification_state={verificationState} verification_reason={verificationReason}
 {heartLine}
 sleep={state.SleepState} confidence={state.SleepConfidence:F2}
 stress={state.StressScore:F2} live_stress_score={state.LiveStressScore}/100 recovery={state.RecoveryState} initiative={NullDash(state.SuggestedInitiative)}

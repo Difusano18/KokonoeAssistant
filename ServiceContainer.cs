@@ -53,6 +53,8 @@ namespace KokonoeAssistant
         private static KokoAutonomousProfileCuratorService? _profileCurator;
         private static KokoActiveAgencyService? _activeAgency;
         private static KokoResearchService? _research;
+        private static KokoDynamicAgentFactoryService? _agentFactory;
+        private static KokoSystemOverlordService? _systemOverlord;
 
         public static void Initialize(string vaultPath)
         {
@@ -64,6 +66,12 @@ namespace KokonoeAssistant
             try { _ = HyperAutomation; } catch (Exception ex) { KokoSystemLog.Write("BOOT", "hyper automation start failed: " + ex.Message); }
             try { ActiveAgency.Start(); } catch (Exception ex) { KokoSystemLog.Write("BOOT", "active agency start failed: " + ex.Message); }
             try { Research.Start(); } catch (Exception ex) { KokoSystemLog.Write("BOOT", "research start failed: " + ex.Message); }
+            try
+            {
+                if (AppSettings.Load().SystemOverlordEnabled)
+                    _ = System.Threading.Tasks.Task.Run(() => SystemOverlord.ScanAsync(maxFiles: Math.Min(AppSettings.Load().SystemOverlordMaxFiles, 700)));
+            }
+            catch (Exception ex) { KokoSystemLog.Write("BOOT", "system overlord scan failed: " + ex.Message); }
             try { _ = ProcessWatchdog; } catch (Exception ex) { KokoSystemLog.Write("BOOT", "process watchdog start failed: " + ex.Message); }
         }
 
@@ -223,7 +231,37 @@ namespace KokonoeAssistant
                     return _agentRuntime ??= new KokoAgentRuntimeService(
                         Path.Combine(_vault ?? AppDomain.CurrentDomain.BaseDirectory, "kokonoe-data"),
                         LlmService,
-                        ObsidianMcp);
+                        ObsidianMcp,
+                        Blackboard);
+                }
+            }
+        }
+
+        public static KokoDynamicAgentFactoryService AgentFactory
+        {
+            get
+            {
+                lock (_lock)
+                {
+                    return _agentFactory ??= new KokoDynamicAgentFactoryService(
+                        Path.Combine(_vault ?? AppDomain.CurrentDomain.BaseDirectory, "kokonoe-data"),
+                        Blackboard,
+                        () => _agentTasks,
+                        () => _llm);
+                }
+            }
+        }
+
+        public static KokoSystemOverlordService SystemOverlord
+        {
+            get
+            {
+                lock (_lock)
+                {
+                    return _systemOverlord ??= new KokoSystemOverlordService(
+                        Path.Combine(_vault ?? AppDomain.CurrentDomain.BaseDirectory, "kokonoe-data"),
+                        Blackboard,
+                        Heartbeat);
                 }
             }
         }
@@ -430,7 +468,18 @@ namespace KokonoeAssistant
                     if (_heart == null)
                     {
                         var dir = Path.Combine(_vault ?? AppDomain.CurrentDomain.BaseDirectory, "kokonoe-data");
-                        _heart = new KokoHeartEngine(EmotionEngine, dir, WearableTelemetry);
+                        _heart = new KokoHeartEngine(
+                            EmotionEngine,
+                            dir,
+                            WearableTelemetry,
+                            state =>
+                            {
+                                var bridge = WearableBridge;
+                                return KokoWearableTrust.IsVerified(
+                                    bridge.GetConnectionSnapshot(state),
+                                    bridge.Diagnostics,
+                                    state);
+                            });
                         _heart.Start();
                     }
                     return _heart;
@@ -556,7 +605,7 @@ namespace KokonoeAssistant
                     _heart?.Dispose(); _heart = null;
                     _wearableBridge?.Dispose(); _wearableBridge = null;
                     _agentTasks?.Stop(); _agentTasks = null;
-                    _agentRuntime = null;
+                    _agentRuntime = null; _agentFactory = null; _systemOverlord = null;
                     _fileTools = null;
                     _capabilities = null;
                     _profileUpdater = null;

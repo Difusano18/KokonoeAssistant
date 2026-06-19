@@ -26,7 +26,7 @@
 
     <Window.Resources>
 
-        <!-- ─── SCROLLBAR ───────────────────────────────────────── -->
+        <!-- в”Ђв”Ђв”Ђ SCROLLBAR в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ -->
         <Style x:Key="KokoScrollThumb" TargetType="Thumb">
             <Setter Property="Template">
                 <Setter.Value>
@@ -56,7 +56,7 @@
 
         <!-- Button/Input/Nav styles live in App.xaml -->
 
-        <!-- ─── LISTBOX ───────────────────────────────────────── -->
+        <!-- в”Ђв”Ђв”Ђ LISTBOX в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ -->
         <Style x:Key="CleanListBox" TargetType="ListBox">
             <Setter Property="Background"      Value="Transparent"/>
             <Setter Property="BorderThickness" Value="0"/>
@@ -91,17 +91,17 @@
             <Setter Property="Background" Value="{DynamicResource KokoCardBrush}"/>
             <Setter Property="BorderBrush" Value="{DynamicResource AccentBgBorder2}"/>
             <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="CornerRadius" Value="12"/>
+            <Setter Property="CornerRadius" Value="8"/>
             <Setter Property="Padding" Value="14"/>
             <Setter Property="SnapsToDevicePixels" Value="True"/>
             <Setter Property="Effect">
                 <Setter.Value>
-                    <DropShadowEffect Color="#000000" BlurRadius="28" ShadowDepth="0" Opacity="0.42"/>
+                    <DropShadowEffect Color="#000000" BlurRadius="20" ShadowDepth="0" Opacity="0.46"/>
                 </Setter.Value>
             </Setter>
         </Style>
 
-        <!-- ─── HEALTH SLIDER ─────────────────────────────────── -->
+        <!-- в”Ђв”Ђв”Ђ HEALTH SLIDER в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ -->
         <Style x:Key="HealthSlider" TargetType="Slider">
             <Setter Property="Template">
                 <Setter.Value>
@@ -145,22 +145,22 @@
 
     </Window.Resources>
 
-    <!-- ════════════ ROOT ════════════════ -->
+    <!-- в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ ROOT в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ -->
     <Border Background="{DynamicResource KokoWindowBackground}"
             BorderBrush="{DynamicResource AccentBgBorder2}" BorderThickness="1"
-            CornerRadius="16" Margin="8"
+            CornerRadius="10" Margin="8"
             ClipToBounds="True">
 
         <Grid x:Name="RootGrid">
             <Grid.RowDefinitions>
-                <RowDefinition Height="36"/>
+                <RowDefinition Height="42"/>
                 <RowDefinition Height="*"/>
                 <RowDefinition Height="22"/>
             </Grid.RowDefinitions>
 
-            <controls:NeuralParticleBackground Grid.RowSpan="3" Opacity="0.22" IsAnimated="False"/>
+            <controls:NeuralParticleBackground Grid.RowSpan="3" Opacity="0.08" IsAnimated="False"/>
 
-            <!-- ══════════════ TITLE BAR ══════════════ -->
+            <!-- в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ TITLE BAR в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ -->
             <Border Grid.Row="0" Background="{DynamicResource KokoHeaderBrush}"
                     BorderBrush="{DynamicResource AccentBgBorder1}" BorderThickness="0,0,0,1"
                     MouseLeftButtonDown="TitleBar_MouseDown">
@@ -174,41 +174,54 @@
                     <!-- Logo -->
                     <StackPanel Grid.Column="0" Orientation="Horizontal"
                                 VerticalAlignment="Center" Margin="14,0,0,0">
-                        <Ellipse x:Name="EmotionDot" Width="7" Height="7" Margin="0,0,9,0"
+                        <Ellipse x:Name="EmotionDot" Width="8" Height="8" Margin="0,0,10,0"
                                  VerticalAlignment="Center" Fill="{DynamicResource AccentBase}">
                             <Ellipse.Effect>
-                                <DropShadowEffect Color="#22D3EE" BlurRadius="10" ShadowDepth="0" Opacity="0.85"/>
+                                <DropShadowEffect Color="#5CB7AA" BlurRadius="8" ShadowDepth="0" Opacity="0.50"/>
                             </Ellipse.Effect>
                         </Ellipse>
-                        <TextBlock Text="KOKONOE" FontSize="12" FontWeight="Bold"
-                                   Foreground="{DynamicResource AccentTextLight}" FontFamily="Consolas"
+                        <TextBlock Text="KOKONOE" FontSize="12" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource AccentTextLight}" FontFamily="Segoe UI Variable, Segoe UI"
                                    VerticalAlignment="Center"/>
-                        <TextBlock Text=" // mercury · v0.7.4" FontSize="10"
-                                   Foreground="{DynamicResource AccentDim}" FontFamily="Consolas"
+                        <TextBlock Text=" / workspace" FontSize="11"
+                                   Foreground="{DynamicResource AccentDim}" FontFamily="Segoe UI Variable, Segoe UI"
                                    VerticalAlignment="Center" Margin="4,0,0,0"/>
                     </StackPanel>
 
-                    <!-- drag area (middle — intentionally empty) -->
-                    <Border Grid.Column="1"/>
+                    <!-- drag area -->
+                    <Border Grid.Column="1" Padding="18,0" VerticalAlignment="Center">
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                            <Border Background="{DynamicResource KokoSurfaceInsetBrush}"
+                                    BorderBrush="{DynamicResource AccentBgBorder}" BorderThickness="1"
+                                    CornerRadius="7" Padding="10,4">
+                                <StackPanel Orientation="Horizontal">
+                                    <Ellipse Width="6" Height="6" Fill="{DynamicResource Brush_Ok}" Margin="0,0,7,0"
+                                             VerticalAlignment="Center"/>
+                                    <TextBlock Text="LOCAL RUNTIME" FontSize="10" FontFamily="Consolas"
+                                               Foreground="{DynamicResource AccentMuted}" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+                    </Border>
 
                     <!-- Window controls -->
                     <StackPanel Grid.Column="2" Orientation="Horizontal"
                                 VerticalAlignment="Center" Margin="0,0,8,0">
-                        <Button x:Name="ExportChatBtn" Content="▣" Style="{StaticResource ChromeBtn}"
-                                Click="ExportChat_Click" ToolTip="Зберегти чат"
+                        <Button x:Name="ExportChatBtn" Content="&#x25A3;" Style="{StaticResource ChromeBtn}"
+                                Click="ExportChat_Click" ToolTip="Export chat"
                                 shell:WindowChrome.IsHitTestVisibleInChrome="True"/>
-                        <Button x:Name="ClearChatBtn" Content="⌫" Style="{StaticResource ChromeBtn}"
-                                Click="ClearChat_Click" ToolTip="Очистити чат"
+                        <Button x:Name="ClearChatBtn" Content="&#x232B;" Style="{StaticResource ChromeBtn}"
+                                Click="ClearChat_Click" ToolTip="Clear chat"
                                 shell:WindowChrome.IsHitTestVisibleInChrome="True"/>
-                        <Button Content="⚙" Style="{StaticResource ChromeBtn}"
-                                Click="OpenSettings_Click" ToolTip="Налаштування"
+                        <Button Content="&#x2699;" Style="{StaticResource ChromeBtn}"
+                                Click="OpenSettings_Click" ToolTip="Settings"
                                 shell:WindowChrome.IsHitTestVisibleInChrome="True"/>
-                        <Border Width="1" Background="{DynamicResource AccentAsstBorder}" Margin="4,7"/>
-                        <Button Content="─" Style="{StaticResource ChromeBtn}" Click="MinimizeBtn_Click"
+                        <Border Width="1" Background="{DynamicResource AccentBgBorder}" Margin="6,7"/>
+                        <Button Content="-" Style="{StaticResource ChromeBtn}" Click="MinimizeBtn_Click"
                                 shell:WindowChrome.IsHitTestVisibleInChrome="True"/>
-                        <Button Content="□" Style="{StaticResource ChromeBtn}" Click="MaximizeBtn_Click"
+                        <Button Content="&#x25A1;" Style="{StaticResource ChromeBtn}" Click="MaximizeBtn_Click"
                                 shell:WindowChrome.IsHitTestVisibleInChrome="True"/>
-                        <Button Content="✕" Click="CloseBtn_Click"
+                        <Button Content="x" Click="CloseBtn_Click"
                                 Width="30" Height="30" Cursor="Hand" BorderThickness="0"
                                 shell:WindowChrome.IsHitTestVisibleInChrome="True"
                                 Background="Transparent" Foreground="{DynamicResource Brush_3A2020}">
@@ -236,15 +249,15 @@
                 </Grid>
             </Border>
 
-            <!-- ══════════════ BODY ══════════════ -->
+            <!-- в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ BODY в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ -->
             <Grid x:Name="BodyGrid" Grid.Row="1" SizeChanged="BodyGrid_SizeChanged">
                 <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="214"/>
+                    <ColumnDefinition Width="232"/>
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
 
-                <!-- ─── LEFT NAV ─────────────────────────────────── -->
+                <!-- в”Ђв”Ђв”Ђ LEFT NAV в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ -->
                 <Border Grid.Column="0" Background="{DynamicResource KokoSidebarBrush}"
                         BorderBrush="{DynamicResource AccentBgBorder2}" BorderThickness="0,0,1,0">
                     <Grid>
@@ -255,19 +268,25 @@
                         </Grid.RowDefinitions>
 
                         <!-- Sidebar header -->
-                        <Border Grid.Row="0" Padding="18,14,18,10"
-                                BorderBrush="{DynamicResource AccentBgBorder2}" BorderThickness="0,0,0,1">
-                            <TextBlock Text="WORKSPACE" FontSize="9" FontFamily="Consolas"
-                                       Foreground="{DynamicResource AccentDim}"/>
+                        <Border Grid.Row="0" Padding="18,16,18,14"
+                                Background="{DynamicResource KokoSurfaceInsetBrush}"
+                                BorderBrush="{DynamicResource AccentBgBorder}" BorderThickness="0,0,0,1">
+                            <StackPanel>
+                                <TextBlock Text="WORKSPACE" FontSize="9" FontFamily="Consolas"
+                                           Foreground="{DynamicResource AccentDim}"/>
+                                <TextBlock Text="Assistant console" FontSize="13" FontWeight="SemiBold"
+                                           FontFamily="Segoe UI Variable, Segoe UI"
+                                           Foreground="{DynamicResource AccentTextLight}" Margin="0,4,0,0"/>
+                            </StackPanel>
                         </Border>
 
                         <!-- Nav items -->
                         <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Hidden">
-                          <StackPanel Margin="10,8,10,0">
+                          <StackPanel Margin="12,10,12,0">
 
                             <Button x:Name="TabBtnChat" Style="{StaticResource BtnNavActive}" Click="Tab_Click">
                                 <StackPanel Orientation="Horizontal">
-                                    <TextBlock Text="◌" FontSize="14" VerticalAlignment="Center" Width="18"/>
+                                    <TextBlock Text="&#x25CC;" FontSize="14" VerticalAlignment="Center" Width="18"/>
                                     <TextBlock Text="Chat" FontSize="11" VerticalAlignment="Center"
                                                FontFamily="Segoe UI Variable, Segoe UI" Margin="8,0,0,0"/>
                                 </StackPanel>
@@ -275,13 +294,13 @@
 
                             <Button x:Name="TabBtnVault" Style="{StaticResource BtnNav}" Click="Tab_Click" Visibility="Collapsed" IsEnabled="False">
                                 <StackPanel Orientation="Horizontal">
-                                    <TextBlock Text="▣" FontSize="13" VerticalAlignment="Center" Width="18"/>
+                                    <TextBlock Text="&#x25A3;" FontSize="13" VerticalAlignment="Center" Width="18"/>
                                 </StackPanel>
                             </Button>
 
                             <Button x:Name="TabBtnHealth" Style="{StaticResource BtnNav}" Click="Tab_Click">
                                 <StackPanel Orientation="Horizontal">
-                                    <TextBlock Text="▦" FontSize="13" VerticalAlignment="Center" Width="18"/>
+                                    <TextBlock Text="&#x25A6;" FontSize="13" VerticalAlignment="Center" Width="18"/>
                                     <TextBlock Text="Calendar" FontSize="11" VerticalAlignment="Center"
                                                FontFamily="Segoe UI Variable, Segoe UI" Margin="8,0,0,0"/>
                                 </StackPanel>
@@ -289,24 +308,24 @@
 
                             <Button x:Name="TabBtnTools" Style="{StaticResource BtnNav}" Click="Tab_Click">
                                 <StackPanel Orientation="Horizontal">
-                                    <TextBlock Text="◈" FontSize="13" VerticalAlignment="Center" Width="18"/>
-                                        <TextBlock Text="Дашборд" FontSize="11" VerticalAlignment="Center"
+                                    <TextBlock Text="&#x25C8;" FontSize="13" VerticalAlignment="Center" Width="18"/>
+                                        <TextBlock Text="Dashboard" FontSize="11" VerticalAlignment="Center"
                                                FontFamily="Segoe UI Variable, Segoe UI" Margin="8,0,0,0"/>
                                 </StackPanel>
                             </Button>
 
                             <Button x:Name="TabBtnMemory" Style="{StaticResource BtnNav}" Click="Tab_Click">
                                 <StackPanel Orientation="Horizontal">
-                                    <TextBlock Text="◇" FontSize="13" VerticalAlignment="Center" Width="18"/>
-                                        <TextBlock Text="Пам'ять" FontSize="11" VerticalAlignment="Center"
+                                    <TextBlock Text="&#x25C7;" FontSize="13" VerticalAlignment="Center" Width="18"/>
+                                        <TextBlock Text="Memory" FontSize="11" VerticalAlignment="Center"
                                                FontFamily="Segoe UI Variable, Segoe UI" Margin="8,0,0,0"/>
                                 </StackPanel>
                             </Button>
 
                             <Button x:Name="TabBtnPulse" Style="{StaticResource BtnNav}" Click="Tab_Click">
                                 <StackPanel Orientation="Horizontal">
-                                    <TextBlock Text="♥" FontSize="13" VerticalAlignment="Center" Width="18"
-                                               Foreground="#FF4D6D"/>
+                                    <TextBlock Text="&#x2665;" FontSize="13" VerticalAlignment="Center" Width="18"
+                                               Foreground="{DynamicResource RgbRedBrush}"/>
                                     <TextBlock Text="Pulse" FontSize="11" VerticalAlignment="Center"
                                                FontFamily="Segoe UI Variable, Segoe UI" Margin="8,0,0,0"/>
                                 </StackPanel>
@@ -314,7 +333,7 @@
 
                             <Button x:Name="TabBtnVoice" Style="{StaticResource BtnNav}" Click="Tab_Click">
                                 <StackPanel Orientation="Horizontal">
-                                    <TextBlock Text="◉" FontSize="13" VerticalAlignment="Center" Width="18"/>
+                                    <TextBlock Text="&#x25C9;" FontSize="13" VerticalAlignment="Center" Width="18"/>
                                     <TextBlock Text="Voice" FontSize="11" VerticalAlignment="Center"
                                                FontFamily="Segoe UI Variable, Segoe UI" Margin="8,0,0,0"/>
                                 </StackPanel>
@@ -322,7 +341,7 @@
 
                             <Button x:Name="TabBtnSandbox" Style="{StaticResource BtnNav}" Click="Tab_Click">
                                 <StackPanel Orientation="Horizontal">
-                                    <TextBlock Text="⬡" FontSize="13" VerticalAlignment="Center" Width="18"/>
+                                    <TextBlock Text="&#x2B21;" FontSize="13" VerticalAlignment="Center" Width="18"/>
                                     <TextBlock Text="Sandbox" FontSize="11" VerticalAlignment="Center"
                                                FontFamily="Segoe UI Variable, Segoe UI" Margin="8,0,0,0"/>
                                 </StackPanel>
@@ -330,45 +349,50 @@
 
                             <Button x:Name="TabBtnTelegram" Style="{StaticResource BtnNav}" Click="Tab_Click">
                                 <StackPanel Orientation="Horizontal">
-                                    <TextBlock Text="✈" FontSize="13" VerticalAlignment="Center" Width="18"/>
+                                    <TextBlock Text="&#x2708;" FontSize="13" VerticalAlignment="Center" Width="18"/>
                                     <TextBlock Text="Telegram" FontSize="11" VerticalAlignment="Center"
                                                FontFamily="Segoe UI Variable, Segoe UI" Margin="8,0,0,0"/>
                                 </StackPanel>
                             </Button>
 
                             <!-- DIAGNOSTICS section -->
-                            <Border Margin="0,14,0,6" BorderBrush="{DynamicResource AccentBgBorder2}" BorderThickness="0,1,0,0" Padding="0,8,0,0">
+                            <Border Margin="0,16,0,8" BorderBrush="{DynamicResource AccentBgBorder}" BorderThickness="0,1,0,0" Padding="0,10,0,0">
                                 <TextBlock Text="DIAGNOSTICS" FontSize="9" FontFamily="Consolas"
                                            Foreground="{DynamicResource AccentDim}"/>
                             </Border>
 
-                            <StackPanel Margin="4,0,0,4">
-                                <Grid Margin="0,3">
+                            <StackPanel Margin="0,0,0,4">
+                                <StackPanel.Resources>
+                                    <Style TargetType="Grid">
+                                        <Setter Property="Margin" Value="0,0,0,6"/>
+                                    </Style>
+                                </StackPanel.Resources>
+                                <Grid>
                                     <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="12"/>
+                                        <ColumnDefinition Width="14"/>
                                         <ColumnDefinition Width="*"/>
                                     </Grid.ColumnDefinitions>
-                                    <Ellipse x:Name="DiagCoreDot" Width="6" Height="6" Fill="{DynamicResource Brush_Ok}"
+                                    <Ellipse x:Name="DiagCoreDot" Width="7" Height="7" Fill="{DynamicResource Brush_Ok}"
                                              VerticalAlignment="Center"/>
                                     <TextBlock Grid.Column="1" Text="core.online" FontSize="9" FontFamily="Consolas"
-                                               Foreground="{DynamicResource AccentDim}" VerticalAlignment="Center" Margin="4,0,0,0"/>
+                                               Foreground="{DynamicResource AccentMuted}" VerticalAlignment="Center" Margin="4,0,0,0"/>
                                 </Grid>
-                                <Grid Margin="0,3">
+                                <Grid>
                                     <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="12"/>
+                                        <ColumnDefinition Width="14"/>
                                         <ColumnDefinition Width="*"/>
                                     </Grid.ColumnDefinitions>
-                                    <Ellipse x:Name="DiagTgDot" Width="6" Height="6" Fill="{DynamicResource AccentDim}"
+                                    <Ellipse x:Name="DiagTgDot" Width="7" Height="7" Fill="{DynamicResource AccentDim}"
                                              VerticalAlignment="Center"/>
                                     <TextBlock Grid.Column="1" Text="mtproto" FontSize="9" FontFamily="Consolas"
                                                Foreground="{DynamicResource AccentDim}" VerticalAlignment="Center" Margin="4,0,0,0"/>
                                 </Grid>
-                                <Grid Margin="0,3">
+                                <Grid>
                                     <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="12"/>
+                                        <ColumnDefinition Width="14"/>
                                         <ColumnDefinition Width="*"/>
                                     </Grid.ColumnDefinitions>
-                                    <Ellipse x:Name="DiagObsidianDot" Width="6" Height="6" Fill="{DynamicResource AccentDim}"
+                                    <Ellipse x:Name="DiagObsidianDot" Width="7" Height="7" Fill="{DynamicResource AccentDim}"
                                              VerticalAlignment="Center"/>
                                     <TextBlock Grid.Column="1" Text="obsidian" FontSize="9" FontFamily="Consolas"
                                                Foreground="{DynamicResource AccentDim}" VerticalAlignment="Center" Margin="4,0,0,0"/>
@@ -379,33 +403,36 @@
                         </ScrollViewer>
 
                         <!-- Sidebar footer -->
-                        <Border Grid.Row="2" BorderBrush="{DynamicResource AccentBgBorder2}" BorderThickness="0,1,0,0"
-                                Padding="18,10,18,12">
+                        <Border Grid.Row="2" Background="{DynamicResource KokoSurfaceInsetBrush}"
+                                BorderBrush="{DynamicResource AccentBgBorder}" BorderThickness="0,1,0,0"
+                                Padding="16,12,16,14">
                             <StackPanel>
+                                <TextBlock Text="SESSION" FontSize="9" FontFamily="Consolas"
+                                           Foreground="{DynamicResource AccentDim}" Margin="0,0,0,8"/>
                                 <Grid>
                                     <TextBlock Text="RAM" FontSize="8" FontFamily="Consolas" Foreground="{DynamicResource AccentDim}"/>
-                                    <TextBlock x:Name="SideFootRam" Text="—" HorizontalAlignment="Right"
-                                               FontSize="8" FontFamily="Consolas" Foreground="{DynamicResource AccentMuted}"/>
+                                    <TextBlock x:Name="SideFootRam" Text="--" HorizontalAlignment="Right"
+                                               FontSize="9" FontFamily="Consolas" Foreground="{DynamicResource AccentText}"/>
                                 </Grid>
-                                <Grid Margin="0,2,0,0">
+                                <Grid Margin="0,4,0,0">
                                     <TextBlock Text="UPTIME" FontSize="8" FontFamily="Consolas" Foreground="{DynamicResource AccentDim}"/>
-                                    <TextBlock x:Name="SideFootUptime" Text="—" HorizontalAlignment="Right"
-                                               FontSize="8" FontFamily="Consolas" Foreground="{DynamicResource AccentMuted}"/>
+                                    <TextBlock x:Name="SideFootUptime" Text="--" HorizontalAlignment="Right"
+                                               FontSize="9" FontFamily="Consolas" Foreground="{DynamicResource AccentText}"/>
                                 </Grid>
-                                <Grid Margin="0,2,0,0">
+                                <Grid Margin="0,4,0,0">
                                     <TextBlock Text="BUILD" FontSize="8" FontFamily="Consolas" Foreground="{DynamicResource AccentDim}"/>
                                     <TextBlock Text="2026.04" HorizontalAlignment="Right"
-                                               FontSize="8" FontFamily="Consolas" Foreground="{DynamicResource AccentDim}"/>
+                                               FontSize="9" FontFamily="Consolas" Foreground="{DynamicResource AccentMuted}"/>
                                 </Grid>
                             </StackPanel>
                         </Border>
                     </Grid>
                 </Border>
 
-                <!-- ─── MAIN CONTENT ──────────────────────────────── -->
+                <!-- в”Ђв”Ђв”Ђ MAIN CONTENT в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ -->
                 <Grid Grid.Column="1">
 
-                    <!-- ╔══════════ CHAT TAB ══════════╗ -->
+                    <!-- в•”в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ CHAT TAB в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•— -->
                     <Grid x:Name="ChatTab" Background="Transparent">
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto"/>
@@ -414,9 +441,9 @@
                         </Grid.RowDefinitions>
 
                         <!-- Live state strip -->
-                        <Border Grid.Row="0" Background="{DynamicResource KokoHeaderBrush}"
-                                BorderBrush="{DynamicResource AccentBgBorder2}" BorderThickness="0,0,0,1"
-                                Padding="18,8">
+                        <Border Grid.Row="0" Background="{DynamicResource KokoSurfaceRaisedBrush}"
+                                BorderBrush="{DynamicResource AccentBgBorder}" BorderThickness="0,0,0,1"
+                                Padding="20,10">
                             <Grid>
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="1.15*"/>
@@ -427,44 +454,52 @@
                                     <ColumnDefinition Width="Auto"/>
                                 </Grid.ColumnDefinitions>
 
-                                <TextBlock x:Name="LiveCoreCompactText" Grid.Column="0" Grid.ColumnSpan="5"
-                                           Text="Kokonoe · loading · -- bpm · vault -- · vision --"
-                                           FontSize="11" FontFamily="Consolas" FontWeight="SemiBold"
-                                           Foreground="{DynamicResource AccentTextLight}"
-                                           VerticalAlignment="Center"
-                                           TextTrimming="CharacterEllipsis"
-                                           ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"/>
+                                <StackPanel Grid.Column="0" Grid.ColumnSpan="5" Orientation="Horizontal" VerticalAlignment="Center">
+                                    <Border Background="{DynamicResource KokoSurfaceInsetBrush}"
+                                            BorderBrush="{DynamicResource AccentBgBorder}" BorderThickness="1"
+                                            CornerRadius="7" Padding="8,3" Margin="0,0,10,0">
+                                        <TextBlock Text="LIVE" FontSize="9" FontFamily="Consolas"
+                                                   Foreground="{DynamicResource AccentBase}"/>
+                                    </Border>
+                                    <TextBlock x:Name="LiveCoreCompactText"
+                                               Text="Kokonoe - loading - vault -- - vision --"
+                                               FontSize="11" FontFamily="Consolas" FontWeight="SemiBold"
+                                               Foreground="{DynamicResource AccentTextLight}"
+                                               VerticalAlignment="Center"
+                                               TextTrimming="CharacterEllipsis"
+                                               ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"/>
+                                </StackPanel>
 
                                 <StackPanel Grid.Column="0" Margin="0,0,12,0" Visibility="Collapsed">
-                                    <TextBlock Text="ЖИВЕ ЯДРО" FontSize="9" FontFamily="Consolas" FontWeight="Bold"
+                                    <TextBlock Text="Р–РР’Р• РЇР”Р Рћ" FontSize="9" FontFamily="Consolas" FontWeight="Bold"
                                                Foreground="{DynamicResource AccentBase}"/>
-                                    <TextBlock x:Name="LiveCoreEmotionText" Text="емоція: завантаження"
+                                    <TextBlock x:Name="LiveCoreEmotionText" Text="РµРјРѕС†С–СЏ: Р·Р°РІР°РЅС‚Р°Р¶РµРЅРЅСЏ"
                                                FontSize="12" FontWeight="SemiBold"
                                                Foreground="{DynamicResource AccentTextLight}" Margin="0,3,0,0"
                                                TextWrapping="Wrap" TextTrimming="CharacterEllipsis"
                                                ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"/>
-                                    <TextBlock x:Name="LiveCoreBondText" Text="зв'язок -- | сила --"
+                                    <TextBlock x:Name="LiveCoreBondText" Text="Р·РІ'СЏР·РѕРє -- | СЃРёР»Р° --"
                                                FontSize="10" Foreground="{DynamicResource Brush_8AC8A0}"
                                                TextWrapping="Wrap" TextTrimming="CharacterEllipsis"
                                                ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"/>
                                 </StackPanel>
 
                                 <StackPanel Grid.Column="1" Margin="0,0,12,0" Visibility="Collapsed">
-                                    <TextBlock Text="ТІЛО" FontSize="9" FontFamily="Consolas" FontWeight="Bold"
+                                    <TextBlock Text="РўР†Р›Рћ" FontSize="9" FontFamily="Consolas" FontWeight="Bold"
                                                Foreground="{DynamicResource AccentBase}"/>
-                                    <TextBlock x:Name="LiveCoreBodyText" Text="соматика: завантаження"
+                                    <TextBlock x:Name="LiveCoreBodyText" Text="СЃРѕРјР°С‚РёРєР°: Р·Р°РІР°РЅС‚Р°Р¶РµРЅРЅСЏ"
                                                FontSize="12" FontWeight="SemiBold"
                                                Foreground="{DynamicResource AccentTextLight}" Margin="0,3,0,0"
                                                TextWrapping="Wrap" TextTrimming="CharacterEllipsis"
                                                ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"/>
-                                    <TextBlock x:Name="LiveCoreRegulationText" Text="саморегуляція --"
+                                    <TextBlock x:Name="LiveCoreRegulationText" Text="СЃР°РјРѕСЂРµРіСѓР»СЏС†С–СЏ --"
                                                FontSize="10" Foreground="{DynamicResource Brush_8AC8A0}"
                                                TextWrapping="Wrap" TextTrimming="CharacterEllipsis"
                                                ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"/>
                                 </StackPanel>
 
                                 <StackPanel Grid.Column="2" Margin="0,0,12,0" Visibility="Collapsed">
-                                    <TextBlock Text="ПУЛЬС" FontSize="9" FontFamily="Consolas" FontWeight="Bold"
+                                    <TextBlock Text="РџРЈР›Р¬РЎ" FontSize="9" FontFamily="Consolas" FontWeight="Bold"
                                                Foreground="{DynamicResource AccentBase}"/>
                                     <TextBlock x:Name="LiveCorePulseText" Text="-- bpm"
                                                FontSize="12" FontWeight="SemiBold"
@@ -477,9 +512,9 @@
                                 </StackPanel>
 
                                 <StackPanel Grid.Column="3" Margin="0,0,12,0" Visibility="Collapsed">
-                                    <TextBlock Text="АВТОНОМНІСТЬ" FontSize="9" FontFamily="Consolas" FontWeight="Bold"
+                                    <TextBlock Text="РђР’РўРћРќРћРњРќР†РЎРўР¬" FontSize="9" FontFamily="Consolas" FontWeight="Bold"
                                                Foreground="{DynamicResource AccentBase}"/>
-                                    <TextBlock x:Name="LiveCoreAutonomyText" Text="рішення --"
+                                    <TextBlock x:Name="LiveCoreAutonomyText" Text="СЂС–С€РµРЅРЅСЏ --"
                                                FontSize="12" FontWeight="SemiBold"
                                                Foreground="{DynamicResource AccentTextLight}" Margin="0,3,0,0"
                                                TextWrapping="Wrap" TextTrimming="CharacterEllipsis"
@@ -488,30 +523,30 @@
                                                FontSize="10" Foreground="{DynamicResource Brush_8AC8A0}"
                                                TextWrapping="Wrap" TextTrimming="CharacterEllipsis" MaxHeight="32"
                                                ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"/>
-                                    <TextBlock x:Name="LiveCoreRhythmText" Text="ритм --"
+                                    <TextBlock x:Name="LiveCoreRhythmText" Text="СЂРёС‚Рј --"
                                                FontSize="9" Foreground="{DynamicResource Brush_1A3020}"
                                                TextWrapping="Wrap" TextTrimming="CharacterEllipsis" MaxHeight="28"
                                                ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"/>
                                 </StackPanel>
 
                                 <StackPanel Grid.Column="4" Visibility="Collapsed">
-                                    <TextBlock Text="ПАМ'ЯТЬ / VAULT" FontSize="9" FontFamily="Consolas" FontWeight="Bold"
+                                    <TextBlock Text="РџРђРњ'РЇРўР¬ / VAULT" FontSize="9" FontFamily="Consolas" FontWeight="Bold"
                                                Foreground="{DynamicResource AccentBase}"/>
-                                    <TextBlock x:Name="LiveCoreMemoryText" Text="синхронізація --"
+                                    <TextBlock x:Name="LiveCoreMemoryText" Text="СЃРёРЅС…СЂРѕРЅС–Р·Р°С†С–СЏ --"
                                                FontSize="12" FontWeight="SemiBold"
                                                Foreground="{DynamicResource AccentTextLight}" Margin="0,3,0,0"
                                                TextWrapping="Wrap" TextTrimming="CharacterEllipsis"
                                                ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"/>
-                                    <TextBlock x:Name="LiveCoreVaultText" Text="огляд -- | задачі --"
+                                    <TextBlock x:Name="LiveCoreVaultText" Text="РѕРіР»СЏРґ -- | Р·Р°РґР°С‡С– --"
                                                FontSize="10" Foreground="{DynamicResource Brush_8AC8A0}"
                                                TextWrapping="Wrap" TextTrimming="CharacterEllipsis" MaxHeight="32"
                                                ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"/>
                                 </StackPanel>
 
                                 <StackPanel Grid.Column="5" Orientation="Horizontal" VerticalAlignment="Center" Margin="12,0,0,0">
-                                    <Button Content="Оновити" Style="{StaticResource BtnGhost}" Padding="8,4" Margin="0,0,4,0"
+                                    <Button Content="Refresh" Style="{StaticResource BtnGhost}" Padding="10,5" Margin="0,0,6,0"
                                             Click="LiveCoreRefresh_Click"/>
-                                    <Button Content="Знімок" Style="{StaticResource BtnGhost}" Padding="8,4"
+                                    <Button Content="Snapshot" Style="{StaticResource BtnGhost}" Padding="10,5"
                                             Click="LiveCoreSnapshot_Click"/>
                                 </StackPanel>
                             </Grid>
@@ -522,24 +557,24 @@
                                       VerticalScrollBarVisibility="Auto"
                                       HorizontalScrollBarVisibility="Disabled"
                                       ClipToBounds="True"
-                                      Background="Transparent"
+                                      Background="{DynamicResource KokoChatCanvasBrush}"
                                       PreviewMouseWheel="MessagesScroll_PreviewMouseWheel">
-                            <StackPanel x:Name="MessagesList" Margin="0,14,0,14"
+                            <StackPanel x:Name="MessagesList" Margin="0,18,0,18"
                                         ClipToBounds="True"
                                         Width="{Binding ActualWidth, ElementName=MessagesScroll}"/>
                         </ScrollViewer>
 
                         <!-- Input panel -->
                         <Border Grid.Row="2" Background="{DynamicResource KokoFooterBrush}"
-                                BorderBrush="{DynamicResource AccentBgBorder2}" BorderThickness="0,1,0,0"
-                                Padding="18,12,18,16">
+                                BorderBrush="{DynamicResource AccentBgBorder}" BorderThickness="0,1,0,0"
+                                Padding="20,14,20,18">
                             <StackPanel>
 
                                 <!-- Image preview (hidden by default) -->
                                 <Border x:Name="ImagePreviewBorder" Visibility="Collapsed"
-                                        Background="{DynamicResource Brush_08180C}" CornerRadius="10"
-                                        BorderBrush="{DynamicResource AccentAsstBorder}" BorderThickness="1"
-                                        Padding="10,8" Margin="0,0,0,10">
+                                        Background="{DynamicResource KokoSurfaceInsetBrush}" CornerRadius="8"
+                                        BorderBrush="{DynamicResource AccentBgBorder1}" BorderThickness="1"
+                                        Padding="12,10" Margin="0,0,0,12">
                                     <Grid>
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="Auto"/>
@@ -549,20 +584,23 @@
                                         <Image x:Name="PendingImageThumb" MaxHeight="64" MaxWidth="96"
                                                Stretch="Uniform" VerticalAlignment="Center" Margin="0,0,10,0"/>
                                         <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                                            <TextBlock Text="Зображення" Foreground="{DynamicResource Brush_8AC8A0}"
+                                            <TextBlock Text="Image attached" Foreground="{DynamicResource AccentText}"
                                                        FontSize="12" FontWeight="SemiBold"/>
-                                            <TextBlock x:Name="PendingImageLabel" Foreground="{DynamicResource Brush_2A4832}" FontSize="10"/>
+                                            <TextBlock x:Name="PendingImageLabel" Foreground="{DynamicResource AccentDim}" FontSize="10"/>
                                         </StackPanel>
-                                        <Button Grid.Column="2" Content="✕" Background="Transparent"
-                                                BorderThickness="0" Foreground="{DynamicResource Brush_2A4832}"
+                                        <Button Grid.Column="2" Content="x" Background="Transparent"
+                                                BorderThickness="0" Foreground="{DynamicResource AccentMuted}"
                                                 FontSize="14" Cursor="Hand"
                                                 Padding="6" Click="RemoveImage_Click" VerticalAlignment="Center"/>
                                     </Grid>
                                 </Border>
 
                                 <!-- Input container (glass card) -->
-                                <Border Background="{DynamicResource KokoInputPanelBrush}" CornerRadius="16"
-                                        BorderBrush="{DynamicResource AccentBgBorder2}" BorderThickness="1">
+                                <Border Background="{DynamicResource KokoInputPanelBrush}" CornerRadius="10"
+                                        BorderBrush="{DynamicResource AccentBgBorder1}" BorderThickness="1">
+                                    <Border.Effect>
+                                        <DropShadowEffect Color="#000000" BlurRadius="18" ShadowDepth="2" Opacity="0.30"/>
+                                    </Border.Effect>
                                     <Border.Style>
                                         <Style TargetType="Border">
                                             <Style.Triggers>
@@ -582,8 +620,8 @@
                                                  Background="Transparent" Foreground="{DynamicResource AccentTextLight}"
                                                  CaretBrush="{DynamicResource AccentBase}" BorderThickness="0"
                                                  FontSize="13" FontFamily="Segoe UI Variable, Segoe UI"
-                                                 MinHeight="52" MaxHeight="160"
-                                                 Padding="16,14,16,4"
+                                                 MinHeight="56" MaxHeight="160"
+                                                 Padding="16,15,16,6"
                                                  TextWrapping="Wrap" AcceptsReturn="False"
                                                  VerticalScrollBarVisibility="Auto"
                                                  KeyDown="Input_KeyDown" AllowDrop="True"
@@ -599,18 +637,18 @@
                                         </TextBox>
 
                                         <!-- Bottom action bar -->
-                                        <Border Grid.Row="1" Padding="10,5,10,7"
-                                                BorderBrush="{DynamicResource AccentBgBorder2}" BorderThickness="0,1,0,0">
+                                        <Border Grid.Row="1" Padding="12,7,12,9"
+                                                BorderBrush="{DynamicResource AccentBgBorder}" BorderThickness="0,1,0,0">
                                             <Grid>
                                                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                                    <Button x:Name="RecordBtn" ToolTip="Голос (Whisper)"
+                                                    <Button x:Name="RecordBtn" ToolTip="Voice input"
                                                             Style="{StaticResource BtnGhost}"
-                                                            Padding="6,4" Margin="0,0,3,0" Click="Record_Click">
+                                                            Padding="8,5" Margin="0,0,6,0" Click="Record_Click">
                                                         <TextBlock Text="REC" FontSize="10" FontFamily="Consolas"/>
                                                     </Button>
-                                                    <Button ToolTip="Прикріпити фото (Ctrl+V / Drop)"
+                                                    <Button ToolTip="Attach image"
                                                             Style="{StaticResource BtnGhost}"
-                                                            Padding="6,4" Margin="0,0,3,0" Click="AttachImage_Click">
+                                                            Padding="8,5" Margin="0,0,6,0" Click="AttachImage_Click">
                                                         <TextBlock Text="IMG" FontSize="10" FontFamily="Consolas"/>
                                                     </Button>
                                                 </StackPanel>
@@ -618,14 +656,14 @@
                                                 <StackPanel Orientation="Horizontal"
                                                             HorizontalAlignment="Right"
                                                             VerticalAlignment="Center">
-                                                    <TextBlock Text="Enter — send  ·  Shift+Enter — newline"
+                                                    <TextBlock Text="Enter sends - Shift+Enter newline"
                                                                Foreground="{DynamicResource AccentDim}" FontSize="10"
                                                                VerticalAlignment="Center" Margin="0,0,10,0"/>
                                                     <Button x:Name="SendBtn" Style="{StaticResource BtnPrimary}"
                                                             Padding="16,7" Click="Send_Click">
                                                         <StackPanel Orientation="Horizontal">
                                                             <TextBlock Text="Send" FontSize="12"/>
-                                                            <TextBlock Text=" ▶" FontSize="11" Margin="2,0,0,0"/>
+                                                            <TextBlock Text=" &#x25B6;" FontSize="11" Margin="2,0,0,0"/>
                                                         </StackPanel>
                                                     </Button>
                                                 </StackPanel>
@@ -637,7 +675,7 @@
                         </Border>
                     </Grid>
 
-                    <!-- ╔══════════ VAULT TAB ══════════╗ -->
+                    <!-- в•”в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ VAULT TAB в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•— -->
                     <Grid x:Name="VaultTab" Visibility="Collapsed" Background="Transparent">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="220"/>
@@ -657,12 +695,12 @@
                                 <Border Grid.Row="0" Padding="10,10,10,6"
                                         BorderBrush="{DynamicResource AccentBgBorder2}" BorderThickness="0,0,0,1">
                                     <StackPanel Orientation="Horizontal">
-                                        <TextBlock Text="📁 VAULT" FontSize="10" FontWeight="Bold"
+                                        <TextBlock Text="рџ“Ѓ VAULT" FontSize="10" FontWeight="Bold"
                                                    Foreground="{DynamicResource AccentBase}" FontFamily="Consolas" VerticalAlignment="Center"/>
                                         <Button Content="+" Style="{StaticResource BtnGhost}"
                                                 Padding="6,2" Margin="8,0,0,0" FontSize="14"
                                                 Click="NewNote_Click"/>
-                                        <Button Content="↻" Style="{StaticResource BtnGhost}"
+                                        <Button Content="в†»" Style="{StaticResource BtnGhost}"
                                                 Padding="6,2" Margin="4,0,0,0"
                                                 Click="RefreshVault_Click"/>
                                     </StackPanel>
@@ -673,7 +711,7 @@
                                         <TextBox x:Name="VaultSearchBox" Style="{StaticResource InputBox}"
                                                  FontSize="11" Padding="28,7,8,7"
                                                  TextChanged="VaultSearch_Changed"/>
-                                        <TextBlock Text="🔍" FontSize="11" Foreground="{DynamicResource Brush_1A3020}"
+                                        <TextBlock Text="рџ”Ќ" FontSize="11" Foreground="{DynamicResource Brush_1A3020}"
                                                    VerticalAlignment="Center" Margin="10,0,0,0"
                                                    IsHitTestVisible="False"/>
                                     </Grid>
@@ -785,11 +823,11 @@
                                 <Border Grid.Row="0" Background="{DynamicResource AccentBgDarker}"
                                         BorderBrush="{DynamicResource AccentBgBorder2}" BorderThickness="0,0,0,1" Padding="14,8">
                                     <StackPanel Orientation="Horizontal">
-                                        <TextBlock x:Name="NotePathLabel" Text="Виберіть нотатку"
+                                        <TextBlock x:Name="NotePathLabel" Text="Р’РёР±РµСЂС–С‚СЊ РЅРѕС‚Р°С‚РєСѓ"
                                                    Foreground="{DynamicResource Brush_2A4232}" FontSize="11" VerticalAlignment="Center"/>
-                                        <Button Content="💾 Зберегти" Style="{StaticResource BtnGhost}"
+                                        <Button Content="рџ’ѕ Р—Р±РµСЂРµРіС‚Рё" Style="{StaticResource BtnGhost}"
                                                 Padding="8,4" Margin="14,0,0,0" Click="SaveNote_Click"/>
-                                        <Button Content="🗑 Видалити" Style="{StaticResource BtnGhost}"
+                                        <Button Content="рџ—‘ Р’РёРґР°Р»РёС‚Рё" Style="{StaticResource BtnGhost}"
                                                 Padding="8,4" Margin="4,0,0,0" Click="DeleteNote_Click"/>
                                     </StackPanel>
                                 </Border>
@@ -806,32 +844,32 @@
                                                 <ColumnDefinition Width="Auto"/>
                                             </Grid.ColumnDefinitions>
                                             <StackPanel>
-                                                <TextBlock Text="ОПЕРАЦІЇ ПАМ'ЯТІ" FontSize="9" FontWeight="Bold"
+                                                <TextBlock Text="РћРџР•Р РђР¦Р†Р‡ РџРђРњ'РЇРўР†" FontSize="9" FontWeight="Bold"
                                                            Foreground="{DynamicResource AccentBase}" FontFamily="Consolas"/>
-                                                <TextBlock x:Name="MemoryOpsStatusLabel" Text="не завантажено"
+                                                <TextBlock x:Name="MemoryOpsStatusLabel" Text="РЅРµ Р·Р°РІР°РЅС‚Р°Р¶РµРЅРѕ"
                                                            FontSize="10" Foreground="{DynamicResource Brush_8AC8A0}" Margin="0,2,0,0"/>
                                                 <TextBlock x:Name="MemoryOpsDetailLabel" Text=""
                                                            FontSize="9" Foreground="{DynamicResource Brush_1A3020}" Margin="0,2,0,0"/>
                                             </StackPanel>
                                             <WrapPanel Grid.Column="1" HorizontalAlignment="Right" VerticalAlignment="Center">
-                                                <Button Content="Оновити" Style="{StaticResource BtnGhost}" Padding="8,4" Margin="4,0,0,0"
+                                                <Button Content="РћРЅРѕРІРёС‚Рё" Style="{StaticResource BtnGhost}" Padding="8,4" Margin="4,0,0,0"
                                                         Click="MemoryOpsRefresh_Click"/>
-                                                <Button Content="Перегляд чистки" Style="{StaticResource BtnGhost}" Padding="8,4" Margin="4,0,0,0"
+                                                <Button Content="РџРµСЂРµРіР»СЏРґ С‡РёСЃС‚РєРё" Style="{StaticResource BtnGhost}" Padding="8,4" Margin="4,0,0,0"
                                                         Click="MemoryOpsPreviewCleanup_Click"/>
-                                                <Button Content="Застосувати чистку" Style="{StaticResource BtnGhost}" Padding="8,4" Margin="4,0,0,0"
+                                                <Button Content="Р—Р°СЃС‚РѕСЃСѓРІР°С‚Рё С‡РёСЃС‚РєСѓ" Style="{StaticResource BtnGhost}" Padding="8,4" Margin="4,0,0,0"
                                                         Click="MemoryOpsApplyCleanup_Click"/>
                                             </WrapPanel>
                                         </Grid>
                                         <WrapPanel Grid.Row="1" Margin="0,8,0,0">
-                                            <Button Content="Якість" Style="{StaticResource BtnGhost}" Padding="8,4" Margin="0,0,4,0"
+                                            <Button Content="РЇРєС–СЃС‚СЊ" Style="{StaticResource BtnGhost}" Padding="8,4" Margin="0,0,4,0"
                                                     Click="OpenMemoryQuality_Click"/>
-                                            <Button Content="Огляд" Style="{StaticResource BtnGhost}" Padding="8,4" Margin="0,0,4,0"
+                                            <Button Content="РћРіР»СЏРґ" Style="{StaticResource BtnGhost}" Padding="8,4" Margin="0,0,4,0"
                                                     Click="OpenMemoryReview_Click"/>
-                                            <Button Content="Чистка" Style="{StaticResource BtnGhost}" Padding="8,4" Margin="0,0,4,0"
+                                            <Button Content="Р§РёСЃС‚РєР°" Style="{StaticResource BtnGhost}" Padding="8,4" Margin="0,0,4,0"
                                                     Click="OpenMemoryCleanup_Click"/>
-                                            <Button Content="Задачі" Style="{StaticResource BtnGhost}" Padding="8,4" Margin="0,0,4,0"
+                                            <Button Content="Р—Р°РґР°С‡С–" Style="{StaticResource BtnGhost}" Padding="8,4" Margin="0,0,4,0"
                                                     Click="OpenTasksQueue_Click"/>
-                                            <Button Content="Архітектура" Style="{StaticResource BtnGhost}" Padding="8,4" Margin="0,0,4,0"
+                                            <Button Content="РђСЂС…С–С‚РµРєС‚СѓСЂР°" Style="{StaticResource BtnGhost}" Padding="8,4" Margin="0,0,4,0"
                                                     Click="OpenVaultArchitecture_Click"/>
                                         </WrapPanel>
                                     </Grid>
@@ -850,12 +888,12 @@
                         </Grid>
                     </Grid>
 
-                    <!-- ╔══════════ HEALTH TAB ══════════╗ -->
+                    <!-- в•”в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ HEALTH TAB в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•— -->
                     <Grid x:Name="HealthTab" Visibility="Collapsed" Background="Transparent">
                         <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="24,20">
                             <StackPanel MaxWidth="680">
 
-                                <TextBlock Text="КАЛЕНДАР" FontSize="13" FontWeight="Bold"
+                                <TextBlock Text="РљРђР›Р•РќР”РђР " FontSize="13" FontWeight="Bold"
                                            Foreground="{DynamicResource AccentBase}" FontFamily="Consolas" Margin="0,0,0,16"/>
 
                                 <!-- Month navigation -->
@@ -865,13 +903,13 @@
                                         <ColumnDefinition Width="*"/>
                                         <ColumnDefinition Width="30"/>
                                     </Grid.ColumnDefinitions>
-                                    <Button x:Name="CalPrevBtn" Content="◀" Style="{StaticResource BtnTab}"
+                                    <Button x:Name="CalPrevBtn" Content="в—Ђ" Style="{StaticResource BtnTab}"
                                             Click="CalPrev_Click" Width="26" Height="26" Padding="0" FontSize="10"/>
                                     <TextBlock x:Name="CalMonthLabel" Grid.Column="1"
                                                FontFamily="Consolas" FontSize="12" FontWeight="Bold"
                                                Foreground="{DynamicResource AccentBase}"
                                                HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                    <Button x:Name="CalNextBtn" Grid.Column="2" Content="▶" Style="{StaticResource BtnTab}"
+                                    <Button x:Name="CalNextBtn" Grid.Column="2" Content="в–¶" Style="{StaticResource BtnTab}"
                                             Click="CalNext_Click" Width="26" Height="26" Padding="0" FontSize="10"/>
                                 </Grid>
 
@@ -900,12 +938,12 @@
                                                             <ColumnDefinition Width="22"/>
                                                         </Grid.ColumnDefinitions>
                                                         <StackPanel Orientation="Horizontal">
-                                                            <TextBlock Text="·" Foreground="{DynamicResource AccentBase}" Margin="0,0,6,0"/>
+                                                            <TextBlock Text="В·" Foreground="{DynamicResource AccentBase}" Margin="0,0,6,0"/>
                                                             <TextBlock Text="{Binding TimeStr}" Foreground="{DynamicResource Brush_2A6040}"
                                                                        FontFamily="Consolas" FontSize="11" Margin="0,0,8,0"/>
                                                             <TextBlock Text="{Binding Title}" Foreground="{DynamicResource AccentMuted}" FontSize="12"/>
                                                         </StackPanel>
-                                                        <Button Grid.Column="1" Content="×" Tag="{Binding Id}"
+                                                        <Button Grid.Column="1" Content="Г—" Tag="{Binding Id}"
                                                                 Foreground="{DynamicResource Brush_1A3020}" Background="Transparent"
                                                                 BorderThickness="0" FontSize="14"
                                                                 Cursor="Hand" Padding="0"
@@ -926,14 +964,14 @@
                                                     </Grid.ColumnDefinitions>
                                                     <TextBox x:Name="EventTitleBox" Style="{StaticResource InputBox}"
                                                              FontSize="11" Padding="8,6" Height="32"
-                                                             ToolTip="Назва події"/>
+                                                             ToolTip="РќР°Р·РІР° РїРѕРґС–С—"/>
                                                     <TextBox x:Name="EventTimeBox" Grid.Column="1"
                                                              Style="{StaticResource InputBox}"
                                                              FontSize="11" Padding="8,6" Height="32"
                                                              Margin="6,0" Text="17:00"
-                                                             ToolTip="Час (напр. 17:00)"/>
+                                                             ToolTip="Р§Р°СЃ (РЅР°РїСЂ. 17:00)"/>
                                                     <Button x:Name="AddEventBtn" Grid.Column="2"
-                                                            Content="ДОДАТИ"
+                                                            Content="Р”РћР”РђРўР"
                                                             Style="{StaticResource BtnPrimary}"
                                                             FontSize="10" Height="32" Padding="0"
                                                             Click="AddEvent_Click"/>
@@ -943,14 +981,14 @@
                                                          MinHeight="50" MaxHeight="120"
                                                          TextWrapping="Wrap" AcceptsReturn="True"
                                                          VerticalScrollBarVisibility="Auto"
-                                                         ToolTip="Опис (необов'язково)"/>
+                                                         ToolTip="РћРїРёСЃ (РЅРµРѕР±РѕРІ'СЏР·РєРѕРІРѕ)"/>
                                             </StackPanel>
                                         </Border>
                                     </StackPanel>
                                 </Border>
 
                                 <!-- Upcoming events -->
-                                <TextBlock Text="НАЙБЛИЖЧІ ПОДІЇ" FontSize="10" FontWeight="Bold"
+                                <TextBlock Text="РќРђР™Р‘Р›РР–Р§Р† РџРћР”Р†Р‡" FontSize="10" FontWeight="Bold"
                                            Foreground="{DynamicResource AccentBase}" FontFamily="Consolas" Margin="0,0,0,10"/>
                                 <ItemsControl x:Name="UpcomingEventsList">
                                     <ItemsControl.ItemTemplate>
@@ -968,7 +1006,7 @@
                                                                    Foreground="{DynamicResource Brush_2A4232}"
                                                                    FontFamily="Consolas" FontSize="10"/>
                                                     </StackPanel>
-                                                    <Button Grid.Column="1" Content="×" Tag="{Binding Id}"
+                                                    <Button Grid.Column="1" Content="Г—" Tag="{Binding Id}"
                                                             Foreground="{DynamicResource Brush_1A3020}" Background="Transparent"
                                                             BorderThickness="0" FontSize="14"
                                                             Cursor="Hand" Padding="0"
@@ -983,27 +1021,27 @@
                         </ScrollViewer>
                     </Grid>
 
-                    <!-- ╔══════════ TOOLS TAB ══════════╗ -->
+                    <!-- в•”в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ TOOLS TAB в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•— -->
                     <Grid x:Name="ToolsTab" Visibility="Collapsed"
                           Background="{DynamicResource AccentBgMain}"
                           SizeChanged="DashboardSizeChanged"
                           TextBlock.FontFamily="Segoe UI Variable, Segoe UI">
                         <Grid.Resources>
-                            <SolidColorBrush x:Key="KokoPurple"  Color="#818CF8"/>
-                            <SolidColorBrush x:Key="KokoPink"    Color="#F472B6"/>
-                            <SolidColorBrush x:Key="KokoGold"    Color="#F59E0B"/>
-                            <SolidColorBrush x:Key="KokoCyan"    Color="#22D3EE"/>
-                            <SolidColorBrush x:Key="KokoRed"     Color="#EF4444"/>
-                            <SolidColorBrush x:Key="KokoOrange"  Color="#F97316"/>
-                            <SolidColorBrush x:Key="KokoGreen"   Color="#22C55E"/>
-                            <SolidColorBrush x:Key="DashPanelBg"     Color="#141923"/>
-                            <SolidColorBrush x:Key="DashPanelBorder" Color="#FFFFFF14"/>
-                            <SolidColorBrush x:Key="DashMuted"       Color="#585548"/>
-                            <SolidColorBrush x:Key="DashVeryMuted"   Color="#3A382F"/>
+                            <SolidColorBrush x:Key="KokoPurple"  Color="#8FA3BF"/>
+                            <SolidColorBrush x:Key="KokoPink"    Color="#E25A6A"/>
+                            <SolidColorBrush x:Key="KokoGold"    Color="#D7B46A"/>
+                            <SolidColorBrush x:Key="KokoCyan"    Color="#68E6D6"/>
+                            <SolidColorBrush x:Key="KokoRed"     Color="#E25A6A"/>
+                            <SolidColorBrush x:Key="KokoOrange"  Color="#C9824A"/>
+                            <SolidColorBrush x:Key="KokoGreen"   Color="#6FE3A1"/>
+                            <SolidColorBrush x:Key="DashPanelBg"     Color="#111821"/>
+                            <SolidColorBrush x:Key="DashPanelBorder" Color="#2A3644"/>
+                            <SolidColorBrush x:Key="DashMuted"       Color="#768493"/>
+                            <SolidColorBrush x:Key="DashVeryMuted"   Color="#47515D"/>
                             <Style x:Key="DashSecHdr" TargetType="TextBlock">
                                 <Setter Property="FontSize"          Value="9"/>
                                 <Setter Property="FontFamily"        Value="Consolas"/>
-                                <Setter Property="Foreground"        Value="#585548"/>
+                                <Setter Property="Foreground"        Value="#768493"/>
                                 <Setter Property="Margin"            Value="0,0,0,8"/>
                                             </Style>
                             <Style x:Key="DashPanel" TargetType="Border">
@@ -1015,7 +1053,7 @@
                             </Style>
                             <Style x:Key="DashSmallLabel" TargetType="TextBlock">
                                 <Setter Property="FontSize"   Value="9"/>
-                                <Setter Property="Foreground" Value="#585548"/>
+                                <Setter Property="Foreground" Value="#768493"/>
                             </Style>
                             <Style x:Key="DashTabBtn" TargetType="Border">
                                 <Setter Property="Padding"      Value="14,5"/>
@@ -1027,7 +1065,7 @@
                                 <Setter Property="FontSize"          Value="10"/>
                                 <Setter Property="FontFamily"        Value="Consolas"/>
                                 <Setter Property="VerticalAlignment" Value="Center"/>
-                                <Setter Property="Foreground"        Value="#585548"/>
+                                <Setter Property="Foreground"        Value="#768493"/>
                             </Style>
                         </Grid.Resources>
 
@@ -1048,16 +1086,16 @@
                                 </Grid.ColumnDefinitions>
                                 <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
                                     <StackPanel VerticalAlignment="Center">
-                                        <TextBlock Text="Живий дашборд" FontSize="15" FontWeight="SemiBold"
+                                        <TextBlock Text="Live Dashboard" FontSize="15" FontWeight="SemiBold"
                                                    Foreground="{DynamicResource AccentTextLight}"/>
-                                        <TextBlock Text="стан · пам'ять · тіло · задачі" FontSize="10" FontFamily="Consolas"
+                                        <TextBlock Text="state / memory / body / tasks" FontSize="10" FontFamily="Consolas"
                                                    Foreground="{StaticResource DashMuted}" Margin="0,2,0,0"/>
                                     </StackPanel>
                                 </StackPanel>
                                 <StackPanel Grid.Column="1" HorizontalAlignment="Center" VerticalAlignment="Center">
                                     <TextBlock x:Name="DashCurrentMoodDisplay" Text="CALM"
                                                FontSize="13" FontWeight="SemiBold" HorizontalAlignment="Center">
-                                        <TextBlock.Foreground><SolidColorBrush Color="#22D3EE"/></TextBlock.Foreground>
+                                        <TextBlock.Foreground><SolidColorBrush Color="#68E6D6"/></TextBlock.Foreground>
                                     </TextBlock>
                                     <TextBlock x:Name="DashMoodSubtext" Text="" FontSize="9" Foreground="{StaticResource DashMuted}"
                                                HorizontalAlignment="Center" Margin="0,3,0,0" FontStyle="Italic"/>
@@ -1069,14 +1107,14 @@
                                                Foreground="{StaticResource DashMuted}" HorizontalAlignment="Right"/>
                                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,4,0,0">
                                         <Border x:Name="HeartDot" Width="10" Height="10" CornerRadius="5"
-                                                Background="#FF4D6D" Margin="0,0,6,0"
-                                                ToolTip="Пульс" VerticalAlignment="Center"
+                                                Background="{DynamicResource RgbRedBrush}" Margin="0,0,6,0"
+                                                ToolTip="Verified watch pulse" VerticalAlignment="Center"
                                                 RenderTransformOrigin="0.5,0.5">
                                             <Border.RenderTransform>
                                                 <ScaleTransform x:Name="HeartScale" ScaleX="1" ScaleY="1"/>
                                             </Border.RenderTransform>
                                             <Border.Effect>
-                                                <DropShadowEffect Color="#FF4D6D" BlurRadius="8" ShadowDepth="0" Opacity="0.6"/>
+                                                <DropShadowEffect Color="#E25A6A" BlurRadius="7" ShadowDepth="0" Opacity="0.36"/>
                                             </Border.Effect>
                                         </Border>
                                         <TextBlock x:Name="HeartBpmText" Text="-- bpm"
@@ -1094,19 +1132,19 @@
                                     <StackPanel Orientation="Horizontal">
                                         <Border x:Name="DashTabNeuroBtn" Style="{StaticResource DashTabBtn}"
                                                 MouseDown="DashTabNeuro_Click">
-                                            <TextBlock Text="Стан" Style="{StaticResource DashTabText}"/>
+                                            <TextBlock Text="State" Style="{StaticResource DashTabText}"/>
                                         </Border>
                                         <Border x:Name="DashTabDevBtn" Style="{StaticResource DashTabBtn}"
                                                 MouseDown="DashTabDev_Click">
-                                            <TextBlock Text="Розробка" Style="{StaticResource DashTabText}"/>
+                                            <TextBlock Text="Development" Style="{StaticResource DashTabText}"/>
                                         </Border>
                                         <Border x:Name="DashTabMemoryBtn" Style="{StaticResource DashTabBtn}"
                                                 MouseDown="DashTabMemory_Click">
-                                            <TextBlock Text="Пам'ять" Style="{StaticResource DashTabText}"/>
+                                            <TextBlock Text="Memory" Style="{StaticResource DashTabText}"/>
                                         </Border>
                                         <Border x:Name="DashTabSystemBtn" Style="{StaticResource DashTabBtn}"
                                                 MouseDown="DashTabSystem_Click">
-                                            <TextBlock Text="Система" Style="{StaticResource DashTabText}"/>
+                                            <TextBlock Text="System" Style="{StaticResource DashTabText}"/>
                                         </Border>
                                     </StackPanel>
                                 </Border>
@@ -1148,12 +1186,12 @@
                                                     <RowDefinition Height="18"/>
                                                 </Grid.RowDefinitions>
                                                 <Grid Grid.Row="0" Margin="0,0,0,6">
-                                                    <TextBlock Text="АКТИВНІСТЬ ПО ГОДИНАХ // КОЛИ ВСЕ ТУТ"
+                                                    <TextBlock Text="РђРљРўРР’РќР†РЎРўР¬ РџРћ Р“РћР”РРќРђРҐ // РљРћР›Р Р’РЎР• РўРЈРў"
                                                                Style="{StaticResource DashSecHdr}" VerticalAlignment="Center"/>
                                                     <TextBlock x:Name="DashActivitySparkLabel" HorizontalAlignment="Right"
                                                                FontSize="8" Foreground="{StaticResource KokoGreen}" VerticalAlignment="Center">
                                                         <TextBlock.Effect>
-                                                            <DropShadowEffect Color="#00FF88" ShadowDepth="0" BlurRadius="6" Opacity="0.5"/>
+                                                            <DropShadowEffect Color="#68E6D6" ShadowDepth="0" BlurRadius="6" Opacity="0.5"/>
                                                         </TextBlock.Effect>
                                                     </TextBlock>
                                                 </Grid>
@@ -1167,7 +1205,7 @@
                                                     <RowDefinition Height="Auto"/>
                                                     <RowDefinition Height="*"/>
                                                 </Grid.RowDefinitions>
-                                                <TextBlock Grid.Row="0" Text="ЕМОЦІЇ (7 ДНІВ)" Style="{StaticResource DashSecHdr}"/>
+                                                <TextBlock Grid.Row="0" Text="Р•РњРћР¦Р†Р‡ (7 Р”РќР†Р’)" Style="{StaticResource DashSecHdr}"/>
                                                 <Grid Grid.Row="1">
                                                     <Grid.RowDefinitions>
                                                         <RowDefinition Height="Auto"/>
@@ -1197,16 +1235,16 @@
                                                 <RowDefinition Height="16"/>
                                             </Grid.RowDefinitions>
                                             <Grid Grid.Row="0" Margin="0,0,0,6">
-                                                <TextBlock Text="КРИВА ТРАЄКТОРІЯ // НІТИМУ ДО БЛИЗОСТІ"
+                                                <TextBlock Text="РљР РР’Рђ РўР РђР„РљРўРћР Р†РЇ // РќР†РўРРњРЈ Р”Рћ Р‘Р›РР—РћРЎРўР†"
                                                            Style="{StaticResource DashSecHdr}" VerticalAlignment="Center"/>
                                                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
                                                     <Ellipse Width="7" Height="7" Fill="{StaticResource KokoPink}"
                                                              Margin="0,0,4,0" VerticalAlignment="Center"/>
-                                                    <TextBlock Text="факт" FontSize="7" Foreground="{StaticResource KokoPink}"
+                                                    <TextBlock Text="С„Р°РєС‚" FontSize="7" Foreground="{StaticResource KokoPink}"
                                                                VerticalAlignment="Center" Margin="0,0,10,0"/>
                                                     <Rectangle Width="8" Height="1.5" Fill="{StaticResource DashMuted}"
                                                                Margin="0,0,4,0" VerticalAlignment="Center"/>
-                                                    <TextBlock Text="база" FontSize="7" Foreground="{StaticResource DashMuted}"
+                                                    <TextBlock Text="Р±Р°Р·Р°" FontSize="7" Foreground="{StaticResource DashMuted}"
                                                                VerticalAlignment="Center"/>
                                                 </StackPanel>
                                             </Grid>
@@ -1234,7 +1272,7 @@
                                                     <RowDefinition Height="*"/>
                                                     <RowDefinition Height="22"/>
                                                 </Grid.RowDefinitions>
-                                                <TextBlock Grid.Row="0" Text="Зв'язок" Style="{StaticResource DashSmallLabel}" Margin="0,0,0,2"/>
+                                                <TextBlock Grid.Row="0" Text="Р—РІ'СЏР·РѕРє" Style="{StaticResource DashSmallLabel}" Margin="0,0,0,2"/>
                                                 <Grid Grid.Row="1">
                                                     <Grid.ColumnDefinitions>
                                                         <ColumnDefinition Width="Auto"/>
@@ -1246,7 +1284,7 @@
                                                                FontSize="8" Foreground="{StaticResource KokoGreen}"
                                                                VerticalAlignment="Bottom" Margin="4,0,0,2"/>
                                                 </Grid>
-                                                <TextBlock Grid.Row="2" x:Name="DashKpiBondLabel" Text="ВІДОМИЙ"
+                                                <TextBlock Grid.Row="2" x:Name="DashKpiBondLabel" Text="Р’Р†Р”РћРњРР™"
                                                            FontSize="7" Foreground="{StaticResource DashMuted}" Margin="0,1,0,0"/>
                                                 <Canvas Grid.Row="3" x:Name="DashKpiSparkConnection" Height="22"/>
                                             </Grid>
@@ -1259,7 +1297,7 @@
                                                     <RowDefinition Height="*"/>
                                                     <RowDefinition Height="22"/>
                                                 </Grid.RowDefinitions>
-                                                <TextBlock Grid.Row="0" Text="Сьогодні" Style="{StaticResource DashSmallLabel}" Margin="0,0,0,2"/>
+                                                <TextBlock Grid.Row="0" Text="РЎСЊРѕРіРѕРґРЅС–" Style="{StaticResource DashSmallLabel}" Margin="0,0,0,2"/>
                                                 <Grid Grid.Row="1">
                                                     <Grid.ColumnDefinitions>
                                                         <ColumnDefinition Width="Auto"/>
@@ -1271,7 +1309,7 @@
                                                                FontSize="8" Foreground="{StaticResource DashMuted}"
                                                                VerticalAlignment="Bottom" Margin="4,0,0,2"/>
                                                 </Grid>
-                                                <TextBlock Grid.Row="2" Text="повідомлень" FontSize="7"
+                                                <TextBlock Grid.Row="2" Text="РїРѕРІС–РґРѕРјР»РµРЅСЊ" FontSize="7"
                                                            Foreground="{StaticResource DashMuted}" Margin="0,1,0,0"/>
                                                 <Canvas Grid.Row="3" x:Name="DashKpiSparkMessages" Height="22"/>
                                             </Grid>
@@ -1284,7 +1322,7 @@
                                                     <RowDefinition Height="*"/>
                                                     <RowDefinition Height="22"/>
                                                 </Grid.RowDefinitions>
-                                                <TextBlock Grid.Row="0" Text="Пам'ять" Style="{StaticResource DashSmallLabel}" Margin="0,0,0,2"/>
+                                                <TextBlock Grid.Row="0" Text="РџР°Рј'СЏС‚СЊ" Style="{StaticResource DashSmallLabel}" Margin="0,0,0,2"/>
                                                 <Grid Grid.Row="1">
                                                     <Grid.ColumnDefinitions>
                                                         <ColumnDefinition Width="Auto"/>
@@ -1296,7 +1334,7 @@
                                                                FontSize="8" Foreground="{StaticResource DashMuted}"
                                                                VerticalAlignment="Bottom" Margin="4,0,0,2"/>
                                                 </Grid>
-                                                <TextBlock Grid.Row="2" Text="фактів збережено" FontSize="7"
+                                                <TextBlock Grid.Row="2" Text="С„Р°РєС‚С–РІ Р·Р±РµСЂРµР¶РµРЅРѕ" FontSize="7"
                                                            Foreground="{StaticResource DashMuted}" Margin="0,1,0,0"/>
                                                 <Canvas Grid.Row="3" x:Name="DashKpiSparkMemory" Height="22"/>
                                             </Grid>
@@ -1309,7 +1347,7 @@
                                                     <RowDefinition Height="*"/>
                                                     <RowDefinition Height="22"/>
                                                 </Grid.RowDefinitions>
-                                                <TextBlock Grid.Row="0" Text="Патерни" Style="{StaticResource DashSmallLabel}" Margin="0,0,0,2"/>
+                                                <TextBlock Grid.Row="0" Text="РџР°С‚РµСЂРЅРё" Style="{StaticResource DashSmallLabel}" Margin="0,0,0,2"/>
                                                 <Grid Grid.Row="1">
                                                     <Grid.ColumnDefinitions>
                                                         <ColumnDefinition Width="Auto"/>
@@ -1321,7 +1359,7 @@
                                                                FontSize="8" Foreground="{StaticResource DashMuted}"
                                                                VerticalAlignment="Bottom" Margin="4,0,0,2"/>
                                                 </Grid>
-                                                <TextBlock Grid.Row="2" x:Name="DashKpiPatternLabel" Text="патернів"
+                                                <TextBlock Grid.Row="2" x:Name="DashKpiPatternLabel" Text="РїР°С‚РµСЂРЅС–РІ"
                                                            FontSize="7" Foreground="{StaticResource DashMuted}" Margin="0,1,0,0"/>
                                                 <Canvas Grid.Row="3" x:Name="DashKpiSparkPatterns" Height="22"/>
                                             </Grid>
@@ -1342,7 +1380,7 @@
                                                     <RowDefinition Height="*"/>
                                                     <RowDefinition Height="Auto"/>
                                                 </Grid.RowDefinitions>
-                                                <TextBlock Grid.Row="0" Text="ЯК ТИ СЬОГОДНІ" Style="{StaticResource DashSecHdr}"/>
+                                                <TextBlock Grid.Row="0" Text="РЇРљ РўР РЎР¬РћР“РћР”РќР†" Style="{StaticResource DashSecHdr}"/>
                                                 <Grid Grid.Row="1">
                                                     <Grid.ColumnDefinitions>
                                                         <ColumnDefinition Width="*"/>
@@ -1350,17 +1388,17 @@
                                                         <ColumnDefinition Width="*"/>
                                                     </Grid.ColumnDefinitions>
                                                     <StackPanel Grid.Column="0" HorizontalAlignment="Center">
-                                                        <TextBlock Text="НАСТРІЙ" Style="{StaticResource DashSmallLabel}" HorizontalAlignment="Center"/>
+                                                        <TextBlock Text="РќРђРЎРўР Р†Р™" Style="{StaticResource DashSmallLabel}" HorizontalAlignment="Center"/>
                                                         <TextBlock x:Name="DashHealthMood" Text="?" FontSize="22" FontWeight="Bold"
                                                                    Foreground="{StaticResource KokoCyan}" HorizontalAlignment="Center"/>
                                                     </StackPanel>
                                                     <StackPanel Grid.Column="1" HorizontalAlignment="Center">
-                                                        <TextBlock Text="ЕНЕРГІЯ" Style="{StaticResource DashSmallLabel}" HorizontalAlignment="Center"/>
+                                                        <TextBlock Text="Р•РќР•Р Р“Р†РЇ" Style="{StaticResource DashSmallLabel}" HorizontalAlignment="Center"/>
                                                         <TextBlock x:Name="DashHealthEnergy" Text="?" FontSize="22" FontWeight="Bold"
                                                                    Foreground="{StaticResource KokoGold}" HorizontalAlignment="Center"/>
                                                     </StackPanel>
                                                     <StackPanel Grid.Column="2" HorizontalAlignment="Center">
-                                                        <TextBlock Text="СТРЕС" Style="{StaticResource DashSmallLabel}" HorizontalAlignment="Center"/>
+                                                        <TextBlock Text="РЎРўР Р•РЎ" Style="{StaticResource DashSmallLabel}" HorizontalAlignment="Center"/>
                                                         <TextBlock x:Name="DashHealthStress" Text="?" FontSize="22" FontWeight="Bold"
                                                                    Foreground="{StaticResource KokoRed}" HorizontalAlignment="Center"/>
                                                     </StackPanel>
@@ -1376,16 +1414,16 @@
                                                     <RowDefinition Height="Auto"/>
                                                     <RowDefinition Height="*"/>
                                                 </Grid.RowDefinitions>
-                                                <TextBlock Grid.Row="0" Text="ПОТОЧНИЙ СТАН" Style="{StaticResource DashSecHdr}"/>
+                                                <TextBlock Grid.Row="0" Text="РџРћРўРћР§РќРР™ РЎРўРђРќ" Style="{StaticResource DashSecHdr}"/>
                                                 <StackPanel Grid.Row="1">
                                                     <Grid>
                                                         <Grid.ColumnDefinitions>
                                                             <ColumnDefinition Width="*"/>
                                                             <ColumnDefinition Width="Auto"/>
                                                         </Grid.ColumnDefinitions>
-                                                        <TextBlock x:Name="DashEmotionValue" Text="СПОКІЙНА"
+                                                        <TextBlock x:Name="DashEmotionValue" Text="РЎРџРћРљР†Р™РќРђ"
                                                                    FontSize="22" FontWeight="Bold">
-                                                            <TextBlock.Foreground><SolidColorBrush Color="#00CED1"/></TextBlock.Foreground>
+                                                            <TextBlock.Foreground><SolidColorBrush Color="#68E6D6"/></TextBlock.Foreground>
                                                         </TextBlock>
                                                         <TextBlock x:Name="DashEmotionIntensity" Grid.Column="1"
                                                                    Text="0.50" FontSize="11" Foreground="{StaticResource DashMuted}"
@@ -1416,7 +1454,7 @@
                                                     <RowDefinition Height="14"/>
                                                 </Grid.RowDefinitions>
                                                 <Grid Grid.Row="0" Margin="0,0,0,6">
-                                                    <TextBlock Text="НАСТРІЙ 24Г // дрейф стану"
+                                                    <TextBlock Text="РќРђРЎРўР Р†Р™ 24Р“ // РґСЂРµР№С„ СЃС‚Р°РЅСѓ"
                                                                Style="{StaticResource DashSecHdr}" VerticalAlignment="Center"/>
                                                     <TextBlock x:Name="DashMood24hLabel"
                                                                HorizontalAlignment="Right" FontSize="8"
@@ -1434,7 +1472,7 @@
                                                     <RowDefinition Height="14"/>
                                                 </Grid.RowDefinitions>
                                                 <Grid Grid.Row="0" Margin="0,0,0,6">
-                                                    <TextBlock Text="ТИЖНЕВА МАПА // 7×24"
+                                                    <TextBlock Text="РўРР–РќР•Р’Рђ РњРђРџРђ // 7Г—24"
                                                                Style="{StaticResource DashSecHdr}" VerticalAlignment="Center"/>
                                                     <TextBlock x:Name="DashHeatmapLabel"
                                                                HorizontalAlignment="Right" FontSize="8"
@@ -1460,13 +1498,13 @@
                                                     <RowDefinition Height="*"/>
                                                 </Grid.RowDefinitions>
                                                 <Grid Grid.Row="0" Margin="0,0,0,6">
-                                                    <TextBlock Text="ПУЛЬС // останні 5 хв"
+                                                    <TextBlock Text="РџРЈР›Р¬РЎ // РѕСЃС‚Р°РЅРЅС– 5 С…РІ"
                                                                Style="{StaticResource DashSecHdr}" VerticalAlignment="Center"/>
                                                     <TextBlock x:Name="DashHeartBpmLabel" HorizontalAlignment="Right"
                                                                FontSize="9" FontFamily="Consolas"
-                                                               Foreground="#FF4D6D" VerticalAlignment="Center">
+                                                               Foreground="{DynamicResource RgbRedBrush}" VerticalAlignment="Center">
                                                         <TextBlock.Effect>
-                                                            <DropShadowEffect Color="#FF4D6D" ShadowDepth="0" BlurRadius="6" Opacity="0.5"/>
+                                                            <DropShadowEffect Color="#E25A6A" ShadowDepth="0" BlurRadius="6" Opacity="0.5"/>
                                                         </TextBlock.Effect>
                                                     </TextBlock>
                                                 </Grid>
@@ -1479,35 +1517,35 @@
                                                     <RowDefinition Height="Auto"/>
                                                     <RowDefinition Height="*"/>
                                                 </Grid.RowDefinitions>
-                                                <TextBlock Grid.Row="0" Text="СТАТИСТИКА ПУЛЬСУ"
+                                                <TextBlock Grid.Row="0" Text="РЎРўРђРўРРЎРўРРљРђ РџРЈР›Р¬РЎРЈ"
                                                            Style="{StaticResource DashSecHdr}" Margin="0,0,0,6"/>
                                                 <StackPanel Grid.Row="1">
                                                     <Grid Margin="0,2">
-                                                        <TextBlock Text="поточний" FontSize="10" Foreground="{StaticResource DashMuted}"/>
+                                                        <TextBlock Text="РїРѕС‚РѕС‡РЅРёР№" FontSize="10" Foreground="{StaticResource DashMuted}"/>
                                                         <TextBlock x:Name="DashHeartCurText" Text="--"
                                                                    HorizontalAlignment="Right" FontSize="12" FontFamily="Consolas"
-                                                                   FontWeight="Bold" Foreground="#FF4D6D"/>
+                                                                   FontWeight="Bold" Foreground="{DynamicResource RgbRedBrush}"/>
                                                     </Grid>
                                                     <Grid Margin="0,2">
-                                                        <TextBlock Text="база" FontSize="10" Foreground="{StaticResource DashMuted}"/>
+                                                        <TextBlock Text="Р±Р°Р·Р°" FontSize="10" Foreground="{StaticResource DashMuted}"/>
                                                         <TextBlock x:Name="DashHeartBaseText" Text="--"
                                                                    HorizontalAlignment="Right" FontSize="11" FontFamily="Consolas"
                                                                    Foreground="{StaticResource KokoCyan}"/>
                                                     </Grid>
                                                     <Grid Margin="0,2">
-                                                        <TextBlock Text="мін / макс (5хв)" FontSize="10" Foreground="{StaticResource DashMuted}"/>
+                                                        <TextBlock Text="РјС–РЅ / РјР°РєСЃ (5С…РІ)" FontSize="10" Foreground="{StaticResource DashMuted}"/>
                                                         <TextBlock x:Name="DashHeartMinMaxText" Text="-- / --"
                                                                    HorizontalAlignment="Right" FontSize="11" FontFamily="Consolas"
                                                                    Foreground="#C8C8D0"/>
                                                     </Grid>
                                                     <Grid Margin="0,2">
-                                                        <TextBlock Text="HRV (RMSSD мс)" FontSize="10" Foreground="{StaticResource DashMuted}"/>
+                                                        <TextBlock Text="HRV (RMSSD РјСЃ)" FontSize="10" Foreground="{StaticResource DashMuted}"/>
                                                         <TextBlock x:Name="DashHeartHrvText" Text="--"
                                                                    HorizontalAlignment="Right" FontSize="11" FontFamily="Consolas"
                                                                    Foreground="{StaticResource KokoGold}"/>
                                                     </Grid>
                                                     <Grid Margin="0,2">
-                                                        <TextBlock Text="ударів у буфері" FontSize="10" Foreground="{StaticResource DashMuted}"/>
+                                                        <TextBlock Text="СѓРґР°СЂС–РІ Сѓ Р±СѓС„РµСЂС–" FontSize="10" Foreground="{StaticResource DashMuted}"/>
                                                         <TextBlock x:Name="DashHeartTotalText" Text="0"
                                                                    HorizontalAlignment="Right" FontSize="11" FontFamily="Consolas"
                                                                    Foreground="{StaticResource DashMuted}"/>
@@ -1545,7 +1583,7 @@
                                                     <RowDefinition Height="18"/>
                                                 </Grid.RowDefinitions>
                                                 <Grid Grid.Row="0" Margin="0,0,0,6">
-                                                    <TextBlock Text="АКТИВНІСТЬ GIT І ТЕМП (ОСТАННІЙ ТИЖДЕНЬ)"
+                                                    <TextBlock Text="РђРљРўРР’РќР†РЎРўР¬ GIT Р† РўР•РњРџ (РћРЎРўРђРќРќР†Р™ РўРР–Р”Р•РќР¬)"
                                                                Style="{StaticResource DashSecHdr}" VerticalAlignment="Center"/>
                                                     <TextBlock x:Name="DashGitVelocityLabel" HorizontalAlignment="Right"
                                                                FontSize="8" Foreground="{StaticResource KokoPurple}" VerticalAlignment="Center"/>
@@ -1560,7 +1598,7 @@
                                                     <RowDefinition Height="Auto"/>
                                                     <RowDefinition Height="*"/>
                                                 </Grid.RowDefinitions>
-                                                <TextBlock Grid.Row="0" Text="РОЗПОДІЛ ЧАСУ (7 ДНІВ)" Style="{StaticResource DashSecHdr}"/>
+                                                <TextBlock Grid.Row="0" Text="Р РћР—РџРћР”Р†Р› Р§РђРЎРЈ (7 Р”РќР†Р’)" Style="{StaticResource DashSecHdr}"/>
                                                 <Grid Grid.Row="1">
                                                     <Grid.RowDefinitions>
                                                         <RowDefinition Height="Auto"/>
@@ -1587,16 +1625,16 @@
                                                 <RowDefinition Height="16"/>
                                             </Grid.RowDefinitions>
                                             <Grid Grid.Row="0" Margin="0,0,0,6">
-                                                <TextBlock Text="BURNDOWN CHART ПОТОЧНОГО СПРИНТУ"
+                                                <TextBlock Text="BURNDOWN CHART РџРћРўРћР§РќРћР“Рћ РЎРџР РРќРўРЈ"
                                                            Style="{StaticResource DashSecHdr}" VerticalAlignment="Center"/>
                                                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
                                                     <Ellipse Width="7" Height="7" Fill="{StaticResource KokoPurple}"
                                                              Margin="0,0,4,0" VerticalAlignment="Center"/>
-                                                    <TextBlock Text="факт" FontSize="7" Foreground="{StaticResource KokoPurple}"
+                                                    <TextBlock Text="С„Р°РєС‚" FontSize="7" Foreground="{StaticResource KokoPurple}"
                                                                VerticalAlignment="Center" Margin="0,0,10,0"/>
                                                     <Rectangle Width="8" Height="1.5" Fill="{StaticResource DashMuted}"
                                                                Margin="0,0,4,0" VerticalAlignment="Center"/>
-                                                    <TextBlock Text="ідеал" FontSize="7" Foreground="{StaticResource DashMuted}"
+                                                    <TextBlock Text="С–РґРµР°Р»" FontSize="7" Foreground="{StaticResource DashMuted}"
                                                                VerticalAlignment="Center"/>
                                                 </StackPanel>
                                             </Grid>
@@ -1624,19 +1662,19 @@
                                                     <RowDefinition Height="*"/>
                                                     <RowDefinition Height="22"/>
                                                 </Grid.RowDefinitions>
-                                                <TextBlock Grid.Row="0" Text="Повідомлень/тиждень" Style="{StaticResource DashSmallLabel}" Margin="0,0,0,2"/>
+                                                <TextBlock Grid.Row="0" Text="РџРѕРІС–РґРѕРјР»РµРЅСЊ/С‚РёР¶РґРµРЅСЊ" Style="{StaticResource DashSmallLabel}" Margin="0,0,0,2"/>
                                                 <Grid Grid.Row="1">
                                                     <Grid.ColumnDefinitions>
                                                         <ColumnDefinition Width="Auto"/>
                                                         <ColumnDefinition Width="*"/>
                                                     </Grid.ColumnDefinitions>
-                                                    <TextBlock x:Name="DashDevKpiVelocity" Text="—"
+                                                    <TextBlock x:Name="DashDevKpiVelocity" Text="вЂ”"
                                                                FontSize="24" FontWeight="Bold" Foreground="{StaticResource KokoPurple}"/>
                                                     <TextBlock x:Name="DashDevKpiVelocityDelta" Grid.Column="1"
                                                                FontSize="8" Foreground="{StaticResource KokoGreen}"
                                                                VerticalAlignment="Bottom" Margin="4,0,0,2"/>
                                                 </Grid>
-                                                <TextBlock Grid.Row="2" Text="за 7 днів" FontSize="7" Foreground="{StaticResource DashMuted}" Margin="0,1,0,0"/>
+                                                <TextBlock Grid.Row="2" Text="Р·Р° 7 РґРЅС–РІ" FontSize="7" Foreground="{StaticResource DashMuted}" Margin="0,1,0,0"/>
                                                 <Canvas Grid.Row="3" x:Name="DashDevKpiSparkVelocity" Height="22"/>
                                             </Grid>
                                         </Border>
@@ -1648,19 +1686,19 @@
                                                     <RowDefinition Height="*"/>
                                                     <RowDefinition Height="22"/>
                                                 </Grid.RowDefinitions>
-                                                <TextBlock Grid.Row="0" Text="Пік активності" Style="{StaticResource DashSmallLabel}" Margin="0,0,0,2"/>
+                                                <TextBlock Grid.Row="0" Text="РџС–Рє Р°РєС‚РёРІРЅРѕСЃС‚С–" Style="{StaticResource DashSmallLabel}" Margin="0,0,0,2"/>
                                                 <Grid Grid.Row="1">
                                                     <Grid.ColumnDefinitions>
                                                         <ColumnDefinition Width="Auto"/>
                                                         <ColumnDefinition Width="*"/>
                                                     </Grid.ColumnDefinitions>
-                                                    <TextBlock x:Name="DashDevKpiFocus" Text="—"
+                                                    <TextBlock x:Name="DashDevKpiFocus" Text="вЂ”"
                                                                FontSize="24" FontWeight="Bold" Foreground="{StaticResource KokoCyan}"/>
                                                     <TextBlock x:Name="DashDevKpiFocusDelta" Grid.Column="1"
                                                                FontSize="8" Foreground="{StaticResource DashMuted}"
                                                                VerticalAlignment="Bottom" Margin="4,0,0,2"/>
                                                 </Grid>
-                                                <TextBlock Grid.Row="2" Text="година доби" FontSize="7" Foreground="{StaticResource DashMuted}" Margin="0,1,0,0"/>
+                                                <TextBlock Grid.Row="2" Text="РіРѕРґРёРЅР° РґРѕР±Рё" FontSize="7" Foreground="{StaticResource DashMuted}" Margin="0,1,0,0"/>
                                                 <Canvas Grid.Row="3" x:Name="DashDevKpiSparkFocus" Height="22"/>
                                             </Grid>
                                         </Border>
@@ -1672,19 +1710,19 @@
                                                     <RowDefinition Height="*"/>
                                                     <RowDefinition Height="22"/>
                                                 </Grid.RowDefinitions>
-                                                <TextBlock Grid.Row="0" Text="Підтверджені факти" Style="{StaticResource DashSmallLabel}" Margin="0,0,0,2"/>
+                                                <TextBlock Grid.Row="0" Text="РџС–РґС‚РІРµСЂРґР¶РµРЅС– С„Р°РєС‚Рё" Style="{StaticResource DashSmallLabel}" Margin="0,0,0,2"/>
                                                 <Grid Grid.Row="1">
                                                     <Grid.ColumnDefinitions>
                                                         <ColumnDefinition Width="Auto"/>
                                                         <ColumnDefinition Width="*"/>
                                                     </Grid.ColumnDefinitions>
-                                                    <TextBlock x:Name="DashDevKpiCoverage" Text="—"
+                                                    <TextBlock x:Name="DashDevKpiCoverage" Text="вЂ”"
                                                                FontSize="24" FontWeight="Bold" Foreground="{StaticResource KokoGreen}"/>
                                                     <TextBlock x:Name="DashDevKpiCoverageDelta" Grid.Column="1"
                                                                FontSize="8" Foreground="{StaticResource DashMuted}"
                                                                VerticalAlignment="Bottom" Margin="4,0,0,2"/>
                                                 </Grid>
-                                                <TextBlock Grid.Row="2" Text="довіра пам'яті" FontSize="7" Foreground="{StaticResource DashMuted}" Margin="0,1,0,0"/>
+                                                <TextBlock Grid.Row="2" Text="РґРѕРІС–СЂР° РїР°Рј'СЏС‚С–" FontSize="7" Foreground="{StaticResource DashMuted}" Margin="0,1,0,0"/>
                                                 <Canvas Grid.Row="3" x:Name="DashDevKpiSparkCoverage" Height="22"/>
                                             </Grid>
                                         </Border>
@@ -1696,19 +1734,19 @@
                                                     <RowDefinition Height="*"/>
                                                     <RowDefinition Height="22"/>
                                                 </Grid.RowDefinitions>
-                                                <TextBlock Grid.Row="0" Text="Виявлені патерни" Style="{StaticResource DashSmallLabel}" Margin="0,0,0,2"/>
+                                                <TextBlock Grid.Row="0" Text="Р’РёСЏРІР»РµРЅС– РїР°С‚РµСЂРЅРё" Style="{StaticResource DashSmallLabel}" Margin="0,0,0,2"/>
                                                 <Grid Grid.Row="1">
                                                     <Grid.ColumnDefinitions>
                                                         <ColumnDefinition Width="Auto"/>
                                                         <ColumnDefinition Width="*"/>
                                                     </Grid.ColumnDefinitions>
-                                                    <TextBlock x:Name="DashDevKpiBugs" Text="—"
+                                                    <TextBlock x:Name="DashDevKpiBugs" Text="вЂ”"
                                                                FontSize="24" FontWeight="Bold" Foreground="{StaticResource KokoRed}"/>
                                                     <TextBlock x:Name="DashDevKpiBugsDelta" Grid.Column="1"
                                                                FontSize="8" Foreground="{StaticResource DashMuted}"
                                                                VerticalAlignment="Bottom" Margin="4,0,0,2"/>
                                                 </Grid>
-                                                <TextBlock Grid.Row="2" Text="усього" FontSize="7" Foreground="{StaticResource DashMuted}" Margin="0,1,0,0"/>
+                                                <TextBlock Grid.Row="2" Text="СѓСЃСЊРѕРіРѕ" FontSize="7" Foreground="{StaticResource DashMuted}" Margin="0,1,0,0"/>
                                                 <Canvas Grid.Row="3" x:Name="DashDevKpiSparkBugs" Height="22"/>
                                             </Grid>
                                         </Border>
@@ -1724,17 +1762,17 @@
                                                 <RowDefinition Height="Auto"/>
                                                 <RowDefinition Height="*"/>
                                             </Grid.RowDefinitions>
-                                            <TextBlock Grid.Row="0" Text="ПАМ'ЯТЬ — ФАКТИ"
+                                            <TextBlock Grid.Row="0" Text="РџРђРњ'РЇРўР¬ вЂ” Р¤РђРљРўР"
                                                        Style="{StaticResource DashSecHdr}"/>
                                             <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,10">
                                                 <TextBlock x:Name="DashMemTotalText" Text="0"
                                                            FontSize="22" FontWeight="SemiBold"
                                                            Foreground="{DynamicResource AccentBase}"/>
-                                                <TextBlock Text="всього" FontSize="9" Foreground="#5A5A6E"
+                                                <TextBlock Text="РІСЃСЊРѕРіРѕ" FontSize="9" Foreground="#5A5A6E"
                                                            VerticalAlignment="Bottom" Margin="6,0,16,4"/>
                                                 <TextBlock x:Name="DashMemConfirmedText" Text="0"
-                                                           FontSize="22" FontWeight="SemiBold" Foreground="#22D3EE"/>
-                                                <TextBlock Text="підтверджено" FontSize="9" Foreground="#5A5A6E"
+                                                           FontSize="22" FontWeight="SemiBold" Foreground="#68E6D6"/>
+                                                <TextBlock Text="РїС–РґС‚РІРµСЂРґР¶РµРЅРѕ" FontSize="9" Foreground="#5A5A6E"
                                                            VerticalAlignment="Bottom" Margin="6,0,0,4"/>
                                             </StackPanel>
                                             <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto">
@@ -1773,7 +1811,7 @@
                                                 <RowDefinition Height="Auto"/>
                                                 <RowDefinition Height="*"/>
                                             </Grid.RowDefinitions>
-                                            <TextBlock Grid.Row="0" Text="СИСТЕМА"
+                                            <TextBlock Grid.Row="0" Text="РЎРРЎРўР•РњРђ"
                                                        Style="{StaticResource DashSecHdr}"/>
                                             <Grid Grid.Row="1">
                                                 <Grid.ColumnDefinitions>
@@ -1790,8 +1828,8 @@
                                                         BorderBrush="#1A1A2A" BorderThickness="1" CornerRadius="6"
                                                         Padding="12" Margin="0,0,5,5">
                                                     <StackPanel>
-                                                        <TextBlock Text="МІНІДОДАТОК" FontSize="9" Foreground="#5A5A6E"/>
-                                                        <TextBlock x:Name="DashSysMiniAppStatus" Text="—"
+                                                        <TextBlock Text="РњР†РќР†Р”РћР”РђРўРћРљ" FontSize="9" Foreground="#5A5A6E"/>
+                                                        <TextBlock x:Name="DashSysMiniAppStatus" Text="вЂ”"
                                                                    FontSize="13" FontWeight="SemiBold"
                                                                    Foreground="{DynamicResource AccentBase}"
                                                                    Margin="0,4,0,0"/>
@@ -1805,9 +1843,9 @@
                                                         Padding="12" Margin="5,0,0,5">
                                                     <StackPanel>
                                                         <TextBlock Text="TUNNEL" FontSize="9" Foreground="#5A5A6E"/>
-                                                        <TextBlock x:Name="DashSysTunnelStatus" Text="—"
+                                                        <TextBlock x:Name="DashSysTunnelStatus" Text="вЂ”"
                                                                    FontSize="13" FontWeight="SemiBold"
-                                                                   Foreground="#22D3EE" Margin="0,4,0,0"/>
+                                                                   Foreground="#68E6D6" Margin="0,4,0,0"/>
                                                     </StackPanel>
                                                 </Border>
                                                 <Border Grid.Row="1" Grid.Column="0" Background="#0E0E18"
@@ -1815,7 +1853,7 @@
                                                         Padding="12" Margin="0,0,5,5">
                                                     <StackPanel>
                                                         <TextBlock Text="UPTIME" FontSize="9" Foreground="#5A5A6E"/>
-                                                        <TextBlock x:Name="DashSysUptime" Text="—"
+                                                        <TextBlock x:Name="DashSysUptime" Text="вЂ”"
                                                                    FontSize="13" FontWeight="SemiBold"
                                                                    Foreground="#E0E0EE" Margin="0,4,0,0"/>
                                                     </StackPanel>
@@ -1825,7 +1863,7 @@
                                                         Padding="12" Margin="5,0,0,5">
                                                     <StackPanel>
                                                         <TextBlock Text="MEMORY (RAM)" FontSize="9" Foreground="#5A5A6E"/>
-                                                        <TextBlock x:Name="DashSysRam" Text="—"
+                                                        <TextBlock x:Name="DashSysRam" Text="вЂ”"
                                                                    FontSize="13" FontWeight="SemiBold"
                                                                    Foreground="#E0E0EE" Margin="0,4,0,0"/>
                                                     </StackPanel>
@@ -1855,7 +1893,7 @@
 
                     </Grid>
 
-                    <!-- ╔══════════ MEMORY TAB ══════════╗ -->
+                    <!-- в•”в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ MEMORY TAB в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•— -->
                     <Grid x:Name="MemoryTab" Visibility="Collapsed" Background="Transparent"
                           SizeChanged="MemoryTab_SizeChanged">
                         <Grid.RowDefinitions>
@@ -1869,7 +1907,7 @@
                             <Grid>
                                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                     <TextBlock Text="// MEMORY CORTEX" FontSize="12" FontFamily="Consolas" FontWeight="Bold"
-                                               Foreground="#FF2D75" VerticalAlignment="Center"/>
+                                               Foreground="#E25A6A" VerticalAlignment="Center"/>
                                     <Border Background="{DynamicResource AccentNavBg}" CornerRadius="6" Padding="10,4" Margin="14,0,0,0">
                                         <TextBlock Text="BRAIN MAP" FontSize="10" FontFamily="Consolas" FontWeight="Bold"
                                                    Foreground="{DynamicResource AccentTextLight}"/>
@@ -1905,7 +1943,7 @@
                                     <UniformGrid Grid.Row="1" Columns="2" Margin="0,0,0,12">
                                         <StackPanel Margin="0,0,10,8"><TextBlock Text="neurons" FontSize="9" Foreground="{DynamicResource AccentDim}"/><TextBlock x:Name="MemTabTotalText" Text="?" FontSize="18" FontFamily="Consolas" FontWeight="Bold" Foreground="{DynamicResource AccentTextLight}"/></StackPanel>
                                         <StackPanel Margin="0,0,0,8"><TextBlock Text="active" FontSize="9" Foreground="{DynamicResource AccentDim}"/><TextBlock x:Name="MemTabConfirmedText" Text="?" FontSize="18" FontFamily="Consolas" FontWeight="Bold" Foreground="{DynamicResource Brush_Ok}"/></StackPanel>
-                                        <StackPanel Margin="0,0,10,8"><TextBlock Text="priority" FontSize="9" Foreground="{DynamicResource AccentDim}"/><TextBlock x:Name="MemTabHighImpText" Text="?" FontSize="18" FontFamily="Consolas" FontWeight="Bold" Foreground="#FF2D75"/></StackPanel>
+                                        <StackPanel Margin="0,0,10,8"><TextBlock Text="priority" FontSize="9" Foreground="{DynamicResource AccentDim}"/><TextBlock x:Name="MemTabHighImpText" Text="?" FontSize="18" FontFamily="Consolas" FontWeight="Bold" Foreground="#E25A6A"/></StackPanel>
                                         <StackPanel Margin="0,0,0,8"><TextBlock Text="clusters" FontSize="9" Foreground="{DynamicResource AccentDim}"/><TextBlock x:Name="MemTabCatCountText" Text="?" FontSize="18" FontFamily="Consolas" FontWeight="Bold" Foreground="{DynamicResource AccentBase}"/></StackPanel>
                                     </UniformGrid>
                                     <StackPanel Grid.Row="2">
@@ -1931,7 +1969,7 @@
                                                 <StackPanel Margin="0,0,34,0"><TextBlock Text="ACTIVE QUERY" FontSize="8" FontFamily="Consolas" Foreground="{DynamicResource AccentDim}"/><TextBlock x:Name="MemoryActiveQueryText" Text="&quot;memory cortex&quot;" FontSize="11" FontFamily="Consolas" Foreground="{DynamicResource AccentBase}"/></StackPanel>
                                                 <StackPanel><TextBlock Text="MODE" FontSize="8" FontFamily="Consolas" Foreground="{DynamicResource AccentDim}"/><TextBlock Text="associative thinking" FontSize="11" FontFamily="Consolas" Foreground="{DynamicResource AccentText}"/></StackPanel>
                                             </StackPanel>
-                                            <TextBlock Grid.Column="1" Text="LIVE" FontSize="9" FontFamily="Consolas" Foreground="#FF2D75" VerticalAlignment="Center"/>
+                                            <TextBlock Grid.Column="1" Text="LIVE" FontSize="9" FontFamily="Consolas" Foreground="#E25A6A" VerticalAlignment="Center"/>
                                         </Grid>
                                     </Border>
                                     <skia:SKElement x:Name="MemoryCortexSkia" Grid.Row="1" ClipToBounds="True"
@@ -1939,9 +1977,9 @@
                                                     MouseLeftButtonDown="MemoryCortexSkia_MouseLeftButtonDown"/>
                                     <Border Grid.Row="2" BorderBrush="{DynamicResource AccentBgBorder2}" BorderThickness="0,1,0,0" Padding="12,6">
                                         <StackPanel Orientation="Horizontal">
-                                            <TextBlock Text="person" Foreground="#FF2D75" FontSize="9" FontFamily="Consolas" Margin="0,0,18,0"/>
-                                            <TextBlock Text="project" Foreground="#29B6F6" FontSize="9" FontFamily="Consolas" Margin="0,0,18,0"/>
-                                            <TextBlock Text="world / lore" Foreground="#00BFA5" FontSize="9" FontFamily="Consolas" Margin="0,0,18,0"/>
+                                            <TextBlock Text="person" Foreground="#E25A6A" FontSize="9" FontFamily="Consolas" Margin="0,0,18,0"/>
+                                            <TextBlock Text="project" Foreground="#76B7E8" FontSize="9" FontFamily="Consolas" Margin="0,0,18,0"/>
+                                            <TextBlock Text="world / lore" Foreground="#68E6D6" FontSize="9" FontFamily="Consolas" Margin="0,0,18,0"/>
                                             <TextBlock Text="ideas" Foreground="{DynamicResource AccentBase}" FontSize="9" FontFamily="Consolas" Margin="0,0,18,0"/>
                                             <TextBlock Text="system" Foreground="#B0B0C0" FontSize="9" FontFamily="Consolas"/>
                                         </StackPanel>
@@ -1951,11 +1989,11 @@
 
                             <StackPanel Grid.Column="4">
                                 <Border Background="{DynamicResource AccentBgCard}" BorderBrush="{DynamicResource AccentBgBorder2}" BorderThickness="1" CornerRadius="10" Padding="14" Margin="0,0,0,10">
-                                    <StackPanel><TextBlock Text="MEMORY INSPECTOR" FontSize="9" FontFamily="Consolas" Foreground="{DynamicResource AccentDim}" Margin="0,0,0,10"/><TextBlock x:Name="MemoryInspectorTitle" Text="select node" FontSize="16" FontWeight="SemiBold" Foreground="{DynamicResource AccentTextLight}" TextWrapping="Wrap"/><TextBlock x:Name="MemoryInspectorMeta" Text="type -- / importance -- / confirmations --" FontSize="10" FontFamily="Consolas" Foreground="{DynamicResource AccentDim}" TextWrapping="Wrap" Margin="0,8,0,0"/><ProgressBar x:Name="MemoryInspectorImportanceBar" Height="4" Minimum="0" Maximum="100" Value="0" Foreground="#FF2D75" Background="{DynamicResource AccentBgDarker}" Margin="0,10,0,0"/></StackPanel>
+                                    <StackPanel><TextBlock Text="MEMORY INSPECTOR" FontSize="9" FontFamily="Consolas" Foreground="{DynamicResource AccentDim}" Margin="0,0,0,10"/><TextBlock x:Name="MemoryInspectorTitle" Text="select node" FontSize="16" FontWeight="SemiBold" Foreground="{DynamicResource AccentTextLight}" TextWrapping="Wrap"/><TextBlock x:Name="MemoryInspectorMeta" Text="type -- / importance -- / confirmations --" FontSize="10" FontFamily="Consolas" Foreground="{DynamicResource AccentDim}" TextWrapping="Wrap" Margin="0,8,0,0"/><ProgressBar x:Name="MemoryInspectorImportanceBar" Height="4" Minimum="0" Maximum="100" Value="0" Foreground="#E25A6A" Background="{DynamicResource AccentBgDarker}" Margin="0,10,0,0"/></StackPanel>
                                 </Border>
-                                <Border Background="{DynamicResource AccentBgCard}" BorderBrush="{DynamicResource AccentBgBorder2}" BorderThickness="1" CornerRadius="10" Padding="14" Margin="0,0,0,10"><StackPanel><TextBlock Text="LINKS" FontSize="9" FontFamily="Consolas" FontWeight="Bold" Foreground="#FF2D75" Margin="0,0,0,8"/><ItemsControl x:Name="MemoryLinksList"/></StackPanel></Border>
-                                <Border Background="{DynamicResource AccentBgCard}" BorderBrush="{DynamicResource AccentBgBorder2}" BorderThickness="1" CornerRadius="10" Padding="14" Margin="0,0,0,10"><StackPanel><TextBlock Text="ACTIVITY FEED" FontSize="9" FontFamily="Consolas" FontWeight="Bold" Foreground="#FF2D75" Margin="0,0,0,8"/><ItemsControl x:Name="MemoryActivityFeed"/></StackPanel></Border>
-                                <Border Background="{DynamicResource AccentBgCard}" BorderBrush="{DynamicResource AccentBgBorder2}" BorderThickness="1" CornerRadius="10" Padding="14"><StackPanel><TextBlock Text="THOUGHT FLOW" FontSize="9" FontFamily="Consolas" FontWeight="Bold" Foreground="#FF2D75" Margin="0,0,0,8"/><ItemsControl x:Name="MemoryThoughtFlow"/></StackPanel></Border>
+                                <Border Background="{DynamicResource AccentBgCard}" BorderBrush="{DynamicResource AccentBgBorder2}" BorderThickness="1" CornerRadius="10" Padding="14" Margin="0,0,0,10"><StackPanel><TextBlock Text="LINKS" FontSize="9" FontFamily="Consolas" FontWeight="Bold" Foreground="#E25A6A" Margin="0,0,0,8"/><ItemsControl x:Name="MemoryLinksList"/></StackPanel></Border>
+                                <Border Background="{DynamicResource AccentBgCard}" BorderBrush="{DynamicResource AccentBgBorder2}" BorderThickness="1" CornerRadius="10" Padding="14" Margin="0,0,0,10"><StackPanel><TextBlock Text="ACTIVITY FEED" FontSize="9" FontFamily="Consolas" FontWeight="Bold" Foreground="#E25A6A" Margin="0,0,0,8"/><ItemsControl x:Name="MemoryActivityFeed"/></StackPanel></Border>
+                                <Border Background="{DynamicResource AccentBgCard}" BorderBrush="{DynamicResource AccentBgBorder2}" BorderThickness="1" CornerRadius="10" Padding="14"><StackPanel><TextBlock Text="THOUGHT FLOW" FontSize="9" FontFamily="Consolas" FontWeight="Bold" Foreground="#E25A6A" Margin="0,0,0,8"/><ItemsControl x:Name="MemoryThoughtFlow"/></StackPanel></Border>
                             </StackPanel>
                         </Grid>
 
@@ -1970,7 +2008,7 @@
                         </Border>
                     </Grid>
 
-                    <!-- ╔══════════ PULSE TAB ══════════╗ -->
+                    <!-- в•”в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ PULSE TAB в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•— -->
                     <Grid x:Name="PulseTab" Visibility="Collapsed" Background="Transparent"
                           SizeChanged="PulseTab_SizeChanged">
                         <Grid.RowDefinitions>
@@ -1987,24 +2025,24 @@
                                 BorderBrush="{DynamicResource AccentBgBorder2}" BorderThickness="0,0,0,1" Padding="20,12">
                             <Grid>
                                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                    <TextBlock Text="// GALAXY WATCH LINK" FontSize="12" FontFamily="Consolas" FontWeight="Bold"
-                                               Foreground="#FF4D6D" VerticalAlignment="Center"/>
-                                    <TextBlock Text=" · CARDIAC · NEURAL · INTERFACE" FontSize="9" FontFamily="Consolas"
+                                    <TextBlock Text="GALAXY WATCH LINK" FontSize="12" FontFamily="Consolas" FontWeight="Bold"
+                                               Foreground="{DynamicResource AccentBase}" VerticalAlignment="Center"/>
+                                    <TextBlock Text=" / verified cardiac telemetry" FontSize="9" FontFamily="Consolas"
                                                Foreground="{DynamicResource AccentDim}" VerticalAlignment="Center" Margin="8,0,0,0"/>
                                 </StackPanel>
                                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
-                                    <TextBlock x:Name="PulseTabBpmBig" Text="—"
+                                    <TextBlock x:Name="PulseTabBpmBig" Text="--"
                                                FontSize="28" FontWeight="Bold" FontFamily="Consolas"
-                                               Foreground="#FF4D6D" VerticalAlignment="Center">
+                                               Foreground="{DynamicResource RgbRedBrush}" VerticalAlignment="Center">
                                         <TextBlock.Effect>
-                                            <DropShadowEffect Color="#FF4D6D" BlurRadius="12" ShadowDepth="0" Opacity="0.6"/>
+                                            <DropShadowEffect Color="#E25A6A" BlurRadius="8" ShadowDepth="0" Opacity="0.28"/>
                                         </TextBlock.Effect>
                                     </TextBlock>
                                     <StackPanel VerticalAlignment="Center" Margin="6,0,0,0">
-                                        <TextBlock Text="BPM · LIVE" FontSize="9" FontFamily="Consolas"
+                                        <TextBlock Text="BPM / VERIFIED" FontSize="9" FontFamily="Consolas"
                                                    Foreground="{DynamicResource AccentDim}"/>
                                         <TextBlock x:Name="PulseTabStateLabel" Text="MONITORING"
-                                                   FontSize="8" FontFamily="Consolas" Foreground="#FF4D6D"/>
+                                                   FontSize="8" FontFamily="Consolas" Foreground="{DynamicResource RgbRedBrush}"/>
                                     </StackPanel>
                                 </StackPanel>
                             </Grid>
@@ -2015,7 +2053,7 @@
                                 BorderBrush="{DynamicResource AccentBgBorder2}" BorderThickness="1" CornerRadius="8"
                                 Padding="20,10" Margin="20,12,20,0">
                             <Grid>
-                                <TextBlock Text="ECG" FontSize="8" FontFamily="Consolas" Foreground="#FF4D6D"
+                                <TextBlock Text="ECG" FontSize="8" FontFamily="Consolas" Foreground="{DynamicResource RgbRedBrush}"
                                            VerticalAlignment="Top" HorizontalAlignment="Left" Opacity="0.6"/>
                                 <Canvas x:Name="PulseEcgCanvas" ClipToBounds="True"/>
                             </Grid>
@@ -2034,8 +2072,8 @@
                                     Padding="12,10" Margin="0,0,6,0">
                                 <StackPanel>
                                     <TextBlock Text="CURRENT" FontSize="8" FontFamily="Consolas" Foreground="{DynamicResource AccentDim}"/>
-                                    <TextBlock x:Name="PulseTabCurText" Text="—" FontSize="20" FontWeight="Bold"
-                                               Foreground="#FF4D6D"/>
+                                    <TextBlock x:Name="PulseTabCurText" Text="вЂ”" FontSize="20" FontWeight="Bold"
+                                               Foreground="{DynamicResource RgbRedBrush}"/>
                                     <TextBlock Text="bpm" FontSize="8" Foreground="{DynamicResource AccentDim}"/>
                                 </StackPanel>
                             </Border>
@@ -2044,7 +2082,7 @@
                                     Padding="12,10" Margin="0,0,6,0">
                                 <StackPanel>
                                     <TextBlock Text="BASELINE" FontSize="8" FontFamily="Consolas" Foreground="{DynamicResource AccentDim}"/>
-                                    <TextBlock x:Name="PulseTabBaseText" Text="—" FontSize="20" FontWeight="Bold"
+                                    <TextBlock x:Name="PulseTabBaseText" Text="вЂ”" FontSize="20" FontWeight="Bold"
                                                Foreground="{DynamicResource Brush_Info}"/>
                                     <TextBlock Text="bpm" FontSize="8" Foreground="{DynamicResource AccentDim}"/>
                                 </StackPanel>
@@ -2054,7 +2092,7 @@
                                     Padding="12,10" Margin="0,0,6,0">
                                 <StackPanel>
                                     <TextBlock Text="HRV RMSSD" FontSize="8" FontFamily="Consolas" Foreground="{DynamicResource AccentDim}"/>
-                                    <TextBlock x:Name="PulseTabHrvText" Text="—" FontSize="20" FontWeight="Bold"
+                                    <TextBlock x:Name="PulseTabHrvText" Text="вЂ”" FontSize="20" FontWeight="Bold"
                                                Foreground="{DynamicResource AccentBase}"/>
                                     <TextBlock Text="ms" FontSize="8" Foreground="{DynamicResource AccentDim}"/>
                                 </StackPanel>
@@ -2064,7 +2102,7 @@
                                     Padding="12,10">
                                 <StackPanel>
                                     <TextBlock Text="MIN / MAX" FontSize="8" FontFamily="Consolas" Foreground="{DynamicResource AccentDim}"/>
-                                    <TextBlock x:Name="PulseTabMinMaxText" Text="— / —" FontSize="16" FontWeight="Bold"
+                                    <TextBlock x:Name="PulseTabMinMaxText" Text="вЂ” / вЂ”" FontSize="16" FontWeight="Bold"
                                                Foreground="{DynamicResource AccentText}"/>
                                     <TextBlock Text="5 min range" FontSize="8" Foreground="{DynamicResource AccentDim}"/>
                                 </StackPanel>
@@ -2085,7 +2123,7 @@
                                 <StackPanel>
                                     <TextBlock Text="LINK" FontSize="8" FontFamily="Consolas" Foreground="{DynamicResource AccentDim}"/>
                                     <TextBlock x:Name="PulseBridgeLinkText" Text="WAITING" FontSize="15" FontWeight="Bold"
-                                               FontFamily="Consolas" Foreground="#FFB020" TextWrapping="Wrap"/>
+                                               FontFamily="Consolas" Foreground="{DynamicResource Brush_Warn}" TextWrapping="Wrap"/>
                                     <TextBlock x:Name="PulseBridgeReasonText" Text="watch/app route unknown" FontSize="9"
                                                FontFamily="Consolas" Foreground="{DynamicResource AccentDim}" TextWrapping="Wrap"/>
                                 </StackPanel>
@@ -2097,7 +2135,7 @@
                                     <TextBlock Text="WATCH APP" FontSize="8" FontFamily="Consolas" Foreground="{DynamicResource AccentDim}"/>
                                     <TextBlock x:Name="PulseBridgeWatchText" Text="not paired" FontSize="13" FontWeight="Bold"
                                                FontFamily="Consolas" Foreground="{DynamicResource AccentText}" TextWrapping="Wrap"/>
-                                    <TextBlock x:Name="PulseBridgeWatchDetailText" Text="poll -- · ack --" FontSize="9"
+                                    <TextBlock x:Name="PulseBridgeWatchDetailText" Text="poll -- В· ack --" FontSize="9"
                                                FontFamily="Consolas" Foreground="{DynamicResource AccentDim}" TextWrapping="Wrap"/>
                                 </StackPanel>
                             </Border>
@@ -2108,7 +2146,7 @@
                                     <TextBlock Text="DESKTOP BRIDGE" FontSize="8" FontFamily="Consolas" Foreground="{DynamicResource AccentDim}"/>
                                     <TextBlock x:Name="PulseBridgeDesktopText" Text="server --" FontSize="13" FontWeight="Bold"
                                                FontFamily="Consolas" Foreground="{DynamicResource AccentText}" TextWrapping="Wrap"/>
-                                    <TextBlock x:Name="PulseBridgeDesktopDetailText" Text="samples 0 · auth 0" FontSize="9"
+                                    <TextBlock x:Name="PulseBridgeDesktopDetailText" Text="samples 0 В· auth 0" FontSize="9"
                                                FontFamily="Consolas" Foreground="{DynamicResource AccentDim}" TextWrapping="Wrap"/>
                                 </StackPanel>
                             </Border>
@@ -2161,25 +2199,20 @@
                                 </StackPanel>
                                 <WrapPanel Grid.Column="3" VerticalAlignment="Center">
                                     <Button Content="Save + Restart" Click="PulseBridgeSaveRestart_Click"
-                                            Background="#1F2937" BorderBrush="#374151" BorderThickness="1"
-                                            Foreground="#E5E7EB" FontFamily="Consolas" FontSize="11"
-                                            Cursor="Hand" Padding="10,6" Margin="0,0,6,6"/>
+                                            Style="{StaticResource BtnGhost}" FontFamily="Consolas" FontSize="11"
+                                            Padding="10,6" Margin="0,0,6,6"/>
                                     <Button Content="Copy Setup" Click="PulseBridgeCopySetup_Click"
-                                            Background="#1F2937" BorderBrush="#374151" BorderThickness="1"
-                                            Foreground="#E5E7EB" FontFamily="Consolas" FontSize="11"
-                                            Cursor="Hand" Padding="10,6" Margin="0,0,6,6"/>
+                                            Style="{StaticResource BtnGhost}" FontFamily="Consolas" FontSize="11"
+                                            Padding="10,6" Margin="0,0,6,6"/>
                                     <Button Content="Fix Firewall" Click="PulseBridgeFixFirewall_Click"
-                                            Background="#1F2937" BorderBrush="#374151" BorderThickness="1"
-                                            Foreground="#E5E7EB" FontFamily="Consolas" FontSize="11"
-                                            Cursor="Hand" Padding="10,6" Margin="0,0,6,6"/>
+                                            Style="{StaticResource BtnGhost}" FontFamily="Consolas" FontSize="11"
+                                            Padding="10,6" Margin="0,0,6,6"/>
                                     <Button Content="Refresh Pair" Click="PulseBridgeRefreshPair_Click"
-                                            Background="#1F2937" BorderBrush="#374151" BorderThickness="1"
-                                            Foreground="#E5E7EB" FontFamily="Consolas" FontSize="11"
-                                            Cursor="Hand" Padding="10,6" Margin="0,0,6,6"/>
+                                            Style="{StaticResource BtnGhost}" FontFamily="Consolas" FontSize="11"
+                                            Padding="10,6" Margin="0,0,6,6"/>
                                     <Button Content="Restart Watch" Click="PulseBridgeRestartWatch_Click"
-                                            Background="#1F2937" BorderBrush="#374151" BorderThickness="1"
-                                            Foreground="#E5E7EB" FontFamily="Consolas" FontSize="11"
-                                            Cursor="Hand" Padding="10,6" Margin="0,0,0,6"/>
+                                            Style="{StaticResource BtnGhost}" FontFamily="Consolas" FontSize="11"
+                                            Padding="10,6" Margin="0,0,0,6"/>
                                 </WrapPanel>
                             </Grid>
                         </Border>
@@ -2204,7 +2237,7 @@
                                         <RowDefinition Height="*"/>
                                     </Grid.RowDefinitions>
                                     <TextBlock Text="VITAL LOG" FontSize="9" FontFamily="Consolas" FontWeight="Bold"
-                                               Foreground="#FF4D6D" Margin="0,0,0,10"/>
+                                               Foreground="{DynamicResource RgbGreenBrush}" Margin="0,0,0,10"/>
                                     <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
                                         <ItemsControl x:Name="PulseVitalLog">
                                             <ItemsControl.ItemTemplate>
@@ -2217,7 +2250,7 @@
                                                         <TextBlock Text="{Binding TimeStr}" FontSize="10" FontFamily="Consolas"
                                                                    Foreground="{DynamicResource AccentDim}" TextTrimming="CharacterEllipsis"/>
                                                         <TextBlock Grid.Column="1" Text="{Binding BpmStr}" FontSize="10" FontFamily="Consolas"
-                                                                   Foreground="#FF4D6D" TextWrapping="Wrap"
+                                                                   Foreground="{DynamicResource RgbRedBrush}" TextWrapping="Wrap"
                                                                    HorizontalAlignment="Stretch" TextAlignment="Right"/>
                                                     </Grid>
                                                 </DataTemplate>
@@ -2235,8 +2268,8 @@
                                         <RowDefinition Height="*"/>
                                         <RowDefinition Height="54"/>
                                     </Grid.RowDefinitions>
-                                    <TextBlock Text="HEART RATE · LIVE WINDOW" FontSize="9" FontFamily="Consolas" FontWeight="Bold"
-                                               Foreground="#FF4D6D" Margin="0,0,0,8"/>
+                                    <TextBlock Text="HEART RATE В· LIVE WINDOW" FontSize="9" FontFamily="Consolas" FontWeight="Bold"
+                                               Foreground="{DynamicResource RgbGreenBrush}" Margin="0,0,0,8"/>
                                     <Canvas x:Name="PulseHr24Canvas" Grid.Row="1" ClipToBounds="True"/>
                                     <UniformGrid Grid.Row="2" Columns="4" Margin="0,10,0,0">
                                         <StackPanel>
@@ -2245,7 +2278,7 @@
                                         </StackPanel>
                                         <StackPanel>
                                             <TextBlock Text="PEAK" FontSize="8" FontFamily="Consolas" Foreground="{DynamicResource AccentDim}"/>
-                                            <TextBlock x:Name="PulsePeakText" Text="-- bpm" FontSize="13" FontFamily="Consolas" Foreground="#FF4D6D"/>
+                                            <TextBlock x:Name="PulsePeakText" Text="-- bpm" FontSize="13" FontFamily="Consolas" Foreground="{DynamicResource RgbRedBrush}"/>
                                         </StackPanel>
                                         <StackPanel>
                                             <TextBlock Text="LOWEST" FontSize="8" FontFamily="Consolas" Foreground="{DynamicResource AccentDim}"/>
@@ -2267,7 +2300,7 @@
                                         <RowDefinition Height="*"/>
                                     </Grid.RowDefinitions>
                                     <TextBlock Text="RECENT EVENTS" FontSize="9" FontFamily="Consolas" FontWeight="Bold"
-                                               Foreground="#FF4D6D" Margin="0,0,0,10"/>
+                                               Foreground="{DynamicResource RgbGreenBrush}" Margin="0,0,0,10"/>
                                     <ItemsControl x:Name="PulseRecentEvents" Grid.Row="1">
                                         <ItemsControl.ItemTemplate>
                                             <DataTemplate>
@@ -2298,20 +2331,20 @@
                                             <ColumnDefinition Width="Auto"/>
                                         </Grid.ColumnDefinitions>
                                         <StackPanel>
-                                            <TextBlock Text="PULSE" FontSize="9" FontFamily="Consolas" FontWeight="Bold" Foreground="#FF4D6D"/>
+                                            <TextBlock Text="WATCH PULSE" FontSize="9" FontFamily="Consolas" FontWeight="Bold" Foreground="{DynamicResource RgbGreenBrush}"/>
                                             <StackPanel Orientation="Horizontal" Margin="0,12,0,6">
                                                 <TextBlock x:Name="PulseSideBpmText" Text="--" FontSize="34" FontWeight="Bold"
-                                                           FontFamily="Consolas" Foreground="#FF4D6D"/>
+                                                           FontFamily="Consolas" Foreground="{DynamicResource RgbRedBrush}"/>
                                                 <TextBlock Text=" BPM" FontSize="11" FontFamily="Consolas"
                                                            Foreground="{DynamicResource AccentText}" VerticalAlignment="Center" Margin="6,10,0,0"/>
                                             </StackPanel>
-                                            <TextBlock x:Name="PulseSideStateText" Text="baseline · strain --"
+                                            <TextBlock x:Name="PulseSideStateText" Text="baseline В· strain --"
                                                        FontSize="9" FontFamily="Consolas" Foreground="{DynamicResource AccentDim}"/>
                                         </StackPanel>
-                                        <TextBlock Grid.Column="1" Text="♥" FontSize="42" Foreground="#FF202A"
+                                        <TextBlock Grid.Column="1" Text="в™Ґ" FontSize="42" Foreground="{DynamicResource RgbRedBrush}"
                                                    VerticalAlignment="Center" Opacity="0.82">
                                             <TextBlock.Effect>
-                                                <DropShadowEffect Color="#FF202A" BlurRadius="16" ShadowDepth="0" Opacity="0.55"/>
+                                                <DropShadowEffect Color="#E25A6A" BlurRadius="16" ShadowDepth="0" Opacity="0.55"/>
                                             </TextBlock.Effect>
                                         </TextBlock>
                                     </Grid>
@@ -2321,14 +2354,14 @@
                                         Padding="14" Margin="0,0,0,12">
                                     <StackPanel>
                                         <TextBlock Text="KOKONOE MOOD" FontSize="9" FontFamily="Consolas" FontWeight="Bold"
-                                                   Foreground="#FF4D6D" Margin="0,0,0,10"/>
+                                                   Foreground="{DynamicResource RgbGreenBrush}" Margin="0,0,0,10"/>
                                         <TextBlock x:Name="PulseMoodMainText" Text="CALM" FontSize="18" FontWeight="Bold"
                                                    Foreground="{DynamicResource AccentTextLight}"/>
-                                        <TextBlock x:Name="PulseMoodDetailText" Text="annoyed -- · curiosity -- · trust --"
+                                        <TextBlock x:Name="PulseMoodDetailText" Text="annoyed -- В· curiosity -- В· trust --"
                                                    FontSize="9" FontFamily="Consolas" Foreground="{DynamicResource AccentDim}"
                                                    TextWrapping="Wrap" Margin="0,4,0,10"/>
                                         <ProgressBar x:Name="PulseMoodBar" Height="4" Minimum="0" Maximum="100" Value="50"
-                                                     Foreground="#FF4D6D" Background="{DynamicResource AccentBgDarker}"/>
+                                                     Foreground="{DynamicResource RgbRedBrush}" Background="{DynamicResource AccentBgDarker}"/>
                                     </StackPanel>
                                 </Border>
                                 <Border Background="{DynamicResource AccentBgCard}"
@@ -2336,8 +2369,8 @@
                                         Padding="14">
                                     <StackPanel>
                                         <TextBlock Text="SYSTEM STATUS" FontSize="9" FontFamily="Consolas" FontWeight="Bold"
-                                                   Foreground="#FF4D6D" Margin="0,0,0,10"/>
-                                        <TextBlock x:Name="PulseSystemStatusText" Text="core online · memory synced · telemetry recording"
+                                                   Foreground="{DynamicResource RgbGreenBrush}" Margin="0,0,0,10"/>
+                                        <TextBlock x:Name="PulseSystemStatusText" Text="core online В· memory synced В· telemetry recording"
                                                    FontSize="10" FontFamily="Consolas" Foreground="{DynamicResource AccentText}"
                                                    TextWrapping="Wrap"/>
                                     </StackPanel>
@@ -2346,7 +2379,7 @@
                         </Grid>
                     </Grid>
 
-                    <!-- ╔══════════ VOICE TAB ══════════╗ -->
+                    <!-- в•”в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ VOICE TAB в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•— -->
                     <Grid x:Name="VoiceTab" Visibility="Collapsed" Background="Transparent">
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto"/>
@@ -2368,7 +2401,7 @@
                                     <StackPanel>
                                         <TextBlock Text="WHISPER ASR" FontSize="9" FontFamily="Consolas"
                                                    Foreground="{DynamicResource AccentDim}" Margin="0,0,0,8"/>
-                                        <Button x:Name="VoiceRecordBtn" Content="● REC"
+                                        <Button x:Name="VoiceRecordBtn" Content="в—Џ REC"
                                                 Style="{StaticResource BtnPrimary}" Width="120" Padding="0,10"
                                                 HorizontalAlignment="Left" Click="Record_Click"/>
                                         <Button x:Name="VoiceTestMicBtn" Content="TEST MIC"
@@ -2378,9 +2411,81 @@
                                                      Foreground="{DynamicResource AccentBase}"
                                                      Background="{DynamicResource AccentBgDarker}"
                                                      Margin="0,10,0,0"/>
-                                        <TextBlock Text="Hold to record · release to transcribe via Whisper"
+                                        <TextBlock Text="Hold to record В· release to transcribe via Whisper"
                                                    FontSize="10" FontFamily="Consolas" Foreground="{DynamicResource AccentDim}"
                                                    Margin="0,8,0,0" TextWrapping="Wrap"/>
+                                    </StackPanel>
+                                </Border>
+                                <Border Background="{DynamicResource AccentBgCard}"
+                                        BorderBrush="{DynamicResource AccentBgBorder2}" BorderThickness="1" CornerRadius="8"
+                                        Padding="16,14" Margin="0,0,0,14">
+                                    <StackPanel>
+                                        <Grid Margin="0,0,0,10">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel>
+                                                <TextBlock Text="GENESIS AGENT FABRIC" FontSize="9" FontFamily="Consolas"
+                                                           Foreground="{DynamicResource AccentBase}" FontWeight="Bold"/>
+                                                <TextBlock x:Name="GenesisStatusText" Text="registry idle"
+                                                           FontSize="10" Foreground="{DynamicResource AccentDim}" Margin="0,4,0,0"/>
+                                            </StackPanel>
+                                            <Button Grid.Column="1" Content="Refresh" Style="{StaticResource BtnGhost}"
+                                                    Padding="10,6" Click="GenesisRefresh_Click"/>
+                                        </Grid>
+
+                                        <Grid Margin="0,0,0,10">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="1.1*"/>
+                                                <ColumnDefinition Width="1.1*"/>
+                                                <ColumnDefinition Width="0.9*"/>
+                                                <ColumnDefinition Width="1.4*"/>
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel Grid.Column="0" Margin="0,0,8,0">
+                                                <TextBlock Text="Agent id" FontSize="9" FontFamily="Consolas" Foreground="{DynamicResource AccentDim}"/>
+                                                <TextBox x:Name="GenesisAgentIdBox" Style="{StaticResource InputBox}" Height="30"
+                                                         FontFamily="Consolas" FontSize="11" Text="research"/>
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="1" Margin="0,0,8,0">
+                                                <TextBlock Text="Role" FontSize="9" FontFamily="Consolas" Foreground="{DynamicResource AccentDim}"/>
+                                                <ComboBox x:Name="GenesisRoleBox" Height="30" FontFamily="Consolas" FontSize="11"
+                                                          DisplayMemberPath="RoleId" SelectedIndex="1"/>
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="2" Margin="0,0,8,0">
+                                                <TextBlock Text="Provider" FontSize="9" FontFamily="Consolas" Foreground="{DynamicResource AccentDim}"/>
+                                                <ComboBox x:Name="GenesisProviderBox" Height="30" FontFamily="Consolas" FontSize="11"
+                                                          IsEditable="True" Text="ollama-cloud">
+                                                    <ComboBoxItem Content="ollama-cloud"/>
+                                                    <ComboBoxItem Content="ollama"/>
+                                                    <ComboBoxItem Content="lmstudio"/>
+                                                    <ComboBoxItem Content="claude"/>
+                                                </ComboBox>
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="3">
+                                                <TextBlock Text="Model override" FontSize="9" FontFamily="Consolas" Foreground="{DynamicResource AccentDim}"/>
+                                                <TextBox x:Name="GenesisModelBox" Style="{StaticResource InputBox}" Height="30"
+                                                         FontFamily="Consolas" FontSize="11"
+                                                         ToolTip="Empty means role/default/global model."/>
+                                            </StackPanel>
+                                        </Grid>
+
+                                        <WrapPanel Margin="0,0,0,10">
+                                            <Button Content="Register / Update Agent" Style="{StaticResource BtnPrimary}" Padding="12,7" Margin="0,0,6,0"
+                                                    Click="GenesisRegister_Click"/>
+                                            <Button Content="Disable Agent" Style="{StaticResource BtnGhost}" Padding="12,7" Margin="0,0,6,0"
+                                                    Click="GenesisDisable_Click"/>
+                                            <Button Content="Run selected as task" Style="{StaticResource BtnGhost}" Padding="12,7"
+                                                    Click="GenesisRunTask_Click"/>
+                                        </WrapPanel>
+
+                                        <Border Background="#33000000" BorderBrush="{DynamicResource AccentBgBorder2}"
+                                                BorderThickness="1" CornerRadius="8" Padding="10,8">
+                                            <TextBlock x:Name="GenesisConsoleText" Text="Genesis fabric not loaded."
+                                                       FontSize="10" FontFamily="Consolas"
+                                                       Foreground="{DynamicResource AccentMuted}"
+                                                       TextWrapping="Wrap"/>
+                                        </Border>
                                     </StackPanel>
                                 </Border>
                                 <Border Background="{DynamicResource AccentBgCard}"
@@ -2389,7 +2494,7 @@
                                     <StackPanel>
                                         <TextBlock Text="LAST TRANSCRIPT" FontSize="9" FontFamily="Consolas"
                                                    Foreground="{DynamicResource AccentDim}" Margin="0,0,0,8"/>
-                                        <TextBlock x:Name="VoiceTranscriptText" Text="—"
+                                        <TextBlock x:Name="VoiceTranscriptText" Text="вЂ”"
                                                    FontSize="12" Foreground="{DynamicResource AccentText}"
                                                    TextWrapping="Wrap" FontStyle="Italic"/>
                                     </StackPanel>
@@ -2399,12 +2504,12 @@
 
                         <Border Grid.Row="2" Background="{DynamicResource AccentBgDarker}"
                                 BorderBrush="{DynamicResource AccentBgBorder2}" BorderThickness="0,1,0,0" Padding="20,10">
-                            <TextBlock x:Name="VoiceStatusLabel" Text="ready · whisper api"
+                            <TextBlock x:Name="VoiceStatusLabel" Text="ready В· whisper api"
                                        FontSize="9" FontFamily="Consolas" Foreground="{DynamicResource AccentDim}"/>
                         </Border>
                     </Grid>
 
-                    <!-- ╔══════════ SANDBOX TAB ══════════╗ -->
+                    <!-- в•”в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ SANDBOX TAB в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•— -->
                     <Grid x:Name="SandboxTab" Visibility="Collapsed" Background="Transparent">
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto"/>
@@ -2431,9 +2536,9 @@
                                                  FontFamily="Consolas" FontSize="11"
                                                  ToolTip="Type a raw prompt to test..."/>
                                         <Grid Margin="0,8,0,0">
-                                            <Button Content="▶ Execute" Style="{StaticResource BtnPrimary}"
+                                            <Button Content="в–¶ Execute" Style="{StaticResource BtnPrimary}"
                                                     Padding="16,8" HorizontalAlignment="Left" Click="SandboxRun_Click"/>
-                                            <Button Content="⊘ Clear" Style="{StaticResource BtnGhost}"
+                                            <Button Content="вЉ Clear" Style="{StaticResource BtnGhost}"
                                                     Padding="10,8" HorizontalAlignment="Right" Click="SandboxClear_Click"/>
                                         </Grid>
                                     </StackPanel>
@@ -2516,7 +2621,7 @@
                                     <StackPanel>
                                         <TextBlock Text="OUTPUT" FontSize="9" FontFamily="Consolas"
                                                    Foreground="{DynamicResource AccentDim}" Margin="0,0,0,8"/>
-                                        <TextBlock x:Name="SandboxOutput" Text="—"
+                                        <TextBlock x:Name="SandboxOutput" Text="вЂ”"
                                                    FontSize="11" FontFamily="Consolas" Foreground="{DynamicResource AccentText}"
                                                    TextWrapping="Wrap"/>
                                     </StackPanel>
@@ -2525,7 +2630,7 @@
                         </ScrollViewer>
                     </Grid>
 
-                    <!-- ╔══════════ TELEGRAM TAB ══════════╗ -->
+                    <!-- в•”в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ TELEGRAM TAB в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•— -->
                     <Grid x:Name="TelegramTab" Visibility="Collapsed" Background="Transparent">
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto"/>
@@ -2551,9 +2656,9 @@
                                 </Border>
                                 <TextBlock Text="TELEGRAM" FontSize="11" FontWeight="Bold"
                                            Foreground="{DynamicResource AccentBase}" FontFamily="Consolas" VerticalAlignment="Center"/>
-                                <TextBlock x:Name="TgStatusLabel" Text=" · не підключено"
+                                <TextBlock x:Name="TgStatusLabel" Text=" В· РЅРµ РїС–РґРєР»СЋС‡РµРЅРѕ"
                                            FontSize="11" Foreground="{DynamicResource Brush_2A4232}" VerticalAlignment="Center"/>
-                                <Button x:Name="TgConnectBtn" Content="⟳ Connect MTProto"
+                                <Button x:Name="TgConnectBtn" Content="вџі Connect MTProto"
                                         FontSize="10" FontFamily="Consolas"
                                         Background="Transparent" BorderThickness="1"
                                         BorderBrush="{DynamicResource AccentAsstBorder}"
@@ -2590,7 +2695,7 @@
                                 </Grid.ColumnDefinitions>
                                 <TextBox x:Name="TgInput" Style="{StaticResource InputBox}"
                                          Height="40" Padding="10,8" KeyDown="TgInput_KeyDown"/>
-                                <Button Grid.Column="1" Content="Send ▶"
+                                <Button Grid.Column="1" Content="Send в–¶"
                                         Style="{StaticResource BtnPrimary}"
                                         Padding="16,0" Width="90" Height="40"
                                         Margin="8,0,0,0" Click="TgSend_Click"/>
@@ -2598,16 +2703,16 @@
                         </Border>
                     </Grid>
 
+                <!-- RIGHT PANEL (Col 2) — Dashboard only -->
                 </Grid>
 
-                <!-- ─── RIGHT PANEL (Col 2) — Dashboard only ───────── -->
-                <Grid Grid.Column="2" x:Name="RightPanel" Width="350" HorizontalAlignment="Right" Visibility="Collapsed">
+                <Grid Grid.Column="2" x:Name="RightPanel" Width="370" HorizontalAlignment="Right" Visibility="Collapsed">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="*"/>
-                        <RowDefinition Height="220"/>
+                        <RowDefinition Height="210"/>
                     </Grid.RowDefinitions>
 
-                    <!-- Internal Monologue -->
+                    <!-- Runtime operations -->
                     <Border Grid.Row="0" Background="{DynamicResource KokoSidebarBrush}"
                             BorderBrush="{DynamicResource AccentBgBorder2}" BorderThickness="1,0,0,0">
                         <Grid>
@@ -2621,13 +2726,13 @@
                             <Border Grid.Row="0" Padding="14,10,14,8"
                                     BorderBrush="{DynamicResource AccentBgBorder2}" BorderThickness="0,0,0,1">
                                 <Grid>
-                                    <TextBlock Text="// RUNTIME OPS" FontSize="9" FontFamily="Consolas"
-                                               Foreground="{DynamicResource AccentDim}"                                               VerticalAlignment="Center"/>
+                                    <TextBlock Text="RUNTIME OPS" FontSize="9" FontFamily="Consolas"
+                                               Foreground="{DynamicResource AccentDim}" VerticalAlignment="Center"/>
                                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
                                         <Ellipse Width="5" Height="5" Fill="{DynamicResource AccentBase}"
                                                  VerticalAlignment="Center" Margin="0,0,4,0">
                                             <Ellipse.Effect>
-                                                <DropShadowEffect Color="#22D3EE" BlurRadius="8" ShadowDepth="0" Opacity="0.8"/>
+                                                <DropShadowEffect Color="#68E6D6" BlurRadius="6" ShadowDepth="0" Opacity="0.42"/>
                                             </Ellipse.Effect>
                                         </Ellipse>
                                         <TextBlock Text="LIVE" FontSize="7" FontFamily="Consolas"
@@ -2649,8 +2754,8 @@
                                             <TextBlock x:Name="RightBodyText" Text="-" FontSize="12" FontWeight="Bold" Foreground="{DynamicResource AccentBase}" TextWrapping="Wrap"/>
                                         </StackPanel>
                                         <StackPanel Margin="0,0,8,0">
-                                            <TextBlock Text="pulse" FontSize="8" FontFamily="Consolas" Foreground="{DynamicResource AccentDim}"/>
-                                            <TextBlock x:Name="RightPulseText" Text="-- bpm" FontSize="12" FontWeight="Bold" Foreground="{DynamicResource AccentPrimary}" TextWrapping="Wrap"/>
+                                            <TextBlock Text="watch pulse" FontSize="8" FontFamily="Consolas" Foreground="{DynamicResource AccentDim}"/>
+                                            <TextBlock x:Name="RightPulseText" Text="watch --" FontSize="12" FontWeight="Bold" Foreground="{DynamicResource AccentPrimary}" TextWrapping="Wrap"/>
                                         </StackPanel>
                                         <StackPanel>
                                             <TextBlock Text="vault" FontSize="8" FontFamily="Consolas" Foreground="{DynamicResource AccentDim}"/>
@@ -2659,12 +2764,12 @@
                                     </UniformGrid>
                                     <Border Background="{DynamicResource KokoCardBrush}"
                                             BorderBrush="{DynamicResource AccentBgBorder2}"
-                                            BorderThickness="1" CornerRadius="10"
+                                            BorderThickness="1" CornerRadius="8"
                                             Padding="9,7" Margin="0,0,0,8">
                                         <StackPanel>
-                                            <TextBlock Text="// KOKONOE CONDITION" FontSize="8" FontFamily="Consolas"
+                                            <TextBlock Text="CONDITION" FontSize="8" FontFamily="Consolas"
                                                        Foreground="{DynamicResource AccentDim}" Margin="0,0,0,4"/>
-                                            <TextBlock x:Name="RightKokoConditionText" Text="СТАБІЛЬНА"
+                                            <TextBlock x:Name="RightKokoConditionText" Text="РЎРўРђР‘Р†Р›Р¬РќРђ"
                                                        FontSize="13" FontWeight="Bold"
                                                        Foreground="{DynamicResource AccentBase}" TextWrapping="Wrap"/>
                                             <TextBlock x:Name="RightKokoConditionDetailText" Text="tone stable"
@@ -2712,19 +2817,19 @@
                                     <UniformGrid Columns="2" Margin="0,0,0,6">
                                         <StackPanel Margin="0,0,8,5">
                                             <TextBlock Text="screen" FontSize="8" FontFamily="Consolas" Foreground="{DynamicResource AccentDim}"/>
-                                            <TextBlock x:Name="RightScreenModeText" Text="—" FontSize="12" FontWeight="Bold" Foreground="{DynamicResource AccentBase}" TextWrapping="Wrap"/>
+                                            <TextBlock x:Name="RightScreenModeText" Text="вЂ”" FontSize="12" FontWeight="Bold" Foreground="{DynamicResource AccentBase}" TextWrapping="Wrap"/>
                                         </StackPanel>
                                         <StackPanel Margin="0,0,0,5">
                                             <TextBlock Text="vision" FontSize="8" FontFamily="Consolas" Foreground="{DynamicResource AccentDim}"/>
-                                            <TextBlock x:Name="RightVisionStatusText" Text="—" FontSize="12" FontWeight="Bold" Foreground="{DynamicResource AccentPrimary}" TextWrapping="Wrap"/>
+                                            <TextBlock x:Name="RightVisionStatusText" Text="вЂ”" FontSize="12" FontWeight="Bold" Foreground="{DynamicResource AccentPrimary}" TextWrapping="Wrap"/>
                                         </StackPanel>
                                         <StackPanel Margin="0,0,8,0">
                                             <TextBlock Text="state" FontSize="8" FontFamily="Consolas" Foreground="{DynamicResource AccentDim}"/>
-                                            <TextBlock x:Name="RightStateRefreshText" Text="—" FontSize="9" Foreground="{DynamicResource AccentText}" TextWrapping="Wrap"/>
+                                            <TextBlock x:Name="RightStateRefreshText" Text="вЂ”" FontSize="9" Foreground="{DynamicResource AccentText}" TextWrapping="Wrap"/>
                                         </StackPanel>
                                         <StackPanel>
                                             <TextBlock Text="proactive" FontSize="8" FontFamily="Consolas" Foreground="{DynamicResource AccentDim}"/>
-                                            <TextBlock x:Name="RightProactiveText" Text="—" FontSize="9" Foreground="{DynamicResource AccentText}" TextWrapping="Wrap"/>
+                                            <TextBlock x:Name="RightProactiveText" Text="вЂ”" FontSize="9" Foreground="{DynamicResource AccentText}" TextWrapping="Wrap"/>
                                         </StackPanel>
                                     </UniformGrid>
                                     <TextBlock Text="active intents" FontSize="8" FontFamily="Consolas"
@@ -2735,7 +2840,7 @@
                                                 <TextBlock Text="{Binding}" Foreground="{DynamicResource AccentBase}"
                                                            FontSize="8" TextWrapping="Wrap" Margin="0,0,0,3">
                                                     <TextBlock.Effect>
-                                                        <DropShadowEffect Color="#22D3EE" ShadowDepth="0" BlurRadius="5" Opacity="0.28"/>
+                                                        <DropShadowEffect Color="#68E6D6" ShadowDepth="0" BlurRadius="5" Opacity="0.28"/>
                                                     </TextBlock.Effect>
                                                 </TextBlock>
                                             </DataTemplate>
@@ -2757,7 +2862,7 @@
                                         <TextBlock x:Name="DashSideBondLabel" Text="KNOWN"
                                                    FontSize="11" FontWeight="Bold"
                                                    Foreground="{DynamicResource AccentBase}"/>
-                                        <TextBlock x:Name="DashSideAttachmentText" Text="trust -- · intimacy --"
+                                        <TextBlock x:Name="DashSideAttachmentText" Text="trust -- В· intimacy --"
                                                    FontSize="8" FontFamily="Consolas"
                                                    Foreground="{DynamicResource AccentDim}" TextWrapping="Wrap"
                                                    Margin="0,2,0,0"/>
@@ -2795,8 +2900,8 @@
                             <Border Grid.Row="0" Padding="14,9,14,7"
                                     BorderBrush="{DynamicResource AccentBgBorder2}" BorderThickness="0,0,0,1">
                                 <Grid>
-                                    <TextBlock Text="◆ OPERATOR CONSOLE" FontSize="9" FontFamily="Consolas"
-                                               Foreground="{DynamicResource AccentBase}"                                               VerticalAlignment="Center"/>
+                                    <TextBlock Text="OPERATOR CONSOLE" FontSize="9" FontFamily="Consolas"
+                                               Foreground="{DynamicResource AccentBase}" VerticalAlignment="Center"/>
                                     <Ellipse Width="5" Height="5" Fill="{DynamicResource Brush_Ok}"
                                              HorizontalAlignment="Right" VerticalAlignment="Center"/>
                                 </Grid>
@@ -2805,6 +2910,8 @@
                             <WrapPanel Grid.Row="1" Margin="10,6,10,4">
                                 <Button Content="Health"    Style="{StaticResource BtnGhost}" Padding="7,3" Margin="2" Click="RightVaultDoctor_Click"/>
                                 <Button Content="Inspector" Style="{StaticResource BtnGhost}" Padding="7,3" Margin="2" Click="RightInspector_Click"/>
+                                <Button Content="Genesis"  Style="{StaticResource BtnGhost}" Padding="7,3" Margin="2" Click="RightGenesis_Click"/>
+                                <Button Content="Overlord" Style="{StaticResource BtnGhost}" Padding="7,3" Margin="2" Click="RightOverlord_Click"/>
                                 <Button Content="Graph"     Style="{StaticResource BtnGhost}" Padding="7,3" Margin="2" Click="McpBuildGraph_Click"/>
                                 <Button Content="Visual"    Style="{StaticResource BtnGhost}" Padding="7,3" Margin="2" Click="OpenKnowledgeGraph_Click"/>
                                 <Button Content="Sync"      Style="{StaticResource BtnGhost}" Padding="7,3" Margin="2" Click="McpSyncNotes_Click"/>
@@ -2824,7 +2931,7 @@
 
             </Grid>
 
-            <!-- ══════════════ STATUS BAR ══════════════ -->
+            <!-- в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ STATUS BAR в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ -->
             <Border Grid.Row="2" Background="{DynamicResource AccentBgBase}"
                     BorderBrush="{DynamicResource AccentBgBorder2}" BorderThickness="0,1,0,0">
                 <Grid Margin="14,0">
@@ -2861,7 +2968,7 @@
                 </Grid>
             </Border>
 
-            <!-- ══════════════ LOADING OVERLAY ══════════════ -->
+            <!-- в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ LOADING OVERLAY в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ -->
             <Grid x:Name="LoadingOverlay" Grid.RowSpan="3"
                   Background="{DynamicResource AccentBgMain}" Panel.ZIndex="100">
 
@@ -2895,7 +3002,7 @@
                     </EventTrigger>
                 </Grid.Triggers>
 
-                <!-- Matrix rain canvas — hidden but kept for code-behind -->
+                <!-- Matrix rain canvas вЂ” hidden but kept for code-behind -->
                 <Canvas x:Name="MatrixCanvas" Visibility="Collapsed"/>
 
                 <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
@@ -2917,7 +3024,7 @@
                         </Ellipse>
                         <Ellipse Width="48" Height="48" HorizontalAlignment="Center" VerticalAlignment="Center"
                                  Stroke="{DynamicResource AccentBase}" StrokeThickness="2" Opacity="0.4"/>
-                        <TextBlock Text="◈" FontSize="22" HorizontalAlignment="Center" VerticalAlignment="Center"
+                        <TextBlock Text="в—€" FontSize="22" HorizontalAlignment="Center" VerticalAlignment="Center"
                                    Foreground="{DynamicResource AccentBase}"/>
                     </Grid>
 
@@ -2965,14 +3072,14 @@
                 </StackPanel>
             </Grid>
 
-        <!-- ══════════════ SETTINGS PANEL (inline overlay) ══════════════ -->
+        <!-- в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ SETTINGS PANEL (inline overlay) в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ -->
         <Grid x:Name="SettingsOverlay" Grid.RowSpan="3" Visibility="Collapsed"
               Background="#C8050713">
             <Grid.RenderTransform>
                 <TranslateTransform x:Name="SettingsTranslate" X="0"/>
             </Grid.RenderTransform>
 
-            <!-- Panel itself — slides in from right -->
+            <!-- Panel itself вЂ” slides in from right -->
             <Border x:Name="SettingsPanel"
                     HorizontalAlignment="Right" Width="480"
                     Background="{DynamicResource KokoSidebarBrush}"
@@ -2997,7 +3104,7 @@
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
-                            <Button Grid.Column="0" Content="← Back"
+                            <Button Grid.Column="0" Content="в†ђ Back"
                                     FontFamily="Segoe UI Variable, Segoe UI" FontSize="12"
                                     Background="Transparent" BorderThickness="0"
                                     Foreground="{DynamicResource AccentMuted}"
@@ -3014,10 +3121,10 @@
                     <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Padding="20,16">
                         <StackPanel>
 
-                            <!-- ── LLM ── -->
+                            <!-- в”Ђв”Ђ LLM в”Ђв”Ђ -->
                             <TextBlock Text="LLM" Style="{StaticResource SettingsSectionHeader}"/>
 
-                            <!-- Provider Switcher (4 режими) -->
+                            <!-- Provider Switcher (4 СЂРµР¶РёРјРё) -->
                             <WrapPanel Margin="0,0,0,12">
                                 <RadioButton x:Name="SP_ProviderLmStudio" Content="LM Studio" GroupName="LlmProvider"
                                              FontFamily="Segoe UI Variable, Segoe UI" FontSize="12"
@@ -3037,7 +3144,7 @@
                                              Checked="Provider_Checked"/>
                             </WrapPanel>
 
-                            <!-- URL group (тільки local: LM Studio / Ollama local) -->
+                            <!-- URL group (С‚С–Р»СЊРєРё local: LM Studio / Ollama local) -->
                             <StackPanel x:Name="SP_UrlGroup">
                                 <TextBlock Text="URL" Style="{StaticResource SettingsLabel}"/>
                                 <TextBox x:Name="SP_LmUrl" Style="{StaticResource SettingInput}" Margin="0,0,0,6"/>
@@ -3046,7 +3153,7 @@
                                            Margin="0,0,0,12" TextWrapping="Wrap"/>
                             </StackPanel>
 
-                            <!-- API Key group (тільки Claude — single-key) -->
+                            <!-- API Key group (С‚С–Р»СЊРєРё Claude вЂ” single-key) -->
                             <StackPanel x:Name="SP_ApiKeyGroup" Visibility="Collapsed">
                                 <TextBlock x:Name="SP_ApiKeyLabel" Text="API Key" Style="{StaticResource SettingsLabel}"/>
                                 <TextBox x:Name="SP_ApiKeyBox" Style="{StaticResource SettingInput}"
@@ -3201,69 +3308,86 @@
                                        Foreground="#3A3A4E" FontFamily="Segoe UI Variable, Segoe UI" FontSize="10"
                                        Margin="0,0,0,16" TextWrapping="Wrap"/>
 
-                            <!-- ── TELEGRAM BOT ── -->
+                            <!-- в”Ђв”Ђ TELEGRAM BOT в”Ђв”Ђ -->
                             <TextBlock Text="TELEGRAM BOT" Style="{StaticResource SettingsSectionHeader}"/>
 
                             <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
                                 <CheckBox x:Name="SP_TgEnabled" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                                <TextBlock Text="Увімкнути бот" Style="{StaticResource SettingsLabel}" Margin="0"/>
+                                <TextBlock Text="РЈРІС–РјРєРЅСѓС‚Рё Р±РѕС‚" Style="{StaticResource SettingsLabel}" Margin="0"/>
                             </StackPanel>
                             <TextBlock Text="Bot Token" Style="{StaticResource SettingsLabel}"/>
                             <TextBox x:Name="SP_TgToken" Style="{StaticResource SettingInput}" Margin="0,0,0,10"/>
                             <TextBlock Text="Chat ID" Style="{StaticResource SettingsLabel}"/>
                             <TextBox x:Name="SP_TgChatId" Style="{StaticResource SettingInput}" Margin="0,0,0,16"/>
 
-                            <!-- ── TELEGRAM USER CLIENT ── -->
+                            <!-- в”Ђв”Ђ TELEGRAM USER CLIENT в”Ђв”Ђ -->
                             <TextBlock Text="TELEGRAM USER CLIENT" Style="{StaticResource SettingsSectionHeader}"/>
-                            <TextBlock Text="Повний доступ до акаунту. API ID і Hash — my.telegram.org → App API"
+                            <TextBlock Text="РџРѕРІРЅРёР№ РґРѕСЃС‚СѓРї РґРѕ Р°РєР°СѓРЅС‚Сѓ. API ID С– Hash вЂ” my.telegram.org в†’ App API"
                                        FontFamily="Consolas" FontSize="10" Foreground="#4A7A5A"
                                        TextWrapping="Wrap" Margin="0,0,0,10"/>
 
                             <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
                                 <CheckBox x:Name="SP_TgUserEnabled" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                                <TextBlock Text="Увімкнути User Client" Style="{StaticResource SettingsLabel}" Margin="0"/>
+                                <TextBlock Text="РЈРІС–РјРєРЅСѓС‚Рё User Client" Style="{StaticResource SettingsLabel}" Margin="0"/>
                             </StackPanel>
                             <TextBlock Text="API ID" Style="{StaticResource SettingsLabel}"/>
                             <TextBox x:Name="SP_TgApiId" Style="{StaticResource SettingInput}" Margin="0,0,0,10"/>
                             <TextBlock Text="API Hash" Style="{StaticResource SettingsLabel}"/>
                             <TextBox x:Name="SP_TgApiHash" Style="{StaticResource SettingInput}" Margin="0,0,0,10"/>
-                            <TextBlock Text="Номер телефону (+34...)" Style="{StaticResource SettingsLabel}"/>
+                            <TextBlock Text="РќРѕРјРµСЂ С‚РµР»РµС„РѕРЅСѓ (+34...)" Style="{StaticResource SettingsLabel}"/>
                             <TextBox x:Name="SP_TgPhone" Style="{StaticResource SettingInput}" Margin="0,0,0,10"/>
                             <StackPanel Orientation="Horizontal" Margin="0,0,0,16">
                                 <CheckBox x:Name="SP_TgDmOnly" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                                <TextBlock Text="Тільки DM (ігнорувати групи/канали)" Style="{StaticResource SettingsLabel}" Margin="0"/>
+                                <TextBlock Text="РўС–Р»СЊРєРё DM (С–РіРЅРѕСЂСѓРІР°С‚Рё РіСЂСѓРїРё/РєР°РЅР°Р»Рё)" Style="{StaticResource SettingsLabel}" Margin="0"/>
                             </StackPanel>
 
-                            <!-- ── VOICE ── -->
+                            <!-- в”Ђв”Ђ VOICE в”Ђв”Ђ -->
                             <TextBlock Text="VOICE" Style="{StaticResource SettingsSectionHeader}"/>
                             <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
                                 <CheckBox x:Name="SP_Voice" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                                <TextBlock Text="Голосовий ввід (Whisper)" Style="{StaticResource SettingsLabel}" Margin="0"/>
+                                <TextBlock Text="Р“РѕР»РѕСЃРѕРІРёР№ РІРІС–Рґ (Whisper)" Style="{StaticResource SettingsLabel}" Margin="0"/>
                             </StackPanel>
                             <TextBlock Text="OpenAI API Key (Whisper)" Style="{StaticResource SettingsLabel}"/>
                             <TextBox x:Name="SP_OpenAiKey" Style="{StaticResource SettingInput}" Margin="0,0,0,16"/>
 
-                            <!-- ── СИСТЕМА ── -->
-                            <TextBlock Text="СИСТЕМА" Style="{StaticResource SettingsSectionHeader}"/>
+                            <!-- в”Ђв”Ђ РЎРРЎРўР•РњРђ в”Ђв”Ђ -->
+                            <TextBlock Text="РЎРРЎРўР•РњРђ" Style="{StaticResource SettingsSectionHeader}"/>
                             <TextBlock Text="Vault Path" Style="{StaticResource SettingsLabel}"/>
                             <TextBox x:Name="SP_VaultPath" Style="{StaticResource SettingInput}" Margin="0,0,0,10"/>
 
+                            <TextBlock Text="SYSTEM OVERLORD" Style="{StaticResource SettingsSectionHeader}"/>
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                                <CheckBox x:Name="SP_SystemOverlordEnabled" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                <TextBlock Text="Enable metadata scan and maintenance proposals" Style="{StaticResource SettingsLabel}" Margin="0"/>
+                            </StackPanel>
+                            <TextBlock Text="Scan roots (one per line)" Style="{StaticResource SettingsLabel}"/>
+                            <TextBox x:Name="SP_SystemOverlordRoots" Style="{StaticResource SettingInput}"
+                                     MinHeight="64" AcceptsReturn="True" TextWrapping="NoWrap"
+                                     VerticalScrollBarVisibility="Auto" FontFamily="Consolas"
+                                     Margin="0,0,0,8"/>
+                            <TextBlock Text="Max files per scan" Style="{StaticResource SettingsLabel}"/>
+                            <TextBox x:Name="SP_SystemOverlordMaxFiles" Style="{StaticResource SettingInput}" Margin="0,0,0,12"/>
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,16">
+                                <CheckBox x:Name="SP_SystemOverlordCloud" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                <TextBlock Text="Allow cloud semantic metadata analysis for selected files" Style="{StaticResource SettingsLabel}" Margin="0"/>
+                            </StackPanel>
+
                             <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
                                 <CheckBox x:Name="SP_Spont" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                                <TextBlock Text="Спонтанні повідомлення" Style="{StaticResource SettingsLabel}" Margin="0"/>
+                                <TextBlock Text="РЎРїРѕРЅС‚Р°РЅРЅС– РїРѕРІС–РґРѕРјР»РµРЅРЅСЏ" Style="{StaticResource SettingsLabel}" Margin="0"/>
                             </StackPanel>
-                            <TextBlock Text="Мін. інтервал спонтанних повідомлень (хв)" Style="{StaticResource SettingsLabel}"/>
+                            <TextBlock Text="РњС–РЅ. С–РЅС‚РµСЂРІР°Р» СЃРїРѕРЅС‚Р°РЅРЅРёС… РїРѕРІС–РґРѕРјР»РµРЅСЊ (С…РІ)" Style="{StaticResource SettingsLabel}"/>
                             <TextBox x:Name="SP_SpontInterval" Style="{StaticResource SettingInput}" Margin="0,0,0,8"/>
-                            <TextBlock Text="Рівень автономності 0-3" Style="{StaticResource SettingsLabel}"/>
+                            <TextBlock Text="Р С–РІРµРЅСЊ Р°РІС‚РѕРЅРѕРјРЅРѕСЃС‚С– 0-3" Style="{StaticResource SettingsLabel}"/>
                             <TextBox x:Name="SP_ProactiveLevel" Style="{StaticResource SettingInput}" Margin="0,0,0,16"/>
                             <StackPanel Orientation="Horizontal" Margin="0,0,0,16">
                                 <CheckBox x:Name="SP_Tray" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                                <TextBlock Text="Мінімізувати в трей" Style="{StaticResource SettingsLabel}" Margin="0"/>
+                                <TextBlock Text="РњС–РЅС–РјС–Р·СѓРІР°С‚Рё РІ С‚СЂРµР№" Style="{StaticResource SettingsLabel}" Margin="0"/>
                             </StackPanel>
 
-                            <!-- ── ТЕМА ── -->
-                            <TextBlock Text="ТЕМА / АКЦЕНТ RGB" Style="{StaticResource SettingsSectionHeader}"/>
-                            <TextBlock Text="HEX колір акценту" Style="{StaticResource SettingsLabel}"/>
+                            <!-- в”Ђв”Ђ РўР•РњРђ в”Ђв”Ђ -->
+                            <TextBlock Text="РўР•РњРђ / РђРљР¦Р•РќРў RGB" Style="{StaticResource SettingsSectionHeader}"/>
+                            <TextBlock Text="HEX РєРѕР»С–СЂ Р°РєС†РµРЅС‚Сѓ" Style="{StaticResource SettingsLabel}"/>
                             <Grid Margin="0,0,0,10">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*"/>
@@ -3272,12 +3396,12 @@
                                 <TextBox x:Name="SP_AccentColor" Style="{StaticResource SettingInput}"/>
                                 <Border Grid.Column="1" x:Name="SP_ColorPreview"
                                         Width="34" Height="34" Margin="6,0,0,0"
-                                        CornerRadius="4" Background="#22D3EE"
+                                        CornerRadius="4" Background="#68E6D6"
                                         Cursor="Hand" MouseLeftButtonDown="SP_ColorPreview_Click"/>
                             </Grid>
                             <!-- Swatches -->
                             <WrapPanel Margin="0,0,0,6">
-                                <Border Width="28" Height="28" CornerRadius="14" Margin="3" Background="#22D3EE" Cursor="Hand" MouseLeftButtonDown="SP_Swatch_Click" Tag="#22D3EE"/>
+                                <Border Width="28" Height="28" CornerRadius="14" Margin="3" Background="#68E6D6" Cursor="Hand" MouseLeftButtonDown="SP_Swatch_Click" Tag="#68E6D6"/>
                                 <Border Width="28" Height="28" CornerRadius="14" Margin="3" Background="#00BCD4" Cursor="Hand" MouseLeftButtonDown="SP_Swatch_Click" Tag="#00BCD4"/>
                                 <Border Width="28" Height="28" CornerRadius="14" Margin="3" Background="#E040FB" Cursor="Hand" MouseLeftButtonDown="SP_Swatch_Click" Tag="#E040FB"/>
                                 <Border Width="28" Height="28" CornerRadius="14" Margin="3" Background="#FF5252" Cursor="Hand" MouseLeftButtonDown="SP_Swatch_Click" Tag="#FF5252"/>
@@ -3310,7 +3434,7 @@
                     Visibility="Collapsed" Opacity="0"
                     Panel.ZIndex="999">
                 <Border.Effect>
-                    <DropShadowEffect Color="#22D3EE" ShadowDepth="0" BlurRadius="20" Opacity="0.35"/>
+                    <DropShadowEffect Color="#68E6D6" ShadowDepth="0" BlurRadius="20" Opacity="0.35"/>
                 </Border.Effect>
                 <StackPanel>
                     <TextBlock x:Name="KokoNoticeTitle" Text="Kokonoe"

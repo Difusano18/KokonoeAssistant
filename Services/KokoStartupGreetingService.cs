@@ -321,6 +321,7 @@ STARTUP GREETING CONTEXT
 Presence/continuity: {NullDash(frame.PresenceContext)}
 Temporal presence:
 {NullDash(frame.TemporalPresenceContext)}
+{KokoPersonaGuardDirective.Compact}
 Директива генерації: напиши свіжу LLM-репліку саме під цей вхід, не копію fallback. Вибери один живий кут: тривалість паузи, час доби, її настрій або останню конкретну тему. Без психологічного мета-театру, без "через екран", без вигаданих прихованих страхів, без сервісного звіту.
 Зараз: {now:dd.MM.yyyy HH:mm}
 Частина доби: {frame.DayPartUk}

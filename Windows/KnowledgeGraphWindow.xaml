@@ -4,13 +4,13 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Knowledge Graph" Height="800" Width="900"
         MinHeight="600" MinWidth="700"
-        Background="#0B0B18"
-        Foreground="#E0E0E0"
+        Background="{DynamicResource AccentBgMain}"
+        Foreground="{DynamicResource AccentText}"
         WindowStartupLocation="CenterScreen"
         ResizeMode="CanResizeWithGrip">
 
-    <Border BorderBrush="#1A1A2E" BorderThickness="1" CornerRadius="8">
-        <Grid Background="#0B0B18">
+    <Border BorderBrush="{DynamicResource AccentBgBorder2}" BorderThickness="1" CornerRadius="8" Background="{DynamicResource KokoWindowBackground}">
+        <Grid Background="Transparent">
             <Grid.RowDefinitions>
                 <RowDefinition Height="40"/>
                 <RowDefinition Height="*"/>
@@ -18,35 +18,33 @@
             </Grid.RowDefinitions>
 
             <!-- Header -->
-            <Border Grid.Row="0" Background="#12121F" BorderBrush="#1A1A2E" BorderThickness="0,0,0,1">
-                <Grid VerticalAlignment="Center" Margin="10,0">
+            <Border Grid.Row="0" Background="{DynamicResource KokoHeaderBrush}" BorderBrush="{DynamicResource AccentBgBorder2}" BorderThickness="0,0,0,1">
+                <Grid VerticalAlignment="Center" Margin="14,0">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto"/>
                         <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="Auto"/>
                         <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
-                    <TextBlock Grid.Column="0" Text="🧠 Knowledge Graph" FontSize="14" FontWeight="Bold" Foreground="#FF6B35" VerticalAlignment="Center"/>
-                    <Button Grid.Column="2" Content="🔄 Refresh" Background="#7777BB" Foreground="White"
-                            Margin="0,0,10,0" Padding="10,6" Click="RefreshButton_Click"/>
-                    <Button Grid.Column="3" Content="📤 Export DOT" Background="#FF6B35" Foreground="White"
-                            Padding="10,6" Click="ExportButton_Click"/>
+                    <TextBlock Grid.Column="0" Text="Knowledge Graph" FontSize="14" FontWeight="SemiBold" Foreground="{DynamicResource AccentTextLight}" VerticalAlignment="Center"/>
+                    <Button Grid.Column="2" Content="Refresh" Style="{StaticResource BtnGhost}" Margin="0,0,10,0" Padding="12,6" Click="RefreshButton_Click"/>
+                    <Button Grid.Column="3" Content="Export DOT" Style="{StaticResource BtnPrimary}" Padding="12,6" Click="ExportButton_Click"/>
                 </Grid>
             </Border>
 
             <!-- Graph Canvas -->
-            <Canvas x:Name="GraphCanvas" Grid.Row="1" Background="#080810"/>
+            <Canvas x:Name="GraphCanvas" Grid.Row="1" Background="{DynamicResource AccentBgDarker}"/>
 
             <!-- Legend -->
-            <Border Grid.Row="2" Background="#12121F" BorderBrush="#1A1A2E" BorderThickness="0,1,0,0" Padding="10">
+            <Border Grid.Row="2" Background="{DynamicResource KokoFooterBrush}" BorderBrush="{DynamicResource AccentBgBorder2}" BorderThickness="0,1,0,0" Padding="12,10">
                 <StackPanel Orientation="Horizontal">
-                    <TextBlock Text="Legend: " Foreground="#BCCCDC" Margin="0,0,10,0"/>
-                    <Ellipse Fill="#FF6B35" Width="8" Height="8" Margin="0,0,5,0"/>
-                    <TextBlock Text="Topics" Foreground="#BCCCDC" Margin="0,0,15,0"/>
-                    <Ellipse Fill="#00CCFF" Width="8" Height="8" Margin="0,0,5,0"/>
-                    <TextBlock Text="Notes" Foreground="#BCCCDC" Margin="0,0,15,0"/>
-                    <Ellipse Fill="#00CC99" Width="8" Height="8" Margin="0,0,5,0"/>
-                    <TextBlock Text="Facts" Foreground="#BCCCDC"/>
+                    <TextBlock Text="Legend: " Foreground="{DynamicResource AccentText}" Margin="0,0,10,0"/>
+                    <Ellipse Fill="{DynamicResource AccentBase}" Width="8" Height="8" Margin="0,0,5,0"/>
+                    <TextBlock Text="Topics" Foreground="{DynamicResource AccentText}" Margin="0,0,15,0"/>
+                    <Ellipse Fill="{DynamicResource RgbBlueBrush}" Width="8" Height="8" Margin="0,0,5,0"/>
+                    <TextBlock Text="Notes" Foreground="{DynamicResource AccentText}" Margin="0,0,15,0"/>
+                    <Ellipse Fill="{DynamicResource RgbGreenBrush}" Width="8" Height="8" Margin="0,0,5,0"/>
+                    <TextBlock Text="Facts" Foreground="{DynamicResource AccentText}"/>
                 </StackPanel>
             </Border>
         </Grid>

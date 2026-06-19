@@ -38,6 +38,7 @@ internal static class Program
             Run("Wearable bridge keeps stable token and pc id", WearableBridgeKeepsStableTokenAndPcId);
             Run("Wearable bridge restores paired device id", WearableBridgeRestoresPairedDeviceId);
             Run("Wearable bridge migrates paired device from telemetry", WearableBridgeMigratesPairedDeviceFromTelemetry);
+            Run("Wearable trust rejects unpaired fresh samples", WearableTrustRejectsUnpairedFreshSamples);
             Run("Wearable bridge accepts watch action endpoint", WearableBridgeAcceptsWatchActionEndpoint);
             Run("Heartbeat dashboard writes markdown and html", HeartbeatDashboardWritesMarkdownAndHtml);
             Run("Semantic cache returns similar cached answer", SemanticCacheReturnsSimilarCachedAnswer);
@@ -233,6 +234,13 @@ internal static class Program
             Run("Reminder scheduled reply hides scheduler ids", ReminderScheduledReplyHidesSchedulerIds);
             Run("Active agency action reports stay internal", ActiveAgencyActionReportsStayInternal);
             Run("Research action reports stay internal", ResearchActionReportsStayInternal);
+            Run("Blackboard builds prompt snapshot and reloads tail", BlackboardBuildsPromptSnapshotAndReloadsTail);
+            Run("Genesis agent factory registers role profile", GenesisAgentFactoryRegistersRoleProfile);
+            Run("Genesis agent factory disables profile", GenesisAgentFactoryDisablesProfile);
+            Run("System overlord scans metadata and proposes cleanup", SystemOverlordScansMetadataAndProposesCleanup);
+            Run("System overlord cleanup requires permission", SystemOverlordCleanupRequiresPermission);
+            Run("Collective mind builds agent debate frame", CollectiveMindBuildsAgentDebateFrame);
+            Run("Unified context includes collective mind", UnifiedContextIncludesCollectiveMind);
             Run("Narrative continue stays conversational", NarrativeContinueStaysConversational);
             Run("Narrative continue context ignores internal status", NarrativeContinueContextIgnoresInternalStatus);
             Run("Short acknowledgement resolves stale intent", ShortAcknowledgementResolvesStaleIntent);
@@ -261,6 +269,7 @@ internal static class Program
             Run("Startup greeting sanitizes system status report", StartupGreetingSanitizesSystemStatusReport);
             Run("Scenario simulation guards temporal continuity", ScenarioSimulationGuardsTemporalContinuity);
             Run("LLM diagnostics snapshot starts idle", LlmDiagnosticsSnapshotStartsIdle);
+            Run("LLM diagnostics labels local Ollama provider", LlmDiagnosticsLabelsLocalOllamaProvider);
             Run("LLM extracts reasoning content for vision replies", LlmExtractsReasoningContentForVisionReplies);
             Run("LLM uses Ollama image URL string payload", LlmUsesOllamaImageUrlStringPayload);
             Run("LLM visible text rejects dotted garbage", LlmVisibleTextRejectsDottedGarbage);
@@ -1206,6 +1215,33 @@ internal static class Program
             AssertTrue(File.Exists(Path.Combine(dir, "wearable-bridge-paired-device.txt")), "migration should create paired device file");
         }
         finally { TryDeleteDir(dir); }
+    }
+
+    private static void WearableTrustRejectsUnpairedFreshSamples()
+    {
+        var wearable = new KokoWearableState
+        {
+            LastSampleUtc = DateTime.UtcNow,
+            DeviceId = "galaxy-watch-8-lte",
+            CurrentBpm = 88,
+            BaselineBpm = 72,
+            SampleSource = "wear-os-bridge"
+        };
+        var connection = new KokoWearableBridgeService.WearableBridgeConnectionSnapshot
+        {
+            State = "WAITING_FOR_PAIR",
+            IsLinked = true,
+            TelemetryFresh = true,
+            SampleRecent = true
+        };
+        var diagnostics = new KokoWearableBridgeService.WearableBridgeDiagnostics
+        {
+            LastPairedDeviceId = "",
+            LastAcceptedSampleId = "sample-1"
+        };
+
+        AssertTrue(!KokoWearableTrust.IsVerified(connection, diagnostics, wearable), "fresh samples must stay untrusted without a paired watch");
+        AssertEqual("no paired Galaxy Watch", KokoWearableTrust.BlockReason(connection, diagnostics, wearable), "block reason should expose pairing truth");
     }
 
     private static void WearableBridgeAcceptsWatchActionEndpoint()
@@ -5529,6 +5565,146 @@ Insight: bridge stability and pulse quality are linked.
         AssertTrue(!ctx.Chat.GetMessages(10).Any(m => m.Content.Contains("[ACTION:", StringComparison.OrdinalIgnoreCase)), "research reports should not be inserted into chat");
     }
 
+    private static void BlackboardBuildsPromptSnapshotAndReloadsTail()
+    {
+        using var ctx = TestContext.Create();
+        var blackboard = new KokoInternalBlackboardService(ctx.TestDir);
+        blackboard.Publish("scientist-agent", "proposal", "inspect evidence before answer", 0.75, status: "proposed");
+        blackboard.Publish("coordinator-agent", "decision", "answer current message first", 0.85, status: "resolved");
+
+        var prompt = blackboard.BuildPromptBlock(5);
+        AssertTrue(prompt.Contains("INTERNAL BLACKBOARD RECENT", StringComparison.OrdinalIgnoreCase), "blackboard should build prompt block");
+        AssertTrue(prompt.Contains("coordinator-agent/decision", StringComparison.OrdinalIgnoreCase), "blackboard prompt should include typed event");
+        AssertTrue(prompt.Contains("status=resolved", StringComparison.OrdinalIgnoreCase), "blackboard prompt should include status");
+
+        var reloaded = new KokoInternalBlackboardService(ctx.TestDir);
+        AssertTrue(reloaded.Recent(5).Any(e => e.Kind == "decision" && e.Summary.Contains("answer current message", StringComparison.OrdinalIgnoreCase)), "blackboard should reload persisted tail");
+    }
+
+    private static void GenesisAgentFactoryRegistersRoleProfile()
+    {
+        using var ctx = TestContext.Create();
+        var blackboard = new KokoInternalBlackboardService(ctx.TestDir);
+        var factory = new KokoDynamicAgentFactoryService(ctx.TestDir, blackboard);
+        var settings = new AppSettings
+        {
+            LlmProvider = "ollama-cloud",
+            OllamaModel = AppSettings.DefaultOllamaCloudModel,
+            AgentLlmProfiles = new Dictionary<string, KokoAgentLlmProfile>(StringComparer.OrdinalIgnoreCase)
+        };
+
+        var agent = factory.CreateOrUpdateAgent(
+            settings,
+            "Deep Researcher",
+            "analyst",
+            provider: "ollama-cloud",
+            model: "gemma4:31b-cloud",
+            saveSettings: false);
+
+        AssertEqual("deep-researcher", agent.AgentId, "agent id should be normalized");
+        AssertEqual("analyst", agent.RoleId, "role should persist");
+        AssertTrue(settings.AgentLlmProfiles.ContainsKey("deep-researcher"), "agent profile should be registered in supplied settings");
+        AssertEqual("gemma4:31b-cloud", settings.AgentLlmProfiles["deep-researcher"].Model, "model override should persist");
+        AssertTrue(factory.RenderConsole().Contains("deep-researcher"), "console should expose registered agent");
+        AssertTrue(blackboard.Recent(5).Any(e => e.Kind == "agent_registered"), "factory should publish registration event");
+    }
+
+    private static void GenesisAgentFactoryDisablesProfile()
+    {
+        using var ctx = TestContext.Create();
+        var factory = new KokoDynamicAgentFactoryService(ctx.TestDir);
+        var settings = new AppSettings
+        {
+            LlmProvider = "lmstudio",
+            Model = "local-model",
+            AgentLlmProfiles = new Dictionary<string, KokoAgentLlmProfile>(StringComparer.OrdinalIgnoreCase)
+        };
+
+        factory.CreateOrUpdateAgent(settings, "creative-one", "creative", saveSettings: false);
+        var ok = factory.SetAgentEnabled("creative-one", false);
+        var snap = factory.GetSnapshot();
+
+        AssertTrue(ok, "disable should find managed agent");
+        AssertTrue(snap.Agents.Any(a => a.AgentId == "creative-one" && !a.Enabled && a.Status == "disabled"),
+            "descriptor should be disabled");
+    }
+
+    private static void SystemOverlordScansMetadataAndProposesCleanup()
+    {
+        using var ctx = TestContext.Create();
+        var downloads = Path.Combine(ctx.TestDir, "Downloads");
+        Directory.CreateDirectory(downloads);
+        var staleArchive = Path.Combine(downloads, "old-pack.zip");
+        File.WriteAllBytes(staleArchive, new byte[1024]);
+        File.SetLastWriteTime(staleArchive, DateTime.Now.AddDays(-45));
+        File.WriteAllText(Path.Combine(downloads, "note.md"), "hello");
+
+        var blackboard = new KokoInternalBlackboardService(ctx.TestDir);
+        var service = new KokoSystemOverlordService(ctx.TestDir, blackboard, new KokoServiceHeartbeatService(ctx.TestDir));
+        var snap = service.ScanAsync(new[] { downloads }, maxFiles: 10).GetAwaiter().GetResult();
+
+        AssertEqual("ready", snap.Status, "scan should complete");
+        AssertTrue(snap.ScannedFiles >= 2, "scan should index files");
+        AssertTrue(snap.Files.Any(f => f.Bucket == "archive" && f.Signal == "stale_download"), "stale download archive should be classified");
+        AssertTrue(snap.Proposals.Any(p => p.Kind == "cleanup" && p.Decision == PcPolicyDecisionKind.NeedsConfirmation),
+            "cleanup should be proposal, not execution");
+        AssertTrue(blackboard.Recent(5).Any(e => e.Agent == "system-overlord" && e.Kind == "index"),
+            "scan should publish blackboard event");
+    }
+
+    private static void SystemOverlordCleanupRequiresPermission()
+    {
+        using var ctx = TestContext.Create();
+        var target = Path.Combine(ctx.TestDir, "victim.tmp");
+        File.WriteAllText(target, "do not delete in test");
+
+        var service = new KokoSystemOverlordService(ctx.TestDir);
+        var proposal = service.PrepareCleanupPermission(new[] { target }, "test cleanup");
+
+        AssertEqual(PcPolicyDecisionKind.NeedsConfirmation, proposal.Decision, "delete cleanup should require confirmation");
+        AssertTrue(!string.IsNullOrWhiteSpace(proposal.PendingActionId), "pending confirmation id should be created");
+        AssertTrue(File.Exists(target), "prepare step must not delete the file");
+    }
+
+    private static void CollectiveMindBuildsAgentDebateFrame()
+    {
+        using var ctx = TestContext.Create();
+        var state = new KokoInternalState
+        {
+            LastKnownUserActivity = "chatting",
+            LastScreenAwarenessMode = "chat",
+            LastSomaticLabel = "stable",
+            LastSomaticStrain = 0.20,
+            LastSomaticAt = DateTime.Now,
+            LastLivingConversationMode = "social"
+        };
+        var service = new KokoCollectiveMindService();
+        var messages = new[]
+        {
+            new ChatRepository.ChatMessage { Role = "user", Content = "привіт, поговоримо про нас", Timestamp = DateTime.Now }
+        };
+        var frame = service.Build("привіт, поговоримо про нас", state, messages, Array.Empty<BlackboardEvent>(), "test", DateTime.Now);
+
+        AssertTrue(frame.PromptBlock.Contains("COLLECTIVE MIND BLACKBOARD", StringComparison.OrdinalIgnoreCase), "collective prompt should be present");
+        AssertTrue(frame.PromptBlock.Contains("scientist.proposal", StringComparison.OrdinalIgnoreCase), "collective prompt should include scientist proposal");
+        AssertTrue(frame.PromptBlock.Contains("persona_guard.critique", StringComparison.OrdinalIgnoreCase), "collective prompt should include persona guard critique");
+        AssertTrue(frame.Decision.Contains("living conversation", StringComparison.OrdinalIgnoreCase), "social bid should produce living conversation decision");
+    }
+
+    private static void UnifiedContextIncludesCollectiveMind()
+    {
+        using var ctx = TestContext.Create();
+        using var health = new HealthService(ctx.TestDir);
+        using var brain = new KokoBrainEngine(new LlmService(), health, new ObsidianMcpService(ctx.TestDir), ctx.Chat, ctx.TestDir);
+
+        brain.ProcessUserMessage("fix build and run tests");
+        var context = brain.BuildUnifiedExternalContext("telegram", "fix build and run tests");
+
+        AssertTrue(context.Contains("COLLECTIVE MIND BLACKBOARD", StringComparison.OrdinalIgnoreCase), "unified context should include collective mind prompt");
+        AssertTrue(context.Contains("scientist.proposal", StringComparison.OrdinalIgnoreCase), "unified context should include agent proposal");
+        AssertTrue(brain.State.LastCollectiveMindDecision.Contains("operator", StringComparison.OrdinalIgnoreCase), "brain state should cache collective decision");
+    }
+
     private static void NarrativeContinueStaysConversational()
     {
         using var ctx = TestContext.Create();
@@ -6162,6 +6338,23 @@ Insight: bridge stability and pulse quality are linked.
         AssertEqual("idle", diag.Status, "diagnostics should start idle before any request");
         AssertEqual(0L, diag.TotalRequests, "diagnostics should not invent requests");
         AssertTrue(diag.ConsecutiveFailures == 0, "diagnostics should not start in failure state");
+    }
+
+    private static void LlmDiagnosticsLabelsLocalOllamaProvider()
+    {
+        var service = new LlmService();
+        typeof(LlmService).GetField("_provider", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
+            .SetValue(service, "ollama");
+        typeof(LlmService).GetField("_model", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
+            .SetValue(service, "llama3.2");
+
+        var provider = typeof(LlmService).GetMethod("ActiveProviderLabel", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
+            .Invoke(service, Array.Empty<object>())?.ToString();
+        var model = typeof(LlmService).GetMethod("ActiveModelLabel", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
+            .Invoke(service, new object[] { false })?.ToString();
+
+        AssertEqual("Ollama Local", provider, "local Ollama provider should not be mislabeled as LM Studio");
+        AssertEqual("llama3.2", model, "diagnostics should expose local Ollama model");
     }
 
     private static void LlmExtractsReasoningContentForVisionReplies()

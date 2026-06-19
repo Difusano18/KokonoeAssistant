@@ -34,14 +34,20 @@ namespace KokonoeAssistant.Services
         private readonly object _lock = new();
         private readonly LlmService _llm;
         private readonly ObsidianMcpService? _obsidian;
+        private readonly KokoInternalBlackboardService? _blackboard;
         private readonly KokoSandboxExecutor _sandbox;
         private readonly List<KokoAgentActivitySnapshot> _activityLog = new();
         private KokoAgentActivitySnapshot _activity = new();
 
-        public KokoAgentRuntimeService(string dataDir, LlmService llm, ObsidianMcpService? obsidian = null)
+        public KokoAgentRuntimeService(
+            string dataDir,
+            LlmService llm,
+            ObsidianMcpService? obsidian = null,
+            KokoInternalBlackboardService? blackboard = null)
         {
             _llm = llm;
             _obsidian = obsidian;
+            _blackboard = blackboard;
             _sandbox = new KokoSandboxExecutor(System.IO.Path.Combine(dataDir, "agent-runtime-sandbox"));
         }
 
@@ -66,6 +72,7 @@ namespace KokonoeAssistant.Services
             var result = new KokoAgentChatResult();
             var plan = BuildChatPlan(request);
             result.Plan = plan.Select(CloneStep).ToList();
+            AttachCollectiveMindContext(request);
 
             await EmitAsync("analyze", "KokoBrainEngine", request.UserText, "Аналізую запит, контекст і обмеження.", request.OnStatus, ct);
             await MarkStepAsync(plan, KokoAgentStepKind.Analyze, KokoAgentTaskStatus.Completed, "Input analyzed.", request.OnStatus, ct);
@@ -294,6 +301,31 @@ namespace KokonoeAssistant.Services
             - Якщо на фото гра/скрін, назви що видно і коротко відреагуй як Kokonoe, а не як сухий OCR.
             - Якщо не можеш прочитати зображення, скажи це прямо без згадок Settings/model/HTTP.
             """;
+        }
+
+        private void AttachCollectiveMindContext(KokoAgentChatRequest request)
+        {
+            try
+            {
+                var collective = ServiceContainer.BrainEngine?.BuildCollectiveMindContext(
+                    request.UserText,
+                    "agent-runtime",
+                    publish: true);
+
+                if (string.IsNullOrWhiteSpace(collective) && _blackboard != null)
+                    collective = _blackboard.BuildPromptBlock(6);
+
+                if (string.IsNullOrWhiteSpace(collective))
+                    return;
+
+                request.Context = string.IsNullOrWhiteSpace(request.Context)
+                    ? collective
+                    : request.Context + "\n\n" + collective;
+            }
+            catch (Exception ex)
+            {
+                KokoSystemLog.Write("AGENT-RUNTIME", "collective context failed: " + ex.Message);
+            }
         }
 
         private string BuildDirectVaultContext(string userText)

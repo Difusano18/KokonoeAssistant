@@ -1,0 +1,492 @@
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.IO;
+using System.Linq;
+using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
+using Newtonsoft.Json;
+
+namespace KokonoeAssistant.Services
+{
+    public sealed class KokoOverlordFileFact
+    {
+        public string Path { get; set; } = "";
+        public string Name { get; set; } = "";
+        public string Extension { get; set; } = "";
+        public long SizeBytes { get; set; }
+        public DateTime CreatedAt { get; set; }
+        public DateTime ModifiedAt { get; set; }
+        public string Bucket { get; set; } = "";
+        public string Signal { get; set; } = "";
+    }
+
+    public sealed class KokoOverlordProcessFact
+    {
+        public string ProcessName { get; set; } = "";
+        public int ProcessId { get; set; }
+        public double WorkingSetMb { get; set; }
+        public string WindowTitle { get; set; } = "";
+    }
+
+    public sealed class KokoOverlordProposal
+    {
+        public string Kind { get; set; } = "";
+        public string Title { get; set; } = "";
+        public string Reason { get; set; } = "";
+        public PcActionRiskTier RiskTier { get; set; } = PcActionRiskTier.Observe;
+        public PcPolicyDecisionKind Decision { get; set; } = PcPolicyDecisionKind.Allowed;
+        public string PendingActionId { get; set; } = "";
+        public List<string> Targets { get; set; } = new();
+    }
+
+    public sealed class KokoOverlordSnapshot
+    {
+        public DateTime TakenAt { get; set; } = DateTime.Now;
+        public List<string> Roots { get; set; } = new();
+        public int ScannedFiles { get; set; }
+        public long TotalBytes { get; set; }
+        public List<KokoOverlordFileFact> Files { get; set; } = new();
+        public List<KokoOverlordProcessFact> Processes { get; set; } = new();
+        public List<KokoOverlordProposal> Proposals { get; set; } = new();
+        public string Status { get; set; } = "idle";
+        public string Error { get; set; } = "";
+    }
+
+    public sealed class KokoSystemOverlordService
+    {
+        private readonly object _lock = new();
+        private readonly string _dataDir;
+        private readonly string _indexPath;
+        private readonly KokoInternalBlackboardService? _blackboard;
+        private readonly KokoServiceHeartbeatService? _heartbeat;
+        private readonly PcActionPolicyEngine _policy = new();
+        private readonly PcPendingActionStore _pending;
+        private KokoOverlordSnapshot _last = new();
+
+        public KokoSystemOverlordService(
+            string dataDir,
+            KokoInternalBlackboardService? blackboard = null,
+            KokoServiceHeartbeatService? heartbeat = null)
+        {
+            _dataDir = dataDir;
+            Directory.CreateDirectory(_dataDir);
+            _indexPath = Path.Combine(_dataDir, "system-overlord-index.json");
+            _blackboard = blackboard;
+            _heartbeat = heartbeat;
+            _pending = new PcPendingActionStore(Path.Combine(_dataDir, "system-overlord-pending-actions.jsonl"));
+            LoadLast();
+        }
+
+        public KokoOverlordSnapshot LastSnapshot
+        {
+            get { lock (_lock) return Clone(_last); }
+        }
+
+        public async Task<KokoOverlordSnapshot> ScanAsync(
+            IEnumerable<string>? roots = null,
+            int? maxFiles = null,
+            CancellationToken ct = default)
+        {
+            var settings = AppSettings.Load();
+            var resolvedRoots = ResolveRoots(roots ?? SplitRoots(settings.SystemOverlordRoots));
+            var limit = Math.Clamp(maxFiles ?? settings.SystemOverlordMaxFiles, 25, 5000);
+            var snapshot = new KokoOverlordSnapshot
+            {
+                TakenAt = DateTime.Now,
+                Roots = resolvedRoots,
+                Status = "scanning"
+            };
+
+            try
+            {
+                foreach (var root in resolvedRoots)
+                {
+                    ct.ThrowIfCancellationRequested();
+                    if (!Directory.Exists(root))
+                        continue;
+
+                    foreach (var file in EnumerateFilesSafe(root, limit - snapshot.ScannedFiles))
+                    {
+                        ct.ThrowIfCancellationRequested();
+                        var fact = BuildFileFact(file);
+                        if (fact == null)
+                            continue;
+                        snapshot.Files.Add(fact);
+                        snapshot.ScannedFiles++;
+                        snapshot.TotalBytes += fact.SizeBytes;
+                        if (snapshot.ScannedFiles >= limit)
+                            break;
+                    }
+
+                    if (snapshot.ScannedFiles >= limit)
+                        break;
+                }
+
+                snapshot.Processes = GetProcessFacts(12).ToList();
+                snapshot.Proposals = BuildProposals(snapshot);
+                snapshot.Status = "ready";
+                SaveSnapshot(snapshot);
+                PublishSnapshot(snapshot);
+            }
+            catch (Exception ex)
+            {
+                snapshot.Status = "error";
+                snapshot.Error = ex.Message;
+                SaveSnapshot(snapshot);
+                KokoSystemLog.Write("OVERLORD", "scan failed: " + ex.Message);
+            }
+
+            await Task.CompletedTask.ConfigureAwait(false);
+            return Clone(snapshot);
+        }
+
+        public string RenderConsole()
+        {
+            var snap = LastSnapshot;
+            var sb = new StringBuilder();
+            sb.AppendLine($"SYSTEM OVERLORD | {snap.Status} | files {snap.ScannedFiles} | size {FormatBytes(snap.TotalBytes)} | pending {_pending.Count}");
+            if (snap.Roots.Count > 0)
+                sb.AppendLine("roots: " + string.Join("; ", snap.Roots.Take(4)));
+            if (!string.IsNullOrWhiteSpace(snap.Error))
+                sb.AppendLine("error: " + snap.Error);
+
+            var buckets = snap.Files
+                .GroupBy(f => f.Bucket)
+                .OrderByDescending(g => g.Sum(f => f.SizeBytes))
+                .Take(6)
+                .Select(g => $"{g.Key}:{g.Count()}({FormatBytes(g.Sum(f => f.SizeBytes))})");
+            sb.AppendLine("buckets: " + string.Join(" | ", buckets));
+
+            if (snap.Proposals.Count > 0)
+            {
+                sb.AppendLine("proposals:");
+                foreach (var p in snap.Proposals.Take(6))
+                {
+                    var pending = string.IsNullOrWhiteSpace(p.PendingActionId) ? "" : $" pending={p.PendingActionId}";
+                    sb.AppendLine($"- [{p.Decision}/{p.RiskTier}] {p.Title}{pending} :: {p.Reason}");
+                }
+            }
+
+            if (snap.Processes.Count > 0)
+            {
+                sb.AppendLine("top processes:");
+                foreach (var p in snap.Processes.Take(5))
+                    sb.AppendLine($"- {p.ProcessName}#{p.ProcessId} {p.WorkingSetMb:0}MB {Trim(p.WindowTitle, 70)}");
+            }
+
+            return sb.ToString().Trim();
+        }
+
+        public KokoOverlordProposal PrepareCleanupPermission(IEnumerable<string> targets, string reason)
+        {
+            var cleanTargets = targets
+                .Where(t => !string.IsNullOrWhiteSpace(t))
+                .Select(t => Path.GetFullPath(t.Trim()))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Take(50)
+                .ToList();
+
+            if (cleanTargets.Count == 0)
+            {
+                return new KokoOverlordProposal
+                {
+                    Kind = "cleanup",
+                    Title = "No cleanup targets",
+                    Reason = "Target list is empty. Stunningly efficient: nothing to do.",
+                    Decision = PcPolicyDecisionKind.Blocked
+                };
+            }
+
+            var plan = new PcActionPlan
+            {
+                Intent = "system_overlord_cleanup",
+                RiskTier = PcActionRiskTier.RiskyLocal,
+                AffectedPaths = cleanTargets,
+                RollbackAvailable = false,
+                UserFacingSummaryUk = $"Коконое знайшла {cleanTargets.Count} файл(ів) для cleanup. Причина: {reason}"
+            };
+            var order = 1;
+            foreach (var target in cleanTargets)
+                plan.Actions.Add(new PcActionStep { Order = order++, ActionType = "deleteFile", Target = target });
+
+            var decision = _policy.Evaluate(plan, new PcContextSnapshotV2());
+            var proposal = new KokoOverlordProposal
+            {
+                Kind = "cleanup",
+                Title = $"Cleanup proposal: {cleanTargets.Count} target(s)",
+                Reason = decision.Reason,
+                RiskTier = decision.RiskTier,
+                Decision = decision.Kind,
+                Targets = cleanTargets
+            };
+
+            if (decision.ConfirmationRequired)
+            {
+                var pending = _pending.Save(plan, decision);
+                proposal.PendingActionId = pending.ActionId;
+                proposal.Reason = $"Requires explicit confirmation. Action id: {pending.ActionId}";
+            }
+
+            _blackboard?.Publish("system-overlord", "permission_request", proposal.Reason, 0.78, proposal, "pending");
+            KokoSystemLog.Write("OVERLORD", $"permission request {proposal.Kind}: {proposal.Reason}");
+            return proposal;
+        }
+
+        private List<KokoOverlordProposal> BuildProposals(KokoOverlordSnapshot snapshot)
+        {
+            var proposals = new List<KokoOverlordProposal>();
+            var downloadsOld = snapshot.Files
+                .Where(f => f.Signal == "stale_download" || f.Signal == "large_archive")
+                .OrderByDescending(f => f.SizeBytes)
+                .Take(20)
+                .ToList();
+
+            if (downloadsOld.Count > 0)
+            {
+                proposals.Add(new KokoOverlordProposal
+                {
+                    Kind = "cleanup",
+                    Title = $"Review {downloadsOld.Count} stale download/archive files",
+                    Reason = $"Potential cleanup: {FormatBytes(downloadsOld.Sum(f => f.SizeBytes))}. Requires explicit confirmation before any delete/move.",
+                    RiskTier = PcActionRiskTier.RiskyLocal,
+                    Decision = PcPolicyDecisionKind.NeedsConfirmation,
+                    Targets = downloadsOld.Select(f => f.Path).ToList()
+                });
+            }
+
+            var duplicateNames = snapshot.Files
+                .GroupBy(f => f.Name, StringComparer.OrdinalIgnoreCase)
+                .Where(g => g.Count() >= 2)
+                .OrderByDescending(g => g.Sum(f => f.SizeBytes))
+                .Take(5)
+                .ToList();
+            foreach (var group in duplicateNames)
+            {
+                proposals.Add(new KokoOverlordProposal
+                {
+                    Kind = "duplicate_review",
+                    Title = $"Duplicate name cluster: {group.Key}",
+                    Reason = $"{group.Count()} files share a name; review before cleanup. Yes, guessing deletes is how amateurs lose work.",
+                    RiskTier = PcActionRiskTier.Prepare,
+                    Decision = PcPolicyDecisionKind.Allowed,
+                    Targets = group.Select(f => f.Path).Take(8).ToList()
+                });
+            }
+
+            var heavy = snapshot.Processes.FirstOrDefault(p => p.WorkingSetMb >= 1200);
+            if (heavy != null)
+            {
+                proposals.Add(new KokoOverlordProposal
+                {
+                    Kind = "process_review",
+                    Title = $"Heavy process: {heavy.ProcessName}",
+                    Reason = $"{heavy.WorkingSetMb:0} MB working set. Review before killing anything.",
+                    RiskTier = PcActionRiskTier.Prepare,
+                    Decision = PcPolicyDecisionKind.Allowed,
+                    Targets = { heavy.ProcessName }
+                });
+            }
+
+            return proposals;
+        }
+
+        private static KokoOverlordFileFact? BuildFileFact(string path)
+        {
+            try
+            {
+                var info = new FileInfo(path);
+                if (!info.Exists)
+                    return null;
+
+                var ext = info.Extension.ToLowerInvariant();
+                var bucket = ext switch
+                {
+                    ".png" or ".jpg" or ".jpeg" or ".webp" or ".gif" => "image",
+                    ".mp4" or ".mkv" or ".mov" or ".webm" => "video",
+                    ".zip" or ".rar" or ".7z" or ".tar" or ".gz" => "archive",
+                    ".pdf" or ".docx" or ".doc" or ".txt" or ".md" => "document",
+                    ".exe" or ".msi" or ".apk" => "installer",
+                    ".cs" or ".kt" or ".xaml" or ".json" or ".ps1" => "code",
+                    _ => string.IsNullOrWhiteSpace(ext) ? "unknown" : ext.TrimStart('.')
+                };
+
+                var age = DateTime.Now - info.LastWriteTime;
+                var signal =
+                    IsDownloadsPath(path) && age > TimeSpan.FromDays(30) ? "stale_download" :
+                    bucket == "archive" && info.Length > 200L * 1024 * 1024 ? "large_archive" :
+                    bucket == "installer" && age > TimeSpan.FromDays(14) ? "old_installer" :
+                    info.Length > 1_000L * 1024 * 1024 ? "very_large" :
+                    "indexed";
+
+                return new KokoOverlordFileFact
+                {
+                    Path = info.FullName,
+                    Name = info.Name,
+                    Extension = ext,
+                    SizeBytes = info.Length,
+                    CreatedAt = info.CreationTime,
+                    ModifiedAt = info.LastWriteTime,
+                    Bucket = bucket,
+                    Signal = signal
+                };
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private static IEnumerable<string> EnumerateFilesSafe(string root, int max)
+        {
+            var queue = new Queue<string>();
+            queue.Enqueue(root);
+            var count = 0;
+            while (queue.Count > 0 && count < max)
+            {
+                var dir = queue.Dequeue();
+                string[] files;
+                try { files = Directory.GetFiles(dir); }
+                catch { continue; }
+
+                foreach (var file in files)
+                {
+                    yield return file;
+                    if (++count >= max)
+                        yield break;
+                }
+
+                string[] dirs;
+                try { dirs = Directory.GetDirectories(dir); }
+                catch { continue; }
+                foreach (var child in dirs)
+                {
+                    var name = Path.GetFileName(child);
+                    if (name is ".git" or "node_modules" or "bin" or "obj" or ".vs")
+                        continue;
+                    queue.Enqueue(child);
+                }
+            }
+        }
+
+        private static IEnumerable<KokoOverlordProcessFact> GetProcessFacts(int count)
+        {
+            foreach (var proc in Process.GetProcesses().OrderByDescending(p => SafeWorkingSet(p)).Take(count))
+            {
+                KokoOverlordProcessFact? fact = null;
+                try
+                {
+                    fact = new KokoOverlordProcessFact
+                    {
+                        ProcessName = proc.ProcessName,
+                        ProcessId = proc.Id,
+                        WorkingSetMb = proc.WorkingSet64 / 1024.0 / 1024.0,
+                        WindowTitle = proc.MainWindowTitle ?? ""
+                    };
+                }
+                catch { }
+                finally { try { proc.Dispose(); } catch { } }
+                if (fact != null)
+                    yield return fact;
+            }
+        }
+
+        private void SaveSnapshot(KokoOverlordSnapshot snapshot)
+        {
+            lock (_lock)
+            {
+                _last = Clone(snapshot);
+                File.WriteAllText(_indexPath, JsonConvert.SerializeObject(_last, Formatting.Indented), Encoding.UTF8);
+            }
+        }
+
+        private void LoadLast()
+        {
+            try
+            {
+                if (!File.Exists(_indexPath))
+                    return;
+                var loaded = JsonConvert.DeserializeObject<KokoOverlordSnapshot>(File.ReadAllText(_indexPath, Encoding.UTF8));
+                if (loaded != null)
+                    _last = loaded;
+            }
+            catch { }
+        }
+
+        private void PublishSnapshot(KokoOverlordSnapshot snapshot)
+        {
+            var summary = $"indexed {snapshot.ScannedFiles} files across {snapshot.Roots.Count} root(s); proposals={snapshot.Proposals.Count}; bytes={FormatBytes(snapshot.TotalBytes)}";
+            _blackboard?.Publish("system-overlord", "index", summary, 0.64, new
+            {
+                snapshot.ScannedFiles,
+                snapshot.TotalBytes,
+                Proposals = snapshot.Proposals.Count
+            });
+            _heartbeat?.Update("SYSTEM_OVERLORD", snapshot.Status, summary);
+            KokoSystemLog.Write("OVERLORD", summary);
+        }
+
+        private static List<string> ResolveRoots(IEnumerable<string> roots)
+        {
+            var list = roots
+                .Where(r => !string.IsNullOrWhiteSpace(r))
+                .Select(r => Environment.ExpandEnvironmentVariables(r.Trim()))
+                .Select(r =>
+                {
+                    try { return Path.GetFullPath(r); }
+                    catch { return ""; }
+                })
+                .Where(r => !string.IsNullOrWhiteSpace(r))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Take(8)
+                .ToList();
+
+            if (list.Count > 0)
+                return list;
+
+            var downloads = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads");
+            var pictures = Environment.GetFolderPath(Environment.SpecialFolder.MyPictures);
+            return new[] { downloads, pictures }
+                .Where(Directory.Exists)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+        }
+
+        private static IEnumerable<string> SplitRoots(string? roots)
+            => (roots ?? "")
+                .Split(new[] { '\r', '\n', ';', '|' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+        private static bool IsDownloadsPath(string path)
+            => path.Contains($"{Path.DirectorySeparatorChar}Downloads{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase) ||
+               path.Contains($"{Path.AltDirectorySeparatorChar}Downloads{Path.AltDirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase);
+
+        private static long SafeWorkingSet(Process p)
+        {
+            try { return p.WorkingSet64; }
+            catch { return 0; }
+        }
+
+        private static string FormatBytes(long bytes)
+        {
+            string[] units = { "B", "KB", "MB", "GB", "TB" };
+            double value = bytes;
+            var unit = 0;
+            while (value >= 1024 && unit < units.Length - 1)
+            {
+                value /= 1024;
+                unit++;
+            }
+            return $"{value:0.#}{units[unit]}";
+        }
+
+        private static string Trim(string? text, int max)
+        {
+            text = (text ?? "").Replace("\r", " ").Replace("\n", " ").Trim();
+            return text.Length <= max ? text : text[..max].TrimEnd() + "...";
+        }
+
+        private static KokoOverlordSnapshot Clone(KokoOverlordSnapshot item)
+            => JsonConvert.DeserializeObject<KokoOverlordSnapshot>(JsonConvert.SerializeObject(item)) ?? item;
+    }
+}

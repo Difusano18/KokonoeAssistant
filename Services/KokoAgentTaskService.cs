@@ -1282,7 +1282,7 @@ Objective: {task.Objective}
         {
             KokoAgentStepKind.Vault => "obsidian",
             KokoAgentStepKind.Sandbox => "coder",
-            KokoAgentStepKind.SystemControl => "system",
+            KokoAgentStepKind.SystemControl => "system-overlord",
             KokoAgentStepKind.Observation => "vision-observer",
             KokoAgentStepKind.InsightExtraction => "research",
             KokoAgentStepKind.Implement => "coder",

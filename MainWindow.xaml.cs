@@ -130,6 +130,14 @@ namespace KokonoeAssistant
         private WinForms.NotifyIcon? _notifyIcon;
         private CancellationTokenSource? _noticeCts;
 
+        private static readonly MediaColor UiMercury = MediaColor.FromRgb(0x68, 0xE6, 0xD6);
+        private static readonly MediaColor UiPulse   = MediaColor.FromRgb(0xE2, 0x5A, 0x6A);
+        private static readonly MediaColor UiInfo    = MediaColor.FromRgb(0x76, 0xB7, 0xE8);
+        private static readonly MediaColor UiWarn    = MediaColor.FromRgb(0xD7, 0xB4, 0x6A);
+        private static readonly MediaColor UiOk      = MediaColor.FromRgb(0x6F, 0xE3, 0xA1);
+        private static readonly MediaColor UiMuted   = MediaColor.FromRgb(0x76, 0x84, 0x93);
+        private static readonly MediaColor UiGrid    = MediaColor.FromRgb(0x50, 0x69, 0x84);
+
         // ---- Session chat log (auto-saved to Obsidian) ----
         // Created on first message, appended after every exchange.
         private string? _sessionChatPath;
@@ -415,7 +423,7 @@ namespace KokonoeAssistant
                     LiveCoreVaultText.Text += $" | {telemetry.ScenarioHealth}";
                 LiveCoreCompactText.Text =
                     $"Kokonoe · {uiState.Primary.ToLowerInvariant()} · {uiState.Emotion.ToLowerInvariant()} · {uiState.Body.ToLowerInvariant()} {somatic.Strain:F2} · " +
-                    $"{(hasWearablePulse ? $"{wearableBpm:0} bpm" : "-- bpm")} · vault {state.PendingVaultExchangeCount}/5 · " +
+                    $"{(hasWearablePulse ? $"watch {wearableBpm:0}" : "watch --")} · vault {state.PendingVaultExchangeCount}/5 · " +
                     $"vision {BuildVisionStatusLabel(state, DateTime.Now).ToLowerInvariant()}";
                 if (RightPanel.Visibility == Visibility.Visible)
                     RefreshRightOpsPanel();
@@ -428,7 +436,7 @@ namespace KokonoeAssistant
                     LiveCoreEmotionText.Text = "емоція: офлайн";
                     LiveCoreBodyText.Text = "соматика: офлайн";
                     LiveCorePulseText.Text = "-- bpm";
-                    LiveCoreCompactText.Text = "Kokonoe · offline · -- bpm · vault -- · vision --";
+                    LiveCoreCompactText.Text = "Kokonoe · offline · watch -- · vault -- · vision --";
                     LiveCoreAutonomyText.Text = "автономність недоступна";
                     LiveCorePresenceText.Text = "";
                     LiveCoreRhythmText.Text = "";
@@ -704,12 +712,12 @@ tags: [kokonoe, live-core, diagnostics]
 
             var poly = new System.Windows.Shapes.Polyline
             {
-                Stroke = new SolidColorBrush(MediaColor.FromRgb(0xFF, 0x4D, 0x6D)),
-                StrokeThickness = 1.8,
+                Stroke = new SolidColorBrush(UiPulse),
+                StrokeThickness = 2.0,
                 Effect = new System.Windows.Media.Effects.DropShadowEffect
                 {
-                    Color = System.Windows.Media.Color.FromRgb(0xFF, 0x4D, 0x6D),
-                    ShadowDepth = 0, BlurRadius = 6, Opacity = 0.6
+                    Color = UiPulse,
+                    ShadowDepth = 0, BlurRadius = 7, Opacity = 0.38
                 }
             };
             foreach (var (t, b) in pts)
@@ -726,7 +734,7 @@ tags: [kokonoe, live-core, diagnostics]
             var dot = new System.Windows.Shapes.Ellipse
             {
                 Width = 6, Height = 6,
-                Fill = new SolidColorBrush(MediaColor.FromRgb(0xFF, 0x4D, 0x6D))
+                Fill = new SolidColorBrush(UiPulse)
             };
             Canvas.SetLeft(dot, lx - 3);
             Canvas.SetTop(dot, ly - 3);
@@ -820,6 +828,7 @@ tags: [kokonoe, live-core, diagnostics]
                 StartPulseLiveMonitor();
                 HookAgentTaskEvents();
                 RefreshAgentTaskBoard();
+                RefreshGenesisFabric();
 
                 TgMessagesList.ItemsSource = _tgMessages;
 
@@ -1529,8 +1538,6 @@ tags: [kokonoe, live-core, diagnostics]
         {
             try
             {
-                if (DateTime.UtcNow.Ticks >= 0)
-                {
                     var wearable = ServiceContainer.WearableTelemetry.State;
                     var bridge = ServiceContainer.WearableBridge;
                     var diagnostics = bridge.Diagnostics;
@@ -1548,7 +1555,7 @@ tags: [kokonoe, live-core, diagnostics]
                     PulseTabHrvText.Text = verified && wearable.HrvRmssdMs.HasValue ? $"{wearable.HrvRmssdMs.Value:0}" : "--";
                     PulseTabMinMaxText.Text = verified ? wearable.SleepState : "no verified sample";
                     var trustBrush = verified
-                        ? new SolidColorBrush(MediaColor.FromRgb(0x00, 0xE6, 0x76))
+                        ? new SolidColorBrush(UiOk)
                         : PulseBridgeBrush(connection.State);
                     PulseTabBpmBig.Foreground = trustBrush;
                     PulseTabCurText.Foreground = trustBrush;
@@ -1593,52 +1600,6 @@ tags: [kokonoe, live-core, diagnostics]
 
                     UpdatePulseSidePanels(wearableCur);
                     UpdatePulseStatsFromSeries(GetVerifiedPulseGraphSamples(diagnostics));
-                    return;
-                }
-
-                var heart = ServiceContainer.Heart;
-                if (heart == null) return;
-                var cur = heart.CurrentBpm;
-                PulseTabBpmBig.Text   = cur > 0 ? $"{cur:0}" : "—";
-                PulseTabCurText.Text  = cur > 0 ? $"{cur:0.0}" : "—";
-                PulseTabBaseText.Text = $"{heart.BaselineBpm:0.0}";
-                PulseSideBpmText.Text = cur > 0 ? $"{cur:0}" : "--";
-                try
-                {
-                    var somatic = ServiceContainer.BrainEngine.GetSomaticSnapshot();
-                    var selfReg = ServiceContainer.BrainEngine.GetSelfRegulationFrame(somatic);
-                    PulseTabStateLabel.Text = $"{somatic.State.ToUpper()} · {selfReg.Regulation} · strain {somatic.Strain:P0}";
-                    PulseSideStateText.Text = $"{somatic.State.ToLowerInvariant()} · baseline {heart.BaselineBpm:0} · strain {somatic.Strain:P0}";
-                }
-                catch { }
-
-                if (_heartRR.Count >= 4)
-                {
-                    var arr = _heartRR.ToArray();
-                    double sumSq = 0; int n = 0;
-                    for (int i = 1; i < arr.Length; i++) { var d = arr[i] - arr[i-1]; sumSq += d*d; n++; }
-                    PulseTabHrvText.Text = $"{Math.Sqrt(sumSq / Math.Max(1, n)):0.0}";
-                }
-
-                if (_heartHistory.Count > 0)
-                {
-                    double mn = double.MaxValue, mx = double.MinValue, sum = 0;
-                    foreach (var (_, b) in _heartHistory) { if (b < mn) mn = b; if (b > mx) mx = b; sum += b; }
-                    var avg = sum / Math.Max(1, _heartHistory.Count);
-                    PulseTabMinMaxText.Text = $"{mn:0} / {mx:0}";
-                    PulseAvgText.Text = $"{avg:0.0} bpm";
-                    PulsePeakText.Text = $"{mx:0} bpm";
-                    PulseLowText.Text = $"{mn:0} bpm";
-                    var spread = Math.Max(1, mx - mn);
-                    PulseConsistencyText.Text = $"{Math.Clamp(100 - spread * 3, 0, 100):0}%";
-                }
-
-                PulseVitalLog.ItemsSource = _heartHistory.ToArray().Reverse().Take(30)
-                    .Select(h => new { TimeStr = h.t.ToString("HH:mm:ss"), BpmStr = $"{h.bpm:0} bpm" })
-                    .ToList();
-
-                UpdatePulseSidePanels(cur);
-                DrawPulseHrGraph();
             }
             catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[PulseTab] {ex.Message}"); }
         }
@@ -1647,23 +1608,7 @@ tags: [kokonoe, live-core, diagnostics]
             KokoWearableBridgeService.WearableBridgeConnectionSnapshot connection,
             KokoWearableBridgeService.WearableBridgeDiagnostics diagnostics,
             KokoWearableState wearable)
-        {
-            if (!connection.IsPaired || !connection.IsLinked || !connection.TelemetryFresh || !connection.SampleRecent)
-                return false;
-
-            var paired = (diagnostics.LastPairedDeviceId ?? "").Trim();
-            var device = (wearable.DeviceId ?? "").Trim();
-            if (string.IsNullOrWhiteSpace(paired) ||
-                paired.Equals("unknown", StringComparison.OrdinalIgnoreCase) ||
-                string.IsNullOrWhiteSpace(device) ||
-                device.Equals("unknown", StringComparison.OrdinalIgnoreCase))
-                return false;
-
-            if (!device.Equals(paired, StringComparison.OrdinalIgnoreCase))
-                return false;
-
-            return !LooksLikeDiagnosticWearable(device) && !LooksLikeDiagnosticWearable(diagnostics.LastAcceptedSampleId);
-        }
+            => KokoWearableTrust.IsVerified(connection, diagnostics, wearable);
 
         private static bool TryGetVerifiedWearablePulse(out double bpm, out double baseline)
         {
@@ -1689,31 +1634,13 @@ tags: [kokonoe, live-core, diagnostics]
         }
 
         private static bool LooksLikeDiagnosticWearable(string? value)
-        {
-            var text = (value ?? "").Trim().ToLowerInvariant();
-            if (string.IsNullOrWhiteSpace(text)) return false;
-            return text.Contains("smoke") ||
-                   text.Contains("mock") ||
-                   text.Contains("dummy") ||
-                   text.Contains("emulated") ||
-                   text.Contains("simulator") ||
-                   text.Contains("test-watch");
-        }
+            => KokoWearableTrust.LooksDiagnostic(value);
 
         private static string VerifiedWearableBlockReason(
             KokoWearableBridgeService.WearableBridgeConnectionSnapshot connection,
             KokoWearableBridgeService.WearableBridgeDiagnostics diagnostics,
             KokoWearableState wearable)
-        {
-            if (!connection.IsPaired) return "no paired Galaxy Watch";
-            if (!connection.IsLinked) return "watch not linked";
-            if (!connection.TelemetryFresh || !connection.SampleRecent) return "waiting for fresh sensor sample";
-            if (LooksLikeDiagnosticWearable(wearable.DeviceId) || LooksLikeDiagnosticWearable(diagnostics.LastAcceptedSampleId))
-                return "diagnostic sample hidden";
-            if (!string.Equals((wearable.DeviceId ?? "").Trim(), (diagnostics.LastPairedDeviceId ?? "").Trim(), StringComparison.OrdinalIgnoreCase))
-                return "sample device does not match pair";
-            return "telemetry not trusted";
-        }
+            => KokoWearableTrust.BlockReason(connection, diagnostics, wearable);
 
         private void UpdatePulseBridgeStrip(
             KokoWearableBridgeService bridge,
@@ -1734,8 +1661,8 @@ tags: [kokonoe, live-core, diagnostics]
 
             PulseBridgeDesktopText.Text = bridge.IsRunning ? $"server running :{bridge.Port}" : "server stopped";
             PulseBridgeDesktopText.Foreground = bridge.IsRunning
-                ? new SolidColorBrush(MediaColor.FromRgb(0x00, 0xE6, 0x76))
-                : new SolidColorBrush(MediaColor.FromRgb(0xFF, 0xB0, 0x20));
+                ? new SolidColorBrush(UiOk)
+                : new SolidColorBrush(UiWarn);
             PulseBridgeDesktopDetailText.Text =
                 $"samples {diagnostics.TotalSamples} / batches {diagnostics.TotalBatchRequests} / dupes {diagnostics.TotalDuplicateSamples} / auth {diagnostics.TotalAuthFailures}";
 
@@ -1844,11 +1771,11 @@ tags: [kokonoe, live-core, diagnostics]
         {
             var color = state switch
             {
-                "LINKED" => MediaColor.FromRgb(0x00, 0xE6, 0x76),
-                "WAITING_FOR_WATCH" => MediaColor.FromRgb(0xFF, 0xB0, 0x20),
-                "WAITING_FOR_PAIR" => MediaColor.FromRgb(0xFF, 0xB0, 0x20),
-                "ERROR" => MediaColor.FromRgb(0xFF, 0x4D, 0x6D),
-                _ => MediaColor.FromRgb(0x7A, 0x88, 0xA8)
+                "LINKED" => UiOk,
+                "WAITING_FOR_WATCH" => UiWarn,
+                "WAITING_FOR_PAIR" => UiWarn,
+                "ERROR" => UiPulse,
+                _ => UiMuted
             };
             return new SolidColorBrush(color);
         }
@@ -1946,8 +1873,6 @@ tags: [kokonoe, live-core, diagnostics]
         {
             try
             {
-                if (DateTime.UtcNow.Ticks >= 0)
-                {
                     var wearable = ServiceContainer.WearableTelemetry.State;
                     var bridge = ServiceContainer.WearableBridge;
                     var diagnostics = bridge.Diagnostics;
@@ -1956,64 +1881,31 @@ tags: [kokonoe, live-core, diagnostics]
                     PulseMoodMainText.Text = verified ? "WATCH VERIFIED" : FormatBridgeState(connection.State);
                     PulseMoodDetailText.Text = verified ? wearable.Summary : VerifiedWearableBlockReason(connection, diagnostics, wearable);
                     PulseMoodBar.Value = verified ? Math.Clamp(wearable.SleepConfidence * 100, 0, 100) : 0;
-                    PulseMoodMainText.Text = verified ? "WATCH VERIFIED" : FormatBridgeState(connection.State);
-                    PulseMoodDetailText.Text = verified ? wearable.Summary : VerifiedWearableBlockReason(connection, diagnostics, wearable);
                     PulseSystemStatusText.Text = verified
                         ? $"watch sample {wearable.LastSampleUtc.ToLocalTime():HH:mm:ss} / {wearable.SleepState}"
                         : $"bridge {FormatBridgeState(connection.State).ToLowerInvariant()} / {NullDash(diagnostics.LastRemoteEndpoint)}";
 
                     var wearableNow = DateTime.Now;
-                    var wearableEventBrushHot = new SolidColorBrush(MediaColor.FromRgb(0xFF, 0x4D, 0x6D));
-                    var wearableEventBrushOk = new SolidColorBrush(MediaColor.FromRgb(0x00, 0xE6, 0x76));
-                    var wearableEventBrushWarn = new SolidColorBrush(MediaColor.FromRgb(0xFF, 0xB0, 0x20));
-                    PulseRecentEvents.ItemsSource = new[]
+                    var wearableEventBrushOk = new SolidColorBrush(UiOk);
+                    var wearableEventBrushWarn = new SolidColorBrush(UiWarn);
+                    var events = new List<object>
                     {
                         new { Time = wearableNow.ToString("HH:mm:ss"), Text = $"link: {FormatBridgeState(connection.State).ToLowerInvariant()}", Brush = verified ? wearableEventBrushOk : wearableEventBrushWarn },
                         new { Time = FormatLocalTime(connection.LastSeenAtUtc), Text = $"trust: {(verified ? "verified" : VerifiedWearableBlockReason(connection, diagnostics, wearable))}", Brush = verified ? wearableEventBrushOk : wearableEventBrushWarn },
                         new { Time = FormatLocalTime(diagnostics.LastPairAtUtc), Text = $"watch app: {(connection.IsPaired ? NullDash(diagnostics.LastPairedDeviceId) : "not paired")}", Brush = connection.IsPaired ? wearableEventBrushOk : wearableEventBrushWarn },
                         new { Time = FormatLocalTime(diagnostics.LastCommandPollAtUtc), Text = $"command poll / ack: {NullDash(diagnostics.LastAckAction)}", Brush = diagnostics.LastCommandPollAtUtc.HasValue ? wearableEventBrushOk : wearableEventBrushWarn },
                         new { Time = wearableNow.ToString("HH:mm:ss"), Text = $"bridge: {(bridge.IsRunning ? $"running:{bridge.Port}" : "stopped")} / samples {diagnostics.TotalSamples} / auth {diagnostics.TotalAuthFailures}", Brush = bridge.IsRunning ? wearableEventBrushOk : wearableEventBrushWarn },
-                        new { Time = wearableNow.ToString("HH:mm:ss"), Text = verified ? "watch telemetry verified" : "watch telemetry blocked", Brush = verified ? wearableEventBrushOk : wearableEventBrushWarn },
-                        new { Time = wearable.LastSampleUtc > DateTime.MinValue ? wearable.LastSampleUtc.ToLocalTime().ToString("HH:mm:ss") : "--", Text = $"last pulse sample: {(currentBpm > 0 ? $"{currentBpm:0} bpm" : "--")}", Brush = currentBpm > 0 ? wearableEventBrushOk : wearableEventBrushWarn },
-                        new { Time = wearableNow.ToString("HH:mm:ss"), Text = $"sleep state: {(verified ? wearable.SleepState : "--")}", Brush = verified && wearable.SleepConfidence >= 0.72 ? wearableEventBrushHot : wearableEventBrushOk },
                     };
-                    return;
-                }
-
-                var brain = ServiceContainer.BrainEngine;
-                var emotion = brain.Emotion;
-                var state = brain.State;
-                var annoyed = emotion.Current == KokoEmotionEngine.EmotionState.Irritated
-                    ? Math.Clamp(emotion.Data.Intensity * 100, 20, 100)
-                    : Math.Clamp((1.0 - state.MoodScore) * 65, 0, 100);
-                var curiosity = emotion.Current == KokoEmotionEngine.EmotionState.Curious
-                    ? Math.Clamp(emotion.Data.Intensity * 100, 20, 100)
-                    : 23.0;
-                var trust = Math.Clamp(emotion.ConnectionScore * 100, 0, 100);
-
-                PulseMoodMainText.Text = DashboardEmotionLabel(emotion.Current).ToUpperInvariant();
-                PulseMoodDetailText.Text = $"annoyed {annoyed:0}% · curiosity {curiosity:0}% · trust {trust:0}% · sleep depr. {Math.Clamp((1.0 - state.MoodScore) * 100, 0, 100):0}%";
-                PulseMoodBar.Value = Math.Clamp(state.MoodScore * 100, 0, 100);
-
-                var status = currentBpm <= 0
-                    ? "telemetry standby"
-                    : currentBpm > 95
-                        ? "core online · memory synced · telemetry elevated"
-                        : "core online · memory synced · telemetry recording";
-                PulseSystemStatusText.Text = status;
-
-                var now = DateTime.Now;
-                var eventBrushHot = new SolidColorBrush(MediaColor.FromRgb(0xFF, 0x4D, 0x6D));
-                var eventBrushOk = new SolidColorBrush(MediaColor.FromRgb(0x00, 0xE6, 0x76));
-                var eventBrushWarn = new SolidColorBrush(MediaColor.FromRgb(0xFF, 0xB0, 0x20));
-                PulseRecentEvents.ItemsSource = new[]
-                {
-                    new { Time = now.ToString("HH:mm:ss"), Text = currentBpm > 95 ? "Elevated pulse detected" : "Telemetry recording", Brush = currentBpm > 95 ? eventBrushHot : eventBrushOk },
-                    new { Time = now.AddSeconds(-18).ToString("HH:mm:ss"), Text = $"{emotion.Current} mood channel active", Brush = eventBrushWarn },
-                    new { Time = now.AddSeconds(-42).ToString("HH:mm:ss"), Text = "Memory sync complete", Brush = eventBrushOk },
-                    new { Time = now.AddMinutes(-1).ToString("HH:mm:ss"), Text = "Vision module active", Brush = eventBrushOk },
-                    new { Time = now.AddMinutes(-2).ToString("HH:mm:ss"), Text = "Idle state baseline captured", Brush = eventBrushWarn },
-                };
+                    if (verified)
+                    {
+                        events.Add(new { Time = wearable.LastSampleUtc.ToLocalTime().ToString("HH:mm:ss"), Text = $"last pulse sample: {currentBpm:0} bpm", Brush = wearableEventBrushOk });
+                        events.Add(new { Time = wearableNow.ToString("HH:mm:ss"), Text = $"sleep state: {wearable.SleepState} / confidence {wearable.SleepConfidence:P0}", Brush = wearableEventBrushOk });
+                    }
+                    else
+                    {
+                        events.Add(new { Time = "--", Text = "no verified watch sample shown", Brush = wearableEventBrushWarn });
+                    }
+                    PulseRecentEvents.ItemsSource = events;
             }
             catch { }
         }
@@ -2141,6 +2033,12 @@ tags: [kokonoe, live-core, diagnostics]
                 DrawPulseChartEmptyState(canvas, w, h, diagnostics.LastPairedDeviceId);
                 return;
             }
+            points = SmoothAndCompressPulsePoints(points);
+            if (points.Count < 2)
+            {
+                DrawPulseChartEmptyState(canvas, w, h, diagnostics.LastPairedDeviceId);
+                return;
+            }
 
             var areaFigure = new PathFigure { StartPoint = new System.Windows.Point(points[0].X, plotBottom), IsClosed = true };
             areaFigure.Segments.Add(new LineSegment(points[0], true));
@@ -2150,7 +2048,7 @@ tags: [kokonoe, live-core, diagnostics]
             canvas.Children.Add(new System.Windows.Shapes.Path
             {
                 Data = areaGeometry,
-                Fill = new SolidColorBrush(MediaColor.FromArgb(34, 255, 77, 109))
+                Fill = new SolidColorBrush(MediaColor.FromArgb(28, UiPulse.R, UiPulse.G, UiPulse.B))
             });
 
             var lineFigure = new PathFigure { StartPoint = points[0], IsClosed = false };
@@ -2158,17 +2056,17 @@ tags: [kokonoe, live-core, diagnostics]
             canvas.Children.Add(new System.Windows.Shapes.Path
             {
                 Data = new PathGeometry(new[] { lineFigure }),
-                Stroke = new SolidColorBrush(MediaColor.FromRgb(0xFF, 0x4D, 0x6D)),
+                Stroke = new SolidColorBrush(UiPulse),
                 StrokeThickness = 2.4,
                 StrokeStartLineCap = PenLineCap.Round,
                 StrokeEndLineCap = PenLineCap.Round,
                 StrokeLineJoin = PenLineJoin.Round,
                 Effect = new System.Windows.Media.Effects.DropShadowEffect
                 {
-                    Color = MediaColor.FromRgb(0xFF, 0x4D, 0x6D),
+                    Color = UiPulse,
                     ShadowDepth = 0,
                     BlurRadius = 9,
-                    Opacity = 0.55
+                    Opacity = 0.34
                 }
             });
 
@@ -2178,8 +2076,8 @@ tags: [kokonoe, live-core, diagnostics]
             {
                 Width = 10,
                 Height = 10,
-                Fill = new SolidColorBrush(MediaColor.FromRgb(0xFF, 0x4D, 0x6D)),
-                Stroke = new SolidColorBrush(MediaColor.FromRgb(0xFF, 0xD1, 0xDC)),
+                Fill = new SolidColorBrush(UiPulse),
+                Stroke = new SolidColorBrush(MediaColor.FromRgb(0xF7, 0xC8, 0xD0)),
                 StrokeThickness = 1.2
             };
             Canvas.SetLeft(dot, lastPoint.X - 5);
@@ -2187,7 +2085,35 @@ tags: [kokonoe, live-core, diagnostics]
             canvas.Children.Add(dot);
 
             var age = Math.Max(0, (DateTime.Now - last.t).TotalSeconds);
-            DrawPulseOverlayLabel(canvas, left + 8, top + 8, $"{last.bpm:0} bpm  /  {age:0}s ago", MediaColor.FromRgb(0xFF, 0xD1, 0xDC));
+            DrawPulseOverlayLabel(canvas, left + 8, top + 8, $"{last.bpm:0} bpm  /  {age:0}s ago", MediaColor.FromRgb(0xF7, 0xC8, 0xD0));
+        }
+
+        private static List<System.Windows.Point> SmoothAndCompressPulsePoints(IReadOnlyList<System.Windows.Point> raw)
+        {
+            if (raw.Count <= 3)
+                return raw.ToList();
+
+            var compressed = raw
+                .GroupBy(p => (int)Math.Round(p.X / 4.0))
+                .Select(g => new System.Windows.Point(g.Average(p => p.X), g.Average(p => p.Y)))
+                .OrderBy(p => p.X)
+                .ToList();
+
+            if (compressed.Count <= 3)
+                return compressed;
+
+            var smoothed = new List<System.Windows.Point>(compressed.Count) { compressed[0] };
+            for (var i = 1; i < compressed.Count - 1; i++)
+            {
+                var prev = compressed[i - 1];
+                var cur = compressed[i];
+                var next = compressed[i + 1];
+                smoothed.Add(new System.Windows.Point(
+                    cur.X,
+                    prev.Y * 0.20 + cur.Y * 0.60 + next.Y * 0.20));
+            }
+            smoothed.Add(compressed[^1]);
+            return smoothed;
         }
 
         private static void DrawPulseChartFrame(Canvas canvas, double left, double top, double plotW, double plotH)
@@ -2196,9 +2122,9 @@ tags: [kokonoe, live-core, diagnostics]
             {
                 Width = plotW,
                 Height = plotH,
-                Stroke = new SolidColorBrush(MediaColor.FromArgb(40, 80, 105, 148)),
+                Stroke = new SolidColorBrush(MediaColor.FromArgb(48, UiGrid.R, UiGrid.G, UiGrid.B)),
                 StrokeThickness = 1,
-                Fill = new SolidColorBrush(MediaColor.FromArgb(22, 3, 8, 20))
+                Fill = new SolidColorBrush(MediaColor.FromArgb(18, 6, 12, 18))
             };
             canvas.Children.Add(frame);
             Canvas.SetLeft(frame, left);
@@ -2216,8 +2142,8 @@ tags: [kokonoe, live-core, diagnostics]
             DateTime windowStart,
             DateTime windowEnd)
         {
-            var gridBrush = new SolidColorBrush(MediaColor.FromArgb(30, 160, 190, 230));
-            var textBrush = new SolidColorBrush(MediaColor.FromArgb(118, 180, 196, 220));
+            var gridBrush = new SolidColorBrush(MediaColor.FromArgb(28, UiGrid.R, UiGrid.G, UiGrid.B));
+            var textBrush = new SolidColorBrush(MediaColor.FromArgb(132, UiMuted.R, UiMuted.G, UiMuted.B));
             var plotBottom = top + plotH;
 
             for (var i = 0; i <= 4; i++)
@@ -2255,7 +2181,7 @@ tags: [kokonoe, live-core, diagnostics]
                     X2 = x,
                     Y1 = top,
                     Y2 = plotBottom,
-                    Stroke = new SolidColorBrush(MediaColor.FromArgb(18, 160, 190, 230)),
+                    Stroke = new SolidColorBrush(MediaColor.FromArgb(18, UiGrid.R, UiGrid.G, UiGrid.B)),
                     StrokeThickness = 0.5
                 });
 
@@ -2284,11 +2210,11 @@ tags: [kokonoe, live-core, diagnostics]
                 X2 = left + plotW,
                 Y1 = y,
                 Y2 = y,
-                Stroke = new SolidColorBrush(MediaColor.FromArgb(130, 34, 211, 238)),
+                Stroke = new SolidColorBrush(MediaColor.FromArgb(120, UiInfo.R, UiInfo.G, UiInfo.B)),
                 StrokeThickness = 1,
                 StrokeDashArray = new DoubleCollection { 6, 5 }
             });
-            DrawPulseOverlayLabel(canvas, left + plotW - 92, y - 18, $"base {baseline:0}", MediaColor.FromRgb(0x22, 0xD3, 0xEE));
+            DrawPulseOverlayLabel(canvas, left + plotW - 92, y - 18, $"base {baseline:0}", UiInfo);
         }
 
         private static void DrawPulseChartEmptyState(Canvas canvas, double w, double h, string? pairedDevice)
@@ -2296,7 +2222,7 @@ tags: [kokonoe, live-core, diagnostics]
             var text = string.IsNullOrWhiteSpace(pairedDevice)
                 ? "waiting for paired Galaxy Watch samples"
                 : "waiting for verified live samples";
-            DrawPulseOverlayLabel(canvas, Math.Max(20, w * 0.5 - 112), Math.Max(18, h * 0.5 - 12), text, MediaColor.FromRgb(0x94, 0xA3, 0xB8));
+            DrawPulseOverlayLabel(canvas, Math.Max(20, w * 0.5 - 112), Math.Max(18, h * 0.5 - 12), text, UiMuted);
         }
 
         private static void DrawPulseOverlayLabel(Canvas canvas, double x, double y, string text, MediaColor color)
@@ -2411,11 +2337,11 @@ tags: [kokonoe, live-core, diagnostics]
 
             var poly = new System.Windows.Shapes.Polyline
             {
-                Stroke = new SolidColorBrush(MediaColor.FromRgb(0xFF, 0x4D, 0x6D)),
+                Stroke = new SolidColorBrush(UiPulse),
                 StrokeThickness = 1.8,
                 Effect = new System.Windows.Media.Effects.DropShadowEffect
                 {
-                    Color = MediaColor.FromRgb(0xFF, 0x4D, 0x6D),
+                    Color = UiPulse,
                     ShadowDepth = 0, BlurRadius = 8, Opacity = 0.55
                 }
             };
@@ -2438,10 +2364,10 @@ tags: [kokonoe, live-core, diagnostics]
             var dot = new System.Windows.Shapes.Ellipse
             {
                 Width = 6, Height = 6,
-                Fill = new SolidColorBrush(MediaColor.FromRgb(0xFF, 0x4D, 0x6D)),
+                Fill = new SolidColorBrush(UiPulse),
                 Effect = new System.Windows.Media.Effects.DropShadowEffect
                 {
-                    Color = MediaColor.FromRgb(0xFF, 0x4D, 0x6D),
+                    Color = UiPulse,
                     ShadowDepth = 0, BlurRadius = 12, Opacity = 0.9
                 }
             };
@@ -2540,6 +2466,117 @@ tags: [kokonoe, live-core, diagnostics]
         {
             _agentDetailLevel = AgentDetailLevelBox?.SelectedIndex ?? 1;
             RefreshAgentTaskBoard();
+        }
+
+        private void GenesisRefresh_Click(object sender, RoutedEventArgs e) => RefreshGenesisFabric();
+
+        private void GenesisRegister_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var role = GenesisRoleBox.SelectedItem as KokoAgentRoleDefinition;
+                var roleId = role?.RoleId ?? "analyst";
+                var provider = GenesisProviderBox.Text?.Trim();
+                var model = GenesisModelBox.Text?.Trim();
+                var agent = ServiceContainer.AgentFactory.CreateOrUpdateAgent(
+                    GenesisAgentIdBox.Text,
+                    roleId,
+                    displayName: role?.DisplayName,
+                    provider: string.IsNullOrWhiteSpace(provider) ? null : provider,
+                    model: string.IsNullOrWhiteSpace(model) ? null : model);
+
+                GenesisStatusText.Text = $"registered {agent.AgentId} as {agent.RoleId}";
+                RefreshGenesisFabric(selectAgentId: agent.AgentId);
+            }
+            catch (Exception ex)
+            {
+                GenesisStatusText.Text = "register failed: " + ex.Message;
+            }
+        }
+
+        private void GenesisDisable_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var agentId = GenesisAgentIdBox.Text.Trim();
+                if (string.IsNullOrWhiteSpace(agentId))
+                {
+                    GenesisStatusText.Text = "agent id is empty";
+                    return;
+                }
+
+                var ok = ServiceContainer.AgentFactory.SetAgentEnabled(agentId, false);
+                GenesisStatusText.Text = ok ? $"disabled {agentId}" : $"agent not found: {agentId}";
+                RefreshGenesisFabric(selectAgentId: agentId);
+            }
+            catch (Exception ex)
+            {
+                GenesisStatusText.Text = "disable failed: " + ex.Message;
+            }
+        }
+
+        private void GenesisRunTask_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var objective = SandboxInput.Text.Trim();
+                if (string.IsNullOrWhiteSpace(objective))
+                {
+                    GenesisStatusText.Text = "prompt workspace is empty";
+                    return;
+                }
+
+                HookAgentTaskEvents();
+                var agentId = GenesisAgentIdBox.Text.Trim();
+                var role = (GenesisRoleBox.SelectedItem as KokoAgentRoleDefinition)?.RoleId ?? "analyst";
+                var task = ServiceContainer.AgentTasks.AddTask($"[{agentId}/{role}] {objective}", priority: 7);
+                ServiceContainer.Blackboard.Publish(agentId, "task", $"queued task {task.Id}: {objective}", 0.68,
+                    new { task.Id, role, objective }, "queued");
+                GenesisStatusText.Text = $"queued {task.Id}";
+                RefreshAgentTaskBoard();
+                RefreshGenesisFabric(selectAgentId: agentId);
+            }
+            catch (Exception ex)
+            {
+                GenesisStatusText.Text = "queue failed: " + ex.Message;
+            }
+        }
+
+        private void RefreshGenesisFabric(string? selectAgentId = null)
+        {
+            try
+            {
+                if (!ServiceContainer.IsInitialized)
+                    return;
+
+                var factory = ServiceContainer.AgentFactory;
+                var roles = factory.Roles.ToList();
+                if (GenesisRoleBox.Items.Count == 0)
+                {
+                    GenesisRoleBox.ItemsSource = roles;
+                    GenesisRoleBox.SelectedItem = roles.FirstOrDefault(r => r.RoleId == "analyst") ?? roles.FirstOrDefault();
+                }
+
+                var snap = factory.GetSnapshot();
+                GenesisConsoleText.Text = factory.RenderConsole();
+                GenesisStatusText.Text = $"agents {snap.Agents.Count(a => a.Enabled)}/{snap.Agents.Count} | blackboard {snap.BlackboardRecent.Count}";
+
+                var selected = !string.IsNullOrWhiteSpace(selectAgentId)
+                    ? snap.Agents.FirstOrDefault(a => a.AgentId.Equals(selectAgentId.Trim(), StringComparison.OrdinalIgnoreCase))
+                    : snap.Agents.FirstOrDefault(a => a.AgentId.Equals(GenesisAgentIdBox.Text.Trim(), StringComparison.OrdinalIgnoreCase));
+                if (selected != null)
+                {
+                    GenesisAgentIdBox.Text = selected.AgentId;
+                    GenesisProviderBox.Text = selected.Provider;
+                    GenesisModelBox.Text = selected.Model;
+                    GenesisRoleBox.SelectedItem = roles.FirstOrDefault(r => r.RoleId.Equals(selected.RoleId, StringComparison.OrdinalIgnoreCase))
+                        ?? GenesisRoleBox.SelectedItem;
+                }
+            }
+            catch (Exception ex)
+            {
+                GenesisStatusText.Text = "fabric offline: " + ex.Message;
+            }
         }
 
         private bool HookAgentTaskEvents()
@@ -2756,6 +2793,29 @@ tags: [kokonoe, live-core, diagnostics]
                 McpOutput.Text = brain.BuildInspectorMarkdown();
             }
             catch (Exception ex) { McpOutput.Text = $"Inspector error: {ex.Message}"; }
+        }
+
+        private void RightGenesis_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                RefreshGenesisFabric();
+                McpOutput.Text = ServiceContainer.AgentFactory.RenderConsole();
+            }
+            catch (Exception ex) { McpOutput.Text = $"Genesis error: {ex.Message}"; }
+        }
+
+        private async void RightOverlord_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                McpOutput.Text = "System Overlord scanning configured roots...";
+                var snap = await ServiceContainer.SystemOverlord.ScanAsync(maxFiles: AppSettings.Load().SystemOverlordMaxFiles);
+                McpOutput.Text = ServiceContainer.SystemOverlord.RenderConsole();
+                if (snap.Proposals.Count == 0)
+                    McpOutput.Text += "\n\nNo maintenance proposals. Either clean system, or insufficient evidence. Shocking restraint.";
+            }
+            catch (Exception ex) { McpOutput.Text = $"Overlord error: {ex.Message}"; }
         }
 
         private void McpRecentNotes_Click(object sender, RoutedEventArgs e)
@@ -3862,6 +3922,14 @@ Full PC context:
                     if (compact.Count > 0)
                         parts.Add("=== LIGHT CONTINUITY ===\n" + string.Join("\n", compact));
                 }
+            }
+            catch { }
+
+            try
+            {
+                var collective = ServiceContainer.BrainEngine?.BuildCollectiveMindDirective(userText);
+                if (!string.IsNullOrWhiteSpace(collective))
+                    parts.Add("=== COLLECTIVE MIND FAST ===\n" + collective);
             }
             catch { }
 
@@ -4985,15 +5053,15 @@ tags: []
                 var bubble = new Border
                 {
                     Background = (System.Windows.Media.SolidColorBrush)System.Windows.Application.Current.Resources["AccentUserBubble"],
-                    CornerRadius = new CornerRadius(18, 6, 18, 18),
+                    CornerRadius = new CornerRadius(10, 2, 10, 10),
                     Padding = new Thickness(16, 11, 16, 11),
-                    BorderBrush = (System.Windows.Media.SolidColorBrush)System.Windows.Application.Current.Resources["AccentBgBorder2"],
+                    BorderBrush = (System.Windows.Media.SolidColorBrush)System.Windows.Application.Current.Resources["AccentAsstBorder"],
                     BorderThickness = new Thickness(1)
                 };
                 bubble.Effect = new System.Windows.Media.Effects.DropShadowEffect
                 {
                     Color = ((System.Windows.Media.SolidColorBrush)System.Windows.Application.Current.Resources["AccentUserShadow"]).Color,
-                    ShadowDepth = 2, BlurRadius = 8, Opacity = 0.5
+                    ShadowDepth = 0, BlurRadius = 10, Opacity = 0.18
                 };
 
                 var sp = new StackPanel();
@@ -5016,16 +5084,16 @@ tags: []
                     sp.Children.Add(new TextBlock
                     {
                         Text = vm.Content, TextWrapping = TextWrapping.Wrap,
-                        Foreground = System.Windows.Media.Brushes.White,
+                        Foreground = (System.Windows.Media.SolidColorBrush)System.Windows.Application.Current.Resources["AccentTextLight"],
                         FontSize = 13, LineHeight = 21,
-                        FontFamily = new System.Windows.Media.FontFamily("Segoe UI")
+                        FontFamily = new System.Windows.Media.FontFamily("Segoe UI Variable, Segoe UI")
                     });
                 }
 
                 sp.Children.Add(new TextBlock
                 {
                     Text = vm.TimeStr, FontSize = 10,
-                    Foreground = (System.Windows.Media.SolidColorBrush)System.Windows.Application.Current.Resources["AccentPale"],
+                    Foreground = (System.Windows.Media.SolidColorBrush)System.Windows.Application.Current.Resources["AccentMuted"],
                     HorizontalAlignment = System.Windows.HorizontalAlignment.Right,
                     Margin = new Thickness(0, 5, 0, 0)
                 });
@@ -5084,7 +5152,7 @@ tags: []
                 outer.Children.Add(header);
 
                 // Emotion-based border color
-                var emotionBorder = "#22D3EE66";
+                var emotionBorder = "#68E6D666";
                 if (!isError)
                 {
                     try
@@ -5092,12 +5160,12 @@ tags: []
                         var emo = ServiceContainer.EmotionEngine.Current.ToString();
                         emotionBorder = emo switch
                         {
-                            "Warm" or "Tender"         => "#F48FB166",
-                            "Playful"                  => "#A78BFA66",
-                            "Irritated" or "Distant"   => "#FB718566",
-                            "Protective" or "Concerned" => "#FBBF2466",
-                            "Melancholy"               => "#64748B66",
-                            _                          => "#22D3EE66"
+                            "Warm" or "Tender"         => "#D7B46A66",
+                            "Playful"                  => "#68E6D666",
+                            "Irritated" or "Distant"   => "#E25A6A66",
+                            "Protective" or "Concerned" => "#D7B46A88",
+                            "Melancholy"               => "#6C788466",
+                            _                          => "#68E6D666"
                         };
                     }
                     catch { }
@@ -5109,9 +5177,9 @@ tags: []
                     Background = isError
                         ? MakeBrush("#1A0808")
                         : (System.Windows.Media.SolidColorBrush)System.Windows.Application.Current.Resources["AccentAsstBubble"],
-                    CornerRadius = new CornerRadius(6, 18, 18, 18),
+                    CornerRadius = new CornerRadius(2, 10, 10, 10),
                     Padding = new Thickness(16, 12, 16, 12),
-                    BorderBrush = MakeBrush(isError ? "#FB718566" : emotionBorder),
+                    BorderBrush = MakeBrush(isError ? "#E25A6A66" : emotionBorder),
                     BorderThickness = new Thickness(1)
                 };
 
@@ -5124,7 +5192,7 @@ tags: []
                 {
                     Width = 3,
                     Background = isError
-                        ? MakeBrush("#FB7185")
+                        ? MakeBrush("#E25A6A")
                         : (System.Windows.Media.SolidColorBrush)System.Windows.Application.Current.Resources["AccentBase"],
                     CornerRadius = new CornerRadius(2),
                     Margin = new Thickness(0, 2, 14, 2),
@@ -5137,7 +5205,7 @@ tags: []
                     Text = vm.Content,
                     TextWrapping = TextWrapping.Wrap,
                     Foreground = isError
-                        ? MakeBrush("#FB7185")
+                        ? MakeBrush("#E25A6A")
                         : (System.Windows.Media.SolidColorBrush)System.Windows.Application.Current.Resources["AccentTextLight"],
                     FontSize = 13,
                     LineHeight = 21,
@@ -5393,7 +5461,7 @@ tags: []
                     KokoEmotionEngine.EmotionState.Tender     => "#F48FB1",
                     KokoEmotionEngine.EmotionState.Focused    => "#FFF176",
                     KokoEmotionEngine.EmotionState.Distant    => "#78909C",
-                    _                                         => "#22D3EE",
+                    _                                         => "#68E6D6",
                 };
                 var color = (System.Windows.Media.Color)
                     System.Windows.Media.ColorConverter.ConvertFromString(hex);
@@ -6584,10 +6652,10 @@ tags: []
             DashMemoryPanel.Visibility = tab == "memory" ? Visibility.Visible : Visibility.Collapsed;
             DashSystemPanel.Visibility = tab == "system" ? Visibility.Visible : Visibility.Collapsed;
 
-            DashStyleTab(DashTabNeuroBtn,  tab == "neuro",  MediaColor.FromRgb(155, 77, 202));
-            DashStyleTab(DashTabDevBtn,    tab == "dev",    MediaColor.FromRgb(0, 255, 136));
-            DashStyleTab(DashTabMemoryBtn, tab == "memory", MediaColor.FromRgb(34, 211, 238));
-            DashStyleTab(DashTabSystemBtn, tab == "system", MediaColor.FromRgb(255, 184, 92));
+            DashStyleTab(DashTabNeuroBtn,  tab == "neuro",  UiInfo);
+            DashStyleTab(DashTabDevBtn,    tab == "dev",    UiOk);
+            DashStyleTab(DashTabMemoryBtn, tab == "memory", UiMercury);
+            DashStyleTab(DashTabSystemBtn, tab == "system", UiWarn);
 
             switch (tab)
             {
@@ -6626,7 +6694,7 @@ tags: []
             {
                 txt.Foreground = active
                     ? new System.Windows.Media.SolidColorBrush(accent)
-                    : new System.Windows.Media.SolidColorBrush(MediaColor.FromRgb(107, 107, 128));
+                    : new System.Windows.Media.SolidColorBrush(UiMuted);
             }
         }
 
@@ -6695,7 +6763,7 @@ tags: []
                 DashCurrentMoodDisplay.Text = $"СТАН: {uiState.Primary}".ToUpperInvariant();
                 DashCurrentMoodDisplay.Foreground = uiState.Kind == "stable"
                     ? DashMakeBrush(cur)
-                    : new SolidColorBrush(MediaColor.FromRgb(0xFF, 0xB0, 0x20));
+                    : new SolidColorBrush(UiWarn);
 
                 var emotionSubtext = cur switch
                 {
@@ -6781,7 +6849,7 @@ tags: []
 
                 var raw = ServiceContainer.KokoPatterns.GetHourlyActivity();
                 var totalReal = raw.Sum();
-                int[] data = totalReal == 0 ? DashGeneratePlausibleHourly() : raw;
+                int[] data = raw;
 
                 var w = DashW(DashActivityBarCanvas, 800);
                 var h = DashH(DashActivityBarCanvas, 130);
@@ -6796,23 +6864,39 @@ tags: []
                     DashActivityBarCanvas.Children.Add(DashHLine(0, w, gy, MediaColor.FromArgb(14, 255, 255, 255)));
                 }
 
+                if (totalReal == 0)
+                {
+                    DashActivityBarCanvas.Children.Add(DashVLine(
+                        curH * barW + barW / 2 + 2,
+                        0,
+                        h,
+                        MediaColor.FromArgb(84, UiOk.R, UiOk.G, UiOk.B),
+                        dashOn: 3,
+                        dashOff: 4));
+                    DashDrawEmptyState(DashActivityBarCanvas, "no activity samples yet", w, h);
+                    foreach (var lh in new[] { 0, 6, 12, 18, 23 })
+                        DashActivityAxisCanvas.Children.Add(DashLabel($"{lh:00}", lh * barW + 2, 2, 7, UiMuted));
+                    DashActivitySparkLabel.Text = "no samples recorded";
+                    return;
+                }
+
                 for (int hr = 0; hr < 24; hr++)
                 {
                     var v     = data[hr];
                     var ratio = v / (double)maxV;
-                    var bh    = Math.Max(4, ratio * h * 0.88);
+                    var bh    = Math.Max(2, ratio * h * 0.88);
                     var x     = hr * barW + 2;
                     var isCur = hr == curH;
 
                     MediaColor barColor;
                     if (isCur)
-                        barColor = MediaColor.FromArgb(230, 0, 255, 136);
+                        barColor = MediaColor.FromArgb(230, UiOk.R, UiOk.G, UiOk.B);
                     else if (ratio > 0.7)
-                        barColor = DashBlendColor(DashEmotionColorOf(emotion.Current), MediaColor.FromRgb(155, 77, 202), 0.5f, 200);
+                        barColor = DashBlendColor(DashEmotionColorOf(emotion.Current), UiInfo, 0.5f, 200);
                     else if (ratio > 0.35)
-                        barColor = MediaColor.FromArgb(130, 155, 77, 202);
+                        barColor = MediaColor.FromArgb(150, UiInfo.R, UiInfo.G, UiInfo.B);
                     else
-                        barColor = MediaColor.FromArgb(40, 155, 77, 202);
+                        barColor = MediaColor.FromArgb(62, UiMuted.R, UiMuted.G, UiMuted.B);
 
                     var rect = new WpfRect
                     {
@@ -6820,7 +6904,7 @@ tags: []
                         Fill = new System.Windows.Media.SolidColorBrush(barColor),
                         RadiusX = 2, RadiusY = 2
                     };
-                    if (isCur) rect.Effect = DashGlow(MediaColor.FromRgb(0, 255, 136), 12);
+                    if (isCur) rect.Effect = DashGlow(UiOk, 12);
 
                     Canvas.SetLeft(rect, x);
                     Canvas.SetBottom(rect, 0);
@@ -6829,11 +6913,11 @@ tags: []
                 }
 
                 var lx = curH * barW + barW / 2 + 2;
-                DashActivityBarCanvas.Children.Add(DashVLine(lx, 0, h, MediaColor.FromArgb(100, 0, 255, 136), dashOn: 3, dashOff: 3));
+                DashActivityBarCanvas.Children.Add(DashVLine(lx, 0, h, MediaColor.FromArgb(100, UiOk.R, UiOk.G, UiOk.B), dashOn: 3, dashOff: 3));
 
                 int[] ticks = { 0, 3, 6, 9, 12, 15, 18, 21, 23 };
                 foreach (var lh in ticks)
-                    DashActivityAxisCanvas.Children.Add(DashLabel($"{lh:00}", lh * barW + 2, 2, 7, MediaColor.FromRgb(74, 61, 92)));
+                    DashActivityAxisCanvas.Children.Add(DashLabel($"{lh:00}", lh * barW + 2, 2, 7, UiMuted));
 
                 var total = totalReal > 0 ? totalReal : data.Sum();
                 DashActivitySparkLabel.Text = totalReal > 0
@@ -6867,7 +6951,10 @@ tags: []
                 }
                 else
                 {
-                    segments = DashGeneratePieFromCurrent(emotion.Current);
+                    segments = new List<(KokoEmotionEngine.EmotionState State, double Pct)>
+                    {
+                        (emotion.Current, 1.0)
+                    };
                 }
 
                 double cx = 65, cy = 65, r = 57, ir = 28;
@@ -6898,7 +6985,7 @@ tags: []
                     {
                         Text = $"{state} {pct:P0}",
                         FontSize = 8,
-                        Foreground = new System.Windows.Media.SolidColorBrush(MediaColor.FromRgb(107, 91, 125)),
+                        Foreground = new System.Windows.Media.SolidColorBrush(UiMuted),
                         VerticalAlignment = VerticalAlignment.Center,
                         FontFamily = new WpfFF("Consolas")
                     });
@@ -6955,10 +7042,10 @@ tags: []
                 var poly = new System.Windows.Shapes.Polyline
                 {
                     Points = pts,
-                    Stroke = new System.Windows.Media.SolidColorBrush(MediaColor.FromRgb(34, 211, 238)),
+                    Stroke = new System.Windows.Media.SolidColorBrush(UiMercury),
                     StrokeThickness = 1.8,
                     Effect = new System.Windows.Media.Effects.DropShadowEffect
-                    { Color = MediaColor.FromRgb(34, 211, 238), ShadowDepth = 0, BlurRadius = 8, Opacity = 0.5 },
+                    { Color = UiMercury, ShadowDepth = 0, BlurRadius = 8, Opacity = 0.5 },
                 };
                 DashMood24hCanvas.Children.Add(poly);
 
@@ -6983,7 +7070,7 @@ tags: []
                         {
                             Text = hr.ToString("00"),
                             FontSize = 8,
-                            Foreground = new System.Windows.Media.SolidColorBrush(MediaColor.FromRgb(90, 90, 110)),
+                            Foreground = new System.Windows.Media.SolidColorBrush(UiMuted),
                         };
                         System.Windows.Controls.Canvas.SetLeft(tb, hr * wAx / 23.0 - 7);
                         DashMood24hAxisCanvas.Children.Add(tb);
@@ -7054,7 +7141,7 @@ tags: []
                         {
                             Text = hr.ToString("00"),
                             FontSize = 8,
-                            Foreground = new System.Windows.Media.SolidColorBrush(MediaColor.FromRgb(90, 90, 110)),
+                            Foreground = new System.Windows.Media.SolidColorBrush(UiMuted),
                         };
                         System.Windows.Controls.Canvas.SetLeft(tb, hr * wAx / 23.0 - 7);
                         DashHeatmapAxisCanvas.Children.Add(tb);
@@ -7097,15 +7184,20 @@ tags: []
                 if (history.Count >= 4)
                     series = DashBuildConnSeries(history, emotion.ConnectionScore);
                 else
-                    series = DashGenerateSyntheticBurndown(emotion.ConnectionScore, 30);
+                    series = new List<(DateTime When, double Conn)>();
 
-                if (series.Count < 2) return;
+                if (series.Count < 2)
+                {
+                    DrawPulseOverlayLabel(DashBurndownCanvas, 14, 12, $"current connection {emotion.ConnectionScore:P0}", UiPulse);
+                    DashDrawEmptyState(DashBurndownCanvas, "not enough relationship history for a trend", w, h);
+                    return;
+                }
 
                 var t0    = series.First().When;
                 var tEnd  = series.Last().When;
                 var tspan = Math.Max(1, (tEnd - t0).TotalMilliseconds);
 
-                var fillPoly = new System.Windows.Shapes.Polygon { Opacity = 0.10, Fill = new System.Windows.Media.SolidColorBrush(MediaColor.FromRgb(255, 105, 180)) };
+                var fillPoly = new System.Windows.Shapes.Polygon { Opacity = 0.10, Fill = new System.Windows.Media.SolidColorBrush(UiPulse) };
                 fillPoly.Points.Add(new System.Windows.Point(0, h));
                 foreach (var (when, conn) in series)
                     fillPoly.Points.Add(new System.Windows.Point(
@@ -7116,9 +7208,9 @@ tags: []
 
                 var line = new System.Windows.Shapes.Polyline
                 {
-                    Stroke = new System.Windows.Media.SolidColorBrush(MediaColor.FromRgb(255, 105, 180)),
+                    Stroke = new System.Windows.Media.SolidColorBrush(UiPulse),
                     StrokeThickness = 2,
-                    Effect = DashGlow(MediaColor.FromRgb(255, 105, 180), 6)
+                    Effect = DashGlow(UiPulse, 6)
                 };
 
                 for (int i = 0; i < series.Count; i++)
@@ -7146,7 +7238,7 @@ tags: []
                 {
                     var (when, _) = series[i];
                     var x = (when - t0).TotalMilliseconds / tspan * axW;
-                    DashBurndownAxisCanvas.Children.Add(DashLabel(when.ToString("MM/dd"), x, 2, 7, MediaColor.FromRgb(74, 61, 92)));
+                    DashBurndownAxisCanvas.Children.Add(DashLabel(when.ToString("MM/dd"), x, 2, 7, UiMuted));
                 }
             }
             catch { }
@@ -7189,9 +7281,9 @@ tags: []
 
                 var connBrush = emotion.ConnectionScore switch
                 {
-                    >= 0.75f => new System.Windows.Media.SolidColorBrush(MediaColor.FromRgb(255, 105, 180)),
-                    >= 0.50f => new System.Windows.Media.SolidColorBrush(MediaColor.FromRgb(155, 77, 202)),
-                    >= 0.25f => new System.Windows.Media.SolidColorBrush(MediaColor.FromRgb(255, 215, 0)),
+                    >= 0.75f => new System.Windows.Media.SolidColorBrush(UiPulse),
+                    >= 0.50f => new System.Windows.Media.SolidColorBrush(UiInfo),
+                    >= 0.25f => new System.Windows.Media.SolidColorBrush(UiWarn),
                     _        => (MediaBrush)MediaBrushes.Gray
                 };
                 DashKpiConnection.Foreground = connBrush;
@@ -7210,14 +7302,14 @@ tags: []
 
                 var connSpark = DashBuildConnSparkValues(emotion);
                 var msgSpark  = DashBuildDailyMsgSpark(chats);
-                DashDrawSparkline(DashKpiSparkConnection, connSpark, MediaColor.FromRgb(255, 105, 180));
-                DashDrawSparkline(DashKpiSparkMessages,   msgSpark,  MediaColor.FromRgb(255, 215, 0));
+                DashDrawSparkline(DashKpiSparkConnection, connSpark, UiPulse);
+                DashDrawSparkline(DashKpiSparkMessages,   msgSpark,  UiWarn);
                 DashDrawSparkline(DashKpiSparkMemory,
-                    Enumerable.Repeat((double)Math.Max(1, factCount), 7).ToArray(),
-                    MediaColor.FromRgb(0, 206, 209));
+                    Enumerable.Repeat((double)factCount, 7).ToArray(),
+                    UiMercury);
                 DashDrawSparkline(DashKpiSparkPatterns,
-                    Enumerable.Repeat((double)Math.Max(1, patCount), 7).ToArray(),
-                    MediaColor.FromRgb(255, 140, 66));
+                    Enumerable.Repeat((double)patCount, 7).ToArray(),
+                    MediaColor.FromRgb(0xC9, 0x82, 0x4A));
             }
             catch { }
         }
@@ -7400,7 +7492,7 @@ tags: []
 
                 RightEmotionText.Text = $"{uiState.Emotion.ToUpperInvariant()} · mood {state.MoodScore:F2}";
                 RightBodyText.Text = $"{DashboardSomaticLabel(somatic.State).ToUpperInvariant()} · strain {somatic.Strain:F2}";
-                RightPulseText.Text = hasWearablePulse ? $"{wearableBpm:0} bpm · {wearableBpm - wearableBaseline:+0;-0;0}" : "-- bpm";
+                RightPulseText.Text = hasWearablePulse ? $"watch {wearableBpm:0} · {wearableBpm - wearableBaseline:+0;-0;0}" : "watch --";
                 RightVaultSyncText.Text = $"sync {state.PendingVaultExchangeCount}/5 · mem {_liveCoreMemoryItems} · tasks {_liveCoreOpenTasks}";
                 RightKokoConditionText.Text = uiState.Primary.ToUpperInvariant();
                 RightKokoConditionDetailText.Text = uiState.Detail;
@@ -7934,14 +8026,14 @@ tags: [kokonoe, dashboard, live]
                         DashGitActivityCanvas.Children.Add(rect);
                     }
 
-                    Bar(groupX,          commits[i],  MediaColor.FromRgb(155, 77, 202), $"Commits: {commits[i]:0}");
-                    Bar(groupX + barW,   prMerge[i],  MediaColor.FromRgb(0, 255, 136),  $"PR-Merge: {prMerge[i]:0}");
-                    Bar(groupX + barW*2, mlMerged[i], MediaColor.FromRgb(0, 206, 209),  $"ML-Merged: {mlMerged[i]:0}");
+                    Bar(groupX,          commits[i],  UiInfo, $"Commits: {commits[i]:0}");
+                    Bar(groupX + barW,   prMerge[i],  UiOk,  $"PR-Merge: {prMerge[i]:0}");
+                    Bar(groupX + barW*2, mlMerged[i], UiMercury,  $"ML-Merged: {mlMerged[i]:0}");
                 }
 
                 for (int i = 0; i < 7; i++)
                     DashGitAxisCanvas.Children.Add(DashLabel(dayLabels[i], i * groupW + 4 + groupW / 2 - 8, 2, 7,
-                        MediaColor.FromRgb(74, 61, 92)));
+                        UiMuted));
 
                 void AddLegend(Canvas c, double x, MediaColor col, string txt)
                 {
@@ -7950,9 +8042,9 @@ tags: [kokonoe, dashboard, live]
                     c.Children.Add(dot);
                     c.Children.Add(DashLabel(txt, x + 9, 2, 7, col));
                 }
-                AddLegend(DashGitAxisCanvas, groupW * 0.5,  MediaColor.FromRgb(155, 77, 202), "Commits");
-                AddLegend(DashGitAxisCanvas, groupW * 2.5,  MediaColor.FromRgb(0, 255, 136),  "PR-Merge");
-                AddLegend(DashGitAxisCanvas, groupW * 4.5,  MediaColor.FromRgb(0, 206, 209),  "ML-Merged");
+                AddLegend(DashGitAxisCanvas, groupW * 0.5,  UiInfo, "Commits");
+                AddLegend(DashGitAxisCanvas, groupW * 2.5,  UiOk,  "PR-Merge");
+                AddLegend(DashGitAxisCanvas, groupW * 4.5,  UiMercury,  "ML-Merged");
 
                 var totalStoryPts = (int)(commits.Sum() * 1.5 + prMerge.Sum() * 3);
                 DashGitVelocityLabel.Text = $"{totalStoryPts} Story Points computed";
@@ -7988,11 +8080,11 @@ tags: [kokonoe, dashboard, live]
 
                 var segments = new (string Name, double Pct, MediaColor Color)[]
                 {
-                    ("Кодинг",      coding,   MediaColor.FromRgb(155, 77, 202)),
-                    ("Дебаг",       debug,    MediaColor.FromRgb(255, 51, 102)),
-                    ("Code Review", review,   MediaColor.FromRgb(0, 206, 209)),
-                    ("Planning",    planning, MediaColor.FromRgb(255, 215, 0)),
-                    ("Research",    research, MediaColor.FromRgb(0, 255, 136)),
+                    ("Кодинг",      coding,   UiInfo),
+                    ("Дебаг",       debug,    UiPulse),
+                    ("Code Review", review,   UiMercury),
+                    ("Planning",    planning, UiWarn),
+                    ("Research",    research, UiOk),
                 };
 
                 double cx = 65, cy = 65, r = 57, ir = 28, angle = -90;
@@ -8019,7 +8111,7 @@ tags: [kokonoe, dashboard, live]
                     row.Children.Add(new TextBlock
                     {
                         Text = $"{name} {pct:P0}", FontSize = 8,
-                        Foreground = new System.Windows.Media.SolidColorBrush(MediaColor.FromRgb(107, 91, 125)),
+                        Foreground = new System.Windows.Media.SolidColorBrush(UiMuted),
                         VerticalAlignment = VerticalAlignment.Center,
                         FontFamily = new WpfFF("Consolas")
                     });
@@ -8075,7 +8167,7 @@ tags: [kokonoe, dashboard, live]
                     actualPts[d] = remaining;
                 }
 
-                var fillPoly = new System.Windows.Shapes.Polygon { Opacity = 0.10, Fill = new System.Windows.Media.SolidColorBrush(MediaColor.FromRgb(155, 77, 202)) };
+                var fillPoly = new System.Windows.Shapes.Polygon { Opacity = 0.10, Fill = new System.Windows.Media.SolidColorBrush(UiInfo) };
                 fillPoly.Points.Add(new System.Windows.Point(0, h));
                 for (int d = 0; d <= sprintDay; d++)
                     fillPoly.Points.Add(new System.Windows.Point(
@@ -8086,9 +8178,9 @@ tags: [kokonoe, dashboard, live]
 
                 var actualLine = new System.Windows.Shapes.Polyline
                 {
-                    Stroke = new System.Windows.Media.SolidColorBrush(MediaColor.FromRgb(155, 77, 202)),
+                    Stroke = new System.Windows.Media.SolidColorBrush(UiInfo),
                     StrokeThickness = 2,
-                    Effect = DashGlow(MediaColor.FromRgb(155, 77, 202), 6)
+                    Effect = DashGlow(UiInfo, 6)
                 };
                 for (int d = 0; d <= sprintDay; d++)
                 {
@@ -8096,7 +8188,7 @@ tags: [kokonoe, dashboard, live]
                     var y = h - (actualPts[d] / totalPts) * h * 0.88;
                     actualLine.Points.Add(new System.Windows.Point(x, y));
 
-                    var dot = new System.Windows.Shapes.Ellipse { Width = 5, Height = 5, Fill = new System.Windows.Media.SolidColorBrush(MediaColor.FromRgb(155, 77, 202)) };
+                    var dot = new System.Windows.Shapes.Ellipse { Width = 5, Height = 5, Fill = new System.Windows.Media.SolidColorBrush(UiInfo) };
                     dot.ToolTip = d == sprintDay ? "Сьогодні" : $"День {d}: {actualPts[d]:F0} pts";
                     Canvas.SetLeft(dot, x - 2.5);
                     Canvas.SetTop(dot, y - 2.5);
@@ -8106,9 +8198,9 @@ tags: [kokonoe, dashboard, live]
 
                 for (int d = 0; d <= sprintLen; d += 2)
                     DashSprintAxisCanvas.Children.Add(DashLabel($"д{d}", d / (double)sprintLen * DashW(DashSprintAxisCanvas, w), 2, 7,
-                        MediaColor.FromRgb(74, 61, 92)));
+                        UiMuted));
 
-                DashSprintAxisCanvas.Children.Add(DashLabel($"// день {sprintDay}, факт", 0, 9, 7, MediaColor.FromRgb(155, 77, 202)));
+                DashSprintAxisCanvas.Children.Add(DashLabel($"// день {sprintDay}, факт", 0, 9, 7, UiInfo));
             }
             catch { }
         }
@@ -8143,8 +8235,8 @@ tags: [kokonoe, dashboard, live]
                 DashDevKpiVelocity.Text      = weekMsgs.ToString();
                 DashDevKpiVelocityDelta.Text = msgDelta == 0 ? "—" : (msgDelta > 0 ? $"+{msgDelta}%" : $"{msgDelta}%");
                 DashDevKpiVelocityDelta.Foreground = msgDelta >= 0
-                    ? new System.Windows.Media.SolidColorBrush(MediaColor.FromRgb(0, 255, 136))
-                    : new System.Windows.Media.SolidColorBrush(MediaColor.FromRgb(255, 51, 102));
+                    ? new System.Windows.Media.SolidColorBrush(UiOk)
+                    : new System.Windows.Media.SolidColorBrush(UiPulse);
 
                 // — KPI 2: Пік активності (real peak hour from pattern engine) —
                 var hourly  = patterns.GetHourlyActivity();
@@ -8168,14 +8260,14 @@ tags: [kokonoe, dashboard, live]
                 DashDevKpiBugs.Text      = insights.ToString();
                 DashDevKpiBugsDelta.Text = "патернів";
 
-                DashDrawSparkline(DashDevKpiSparkVelocity, msgsSpark,  MediaColor.FromRgb(155, 77, 202));
-                DashDrawSparkline(DashDevKpiSparkFocus,    focusSpark, MediaColor.FromRgb(0, 206, 209));
+                DashDrawSparkline(DashDevKpiSparkVelocity, msgsSpark,  UiInfo);
+                DashDrawSparkline(DashDevKpiSparkFocus,    focusSpark, UiMercury);
                 DashDrawSparkline(DashDevKpiSparkCoverage,
                     Enumerable.Repeat((double)coveragePct, 7).ToArray(),
-                    MediaColor.FromRgb(0, 255, 136));
+                    UiOk);
                 DashDrawSparkline(DashDevKpiSparkBugs,
                     Enumerable.Repeat((double)insights, 7).ToArray(),
-                    MediaColor.FromRgb(255, 51, 102));
+                    UiPulse);
             }
             catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[Dash] DevKpis failed: {ex.Message}"); }
         }
@@ -8190,6 +8282,11 @@ tags: [kokonoe, dashboard, live]
             if (values == null || values.Length < 2) return;
             var w    = DashW(canvas, 120);
             var h    = DashH(canvas, 24);
+            if (values.All(v => Math.Abs(v) < 0.001))
+            {
+                canvas.Children.Add(DashHLine(0, w, h * 0.68, MediaColor.FromArgb(54, UiGrid.R, UiGrid.G, UiGrid.B)));
+                return;
+            }
             var max  = values.Max() > 0 ? values.Max() : 1;
             var step = w / (values.Length - 1.0);
             var line = new System.Windows.Shapes.Polyline
@@ -8235,8 +8332,6 @@ tags: [kokonoe, dashboard, live]
                 var day = DateTime.Today.AddDays(-d);
                 result[6-d] = chats.GetMessagesFromDate(day, 500).Where(m => m.Timestamp.Date == day).Count();
             }
-            if (result.All(v => v == 0))
-                return new double[] { 3, 7, 12, 5, 8, 15, 9 };
             return result;
         }
 
@@ -8264,33 +8359,6 @@ tags: [kokonoe, dashboard, live]
                               or KokoEmotionEngine.EmotionState.Irritated)
                     conn = Math.Max(0.1, conn - 0.02);
                 result.Add((e.When, Math.Clamp(conn, 0.05, 1.0)));
-            }
-            return result;
-        }
-
-        private static int[] DashGeneratePlausibleHourly()
-            => new int[] { 0,0,0,1,2,3,5,8,12,15,14,11,9,10,13,14,15,12,10,14,18,16,11,5 };
-
-        private static List<(KokoEmotionEngine.EmotionState State, double Pct)> DashGeneratePieFromCurrent(
-            KokoEmotionEngine.EmotionState cur)
-            => new List<(KokoEmotionEngine.EmotionState, double)>
-            {
-                (cur,                                     0.38),
-                (KokoEmotionEngine.EmotionState.Calm,     0.22),
-                (KokoEmotionEngine.EmotionState.Focused,  0.17),
-                (KokoEmotionEngine.EmotionState.Curious,  0.13),
-                (KokoEmotionEngine.EmotionState.Warm,     0.10),
-            };
-
-        private static List<(DateTime When, double Conn)> DashGenerateSyntheticBurndown(float curConn, int days)
-        {
-            var result = new List<(DateTime, double)>();
-            var now    = DateTime.Now;
-            double c   = Math.Max(0.3, curConn - 0.15);
-            for (int d = days; d >= 0; d--)
-            {
-                c = Math.Clamp(c + 0.005 + Math.Sin(d * 0.7) * 0.05, 0.1, 1.0);
-                result.Add((now.AddDays(-d), c));
             }
             return result;
         }
@@ -8348,6 +8416,21 @@ tags: [kokonoe, dashboard, live]
             return tb;
         }
 
+        private static void DashDrawEmptyState(Canvas canvas, string text, double w, double h)
+        {
+            var label = new TextBlock
+            {
+                Text = text,
+                FontSize = 10,
+                FontFamily = new WpfFF("Segoe UI Variable, Segoe UI"),
+                Foreground = new SolidColorBrush(MediaColor.FromArgb(150, UiMuted.R, UiMuted.G, UiMuted.B))
+            };
+            label.Measure(new WpfSz(double.PositiveInfinity, double.PositiveInfinity));
+            Canvas.SetLeft(label, Math.Max(8, (w - label.DesiredSize.Width) * 0.5));
+            Canvas.SetTop(label, Math.Max(8, (h - label.DesiredSize.Height) * 0.5));
+            canvas.Children.Add(label);
+        }
+
         private static System.Windows.Media.Effects.DropShadowEffect DashGlow(MediaColor c, double blur)
             => new() { Color = c, ShadowDepth = 0, BlurRadius = blur, Opacity = 0.65 };
 
@@ -8366,22 +8449,22 @@ tags: [kokonoe, dashboard, live]
         // ---- Emotion color map ----
         private static MediaColor DashEmotionColorOf(KokoEmotionEngine.EmotionState s) => s switch
         {
-            KokoEmotionEngine.EmotionState.Calm       => MediaColor.FromRgb(0,   206, 209),
-            KokoEmotionEngine.EmotionState.Curious    => MediaColor.FromRgb(155, 77,  202),
-            KokoEmotionEngine.EmotionState.Warm       => MediaColor.FromRgb(255, 182, 193),
-            KokoEmotionEngine.EmotionState.Playful    => MediaColor.FromRgb(255, 215, 0),
-            KokoEmotionEngine.EmotionState.Proud      => MediaColor.FromRgb(218, 165, 32),
-            KokoEmotionEngine.EmotionState.Concerned  => MediaColor.FromRgb(255, 140, 66),
-            KokoEmotionEngine.EmotionState.Melancholy => MediaColor.FromRgb(112, 128, 144),
-            KokoEmotionEngine.EmotionState.Irritated  => MediaColor.FromRgb(255, 51,  102),
-            KokoEmotionEngine.EmotionState.Protective => MediaColor.FromRgb(220, 20,  60),
-            KokoEmotionEngine.EmotionState.Tender     => MediaColor.FromRgb(255, 160, 180),
-            KokoEmotionEngine.EmotionState.Focused    => MediaColor.FromRgb(70,  130, 180),
-            KokoEmotionEngine.EmotionState.Distant    => MediaColor.FromRgb(128, 128, 128),
-            KokoEmotionEngine.EmotionState.Excited    => MediaColor.FromRgb(0,   255, 136),
-            KokoEmotionEngine.EmotionState.Nostalgic  => MediaColor.FromRgb(147, 112, 219),
-            KokoEmotionEngine.EmotionState.Anxious    => MediaColor.FromRgb(255, 165, 0),
-            KokoEmotionEngine.EmotionState.Hopeful    => MediaColor.FromRgb(135, 206, 250),
+            KokoEmotionEngine.EmotionState.Calm       => UiMercury,
+            KokoEmotionEngine.EmotionState.Curious    => UiInfo,
+            KokoEmotionEngine.EmotionState.Warm       => MediaColor.FromRgb(0xD8, 0x9A, 0xA8),
+            KokoEmotionEngine.EmotionState.Playful    => UiWarn,
+            KokoEmotionEngine.EmotionState.Proud      => UiWarn,
+            KokoEmotionEngine.EmotionState.Concerned  => MediaColor.FromRgb(0xC9, 0x82, 0x4A),
+            KokoEmotionEngine.EmotionState.Melancholy => UiMuted,
+            KokoEmotionEngine.EmotionState.Irritated  => UiPulse,
+            KokoEmotionEngine.EmotionState.Protective => UiPulse,
+            KokoEmotionEngine.EmotionState.Tender     => MediaColor.FromRgb(0xD8, 0x9A, 0xA8),
+            KokoEmotionEngine.EmotionState.Focused    => UiInfo,
+            KokoEmotionEngine.EmotionState.Distant    => UiMuted,
+            KokoEmotionEngine.EmotionState.Excited    => UiOk,
+            KokoEmotionEngine.EmotionState.Nostalgic  => MediaColor.FromRgb(0x8F, 0xA3, 0xBF),
+            KokoEmotionEngine.EmotionState.Anxious    => MediaColor.FromRgb(0xC9, 0x82, 0x4A),
+            KokoEmotionEngine.EmotionState.Hopeful    => UiInfo,
             _                                         => MediaColor.FromRgb(255, 255, 255),
         };
 
@@ -9807,6 +9890,10 @@ tags: [kokonoe, dashboard, live]
             SP_Voice.IsChecked      = s.VoiceInputEnabled;
             SP_OpenAiKey.Text       = s.OpenAiApiKey;
             SP_VaultPath.Text       = s.VaultPath;
+            SP_SystemOverlordEnabled.IsChecked = s.SystemOverlordEnabled;
+            SP_SystemOverlordRoots.Text = s.SystemOverlordRoots;
+            SP_SystemOverlordMaxFiles.Text = s.SystemOverlordMaxFiles.ToString();
+            SP_SystemOverlordCloud.IsChecked = s.SystemOverlordCloudAnalysisEnabled;
             SP_Spont.IsChecked      = s.SpontaneousEnabled;
             SP_SpontInterval.Text   = s.SpontaneousIntervalMins.ToString();
             SP_ProactiveLevel.Text  = s.ProactiveAutonomyLevel.ToString();
@@ -10248,13 +10335,20 @@ tags: [kokonoe, dashboard, live]
             if (!string.IsNullOrWhiteSpace(openAiKeyText))
                 s.OpenAiApiKey = openAiKeyText;
             s.VaultPath          = SP_VaultPath.Text.Trim();
+            s.SystemOverlordEnabled = SP_SystemOverlordEnabled.IsChecked == true;
+            s.SystemOverlordRoots = string.IsNullOrWhiteSpace(SP_SystemOverlordRoots.Text)
+                ? "%USERPROFILE%\\Downloads\r\n%USERPROFILE%\\Pictures"
+                : SP_SystemOverlordRoots.Text.Trim();
+            if (int.TryParse(SP_SystemOverlordMaxFiles.Text.Trim(), out var overlordMax))
+                s.SystemOverlordMaxFiles = Math.Clamp(overlordMax, 50, 5000);
+            s.SystemOverlordCloudAnalysisEnabled = SP_SystemOverlordCloud.IsChecked == true;
             s.SpontaneousEnabled = SP_Spont.IsChecked == true;
             if (int.TryParse(SP_SpontInterval.Text.Trim(), out var spontMins))
                 s.SpontaneousIntervalMins = Math.Clamp(spontMins, 10, 240);
             if (int.TryParse(SP_ProactiveLevel.Text.Trim(), out var proactiveLevel))
                 s.ProactiveAutonomyLevel = Math.Clamp(proactiveLevel, 0, 3);
             s.MinimizeToTray     = SP_Tray.IsChecked == true;
-            s.MatrixColor        = string.IsNullOrWhiteSpace(SP_AccentColor.Text) ? "#22D3EE" : SP_AccentColor.Text.Trim();
+            s.MatrixColor        = string.IsNullOrWhiteSpace(SP_AccentColor.Text) ? "#68E6D6" : SP_AccentColor.Text.Trim();
 
             if (long.TryParse(SP_TgChatId.Text.Trim(), out var cid)) s.TelegramChatId = cid;
 

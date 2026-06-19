@@ -4,15 +4,15 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Kokonoe Chat" Height="900" Width="1400"
         MinHeight="600" MinWidth="800"
-        Background="#0B0B18"
-        Foreground="#E0E0E0"
+        Background="{DynamicResource AccentBgMain}"
+        Foreground="{DynamicResource AccentText}"
         WindowStartupLocation="CenterScreen"
         ResizeMode="CanResizeWithGrip">
 
     <Window.Resources>
         <Style x:Key="ModernButton" TargetType="Button">
-            <Setter Property="Background" Value="#FF6B35"/>
-            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="Background" Value="{DynamicResource AccentPrimary}"/>
+            <Setter Property="Foreground" Value="{DynamicResource AccentBgMain}"/>
             <Setter Property="FontSize" Value="12"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
             <Setter Property="Padding" Value="12,8"/>
@@ -26,10 +26,10 @@
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter Property="Background" Value="#FF8C5A"/>
+                                <Setter Property="Background" Value="{DynamicResource AccentPale}"/>
                             </Trigger>
                             <Trigger Property="IsPressed" Value="True">
-                                <Setter Property="Background" Value="#CC5520"/>
+                                <Setter Property="Background" Value="{DynamicResource AccentAmberLine}"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -39,11 +39,11 @@
 
         <Style x:Key="ToolButton" TargetType="Button">
             <Setter Property="Background" Value="Transparent"/>
-            <Setter Property="Foreground" Value="#BCCCDC"/>
+            <Setter Property="Foreground" Value="{DynamicResource AccentText}"/>
             <Setter Property="FontSize" Value="11"/>
             <Setter Property="Padding" Value="8"/>
             <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="BorderBrush" Value="#2A2A3E"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource AccentBgBorder2}"/>
             <Setter Property="Cursor" Value="Hand"/>
             <Setter Property="Template">
                 <Setter.Value>
@@ -57,9 +57,9 @@
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter Property="Background" Value="#16162A"/>
-                                <Setter Property="Foreground" Value="#FFF"/>
-                                <Setter Property="BorderBrush" Value="#FF6B35"/>
+                                <Setter Property="Background" Value="{DynamicResource AccentNavBg}"/>
+                                <Setter Property="Foreground" Value="{DynamicResource AccentTextLight}"/>
+                                <Setter Property="BorderBrush" Value="{DynamicResource AccentAsstBorder}"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -68,9 +68,9 @@
         </Style>
 
         <Style x:Key="ModernTextBox" TargetType="TextBox">
-            <Setter Property="Background" Value="#12121F"/>
-            <Setter Property="Foreground" Value="#E0E0E0"/>
-            <Setter Property="BorderBrush" Value="#2A2A3E"/>
+            <Setter Property="Background" Value="{DynamicResource AccentBgInput}"/>
+            <Setter Property="Foreground" Value="{DynamicResource AccentTextLight}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource AccentBgBorder2}"/>
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="Padding" Value="10"/>
             <Setter Property="FontSize" Value="12"/>
@@ -86,7 +86,7 @@
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsFocused" Value="True">
-                                <Setter Property="BorderBrush" Value="#FF6B35"/>
+                                <Setter Property="BorderBrush" Value="{DynamicResource AccentBase}"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -95,23 +95,23 @@
         </Style>
     </Window.Resources>
 
-    <Grid Background="#0B0B18">
+    <Grid Background="{DynamicResource AccentBgMain}">
         <Grid.RowDefinitions>
             <RowDefinition Height="*"/>
             <RowDefinition Height="100"/>
         </Grid.RowDefinitions>
 
             <!-- Message List Area - Full Width -->
-            <ListBox x:Name="MessageList" Grid.Row="0" Background="Transparent" BorderThickness="0" Margin="10">
+            <ListBox x:Name="MessageList" Grid.Row="0" Background="Transparent" BorderThickness="0" Margin="14,12,230,12">
                     <ListBox.ItemTemplate>
                         <DataTemplate>
-                            <Border Margin="10,5" Padding="12" BorderThickness="0,0,0,1" BorderBrush="#1A1A2E" CornerRadius="6" Background="#12121F">
+                            <Border Margin="10,5" Padding="13,11" BorderThickness="1" BorderBrush="{DynamicResource AccentBgBorder2}" CornerRadius="7" Background="{DynamicResource KokoCardBrush}">
                                 <StackPanel>
                                     <StackPanel Orientation="Horizontal" Margin="0,0,0,5">
-                                        <TextBlock Text="{Binding Role}" FontSize="11" Foreground="#FF6B35" FontWeight="Bold"/>
-                                        <TextBlock Text="{Binding Timestamp, StringFormat=HH:mm:ss}" FontSize="10" Foreground="#556" Margin="10,0,0,0"/>
+                                        <TextBlock Text="{Binding Role}" FontSize="11" Foreground="{DynamicResource AccentBase}" FontWeight="Bold"/>
+                                        <TextBlock Text="{Binding Timestamp, StringFormat=HH:mm:ss}" FontSize="10" Foreground="{DynamicResource AccentDim}" Margin="10,0,0,0"/>
                                     </StackPanel>
-                                    <TextBlock Text="{Binding Content}" TextWrapping="Wrap" Foreground="#BCCCDC" FontSize="12"/>
+                                    <TextBlock Text="{Binding Content}" TextWrapping="Wrap" Foreground="{DynamicResource AccentText}" FontSize="12"/>
                                 </StackPanel>
                             </Border>
                         </DataTemplate>
@@ -119,14 +119,14 @@
                 </ListBox>
 
             <!-- Pinned Messages Sidebar -->
-            <Border Grid.Row="0" Background="#16162A" BorderBrush="#1A1A2E" BorderThickness="0,0,1,0" Margin="0" Width="200" HorizontalAlignment="Right">
+            <Border Grid.Row="0" Background="{DynamicResource KokoSidebarBrush}" BorderBrush="{DynamicResource AccentBgBorder2}" BorderThickness="1,0,0,0" Margin="0" Width="220" HorizontalAlignment="Right">
                 <StackPanel>
-                    <TextBlock Text="📌 Pinned" FontSize="12" Foreground="#FF6B35" FontWeight="Bold" Margin="12,10,12,8"/>
+                    <TextBlock Text="📌 Pinned" FontSize="12" Foreground="{DynamicResource AccentBase}" FontWeight="Bold" Margin="12,10,12,8"/>
                     <ListBox x:Name="PinnedList" Background="Transparent" BorderThickness="0" MaxHeight="500">
                         <ListBox.ItemTemplate>
                             <DataTemplate>
-                                <Border Margin="8,4" Padding="10" Background="#12121F" CornerRadius="4" BorderThickness="1" BorderBrush="#2A2A3E">
-                                    <TextBlock Text="{Binding Content}" TextWrapping="Wrap" TextTrimming="CharacterEllipsis" Foreground="#BCCCDC" FontSize="10"/>
+                                <Border Margin="8,4" Padding="10" Background="{DynamicResource KokoCardBrush}" CornerRadius="6" BorderThickness="1" BorderBrush="{DynamicResource AccentBgBorder2}">
+                                    <TextBlock Text="{Binding Content}" TextWrapping="Wrap" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource AccentText}" FontSize="10"/>
                                 </Border>
                             </DataTemplate>
                         </ListBox.ItemTemplate>
@@ -135,7 +135,7 @@
             </Border>
 
             <!-- Input Area with Tools -->
-            <Border Grid.Row="1" Background="#12121F" BorderBrush="#1A1A2E" BorderThickness="0,1,0,0">
+            <Border Grid.Row="1" Background="{DynamicResource KokoInputPanelBrush}" BorderBrush="{DynamicResource AccentBgBorder2}" BorderThickness="0,1,0,0">
                 <StackPanel Margin="15">
                     <!-- Formatting Toolbar -->
                     <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
@@ -143,7 +143,7 @@
                         <Button x:Name="ItalicButton" Content="Italic" Style="{StaticResource ToolButton}" Margin="0,0,5,0" Click="FormatItalic_Click"/>
                         <Button x:Name="CodeButton" Content="Code" Style="{StaticResource ToolButton}" Margin="0,0,5,0" Click="FormatCode_Click"/>
                         <Button x:Name="QuoteButton" Content="Quote" Style="{StaticResource ToolButton}" Margin="0,0,5,0" Click="FormatQuote_Click"/>
-                        <Separator Background="#2A2A3E" Width="1" Margin="5,0"/>
+                        <Separator Background="{DynamicResource AccentBgBorder2}" Width="1" Margin="5,0"/>
                         <Button x:Name="RecordButton" Content="🎤 Record" Style="{StaticResource ToolButton}" Margin="0,0,5,0" Click="RecordVoice_Click"/>
                         <Button x:Name="PinButton" Content="📌 Pin" Style="{StaticResource ToolButton}" Margin="0,0,5,0" Click="PinMessage_Click"/>
                         <Button x:Name="ExportButton" Content="📤 Export" Style="{StaticResource ToolButton}" Margin="0,0,5,0" Click="ExportChat_Click"/>
