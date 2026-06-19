@@ -1,0 +1,52 @@
+root = true
+
+[*]
+charset = utf-8
+end_of_line = crlf
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+[*.{cs,csx}]
+indent_style = space
+indent_size = 4
+
+[*.{xaml,xml,config,props,targets,csproj}]
+indent_style = space
+indent_size = 2
+
+[*.{json,yml,yaml,md}]
+indent_style = space
+indent_size = 2
+
+[*.md]
+trim_trailing_whitespace = false
+
+# C# style preferences. Keep them as warnings for now so the current codebase is not
+# blocked by formatting debt while new code still gets a visible signal.
+dotnet_sort_system_directives_first = true
+dotnet_separate_import_directive_groups = false
+
+csharp_style_namespace_declarations = file_scoped:suggestion
+csharp_style_var_for_built_in_types = false:suggestion
+csharp_style_var_when_type_is_apparent = true:suggestion
+csharp_style_var_elsewhere = false:suggestion
+csharp_prefer_braces = true:suggestion
+csharp_prefer_simple_using_statement = true:suggestion
+csharp_prefer_static_local_function = true:suggestion
+
+# Nullable code should stay explicit and readable.
+dotnet_style_coalesce_expression = true:suggestion
+dotnet_style_null_propagation = true:suggestion
+
+# Safety-sensitive code should avoid hidden culture-dependent behavior.
+dotnet_diagnostic.CA1304.severity = suggestion
+dotnet_diagnostic.CA1305.severity = suggestion
+dotnet_diagnostic.CA1307.severity = suggestion
+dotnet_diagnostic.CA1309.severity = suggestion
+
+# Keep generated or designer files quiet.
+[*.Designer.cs]
+dotnet_analyzer_diagnostic.severity = none
+
+[*.g.cs]
+dotnet_analyzer_diagnostic.severity = none

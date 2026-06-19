@@ -37,10 +37,17 @@ namespace KokonoeAssistant.Services
     public sealed class KokoFileSystemToolService
     {
         private readonly string _workspaceRoot;
+        private readonly string _workspaceRootWithSeparator;
 
         public KokoFileSystemToolService(string workspaceRoot)
         {
-            _workspaceRoot = Path.GetFullPath(workspaceRoot);
+            if (string.IsNullOrWhiteSpace(workspaceRoot))
+                throw new ArgumentException("Workspace root is empty.", nameof(workspaceRoot));
+
+            _workspaceRoot = Path.GetFullPath(workspaceRoot)
+                .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            _workspaceRootWithSeparator = _workspaceRoot + Path.DirectorySeparatorChar;
+
             Directory.CreateDirectory(_workspaceRoot);
         }
 
@@ -57,13 +64,14 @@ namespace KokonoeAssistant.Services
         {
             if (request == null) throw new ArgumentNullException(nameof(request));
 
+            ct.ThrowIfCancellationRequested();
+
             var path = ResolveInsideWorkspace(request.Path);
             var destination = string.IsNullOrWhiteSpace(request.DestinationPath)
                 ? ""
                 : ResolveInsideWorkspace(request.DestinationPath);
 
-            if (request.Kind is KokoFileOperationKind.Delete or KokoFileOperationKind.Move or KokoFileOperationKind.WriteText &&
-                !request.Confirmed)
+            if (RequiresConfirmation(request.Kind) && !request.Confirmed)
             {
                 return new KokoFileOperationResult
                 {
@@ -115,6 +123,10 @@ namespace KokonoeAssistant.Services
                         return Fail($"Unsupported operation: {request.Kind}");
                 }
             }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
             catch (Exception ex)
             {
                 return Fail(ex.Message);
@@ -130,11 +142,23 @@ namespace KokonoeAssistant.Services
                 ? Path.GetFullPath(path)
                 : Path.GetFullPath(Path.Combine(_workspaceRoot, path));
 
-            if (!combined.StartsWith(_workspaceRoot, StringComparison.OrdinalIgnoreCase))
+            if (!IsInsideWorkspace(combined))
                 throw new InvalidOperationException($"Path escapes agent workspace: {combined}");
 
             return combined;
         }
+
+        private bool IsInsideWorkspace(string fullPath)
+        {
+            var normalized = Path.GetFullPath(fullPath)
+                .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+
+            return string.Equals(normalized, _workspaceRoot, StringComparison.OrdinalIgnoreCase) ||
+                   normalized.StartsWith(_workspaceRootWithSeparator, StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool RequiresConfirmation(KokoFileOperationKind kind) =>
+            kind is KokoFileOperationKind.Delete or KokoFileOperationKind.Move or KokoFileOperationKind.WriteText;
 
         private static KokoFileOperationResult Ok(string output, string message) => new()
         {
