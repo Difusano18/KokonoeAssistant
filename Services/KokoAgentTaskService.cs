@@ -597,15 +597,18 @@ namespace KokonoeAssistant.Services
             if (pcPlan == null)
                 return "SystemControl skipped: objective did not contain a plannable PC action.";
 
-            var pcExecution = await new PcActionExecutor(pc: ServiceContainer.PcControl)
-                .ExecuteAsync(pcPlan, ServiceContainer.PcControl.GetContextV2(PcObservationMode.Light), ct)
-                .ConfigureAwait(false);
+            var gatewayResult = await ServiceContainer.ToolGateway.ExecuteAsync(new KokoToolCall
+            {
+                Name = "pc_action",
+                Payload = pcPlan
+            }, ct).ConfigureAwait(false);
+            var pcExecution = gatewayResult.RawResult as PcActionExecutionResult;
             return $"""
-            SystemControl routed through PcActionExecutor.
+            SystemControl routed through IKokoToolGateway.
             - Action: {pcPlan.Actions.FirstOrDefault()?.ActionType}
-            - Decision: {pcExecution.Decision.Kind}
+            - Decision: {pcExecution?.Decision.Kind}
             - Result:
-            {TrimBlock(PcIntentRouter.FormatExecutionResult(pcExecution), 2200)}
+            {TrimBlock(pcExecution != null ? PcIntentRouter.FormatExecutionResult(pcExecution) : gatewayResult.ToLlmText(), 2200)}
             """.Trim();
 
 #if false

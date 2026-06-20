@@ -34,7 +34,14 @@ namespace KokonoeAssistant.Services
         public string Output { get; set; } = "";
     }
 
-    public sealed class KokoFileSystemToolService
+    public interface IKokoFileSystemToolService
+    {
+        IReadOnlyList<string> GetToolNames();
+        string ResolvePath(string path);
+        Task<KokoFileOperationResult> ExecuteAsync(KokoFileOperationRequest request, CancellationToken ct = default);
+    }
+
+    public sealed class KokoFileSystemToolService : IKokoFileSystemToolService
     {
         private readonly string _workspaceRoot;
         private readonly string _workspaceRootWithSeparator;
@@ -59,6 +66,8 @@ namespace KokonoeAssistant.Services
             "fs_delete",
             "fs_move"
         };
+
+        public string ResolvePath(string path) => ResolveInsideWorkspace(path);
 
         public async Task<KokoFileOperationResult> ExecuteAsync(KokoFileOperationRequest request, CancellationToken ct = default)
         {
@@ -129,7 +138,8 @@ namespace KokonoeAssistant.Services
             }
             catch (Exception ex)
             {
-                return Fail(ex.Message);
+                KokoSystemLog.Write("FILE-TOOL", $"{request.Kind} failed path={path} destination={destination}: {ex}");
+                return Fail($"{request.Kind} failed: {ex.Message}");
             }
         }
 

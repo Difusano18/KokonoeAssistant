@@ -277,7 +277,8 @@ namespace KokonoeAssistant.Services
                     _activityLog.RemoveRange(80, _activityLog.Count - 80);
             }
 
-            try { ActivityChanged?.Invoke(CloneActivity(snapshot)); } catch { }
+            try { ActivityChanged?.Invoke(CloneActivity(snapshot)); }
+            catch (Exception ex) { KokoSystemLog.Write("AGENT-RUNTIME", "activity subscriber failed: " + ex); }
             if (onStatus != null)
                 await onStatus(snapshot.Thought).ConfigureAwait(false);
         }
@@ -335,8 +336,9 @@ namespace KokonoeAssistant.Services
             {
                 return new ObsidianPreflightContextService(_obsidian).Build(userText, maxChars: 2600) ?? "";
             }
-            catch
+            catch (Exception ex)
             {
+                KokoSystemLog.Write("AGENT-RUNTIME", "direct vault context failed: " + ex);
                 return "";
             }
         }

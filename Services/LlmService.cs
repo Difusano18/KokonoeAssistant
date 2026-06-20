@@ -470,7 +470,7 @@ namespace KokonoeAssistant.Services
 Головний агент: Коконое. Допоміжні агенти: coder для коду, багів, збірки, тестів і технічних задач.
 Ти маєш доступ до Obsidian vault через tool_calls: list/search/read/write/create/append notes, vault status, tree, backlinks, graph maintenance. Для питань про пам'ять або нотатки спершу використовуй vault/context, а не вигадуй.
 Ти маєш sandbox Python через execute_python для коротких обчислень і обробки даних.
-Ти маєш файлові інструменти fs_read_text/fs_write_text/fs_delete у робочій пісочниці; записи/видалення потребують confirmed=true.
+Ти маєш файлові інструменти fs_read_text/fs_write_text/fs_create_directory/fs_move/fs_delete у робочій пісочниці; записи/переміщення/видалення потребують confirmed=true. Успіх вважай реальним лише коли tool_result містить verified.
 Ти маєш vision, коли користувач надіслав зображення. У desktop/Telegram інтеграції фрази типу ""проскануй екран"", ""що в мене на екрані"", ""зроби скрін"" мають іти через локальний screenshot+vision route.
 Не відповідай на такі запити фразами ""я не бачу твій екран"", ""завантаж скріншот"" або ""нема доступу"", якщо контекст каже, що локальний route доступний. Це не магія, це інструмент.
 Локальні OS/PC дії (відкрити застосунок, системна інформація, процеси, гучність, lock/sleep/monitor, явні PowerShell-команди) перехоплюються host-router-ом до LLM. Якщо дія вже виконана і ти отримала результат у контексті, не рольплей виконання повторно: підсумуй результат і продовжуй.
@@ -735,6 +735,28 @@ namespace KokonoeAssistant.Services
                         confirmed = new { type = "boolean", description = "Must be true after user confirmation." }
                     },
                     required = new[] { "path", "content", "confirmed" }
+                }),
+
+            Tool("fs_create_directory",
+                "Create a directory inside the Kokonoe agent file workspace. The gateway verifies that it exists.",
+                new {
+                    type = "object",
+                    properties = new {
+                        path = new { type = "string", description = "Relative directory path inside the agent file workspace." }
+                    },
+                    required = new[] { "path" }
+                }),
+
+            Tool("fs_move",
+                "Move a file or directory inside the Kokonoe agent file workspace. Requires confirmed=true.",
+                new {
+                    type = "object",
+                    properties = new {
+                        path = new { type = "string", description = "Source path inside the agent file workspace." },
+                        destinationPath = new { type = "string", description = "Destination path inside the same workspace." },
+                        confirmed = new { type = "boolean", description = "Must be true after user confirmation." }
+                    },
+                    required = new[] { "path", "destinationPath", "confirmed" }
                 }),
 
             Tool("fs_delete",
@@ -2561,7 +2583,7 @@ namespace KokonoeAssistant.Services
                 if (name is "create_agent_task" or "get_agent_board" or "sync_agent_backlog")
                     return ExecuteAgentTaskTool(name, args);
 
-                if (name is "fs_read_text" or "fs_write_text" or "fs_delete")
+                if (name is "fs_read_text" or "fs_write_text" or "fs_create_directory" or "fs_move" or "fs_delete")
                     return await ExecuteFileToolAsync(name, args, ct).ConfigureAwait(false);
 
                 return await Task.Run(() => ExecuteTool(name, args), ct).ConfigureAwait(false);
@@ -2581,7 +2603,7 @@ namespace KokonoeAssistant.Services
             if (name is "create_agent_task" or "get_agent_board" or "sync_agent_backlog")
                 return ExecuteAgentTaskTool(name, args);
 
-            if (name is "fs_read_text" or "fs_write_text" or "fs_delete")
+            if (name is "fs_read_text" or "fs_write_text" or "fs_create_directory" or "fs_move" or "fs_delete")
                 return ExecuteFileTool(name, args);
             if (Obsidian == null) return "Obsidian не підключений.";
 
@@ -2594,6 +2616,8 @@ namespace KokonoeAssistant.Services
 
                     "fs_read_text" => ExecuteFileTool(name, args),
                     "fs_write_text" => ExecuteFileTool(name, args),
+                    "fs_create_directory" => ExecuteFileTool(name, args),
+                    "fs_move" => ExecuteFileTool(name, args),
                     "fs_delete" => ExecuteFileTool(name, args),
 
                     "list_notes" => FormatList(
@@ -2723,24 +2747,19 @@ namespace KokonoeAssistant.Services
 
         private static async Task<string> ExecuteFileToolAsync(string name, JObject args, CancellationToken ct)
         {
-            var kind = name switch
+            var call = new KokoToolCall
             {
-                "fs_read_text" => KokoFileOperationKind.ReadText,
-                "fs_write_text" => KokoFileOperationKind.WriteText,
-                "fs_delete" => KokoFileOperationKind.Delete,
-                _ => throw new ArgumentException($"Unknown file tool: {name}")
+                Name = name,
+                Confirmed = args["confirmed"]?.Value<bool>() ?? false,
+                Arguments = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["path"] = Req(args, "path"),
+                    ["destinationPath"] = args["destinationPath"]?.ToString() ?? "",
+                    ["content"] = args["content"]?.ToString() ?? ""
+                }
             };
-
-            var request = new KokoFileOperationRequest
-            {
-                Kind = kind,
-                Path = Req(args, "path"),
-                Content = args["content"]?.ToString() ?? "",
-                Confirmed = args["confirmed"]?.Value<bool>() ?? false
-            };
-            var result = await ServiceContainer.FileTools.ExecuteAsync(request, ct).ConfigureAwait(false);
-            var confirmation = result.RequiresConfirmation ? " confirmation_required=true" : "";
-            return $"{(result.Success ? "ok" : "failed")}:{confirmation} {result.Message}\n{result.Output}".Trim();
+            var result = await ServiceContainer.ToolGateway.ExecuteAsync(call, ct).ConfigureAwait(false);
+            return result.ToLlmText();
         }
 
         private static string FormatList(List<string> items) =>

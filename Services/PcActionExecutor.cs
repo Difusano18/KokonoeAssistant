@@ -91,6 +91,7 @@ namespace KokonoeAssistant.Services
             catch (Exception ex)
             {
                 result.Message = ex.Message;
+                KokoSystemLog.Write("PC-ACTION", $"execute failed plan={plan.Id}: {ex}");
                 _journal.AppendDecision(plan, decision, error: ex.Message, rollbackAvailable: false);
                 return result;
             }
@@ -203,6 +204,7 @@ namespace KokonoeAssistant.Services
             catch (Exception ex)
             {
                 result.Message = ex.Message;
+                KokoSystemLog.Write("PC-ACTION", $"confirmed execute failed action={record.ActionId}: {ex}");
                 _journal.AppendDecision(plan, decision, error: ex.Message, rollbackAvailable: false);
                 return result;
             }

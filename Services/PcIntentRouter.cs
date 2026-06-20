@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -357,7 +358,8 @@ namespace KokonoeAssistant.Services
             string? text,
             PcControlService pc,
             CancellationToken ct = default,
-            PcActionExecutor? executor = null)
+            PcActionExecutor? executor = null,
+            IKokoToolGateway? gateway = null)
         {
             var normalized = NormalizeSystemControlText(text);
             var pendingCommand = TryParsePendingActionCommand(normalized);
@@ -366,14 +368,38 @@ namespace KokonoeAssistant.Services
                 try
                 {
                     ct.ThrowIfCancellationRequested();
-                    executor ??= new PcActionExecutor(pc: pc);
-                    var pendingResult = pendingCommand.Action == PcIntentAction.CancelPendingAction
-                        ? await executor.CancelPendingActionAsync(pendingCommand.Argument, "cancelled from live route").ConfigureAwait(false)
-                        : await executor.ConfirmAndExecuteAsync(
-                            pendingCommand.Argument,
-                            normalized,
-                            pc.GetContextV2(PcObservationMode.Light),
-                            ct).ConfigureAwait(false);
+                    PcActionExecutionResult pendingResult;
+                    if (gateway != null)
+                    {
+                        var gatewayResult = await gateway.ExecuteAsync(new KokoToolCall
+                        {
+                            Name = pendingCommand.Action == PcIntentAction.CancelPendingAction ? "pc_cancel" : "pc_confirm",
+                            Arguments = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                            {
+                                ["actionId"] = pendingCommand.Argument,
+                                ["confirmationText"] = normalized,
+                                ["reason"] = "cancelled from live route"
+                            }
+                        }, ct).ConfigureAwait(false);
+                        pendingResult = gatewayResult.RawResult as PcActionExecutionResult ?? new PcActionExecutionResult
+                        {
+                            ActionId = pendingCommand.Argument,
+                            Succeeded = gatewayResult.Success,
+                            Blocked = !gatewayResult.Success,
+                            Message = gatewayResult.Reason
+                        };
+                    }
+                    else
+                    {
+                        executor ??= new PcActionExecutor(pc: pc);
+                        pendingResult = pendingCommand.Action == PcIntentAction.CancelPendingAction
+                            ? await executor.CancelPendingActionAsync(pendingCommand.Argument, "cancelled from live route").ConfigureAwait(false)
+                            : await executor.ConfirmAndExecuteAsync(
+                                pendingCommand.Argument,
+                                normalized,
+                                pc.GetContextV2(PcObservationMode.Light),
+                                ct).ConfigureAwait(false);
+                    }
 
                     return new PcIntentExecutionResult
                     {
@@ -400,9 +426,30 @@ namespace KokonoeAssistant.Services
             try
             {
                 ct.ThrowIfCancellationRequested();
-                executor ??= new PcActionExecutor(pc: pc);
-                var routedResult = await executor.ExecuteAsync(routedPlan, pc.GetContextV2(PcObservationMode.Light), ct)
-                    .ConfigureAwait(false);
+                PcActionExecutionResult routedResult;
+                if (gateway != null)
+                {
+                    var gatewayResult = await gateway.ExecuteAsync(new KokoToolCall
+                    {
+                        Name = "pc_action",
+                        Payload = routedPlan
+                    }, ct).ConfigureAwait(false);
+                    routedResult = gatewayResult.RawResult as PcActionExecutionResult ?? new PcActionExecutionResult
+                    {
+                        ActionId = routedPlan.Id,
+                        Succeeded = gatewayResult.Success,
+                        Blocked = !gatewayResult.Success && !gatewayResult.RequiresConfirmation,
+                        RequiresConfirmation = gatewayResult.RequiresConfirmation,
+                        PendingActionId = gatewayResult.PendingActionId,
+                        Message = gatewayResult.Reason
+                    };
+                }
+                else
+                {
+                    executor ??= new PcActionExecutor(pc: pc);
+                    routedResult = await executor.ExecuteAsync(routedPlan, pc.GetContextV2(PcObservationMode.Light), ct)
+                        .ConfigureAwait(false);
+                }
                 return new PcIntentExecutionResult
                 {
                     Handled = true,

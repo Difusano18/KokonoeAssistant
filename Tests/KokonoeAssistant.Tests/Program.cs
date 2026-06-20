@@ -43,6 +43,9 @@ internal static class Program
             Run("Heartbeat dashboard writes markdown and html", HeartbeatDashboardWritesMarkdownAndHtml);
             Run("Semantic cache returns similar cached answer", SemanticCacheReturnsSimilarCachedAnswer);
             Run("Capability manifest advertises runtime routes", CapabilityManifestAdvertisesRuntimeRoutes);
+            Run("Tool gateway verifies file writes and directories", ToolGatewayVerifiesFileWritesAndDirectories);
+            Run("Tool gateway exposes confirmation and failures", ToolGatewayExposesConfirmationAndFailures);
+            Run("Tool gateway stops execution plan after failure", ToolGatewayStopsExecutionPlanAfterFailure);
             Run("Self regulation clamps pulse spike", SelfRegulationClampsPulseSpike);
             Run("Self regulation protects vulnerable tone", SelfRegulationProtectsVulnerableTone);
             Run("Initiative respects low-power silence", InitiativeRespectsLowPowerSilence);
@@ -5633,6 +5636,78 @@ Insight: bridge stability and pulse quality are linked.
             "descriptor should be disabled");
     }
 
+    private static void ToolGatewayVerifiesFileWritesAndDirectories()
+    {
+        using var ctx = TestContext.Create();
+        var workspace = Path.Combine(ctx.TestDir, "gateway-workspace");
+        var gateway = new KokoToolGateway(
+            new KokoFileSystemToolService(workspace),
+            new PcActionExecutor());
+
+        var directory = gateway.ExecuteAsync(new KokoToolCall
+        {
+            Name = "fs_create_directory",
+            Arguments = new Dictionary<string, string> { ["path"] = "notes" }
+        }).GetAwaiter().GetResult();
+        AssertTrue(directory.Success && directory.Verified, "directory creation must be verified by gateway");
+        AssertTrue(Directory.Exists(Path.Combine(workspace, "notes")), "verified directory must exist on disk");
+
+        var write = gateway.ExecuteAsync(new KokoToolCall
+        {
+            Name = "fs_write_text",
+            Confirmed = true,
+            Arguments = new Dictionary<string, string>
+            {
+                ["path"] = "notes/result.txt",
+                ["content"] = "gateway wrote this"
+            }
+        }).GetAwaiter().GetResult();
+        AssertTrue(write.Success && write.Verified, "write must not report success before read-back verification");
+        AssertEqual("gateway wrote this", File.ReadAllText(Path.Combine(workspace, "notes", "result.txt")), "verified write content should match");
+    }
+
+    private static void ToolGatewayExposesConfirmationAndFailures()
+    {
+        using var ctx = TestContext.Create();
+        var gateway = new KokoToolGateway(
+            new KokoFileSystemToolService(Path.Combine(ctx.TestDir, "gateway-workspace")),
+            new PcActionExecutor());
+
+        var confirmation = gateway.ExecuteAsync(new KokoToolCall
+        {
+            Name = "fs_write_text",
+            Arguments = new Dictionary<string, string>
+            {
+                ["path"] = "blocked.txt",
+                ["content"] = "must not exist"
+            }
+        }).GetAwaiter().GetResult();
+        AssertTrue(confirmation.RequiresConfirmation, "write without confirmation must be visible, not silently ignored");
+        AssertTrue(!confirmation.Success && !confirmation.Verified, "unconfirmed write must not report success");
+
+        var unknown = gateway.ExecuteAsync(new KokoToolCall { Name = "not_registered" }).GetAwaiter().GetResult();
+        AssertTrue(!unknown.Success && unknown.Reason.Contains("not registered", StringComparison.OrdinalIgnoreCase), "unknown tool must return explicit failure");
+    }
+
+    private static void ToolGatewayStopsExecutionPlanAfterFailure()
+    {
+        using var ctx = TestContext.Create();
+        var workspace = Path.Combine(ctx.TestDir, "gateway-workspace");
+        var gateway = new KokoToolGateway(new KokoFileSystemToolService(workspace), new PcActionExecutor());
+        var results = gateway.ExecutePlanAsync(new[]
+        {
+            new KokoToolCall { Name = "not_registered" },
+            new KokoToolCall
+            {
+                Name = "fs_create_directory",
+                Arguments = new Dictionary<string, string> { ["path"] = "must-not-run" }
+            }
+        }).GetAwaiter().GetResult();
+
+        AssertEqual(1, results.Count, "execution plan must stop after first failed tool");
+        AssertTrue(!Directory.Exists(Path.Combine(workspace, "must-not-run")), "steps after failure must not execute");
+    }
+
     private static void SystemOverlordScansMetadataAndProposesCleanup()
     {
         using var ctx = TestContext.Create();
@@ -7540,7 +7615,7 @@ Persistent Obsidian context is now a core project requirement.
             AssertEqual(KokoAgentTaskStatus.Completed, finalTask.Status, "system-control task should complete");
             var systemStep = finalTask.Steps.FirstOrDefault(s => s.Kind == KokoAgentStepKind.SystemControl);
             AssertTrue(systemStep != null, "system-control result should exist");
-            AssertTrue(systemStep!.Result.Contains("PcActionExecutor", StringComparison.OrdinalIgnoreCase), "system control should route through PcActionExecutor");
+            AssertTrue(systemStep!.Result.Contains("IKokoToolGateway", StringComparison.OrdinalIgnoreCase), "system control should route through unified tool gateway");
             AssertTrue(systemStep.Result.Contains("NeedsConfirmation", StringComparison.OrdinalIgnoreCase), "PowerShell should require confirmation instead of executing");
             service.Stop();
         }

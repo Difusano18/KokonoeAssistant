@@ -17,7 +17,7 @@ namespace KokonoeAssistant.Services
         private readonly KokoServiceHeartbeatService _heartbeat;
         private readonly Func<KokoWearableTelemetryService?> _wearableFactory;
         private readonly Func<KokoBrainEngine?> _brainFactory;
-        private readonly PcActionExecutor _executor;
+        private readonly IKokoToolGateway _toolGateway;
         private readonly System.Threading.Timer _timer;
         private readonly SemaphoreSlim _gate = new(1, 1);
         private readonly string _statePath;
@@ -31,7 +31,8 @@ namespace KokonoeAssistant.Services
             KokoInternalBlackboardService blackboard,
             KokoServiceHeartbeatService heartbeat,
             Func<KokoWearableTelemetryService?> wearableFactory,
-            Func<KokoBrainEngine?> brainFactory)
+            Func<KokoBrainEngine?> brainFactory,
+            IKokoToolGateway? toolGateway = null)
         {
             _dataDir = dataDir;
             Directory.CreateDirectory(_dataDir);
@@ -41,7 +42,9 @@ namespace KokonoeAssistant.Services
             _heartbeat = heartbeat;
             _wearableFactory = wearableFactory;
             _brainFactory = brainFactory;
-            _executor = new PcActionExecutor(pc: _pc);
+            _toolGateway = toolGateway ?? new KokoToolGateway(
+                new KokoFileSystemToolService(Path.Combine(dataDir, "agent-files")),
+                new PcActionExecutor(pc: _pc));
             _statePath = Path.Combine(_dataDir, "active-agency-state.json");
             _state = LoadState();
             _timer = new System.Threading.Timer(_ => _ = TickAsync("timer"), null, Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
@@ -105,7 +108,7 @@ namespace KokonoeAssistant.Services
                 "obsidian",
                 PcActionRiskTier.SafeLocal);
             plan.UserFacingSummaryUk = "Work bootstrap: open Obsidian beside coding context.";
-            var result = await _executor.ExecuteAsync(plan).ConfigureAwait(false);
+            var result = await ExecutePcPlanAsync(plan).ConfigureAwait(false);
             _state.LastWorkBootstrapAt = now;
             LogAction("work_bootstrap", result, "Detected coding context; opened Obsidian as working memory.");
         }
@@ -134,7 +137,7 @@ namespace KokonoeAssistant.Services
                 "25",
                 PcActionRiskTier.SafeLocal);
             plan.UserFacingSummaryUk = "Somatic automation: reduce audio volume during high strain.";
-            var result = await _executor.ExecuteAsync(plan).ConfigureAwait(false);
+            var result = await ExecutePcPlanAsync(plan).ConfigureAwait(false);
             _state.LastAudioDampenAt = now;
             LogAction("somatic_audio", result, $"Wearable strain {wearable.LiveStressScore}/100; volume {volume}% -> 25%.");
         }
@@ -166,7 +169,7 @@ namespace KokonoeAssistant.Services
                 "",
                 PcActionRiskTier.RiskyLocal);
             plan.UserFacingSummaryUk = "Sleep protection: lock PC after 30m idle and watch sleep telemetry.";
-            var result = await _executor.ExecuteAsync(plan).ConfigureAwait(false);
+            var result = await ExecutePcPlanAsync(plan).ConfigureAwait(false);
             _state.LastSleepLockProposalAt = now;
             LogAction("sleep_lock", result, $"Idle={info.IdleTime.TotalMinutes:F0}m; wearable={wearable.SleepState}; motion={wearable.Motion:F2}; bpm={wearable.CurrentBpm:F0}.");
         }
@@ -205,6 +208,27 @@ namespace KokonoeAssistant.Services
             KokoSystemLog.Write("ACTIVE_AGENCY", message);
         }
 
+        private async Task<PcActionExecutionResult> ExecutePcPlanAsync(PcActionPlan plan)
+        {
+            var gatewayResult = await _toolGateway.ExecuteAsync(new KokoToolCall
+            {
+                Name = "pc_action",
+                Payload = plan
+            }).ConfigureAwait(false);
+            if (gatewayResult.RawResult is PcActionExecutionResult pcResult)
+                return pcResult;
+
+            return new PcActionExecutionResult
+            {
+                ActionId = plan.Id,
+                Succeeded = false,
+                Blocked = !gatewayResult.RequiresConfirmation,
+                RequiresConfirmation = gatewayResult.RequiresConfirmation,
+                PendingActionId = gatewayResult.PendingActionId,
+                Message = gatewayResult.Reason
+            };
+        }
+
         private void LogAction(string kind, PcActionExecutionResult result, string reason)
         {
             var status = result.Succeeded ? "executed" :
@@ -225,7 +249,10 @@ namespace KokonoeAssistant.Services
                 _blackboard.Publish("active-agency", "internal_action", message, 0.55);
                 KokoSystemLog.Write("ACTIVE_AGENCY", "internal action suppressed from chat: " + Trim(message, 260));
             }
-            catch { }
+            catch (Exception ex)
+            {
+                KokoSystemLog.Write("ACTIVE_AGENCY", "append internal action failed: " + ex);
+            }
         }
 
         private AgencyState LoadState()
@@ -236,13 +263,17 @@ namespace KokonoeAssistant.Services
                     ? JsonConvert.DeserializeObject<AgencyState>(File.ReadAllText(_statePath)) ?? new AgencyState()
                     : new AgencyState();
             }
-            catch { return new AgencyState(); }
+            catch (Exception ex)
+            {
+                KokoSystemLog.Write("ACTIVE_AGENCY", "state load failed: " + ex);
+                return new AgencyState();
+            }
         }
 
         private void SaveState()
         {
             try { File.WriteAllText(_statePath, JsonConvert.SerializeObject(_state, Formatting.Indented)); }
-            catch { }
+            catch (Exception ex) { KokoSystemLog.Write("ACTIVE_AGENCY", "state save failed: " + ex); }
         }
 
         private static bool ContainsAny(string text, params string[] values)

@@ -41,6 +41,7 @@ namespace KokonoeAssistant
         private static KokoAgentTaskService?   _agentTasks;
         private static KokoAgentRuntimeService? _agentRuntime;
         private static KokoFileSystemToolService? _fileTools;
+        private static IKokoToolGateway? _toolGateway;
         private static KokoCapabilityManifestService? _capabilities;
         private static KokoPhotoFileWatcherService? _photoWatcher;
         private static KokoServiceHeartbeatService? _heartbeat;
@@ -295,6 +296,19 @@ namespace KokonoeAssistant
             }
         }
 
+        public static IKokoToolGateway ToolGateway
+        {
+            get
+            {
+                lock (_lock)
+                {
+                    return _toolGateway ??= new KokoToolGateway(
+                        FileTools,
+                        new PcActionExecutor(pc: PcControl));
+                }
+            }
+        }
+
         public static KokoInternalBlackboardService Blackboard
         {
             get
@@ -406,7 +420,8 @@ namespace KokonoeAssistant
                         Blackboard,
                         Heartbeat,
                         () => _wearable,
-                        () => _brain);
+                        () => _brain,
+                        ToolGateway);
                 }
             }
         }
@@ -606,6 +621,7 @@ namespace KokonoeAssistant
                     _wearableBridge?.Dispose(); _wearableBridge = null;
                     _agentTasks?.Stop(); _agentTasks = null;
                     _agentRuntime = null; _agentFactory = null; _systemOverlord = null;
+                    _toolGateway = null;
                     _fileTools = null;
                     _capabilities = null;
                     _profileUpdater = null;

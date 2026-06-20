@@ -26,6 +26,14 @@ The project uses WPF with Windows Forms interop (`UseWPF` + `UseWindowsForms`). 
 
 ## Architecture Overview
 
+### Mandatory Tool Gateway
+
+All filesystem and OS side effects must go through `ServiceContainer.ToolGateway` / `IKokoToolGateway`.
+Do not call `KokoFileSystemToolService.ExecuteAsync`, instantiate `PcActionExecutor`, or add another executor from production UI/LLM/agent code.
+Every write/create/move/delete must return a verified `KokoToolResult`; never claim success from provider output alone.
+Empty `catch { }` blocks are forbidden in new code. Log failures with `KokoSystemLog` and propagate a structured failure result where possible.
+See `Architecture/TOOL_GATEWAY.md`.
+
 ### Service Container Pattern
 
 `ServiceContainer.cs` implements a static service locator pattern for dependency injection. All services are lazily initialized and thread-safe using `lock (_lock)`.

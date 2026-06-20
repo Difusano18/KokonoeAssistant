@@ -1,70 +1,85 @@
-using System;
+using System.Collections.Generic;
 using System.ComponentModel;
-using System.Runtime.CompilerServices;
+using System.Windows.Controls;
 using System.Windows.Media.Imaging;
+using SkiaSharp;
 
 namespace KokonoeAssistant
 {
-    public class ChatMessageVm : INotifyPropertyChanged
+    internal sealed class MatrixColumn
     {
-        private string _content = "";
-
-        public string Id { get; set; } = Guid.NewGuid().ToString();
-        public string Role { get; set; } = "user";
-        public DateTime Time { get; set; } = DateTime.Now;
-        public string TimeStr => Time.ToString("HH:mm");
-        public BitmapImage? ImageThumb { get; set; }
-        public bool HasImage => ImageThumb != null;
-
-        public string Content
-        {
-            get => _content;
-            set { _content = value; OnPropertyChanged(); }
-        }
-
-        public event PropertyChangedEventHandler? PropertyChanged;
-        protected void OnPropertyChanged([CallerMemberName] string? n = null)
-            => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(n));
+        public double X;
+        public double Y;
+        public double Speed;
+        public List<TextBlock> Cells = new();
+        public int Length;
     }
 
-    public class NoteVm
+    internal sealed class MemoryCortexNodeVm
+    {
+        public string Id { get; init; } = "";
+        public string Text { get; init; } = "";
+        public string Category { get; init; } = "general";
+        public float Importance { get; init; }
+        public int ConfirmCount { get; init; }
+        public double X { get; set; }
+        public double Y { get; set; }
+        public double Radius { get; set; }
+        public SKColor Color { get; init; } = SKColors.White;
+    }
+
+    internal sealed class AgentChatUiResult
+    {
+        public string Reply { get; set; } = "";
+        public TextBlock? FinalTextBlock { get; set; }
+    }
+
+    internal sealed class ChatMessageVm
+    {
+        public string Role { get; set; } = "";
+        public string Content { get; set; } = "";
+        public System.DateTime Time { get; set; } = System.DateTime.Now;
+        public string TimeStr => Time.ToString("HH:mm");
+        public BitmapImage? ImageThumb { get; set; }
+    }
+
+    internal sealed class DashThoughtVm
+    {
+        public string Time { get; set; } = "";
+        public string Thought { get; set; } = "";
+        public string MoodTag { get; set; } = "";
+    }
+
+    internal sealed class CalEventVm
+    {
+        public string Id { get; set; } = "";
+        public string Title { get; set; } = "";
+        public string TimeStr { get; set; } = "";
+        public string DateStr { get; set; } = "";
+    }
+
+    internal sealed class NoteVm
     {
         public string Path { get; set; } = "";
         public string Title { get; set; } = "";
     }
 
-    public class HealthHistoryVm
+    public sealed class OllamaKeyRowVM : INotifyPropertyChanged
     {
-        public string DateStr { get; set; } = "";
-        public string Summary { get; set; } = "";
-    }
+        private string _name = "";
+        private string _key = "";
+        private string _statusText = "-";
+        private System.Windows.Media.Brush _statusBrush = System.Windows.Media.Brushes.Gray;
+        private System.Windows.Media.Brush _activeDotBrush = System.Windows.Media.Brushes.Transparent;
 
-    public class HabitVm : INotifyPropertyChanged
-    {
-        private bool _done;
-
-        public string Name { get; set; } = "";
-
-        public bool Done
-        {
-            get => _done;
-            set { _done = value; OnPropertyChanged(); }
-        }
+        public string Name { get => _name; set { _name = value; OnPropertyChanged(nameof(Name)); } }
+        public string Key { get => _key; set { _key = value; OnPropertyChanged(nameof(Key)); } }
+        public string StatusText { get => _statusText; set { _statusText = value; OnPropertyChanged(nameof(StatusText)); } }
+        public System.Windows.Media.Brush StatusBrush { get => _statusBrush; set { _statusBrush = value; OnPropertyChanged(nameof(StatusBrush)); } }
+        public System.Windows.Media.Brush ActiveDotBrush { get => _activeDotBrush; set { _activeDotBrush = value; OnPropertyChanged(nameof(ActiveDotBrush)); } }
 
         public event PropertyChangedEventHandler? PropertyChanged;
-        protected void OnPropertyChanged([CallerMemberName] string? n = null)
-            => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(n));
-    }
-
-    public class GoalVm
-    {
-        public string Title { get; set; } = "";
-    }
-
-    public class DashThoughtVm
-    {
-        public string Time { get; set; } = "";
-        public string Thought { get; set; } = "";
-        public string MoodTag { get; set; } = "";
+        private void OnPropertyChanged(string name)
+            => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
     }
 }

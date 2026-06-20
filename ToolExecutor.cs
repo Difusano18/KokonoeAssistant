@@ -4,7 +4,9 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
+using System.Threading;
 using System.Threading.Tasks;
+using KokonoeAssistant.Services;
 
 namespace KokonoeAssistant
 {
@@ -27,12 +29,16 @@ namespace KokonoeAssistant
         private readonly string _vaultPath;
         private readonly KnowledgeGraph _graph;
         private readonly StateEngine _state;
+        private readonly IKokoToolGateway _gateway;
 
-        public ToolExecutor(string vaultPath, KnowledgeGraph graph, StateEngine state)
+        public ToolExecutor(string vaultPath, KnowledgeGraph graph, StateEngine state, IKokoToolGateway? gateway = null)
         {
             _vaultPath = vaultPath;
             _graph = graph;
             _state = state;
+            _gateway = gateway ?? new KokoToolGateway(
+                new KokoFileSystemToolService(Path.Combine(vaultPath, ".kokonoe-tools")),
+                new PcActionExecutor());
             RegisterDefaultTools();
         }
 
@@ -50,6 +56,7 @@ namespace KokonoeAssistant
         public void RegisterTool(KokonooTool tool)
         {
             _tools[tool.Name.ToLower()] = tool;
+            _gateway.Register(new LegacyKokonooToolHandler(tool));
         }
 
         public async Task<string> ExecuteFromPrompt(string toolCall)
@@ -61,18 +68,24 @@ namespace KokonoeAssistant
             var toolName = match.Groups[1].Value.ToLower();
             var paramsJson = match.Groups[2].Value;
 
-            if (!_tools.TryGetValue(toolName, out var tool))
+            if (!_tools.ContainsKey(toolName))
                 return $"Tool '{toolName}' not found";
 
             try
             {
                 var parameters = Newtonsoft.Json.JsonConvert.DeserializeObject<Dictionary<string, string>>(paramsJson) 
                     ?? new Dictionary<string, string>();
-                return await tool.Execute(parameters);
+                var result = await _gateway.ExecuteAsync(new KokoToolCall
+                {
+                    Name = toolName,
+                    Arguments = parameters
+                }).ConfigureAwait(false);
+                return result.ToLlmText();
             }
             catch (Exception ex)
             {
-                return $"Error: {ex.Message}";
+                KokoSystemLog.Write("LEGACY-TOOL", $"parse/dispatch failed tool={toolName}: {ex}");
+                return $"tool_result {toolName} failure unverified: {ex.Message}";
             }
         }
 
@@ -87,6 +100,31 @@ namespace KokonoeAssistant
                 sb.AppendLine($"  - {name}: {tool.Description}");
             }
             return sb.ToString();
+        }
+
+        private sealed class LegacyKokonooToolHandler : IKokoToolHandler
+        {
+            private readonly KokonooTool _tool;
+            public string Name => _tool.Name;
+
+            public LegacyKokonooToolHandler(KokonooTool tool) => _tool = tool;
+
+            public async Task<KokoToolResult> ExecuteAsync(KokoToolCall call, CancellationToken ct)
+            {
+                ct.ThrowIfCancellationRequested();
+                var output = await _tool.Execute(call.Arguments).ConfigureAwait(false);
+                var failed = string.IsNullOrWhiteSpace(output) ||
+                             output.StartsWith("Error:", StringComparison.OrdinalIgnoreCase) ||
+                             output.Contains(" required", StringComparison.OrdinalIgnoreCase) ||
+                             output.Contains(" not found", StringComparison.OrdinalIgnoreCase);
+                return new KokoToolResult
+                {
+                    Success = !failed,
+                    Verified = !failed,
+                    Reason = failed ? output : "legacy handler completed",
+                    Output = output
+                };
+            }
         }
     }
 
@@ -115,17 +153,13 @@ namespace KokonoeAssistant
                 var results = new List<(string file, int matches)>();
                 var queryLower = query.ToLower();
 
-                try
+                foreach (var file in Directory.GetFiles(_vaultPath, "*.md", SearchOption.AllDirectories))
                 {
-                    foreach (var file in Directory.GetFiles(_vaultPath, "*.md", SearchOption.AllDirectories))
-                    {
-                        var content = File.ReadAllText(file).ToLower();
-                        var count = (content.Length - content.Replace(queryLower, "").Length) / queryLower.Length;
-                        if (count > 0)
-                            results.Add((Path.GetFileNameWithoutExtension(file), count));
-                    }
+                    var content = File.ReadAllText(file).ToLower();
+                    var count = (content.Length - content.Replace(queryLower, "").Length) / queryLower.Length;
+                    if (count > 0)
+                        results.Add((Path.GetFileNameWithoutExtension(file), count));
                 }
-                catch { }
 
                 if (results.Count == 0)
                     return "No matches found";
@@ -177,7 +211,11 @@ namespace KokonoeAssistant
 
                     return $"Note created: {path}";
                 }
-                catch (Exception ex) { return $"Error: {ex.Message}"; }
+                catch (Exception ex)
+                {
+                    KokoSystemLog.Write("LEGACY-TOOL", $"create_note failed path={path}: {ex}");
+                    return $"Error: {ex.Message}";
+                }
             });
         }
     }
@@ -220,7 +258,11 @@ namespace KokonoeAssistant
 
                     return $"Linked: {note1} <-[{relation}]-> {note2}";
                 }
-                catch (Exception ex) { return $"Error: {ex.Message}"; }
+                catch (Exception ex)
+                {
+                    KokoSystemLog.Write("LEGACY-TOOL", $"link_notes failed {note1}->{note2}: {ex}");
+                    return $"Error: {ex.Message}";
+                }
             });
         }
     }
@@ -341,7 +383,11 @@ namespace KokonoeAssistant
                     File.WriteAllText(outputPath, dot);
                     return $"Graph visualization saved to: {outputPath}";
                 }
-                catch (Exception ex) { return $"Error: {ex.Message}"; }
+                catch (Exception ex)
+                {
+                    KokoSystemLog.Write("LEGACY-TOOL", $"generate_visualization failed path={_vaultPath}: {ex}");
+                    return $"Error: {ex.Message}";
+                }
             });
         }
     }

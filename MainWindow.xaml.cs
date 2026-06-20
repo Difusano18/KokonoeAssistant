@@ -866,15 +866,6 @@ tags: [kokonoe, live-core, diagnostics]
         private readonly List<MatrixColumn> _matrixCols = new();
         private const string MatrixChars = "アイウエオカキクケコサシスセソタチツテトナニヌネノ0123456789ABCDEF∑∆∇∫≈≠∞";
 
-        private class MatrixColumn
-        {
-            public double X;
-            public double Y;
-            public double Speed;
-            public List<System.Windows.Controls.TextBlock> Cells = new();
-            public int Length;
-        }
-
         private void StartMatrixRain()
         {
             MatrixCanvas.Children.Clear();
@@ -1230,19 +1221,6 @@ tags: [kokonoe, live-core, diagnostics]
                 SelectMemoryCortexNode(_memoryCortexNodes.OrderByDescending(n => n.Importance).FirstOrDefault());
             }
             catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[MemTab] {ex.Message}"); }
-        }
-
-        private sealed class MemoryCortexNodeVm
-        {
-            public string Id { get; init; } = "";
-            public string Text { get; init; } = "";
-            public string Category { get; init; } = "general";
-            public float Importance { get; init; }
-            public int ConfirmCount { get; init; }
-            public double X { get; set; }
-            public double Y { get; set; }
-            public double Radius { get; set; }
-            public SKColor Color { get; init; } = SKColors.White;
         }
 
         private void BuildMemoryCortexNodes(IReadOnlyList<KokoMemoryEngine.MemoryFact> facts)
@@ -1814,7 +1792,10 @@ tags: [kokonoe, live-core, diagnostics]
                     .ToString();
                 WClipboard.SetText(setup);
             }
-            catch { }
+            catch (Exception ex)
+            {
+                KokoSystemLog.Write("WEARABLE-UI", "copy bridge setup failed: " + ex);
+            }
         }
 
         private void PulseBridgeFixFirewall_Click(object sender, RoutedEventArgs e)
@@ -3234,105 +3215,6 @@ tags: [kokonoe, live-core, diagnostics]
                 SendBtn.IsEnabled = true;
                 ScrollToBottom();
                 InputBox.Focus();
-            }
-        }
-
-        private sealed class AgentChatUiResult
-        {
-            public string Reply { get; set; } = "";
-            public TextBlock? FinalTextBlock { get; set; }
-        }
-
-        private async Task<PcIntentExecutionResult> TryHandleDirectControlCommandAsync(string userText, CancellationToken ct)
-        {
-            try
-            {
-                string reply;
-                if (TryScheduleWakeOrReminder(userText, out reply))
-                    return new PcIntentExecutionResult { Handled = true, Reply = reply };
-
-                var pc = await PcIntentRouter.TryExecuteAsync(userText, ServiceContainer.PcControl, ct);
-                if (pc.Handled)
-                    return pc;
-
-                var brain = ServiceContainer.BrainEngine;
-                if (brain != null && brain.TryApplyUserControlCommand(userText, out reply))
-                    return new PcIntentExecutionResult { Handled = true, Reply = reply };
-            }
-            catch (OperationCanceledException) { throw; }
-            catch { }
-            return new PcIntentExecutionResult { Handled = false };
-        }
-
-        private async Task<(bool Handled, string Reply)> TryHandleSystemOverlordDirectiveAsync(
-            string userText,
-            CancellationToken ct,
-            bool allowAgentTask = false)
-        {
-            var directive = KokoActionDirectiveRouter.Analyze(userText);
-            if (directive.Route == KokoActionDirectiveRoute.None)
-                return (false, "");
-
-            try
-            {
-                if (directive.Route == KokoActionDirectiveRoute.LocalArtifact)
-                {
-                    await ShowKokoActivityAsync("Overlord: сканую локальні файли і пишу артефакт");
-                    var result = await ServiceContainer.SystemOverlord.CreateSurpriseNoteAsync(userText, ct);
-                    return (true, result.ToUserReply());
-                }
-
-                if (allowAgentTask && directive.Route == KokoActionDirectiveRoute.AgentTask)
-                {
-                    HookAgentTaskEvents();
-                    var task = ServiceContainer.AgentTasks.AddTask(userText, priority: Math.Clamp(directive.Confidence / 10, 5, 9));
-                    ServiceContainer.AgentTasks.Start();
-                    RefreshAgentTaskBoard();
-                    KokoSystemLog.Write("ACTION-DIRECTIVE", $"agent task {task.Id}: {directive.Reason}; confidence={directive.Confidence}; objective={userText}");
-                    return (true, $"Взяла в agent-task `{task.Id}`. Route: {directive.Reason}. Не балакаю замість виконання.");
-                }
-            }
-            catch (OperationCanceledException) { throw; }
-            catch (Exception ex)
-            {
-                KokoSystemLog.Write("ACTION-DIRECTIVE", "UI directive failed: " + ex.Message);
-                return (true, "Не зробила. Action route зламався на: " + ex.Message);
-            }
-
-            return (false, "");
-        }
-
-        private static async Task<string> ExecuteLivePcActionPlanAsync(PcActionPlan plan, CancellationToken ct)
-        {
-            var pc = ServiceContainer.PcControl;
-            var result = await new PcActionExecutor(pc: pc)
-                .ExecuteAsync(plan, pc.GetContextV2(PcObservationMode.Light), ct)
-                .ConfigureAwait(false);
-            return PcIntentRouter.FormatExecutionResult(result);
-        }
-
-        private bool TryStartObservationAgentTask(string userText, out string reply)
-        {
-            reply = "";
-            try
-            {
-                if (!ServiceContainer.IsInitialized ||
-                    !KokoResponsePlannerEngine.LooksLikeLongObservationObjective(userText))
-                    return false;
-
-                HookAgentTaskEvents();
-                var objective = "Observation: " + userText.Trim();
-                var task = ServiceContainer.AgentTasks.AddTask(objective, priority: 8);
-                ServiceContainer.AgentTasks.Start();
-                var options = KokoObservationService.BuildOptions(objective, task.Id);
-                reply = $"Запустила observation-task `{task.Id}`: {KokoObservationService.DescribePlan(options)}. Згортаю своє вікно перед кадрами, знімаю весь virtual desktop і дам фінальний звіт після завершення.";
-                RefreshAgentTaskBoard();
-                return true;
-            }
-            catch (Exception ex)
-            {
-                reply = "Observation-task не стартував: " + ex.Message;
-                return true;
             }
         }
 
@@ -6203,7 +6085,10 @@ tags: []
                     }).ToList();
                 NotesList.ItemsSource = notes;
             }
-            catch { }
+            catch (Exception ex)
+            {
+                KokoSystemLog.Write("VAULT-UI", "refresh notes failed: " + ex);
+            }
         }
 
         private void NotesList_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -6399,14 +6284,6 @@ tags: []
 
         private DateTime _calViewDate    = new(DateTime.Today.Year, DateTime.Today.Month, 1);
         private DateTime _calSelectedDate = DateTime.Today;
-
-        private class CalEventVm
-        {
-            public string Id      { get; set; } = "";
-            public string Title   { get; set; } = "";
-            public string TimeStr { get; set; } = "";
-            public string DateStr { get; set; } = "";
-        }
 
         private void LoadCalendarTab()
         {
@@ -10017,27 +9894,6 @@ tags: [kokonoe, dashboard, live]
         // Ollama Cloud key-pool VM
         private readonly System.Collections.ObjectModel.ObservableCollection<OllamaKeyRowVM> _ollamaKeysVM = new();
         private System.Windows.Threading.DispatcherTimer? _poolRefreshTimer;
-
-        public class OllamaKeyRowVM : System.ComponentModel.INotifyPropertyChanged
-        {
-            private string _name = "";
-            private string _key  = "";
-            private string _statusText = "—";
-            private System.Windows.Media.Brush _statusBrush = System.Windows.Media.Brushes.Gray;
-            private System.Windows.Media.Brush _activeDotBrush = System.Windows.Media.Brushes.Transparent;
-
-            public string Name { get => _name; set { _name = value; OnPC(nameof(Name)); } }
-            public string Key  { get => _key;  set { _key  = value; OnPC(nameof(Key));  } }
-            public string StatusText { get => _statusText; set { _statusText = value; OnPC(nameof(StatusText)); } }
-            public System.Windows.Media.Brush StatusBrush
-            { get => _statusBrush; set { _statusBrush = value; OnPC(nameof(StatusBrush)); } }
-            public System.Windows.Media.Brush ActiveDotBrush
-            { get => _activeDotBrush; set { _activeDotBrush = value; OnPC(nameof(ActiveDotBrush)); } }
-
-            public event System.ComponentModel.PropertyChangedEventHandler? PropertyChanged;
-            private void OnPC(string n)
-                => PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(n));
-        }
 
         private string CurrentSelectedProvider()
         {
