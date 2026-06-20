@@ -210,7 +210,7 @@ namespace KokonoeAssistant.Windows
                                 encoder.Save(stream);
                             count++;
                         }
-                        catch { }
+                        catch (Exception suppressedEx213) { KokoSystemLog.Write("MEDIAVIEWERWINDOW.XAML-CATCH", "ExportButton_Click failed near source line 213: " + suppressedEx213); }
                     }
                     System.Windows.MessageBox.Show($"Exported {count} frames", "Done", MessageBoxButton.OK, MessageBoxImage.Information);
                 }

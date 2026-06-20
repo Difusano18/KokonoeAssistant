@@ -541,7 +541,7 @@ namespace KokonoeAssistant
         {
             lock (_lock)
             {
-                try { _wearableBridge?.Dispose(); } catch { }
+                try { _wearableBridge?.Dispose(); } catch (Exception suppressedEx544) { KokoSystemLog.Write("SERVICECONTAINER-CATCH", "ReloadWearableBridge failed near source line 544: " + suppressedEx544); }
                 _wearableBridge = null;
                 if (AppSettings.Load().WearBridgeEnabled)
                     _ = WearableBridge;
@@ -631,7 +631,7 @@ namespace KokonoeAssistant
                     _heartbeat = null; _blackboard = null; _lightOcr = null; _semanticCache = null;
                     _hyperAutomation = null; _processWatchdog = null;
                 }
-                catch { }
+                catch (Exception suppressedEx634) { KokoSystemLog.Write("SERVICECONTAINER-CATCH", "Disposing failed near source line 634: " + suppressedEx634); }
             }
         }
     }

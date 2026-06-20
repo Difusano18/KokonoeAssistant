@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Windows;
 using System.Windows.Threading;
+using KokonoeAssistant.Services;
 using WinApp    = System.Windows.Application;
 using WMsgBox   = System.Windows.MessageBox;
 
@@ -23,7 +24,7 @@ namespace KokonoeAssistant
                 var settings = AppSettings.Load();
                 ThemeManager.ApplyTheme(settings.MatrixColor);
             }
-            catch { }
+            catch (Exception suppressedEx26) { KokoSystemLog.Write("APP.XAML-CATCH", "OnStartup failed near source line 26: " + suppressedEx26); }
 
             // Global unhandled exception handlers
             AppDomain.CurrentDomain.UnhandledException += (s, ex) =>
@@ -94,7 +95,7 @@ namespace KokonoeAssistant
                 var path = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "crash.log");
                 File.AppendAllText(path, $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}]\n{msg}\n\n");
             }
-            catch { }
+            catch (Exception suppressedEx97) { KokoSystemLog.Write("APP.XAML-CATCH", "LogCrash failed near source line 97: " + suppressedEx97); }
         }
     }
 }

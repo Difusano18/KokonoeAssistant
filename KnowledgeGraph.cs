@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
+using KokonoeAssistant.Services;
 using Newtonsoft.Json;
 
 namespace KokonoeAssistant
@@ -200,7 +201,7 @@ namespace KokonoeAssistant
                     File.WriteAllText(_nodesPath, JsonConvert.SerializeObject(_nodes.Values, Formatting.Indented));
                     File.WriteAllText(_edgesPath, JsonConvert.SerializeObject(_edges, Formatting.Indented));
                 }
-                catch { }
+                catch (Exception suppressedEx203) { KokoSystemLog.Write("KNOWLEDGEGRAPH-CATCH", "Save failed near source line 203: " + suppressedEx203); }
             }
         }
 
@@ -225,7 +226,7 @@ namespace KokonoeAssistant
                             _edges.AddRange(edges);
                     }
                 }
-                catch { }
+                catch (Exception suppressedEx228) { KokoSystemLog.Write("KNOWLEDGEGRAPH-CATCH", "Load failed near source line 228: " + suppressedEx228); }
             }
         }
 

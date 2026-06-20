@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using KokonoeAssistant.Services;
 using Newtonsoft.Json;
 
 namespace KokonoeAssistant
@@ -155,7 +156,7 @@ namespace KokonoeAssistant
                     return loaded;
                 }
             }
-            catch { }
+            catch (Exception suppressedEx158) { KokoSystemLog.Write("APPSETTINGS-CATCH", "Load failed near source line 158: " + suppressedEx158); }
 
             var def = new AppSettings();
             RecoverMissingSecretsFromLegacySettings(def);
@@ -367,7 +368,7 @@ namespace KokonoeAssistant
                 Directory.CreateDirectory(dir);
                 File.WriteAllText(_path, JsonConvert.SerializeObject(this, Formatting.Indented));
             }
-            catch { }
+            catch (Exception suppressedEx370) { KokoSystemLog.Write("APPSETTINGS-CATCH", "Save failed near source line 370: " + suppressedEx370); }
         }
     }
 }

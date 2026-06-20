@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using KokonoeAssistant.Services;
 
 namespace KokonoeAssistant
 {
@@ -33,7 +34,7 @@ namespace KokonoeAssistant
                 var path = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "startup.log");
                 File.AppendAllText(path, $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] {message}{Environment.NewLine}");
             }
-            catch { }
+            catch (Exception suppressedEx36) { KokoSystemLog.Write("PROGRAM-CATCH", "BootstrapLog failed near source line 36: " + suppressedEx36); }
         }
 
         private static void TrySetConsoleUtf8()
@@ -42,12 +43,14 @@ namespace KokonoeAssistant
             {
                 Console.OutputEncoding = System.Text.Encoding.UTF8;
             }
-            catch (IOException)
+            catch (IOException ex)
             {
                 // WPF can start without an attached console; UI startup must not die over console encoding.
+                KokoSystemLog.Write("PROGRAM-CATCH", "Console UTF-8 setup unavailable: " + ex);
             }
-            catch (UnauthorizedAccessException)
+            catch (UnauthorizedAccessException ex)
             {
+                KokoSystemLog.Write("PROGRAM-CATCH", "Console UTF-8 setup denied: " + ex);
             }
         }
     }

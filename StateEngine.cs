@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
+using KokonoeAssistant.Services;
 using Newtonsoft.Json;
 
 namespace KokonoeAssistant
@@ -132,7 +133,7 @@ namespace KokonoeAssistant
             {
                 File.AppendAllText(_observationsPath, $"- {DateTime.Now:yyyy-MM-dd HH:mm} | {observation}\n");
             }
-            catch { }
+            catch (Exception suppressedEx135) { KokoSystemLog.Write("STATEENGINE-CATCH", "RecordObservation failed near source line 135: " + suppressedEx135); }
 
             Save();
         }
@@ -326,7 +327,7 @@ namespace KokonoeAssistant
             {
                 File.WriteAllText(_statePath, JsonConvert.SerializeObject(_state, Formatting.Indented));
             }
-            catch { }
+            catch (Exception suppressedEx329) { KokoSystemLog.Write("STATEENGINE-CATCH", "Save failed near source line 329: " + suppressedEx329); }
         }
 
         private void Load()
@@ -351,7 +352,7 @@ namespace KokonoeAssistant
                     }
                 }
             }
-            catch { }
+            catch (Exception suppressedEx354) { KokoSystemLog.Write("STATEENGINE-CATCH", "Load failed near source line 354: " + suppressedEx354); }
         }
     }
 }

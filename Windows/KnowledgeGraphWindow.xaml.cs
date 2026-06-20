@@ -6,6 +6,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Shapes;
+using KokonoeAssistant.Services;
 using Color = System.Windows.Media.Color;
 using Button = System.Windows.Controls.Button;
 using Orientation = System.Windows.Controls.Orientation;
@@ -225,7 +226,7 @@ namespace KokonoeAssistant.Windows
 
                 MessageBox.Show($"Graph exported to:\n{outputPath}", "Export Complete", MessageBoxButton.OK, MessageBoxImage.Information);
 
-                try { Process.Start(new ProcessStartInfo(outputPath) { UseShellExecute = true }); } catch { }
+                try { Process.Start(new ProcessStartInfo(outputPath) { UseShellExecute = true }); } catch (Exception suppressedEx228) { KokoSystemLog.Write("KNOWLEDGEGRAPHWINDOW.XAML-CATCH", "ExportButton_Click failed near source line 228: " + suppressedEx228); }
             }
             catch (Exception ex)
             {

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
+using KokonoeAssistant.Services;
 using Newtonsoft.Json;
 
 namespace KokonoeAssistant
@@ -104,7 +105,7 @@ namespace KokonoeAssistant
                 _memoryBuffer.RemoveRange(0, batch.Count);
                 _lastFlush = DateTime.Now;
             }
-            catch { }
+            catch (Exception suppressedEx107) { KokoSystemLog.Write("NOEDATAMANAGER-CATCH", "FlushBuffer failed near source line 107: " + suppressedEx107); }
         }
 
         public List<TimestampedEntry> GetEntriesByDateRange(DateTime from, DateTime to)
@@ -247,7 +248,7 @@ namespace KokonoeAssistant
                 foreach (var entry in _memoryBuffer)
                     AddToIndex(entry);
             }
-            catch { }
+            catch (Exception suppressedEx250) { KokoSystemLog.Write("NOEDATAMANAGER-CATCH", "LoadIndex failed near source line 250: " + suppressedEx250); }
         }
 
         public void Save()
@@ -263,7 +264,7 @@ namespace KokonoeAssistant
                 var indexFile = Path.Combine(_dataPath, "chronological_index.json");
                 File.WriteAllText(indexFile, JsonConvert.SerializeObject(_index, Formatting.Indented));
             }
-            catch { }
+            catch (Exception suppressedEx266) { KokoSystemLog.Write("NOEDATAMANAGER-CATCH", "SaveIndex failed near source line 266: " + suppressedEx266); }
         }
     }
 }

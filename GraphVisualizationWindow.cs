@@ -6,6 +6,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Shapes;
+using KokonoeAssistant.Services;
 using Color = System.Windows.Media.Color;
 using Button = System.Windows.Controls.Button;
 using Orientation = System.Windows.Controls.Orientation;
@@ -153,7 +154,7 @@ namespace KokonoeAssistant
                 MessageBox.Show($"Graph exported to:\n{outputPath}\n\nUse Graphviz to visualize.", "Export Complete", MessageBoxButton.OK, MessageBoxImage.Information);
 
                 // Try to open with default app
-                try { Process.Start(new ProcessStartInfo(outputPath) { UseShellExecute = true }); } catch { }
+                try { Process.Start(new ProcessStartInfo(outputPath) { UseShellExecute = true }); } catch (Exception suppressedEx156) { KokoSystemLog.Write("GRAPHVISUALIZATIONWINDOW-CATCH", "ExportGraph failed near source line 156: " + suppressedEx156); }
             }
             catch (Exception ex)
             {

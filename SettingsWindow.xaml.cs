@@ -262,7 +262,7 @@ namespace KokonoeAssistant
 
         private void WearBridgeCopyToken_Click(object sender, RoutedEventArgs e)
         {
-            try { System.Windows.Clipboard.SetText(ServiceContainer.WearableBridge.Token); } catch { }
+            try { System.Windows.Clipboard.SetText(ServiceContainer.WearableBridge.Token); } catch (Exception suppressedEx265) { KokoSystemLog.Write("SETTINGSWINDOW.XAML-CATCH", "WearBridgeCopyToken_Click failed near source line 265: " + suppressedEx265); }
         }
 
         private void WearBridgeCopyDiagnostics_Click(object sender, RoutedEventArgs e)
@@ -285,7 +285,7 @@ namespace KokonoeAssistant
                 };
                 System.Windows.Clipboard.SetText(JsonConvert.SerializeObject(payload, Formatting.Indented));
             }
-            catch { }
+            catch (Exception suppressedEx288) { KokoSystemLog.Write("SETTINGSWINDOW.XAML-CATCH", "WearBridgeCopyDiagnostics_Click failed near source line 288: " + suppressedEx288); }
         }
 
         private void WearBridgeRefreshPair_Click(object sender, RoutedEventArgs e)

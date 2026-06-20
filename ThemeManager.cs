@@ -1,6 +1,7 @@
 using System;
 using System.Windows.Media;
 using System.Linq;
+using KokonoeAssistant.Services;
 
 namespace KokonoeAssistant
 {
@@ -136,7 +137,7 @@ namespace KokonoeAssistant
                 SetB("AccentListHovBg",   System.Windows.Media.Color.FromArgb(18, 34, 211, 238));
                 System.Windows.Application.Current.Resources["AccentBaseColor"] = cyan;
             }
-            catch { }
+            catch (Exception suppressedEx139) { KokoSystemLog.Write("THEMEMANAGER-CATCH", "ApplyTheme failed near source line 139: " + suppressedEx139); }
         }
 
         private static void RgbToHsl(byte r, byte g, byte b, out double h, out double s, out double l)
