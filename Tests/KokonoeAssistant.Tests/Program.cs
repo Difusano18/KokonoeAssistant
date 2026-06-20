@@ -252,6 +252,7 @@ internal static class Program
             Run("Action directive router sends non artifact tasks to agents", ActionDirectiveRouterSendsNonArtifactTasksToAgents);
             Run("Action directive router handles inflected targets", ActionDirectiveRouterHandlesInflectedTargets);
             Run("Generated content route stays separate from surprise scan", GeneratedContentRouteStaysSeparateFromSurpriseScan);
+            Run("Chat runtime defaults to streaming with bounded token budget", ChatRuntimeDefaultsToStreamingWithBoundedTokenBudget);
             Run("System overlord detects retry surprise directive", SystemOverlordDetectsRetrySurpriseDirective);
             Run("System overlord creates real surprise note", SystemOverlordCreatesRealSurpriseNote);
             Run("Collective mind builds agent debate frame", CollectiveMindBuildsAgentDebateFrame);
@@ -5820,6 +5821,19 @@ Insight: bridge stability and pulse quality are linked.
         foreach (var phrase in vague)
             AssertEqual(KokoActionDirectiveRoute.LocalArtifact, KokoActionDirectiveRouter.Analyze(phrase).Route,
                 "vague surprise/search must retain local scan route: " + phrase);
+    }
+
+    private static void ChatRuntimeDefaultsToStreamingWithBoundedTokenBudget()
+    {
+        var request = new KokoAgentChatRequest();
+        AssertTrue(request.PreferStreaming, "chat runtime must prefer streaming by default");
+
+        var field = typeof(LlmService).GetField(
+            "MainMaxTokens",
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+        AssertTrue(field != null, "main token budget constant must exist");
+        AssertEqual(4096, (int)(field!.GetRawConstantValue() ?? 0),
+            "ordinary chat must not reserve a 16k completion by default");
     }
 
     private static void ActionDirectiveRouterHandlesInflectedTargets()

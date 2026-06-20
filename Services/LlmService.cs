@@ -39,8 +39,9 @@ namespace KokonoeAssistant.Services
         // Constants for history management
         private const int MAX_HISTORY_ENTRIES = 30;
         private const int HISTORY_TRUNCATE_STEP = 10; // скільки видаляти коли перевищено ліміт
-        private const int MainMaxTokens = 16384;
+        private const int MainMaxTokens = 4096;
         private const int SystemMaxTokens = 1024;
+        private const int MaxTokenOverrideLimit = 16384;
 
         private readonly object _diagLock = new();
         private DateTime _diagLastRequestAt = DateTime.MinValue;
@@ -1239,13 +1240,19 @@ namespace KokonoeAssistant.Services
         /// Виконує системний запит до LLM з підтримкою інструментів (Agent Loop).
         /// Використовується для автономних завдань, де Kokonoe може сама планувати дії.
         /// </summary>
-        public async Task<string?> SendSystemQueryAsync(string prompt, bool useTools = false, CancellationToken ct = default, string? agentId = null)
+        public async Task<string?> SendSystemQueryAsync(
+            string prompt,
+            bool useTools = false,
+            CancellationToken ct = default,
+            string? agentId = null,
+            int? maxTokensOverride = null)
         {
             var diagWatch = Stopwatch.StartNew();
             var target = ResolveAgentTarget(agentId);
             var diagProvider = string.IsNullOrWhiteSpace(agentId) ? ActiveProviderLabel() : $"{target.Provider}:{agentId}";
             var diagModel = target.Model;
             const string diagChannel = "system_agent";
+            var maxTokens = ResolveMaxTokens(maxTokensOverride, SystemMaxTokens);
             RecordLlmRequest(diagProvider, diagModel, diagChannel);
 
             var history = new List<HistoryEntry>();
@@ -1284,7 +1291,7 @@ namespace KokonoeAssistant.Services
                         reqBody = new
                         {
                             model = sysModel,
-                            max_tokens = SystemMaxTokens,
+                            max_tokens = maxTokens,
                             temperature = target.Temperature,
                             system = SanitizeContent(systemContent),
                             messages = history.Where(h => h.Role != "tool" && h.Role != "assistant_tool_calls")
@@ -1293,9 +1300,9 @@ namespace KokonoeAssistant.Services
                         };
                     }
                     else if (useTools && Obsidian != null && round < 4)
-                        reqBody = new { model = sysModel, messages, tools = TOOLS, tool_choice = "auto", max_tokens = SystemMaxTokens, temperature = target.Temperature, stream = false };
+                        reqBody = new { model = sysModel, messages, tools = TOOLS, tool_choice = "auto", max_tokens = maxTokens, temperature = target.Temperature, stream = false };
                     else
-                        reqBody = new { model = sysModel, messages, max_tokens = SystemMaxTokens, temperature = target.Temperature, stream = false };
+                        reqBody = new { model = sysModel, messages, max_tokens = maxTokens, temperature = target.Temperature, stream = false };
 
                     var json = JsonConvert.SerializeObject(reqBody);
                     HttpResponseMessage? resp = null;
@@ -1599,7 +1606,8 @@ namespace KokonoeAssistant.Services
             string imageMime = "image/jpeg",
             string? extraContext = null,
             CancellationToken ct = default,
-            string? agentId = null)
+            string? agentId = null,
+            int? maxTokensOverride = null)
         {
             // Checkpoint: зберігаємо стан історії для можливого відкату
             int checkpoint;
@@ -1610,6 +1618,7 @@ namespace KokonoeAssistant.Services
             var diagProvider = string.IsNullOrWhiteSpace(agentId) ? ActiveProviderLabel() : $"{agentTarget.Provider}:{agentId}";
             var diagModel = string.IsNullOrWhiteSpace(agentId) || isImageDiagnosticRequest ? ActiveModelLabel(isImageDiagnosticRequest) : agentTarget.Model;
             var diagChannel = isImageDiagnosticRequest ? "chat:image" : "chat";
+            var maxTokens = ResolveMaxTokens(maxTokensOverride, MainMaxTokens);
             RecordLlmRequest(diagProvider, diagModel, diagChannel);
 
             try
@@ -1735,7 +1744,7 @@ namespace KokonoeAssistant.Services
                             reqBody = new
                             {
                                 model = targetModel,
-                                max_tokens = MainMaxTokens,
+                                max_tokens = maxTokens,
                                 temperature = agentTarget.Temperature,
                                 system = SanitizeContent(systemContent),
                                 messages = claudeMessages,
@@ -1748,7 +1757,7 @@ namespace KokonoeAssistant.Services
                             reqBody = new
                             {
                                 model = targetModel,
-                                max_tokens = MainMaxTokens,
+                                max_tokens = maxTokens,
                                 temperature = agentTarget.Temperature,
                                 system = SanitizeContent(systemContent),
                                 messages = claudeMessages
@@ -1763,10 +1772,10 @@ namespace KokonoeAssistant.Services
                             var toolChoice = looksLikeVaultOp && round == 0
                                 ? (object)new { type = "function", function = new { name = DetectBestTool(userText!) } }
                                 : "auto";
-                            reqBody = new { model = targetModel, messages, tools = TOOLS, tool_choice = toolChoice, max_tokens = MainMaxTokens, temperature = agentTarget.Temperature, stream = false };
+                            reqBody = new { model = targetModel, messages, tools = TOOLS, tool_choice = toolChoice, max_tokens = maxTokens, temperature = agentTarget.Temperature, stream = false };
                         }
                         else
-                            reqBody = new { model = targetModel, messages, max_tokens = MainMaxTokens, temperature = agentTarget.Temperature, stream = false };
+                            reqBody = new { model = targetModel, messages, max_tokens = maxTokens, temperature = agentTarget.Temperature, stream = false };
                     }
 
                     var json = JsonConvert.SerializeObject(reqBody);
@@ -3344,6 +3353,10 @@ namespace KokonoeAssistant.Services
                    lower.StartsWith("why ") ||
                    lower.StartsWith("how ");
         }
+
+        private static int ResolveMaxTokens(int? requested, int fallback)
+            => Math.Clamp(requested ?? fallback, 256, MaxTokenOverrideLimit);
+
         // ------------------------------------------------------------
 
         /// <summary>
@@ -3357,13 +3370,19 @@ namespace KokonoeAssistant.Services
             string? extraContext,
             Action<string> onChunk,
             CancellationToken ct = default,
-            string? agentId = null)
+            string? agentId = null,
+            int? maxTokensOverride = null)
         {
             // Claude API doesn't support streaming in this implementation yet — fall back to SendAsync
             var target = ResolveAgentTarget(agentId);
             if (target.Provider.Equals("claude", StringComparison.OrdinalIgnoreCase))
             {
-                var reply = await SendAsync(userText, extraContext: extraContext, ct: ct, agentId: agentId);
+                var reply = await SendAsync(
+                    userText,
+                    extraContext: extraContext,
+                    ct: ct,
+                    agentId: agentId,
+                    maxTokensOverride: maxTokensOverride);
                 if (!string.IsNullOrEmpty(reply))
                     onChunk(reply);
                 return reply;
@@ -3399,11 +3418,12 @@ namespace KokonoeAssistant.Services
             var streamIsOllamaCloud = target.Provider.Equals("ollama-cloud", StringComparison.OrdinalIgnoreCase);
             var streamUrl = target.Url;
             var streamModel = target.Model;
+            var maxTokens = ResolveMaxTokens(maxTokensOverride, MainMaxTokens);
             object reqBody = useTools
                 ? (object)new { model = streamModel, messages = BuildMessages(systemContent), tools = TOOLS,
-                                tool_choice = "auto", max_tokens = MainMaxTokens, temperature = target.Temperature, stream = true }
+                                tool_choice = "auto", max_tokens = maxTokens, temperature = target.Temperature, stream = true }
                 : new { model = streamModel, messages = BuildMessages(systemContent),
-                        max_tokens = MainMaxTokens, temperature = target.Temperature, stream = true };
+                        max_tokens = maxTokens, temperature = target.Temperature, stream = true };
 
             var json = JsonConvert.SerializeObject(reqBody);
 
