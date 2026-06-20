@@ -1424,7 +1424,7 @@ Summary: {summary}
             }
             if (sent)
             {
-                try { OnNewMessage?.Invoke("assistant", decision.Message); } catch { }
+                try { OnNewMessage?.Invoke("assistant", decision.Message); } catch (Exception ex) { KokoSystemLog.Write("BRAIN-CATCH", "SafeResourceGuardianAsync failed near source line 1427: " + ex); }
             }
         }
 
@@ -1490,7 +1490,7 @@ Summary: {summary}
                 await _tgBot!.SendMessage(_tgChatId, message);
                 RecordRecentThought(message, category, DateTime.Now);
                 // Log to vault archive
-                try { ServiceContainer.ChatLogger.LogOutgoing("tg", message, category); } catch { }
+                try { ServiceContainer.ChatLogger.LogOutgoing("tg", message, category); } catch (Exception ex) { KokoSystemLog.Write("BRAIN-CATCH", "SendTgAndLog failed near source line 1493: " + ex); }
                 return true;
             }
             catch (Exception ex)
@@ -1669,7 +1669,7 @@ Summary: {summary}
                 if (ServiceContainer.PcControl.GetSystemInfo().IdleTime >= TimeSpan.FromMinutes(30))
                     return true;
             }
-            catch { }
+            catch (Exception ex) { KokoSystemLog.Write("BRAIN-CATCH", "IsLowActivityState failed near source line 1672: " + ex); }
 
             try
             {
@@ -1679,7 +1679,7 @@ Summary: {summary}
                     ((wearable.Motion ?? 0) <= 0.01 || wearable.SleepState is "probably_asleep" or "drowsy_or_resting" or "quiet_night"))
                     return true;
             }
-            catch { }
+            catch (Exception ex) { KokoSystemLog.Write("BRAIN-CATCH", "IsLowActivityState failed near source line 1682: " + ex); }
 
             return false;
         }
@@ -1718,19 +1718,19 @@ Summary: {summary}
                     if (RepairMojibakeObject(state))
                     {
                         try { File.WriteAllText(_statePath, JsonConvert.SerializeObject(state, Formatting.Indented), Encoding.UTF8); }
-                        catch { }
+                        catch (Exception ex) { KokoSystemLog.Write("BRAIN-CATCH", "LoadState failed near source line 1721: " + ex); }
                     }
                     return state;
                 }
             }
-            catch { }
+            catch (Exception ex) { KokoSystemLog.Write("BRAIN-CATCH", "LoadState failed near source line 1726: " + ex); }
             return new KokoInternalState();
         }
 
         private void SaveState()
         {
             try { File.WriteAllText(_statePath, JsonConvert.SerializeObject(_state, Formatting.Indented), Encoding.UTF8); }
-            catch { }
+            catch (Exception ex) { KokoSystemLog.Write("BRAIN-CATCH", "SaveState failed near source line 1733: " + ex); }
         }
 
         // ---- CONTEXT BUILDER ----
@@ -1832,7 +1832,7 @@ Summary: {summary}
                     if (!LooksMojibake(best)) break;
                 }
             }
-            catch { }
+            catch (Exception ex) { KokoSystemLog.Write("BRAIN-CATCH", "RepairMojibakeString failed near source line 1835: " + ex); }
 
             return best;
         }
@@ -1897,7 +1897,7 @@ Summary: {summary}
                     sb.AppendLine($"\n--- МОВЧАННЯ: {(int)silence.TotalHours}г {silence.Minutes}хв ---");
                 }
             }
-            catch { }
+            catch (Exception ex) { KokoSystemLog.Write("BRAIN-CATCH", "BuildContextAsync failed near source line 1900: " + ex); }
 
             // Vault activity
             try
@@ -1924,7 +1924,7 @@ Summary: {summary}
                 if (!string.IsNullOrEmpty(vaultMaintenanceLine)) sb.AppendLine(vaultMaintenanceLine);
                 if (!string.IsNullOrEmpty(vaultMaintenanceErrorLine)) sb.AppendLine(vaultMaintenanceErrorLine);
             }
-            catch { }
+            catch (Exception ex) { KokoSystemLog.Write("BRAIN-CATCH", "BuildContextAsync failed near source line 1927: " + ex); }
 
             // Internal state
             sb.AppendLine($"\n--- ВНУТРІШНІЙ СТАН KOKONOE ---");
@@ -1961,7 +1961,7 @@ Summary: {summary}
                         bridge.Diagnostics));
                 }
             }
-            catch { }
+            catch (Exception ex) { KokoSystemLog.Write("BRAIN-CATCH", "BuildContextAsync failed near source line 1964: " + ex); }
 
             // ── Календар ────────────────────────────────────────────────
             try
@@ -1978,10 +1978,10 @@ Summary: {summary}
                         sb.AppendLine("Найближче: " + string.Join("; ", upcoming.Select(e => $"{e.Title} {e.EventAt:dd.MM}")));
                 }
             }
-            catch { }
+            catch (Exception ex) { KokoSystemLog.Write("BRAIN-CATCH", "BuildContextAsync failed near source line 1981: " + ex); }
 
             // ── Емоційний двигун ──────────────────────────────────────
-            try { sb.AppendLine($"\n{Emotion.GetPromptHint()}"); } catch { }
+            try { sb.AppendLine($"\n{Emotion.GetPromptHint()}"); } catch (Exception ex) { KokoSystemLog.Write("BRAIN-CATCH", "BuildContextAsync failed near source line 1984: " + ex); }
 
             // ── Когнітивний двигун (GWT + Working Memory + User Model) ──
             try
@@ -1989,7 +1989,7 @@ Summary: {summary}
                 var cogCtx = await Cognition.BuildCognitionContextAsync();
                 if (!string.IsNullOrEmpty(cogCtx)) sb.AppendLine("\n" + cogCtx);
             }
-            catch { }
+            catch (Exception ex) { KokoSystemLog.Write("BRAIN-CATCH", "BuildContextAsync failed near source line 1992: " + ex); }
 
             // ── Пам'ять ───────────────────────────────────────────────
             try
@@ -1997,7 +1997,7 @@ Summary: {summary}
                 var memCtx = await Memory.BuildMemoryContextAsync(10, 3, query);
                 if (!string.IsNullOrEmpty(memCtx)) sb.AppendLine("\n" + memCtx);
             }
-            catch { }
+            catch (Exception ex) { KokoSystemLog.Write("BRAIN-CATCH", "BuildContextAsync failed near source line 2000: " + ex); }
 
             // ── Паттерни ──────────────────────────────────────────────
             try
@@ -2008,7 +2008,7 @@ Summary: {summary}
                 var moodForecast = Patterns.PredictTodayMood();
                 if (!string.IsNullOrEmpty(moodForecast)) sb.AppendLine($"[Прогноз] {moodForecast}");
             }
-            catch { }
+            catch (Exception ex) { KokoSystemLog.Write("BRAIN-CATCH", "BuildContextAsync failed near source line 2011: " + ex); }
 
             // ── Активні цілі ─────────────────────────────────────────
             try
@@ -2027,10 +2027,10 @@ Summary: {summary}
                         sb.AppendLine($"⚠️ Прострочено цілей: {overdue.Count}");
                 }
             }
-            catch { }
+            catch (Exception ex) { KokoSystemLog.Write("BRAIN-CATCH", "BuildContextAsync failed near source line 2030: " + ex); }
 
             // ── Планувальник ──────────────────────────────────────────
-            try { sb.AppendLine($"[{Scheduler.GetStatusLine()}]"); } catch { }
+            try { sb.AppendLine($"[{Scheduler.GetStatusLine()}]"); } catch (Exception ex) { KokoSystemLog.Write("BRAIN-CATCH", "BuildContextAsync failed near source line 2033: " + ex); }
 
             // ── StateEngine: навчене ──────────────────────────────────
             try
@@ -2038,7 +2038,7 @@ Summary: {summary}
                 var learning = _stateEngine?.GetLearningSnapshot();
                 if (!string.IsNullOrEmpty(learning)) sb.AppendLine("\n" + learning);
             }
-            catch { }
+            catch (Exception ex) { KokoSystemLog.Write("BRAIN-CATCH", "BuildContextAsync failed near source line 2041: " + ex); }
 
             // ── Screen context (якщо свіжий < 10хв) ──────────────────
             try
@@ -2057,7 +2057,7 @@ Summary: {summary}
                         sb.AppendLine($"Notes: {_state.LastPredictiveContextNotes}");
                 }
             }
-            catch { }
+            catch (Exception ex) { KokoSystemLog.Write("BRAIN-CATCH", "BuildContextAsync failed near source line 2060: " + ex); }
 
             // ── Емоційна траєкторія і патерн ─────────────────────────
             try
@@ -2069,7 +2069,7 @@ Summary: {summary}
                 if (!string.IsNullOrEmpty(pat))  sb.AppendLine(pat);
                 if (!string.IsNullOrEmpty(hist)) sb.AppendLine(hist);
             }
-            catch { }
+            catch (Exception ex) { KokoSystemLog.Write("BRAIN-CATCH", "BuildContextAsync failed near source line 2072: " + ex); }
 
             // ── Тижневий тренд, інсайти, найкращий час ────────────────
             try
@@ -2081,7 +2081,7 @@ Summary: {summary}
                 if (!string.IsNullOrEmpty(insights)) sb.AppendLine(insights);
                 if (!string.IsNullOrEmpty(bestTime)) sb.AppendLine(bestTime);
             }
-            catch { }
+            catch (Exception ex) { KokoSystemLog.Write("BRAIN-CATCH", "BuildContextAsync failed near source line 2084: " + ex); }
 
             // ── ML.NET прогноз (аномалії + trend + mood forecast) ────────
             try
@@ -2089,7 +2089,7 @@ Summary: {summary}
                 var forecastCtx = ServiceContainer.Predictor.GetForecastContext();
                 if (!string.IsNullOrEmpty(forecastCtx)) sb.AppendLine("\n" + forecastCtx);
             }
-            catch { }
+            catch (Exception ex) { KokoSystemLog.Write("BRAIN-CATCH", "BuildContextAsync failed near source line 2092: " + ex); }
 
             // ── Топіки і ефективні відповіді ─────────────────────────
             try
@@ -2099,7 +2099,7 @@ Summary: {summary}
                 if (!string.IsNullOrEmpty(topics)) sb.AppendLine($"\n{topics}");
                 if (!string.IsNullOrEmpty(eff))    sb.AppendLine(eff);
             }
-            catch { }
+            catch (Exception ex) { KokoSystemLog.Write("BRAIN-CATCH", "BuildContextAsync failed near source line 2102: " + ex); }
 
             // ── EnhancedMemory (факти по категоріях) ─────────────────
             try
@@ -2107,7 +2107,7 @@ Summary: {summary}
                 var enhCtx = _enhanced?.GetMemoryAsContext();
                 if (!string.IsNullOrEmpty(enhCtx)) sb.AppendLine("\n" + enhCtx);
             }
-            catch { }
+            catch (Exception ex) { KokoSystemLog.Write("BRAIN-CATCH", "BuildContextAsync failed near source line 2110: " + ex); }
 
             // ── Vault: Досьє (хто він для Kokonoe) ───────────────────
             try
@@ -2116,7 +2116,7 @@ Summary: {summary}
                 if (!string.IsNullOrEmpty(dossier))
                     sb.AppendLine($"\n--- ДОСЬЄ (Kokonoe про нього) ---\n{dossier[..Math.Min(700, dossier.Length)]}");
             }
-            catch { }
+            catch (Exception ex) { KokoSystemLog.Write("BRAIN-CATCH", "BuildContextAsync failed near source line 2119: " + ex); }
 
             // ── Vault: Рефлексія (остання) ────────────────────────────
             try
@@ -2125,7 +2125,7 @@ Summary: {summary}
                 if (!string.IsNullOrEmpty(reflection))
                     sb.AppendLine($"\n--- РЕФЛЕКСІЯ ---\n{reflection[..Math.Min(500, reflection.Length)]}");
             }
-            catch { }
+            catch (Exception ex) { KokoSystemLog.Write("BRAIN-CATCH", "BuildContextAsync failed near source line 2128: " + ex); }
 
             // ── Внутрішні монологи (останні 5) ───────────────────────
             try
@@ -2138,7 +2138,7 @@ Summary: {summary}
                         sb.AppendLine($"• {m}");
                 }
             }
-            catch { }
+            catch (Exception ex) { KokoSystemLog.Write("BRAIN-CATCH", "BuildContextAsync failed near source line 2141: " + ex); }
 
             return sb.ToString();
         }
@@ -2189,29 +2189,29 @@ Summary: {summary}
                 if (!string.IsNullOrWhiteSpace(living))
                     sb.AppendLine(living);
             }
-            catch { }
+            catch (Exception ex) { KokoSystemLog.Write("BRAIN-CATCH", "BuildPersonalityInjection failed near source line 2192: " + ex); }
             try
             {
                 var subconscious = Subconscious.BuildPromptBlock(_state, Emotion, DateTime.Now);
                 if (!string.IsNullOrWhiteSpace(subconscious))
                     sb.AppendLine(subconscious);
             }
-            catch { }
+            catch (Exception ex) { KokoSystemLog.Write("BRAIN-CATCH", "BuildPersonalityInjection failed near source line 2199: " + ex); }
             try
             {
                 var asyncPersonality = AsyncPersonality.BuildPromptBlock(_state, DateTime.Now);
                 if (!string.IsNullOrWhiteSpace(asyncPersonality))
                     sb.AppendLine(asyncPersonality);
             }
-            catch { }
+            catch (Exception ex) { KokoSystemLog.Write("BRAIN-CATCH", "BuildPersonalityInjection failed near source line 2206: " + ex); }
             try
             {
                 var temporal = TemporalPresence.BuildPromptBlock(_state, DateTime.Now);
                 if (!string.IsNullOrWhiteSpace(temporal))
                     sb.AppendLine(temporal);
             }
-            catch { }
-            try { sb.AppendLine(Emotion.BuildEmotionalContextBlock(BuildNarrativeThreadSummary(DateTime.Now))); } catch { }
+            catch (Exception ex) { KokoSystemLog.Write("BRAIN-CATCH", "BuildPersonalityInjection failed near source line 2213: " + ex); }
+            try { sb.AppendLine(Emotion.BuildEmotionalContextBlock(BuildNarrativeThreadSummary(DateTime.Now))); } catch (Exception ex) { KokoSystemLog.Write("BRAIN-CATCH", "BuildPersonalityInjection failed near source line 2214: " + ex); }
 
             try
             {
@@ -2223,7 +2223,7 @@ Summary: {summary}
                     bpm = heart.CurrentBpm;
                     baseline = heart.BaselineBpm;
                 }
-                catch { }
+                catch (Exception ex) { KokoSystemLog.Write("BRAIN-CATCH", "BuildPersonalityInjection failed near source line 2226: " + ex); }
 
                 sb.AppendLine(RuntimeState.BuildPromptBlock(_state, Emotion, _health, _chatRepo, bpm, baseline));
                 sb.AppendLine(Relationship.BuildPromptBlock());
@@ -2247,7 +2247,7 @@ Summary: {summary}
                 if (!string.IsNullOrWhiteSpace(foodSleep))
                     sb.AppendLine(foodSleep);
             }
-            catch { }
+            catch (Exception ex) { KokoSystemLog.Write("BRAIN-CATCH", "BuildPersonalityInjection failed near source line 2250: " + ex); }
 
             try
             {
@@ -2255,7 +2255,7 @@ Summary: {summary}
                 if (!string.IsNullOrWhiteSpace(continuity))
                     sb.AppendLine(continuity);
             }
-            catch { }
+            catch (Exception ex) { KokoSystemLog.Write("BRAIN-CATCH", "BuildPersonalityInjection failed near source line 2258: " + ex); }
 
             if (!string.IsNullOrWhiteSpace(_state.LastResponsePlan) &&
                 (DateTime.Now - _state.LastResponsePlanAt).TotalMinutes < 30)
@@ -2304,7 +2304,7 @@ Summary: {summary}
                 if (daysTogether > 0)
                     sb.AppendLine($"Разом {daysTogether} дн. Близькість {bondTrend}.");
             }
-            catch { }
+            catch (Exception ex) { KokoSystemLog.Write("BRAIN-CATCH", "BuildPersonalityInjection failed near source line 2307: " + ex); }
 
             // SelfQuestion — що зараз займає її (показуємо 2 останніх для конфлікту)
             var selfQs = _state.SelfQuestions.TakeLast(2).ToList();
@@ -2340,7 +2340,7 @@ Summary: {summary}
                     }
                 }
             }
-            catch { }
+            catch (Exception ex) { KokoSystemLog.Write("BRAIN-CATCH", "BuildPersonalityInjection failed near source line 2343: " + ex); }
 
             // Активні цілі (топ-2 за пріоритетом)
             try
@@ -2352,7 +2352,7 @@ Summary: {summary}
                         sb.AppendLine("Його активні цілі: " + string.Join(", ", goals.Select(g => $"«{g.Title}»")));
                 }
             }
-            catch { }
+            catch (Exception ex) { KokoSystemLog.Write("BRAIN-CATCH", "BuildPersonalityInjection failed near source line 2355: " + ex); }
 
             // Патерни активності
             try
@@ -2361,7 +2361,7 @@ Summary: {summary}
                 if (!string.IsNullOrEmpty(bestTime))
                     sb.AppendLine(bestTime);
             }
-            catch { }
+            catch (Exception ex) { KokoSystemLog.Write("BRAIN-CATCH", "BuildPersonalityInjection failed near source line 2364: " + ex); }
 
             // Топ-3 факти з пам'яті
             try
@@ -2370,7 +2370,7 @@ Summary: {summary}
                 if (facts.Count > 0)
                     sb.AppendLine("Що знаю про нього: " + string.Join("; ", facts.Select(f => f.Content)));
             }
-            catch { }
+            catch (Exception ex) { KokoSystemLog.Write("BRAIN-CATCH", "BuildPersonalityInjection failed near source line 2373: " + ex); }
 
             // Time-of-day personality shift
             var hour = DateTime.Now.Hour;
@@ -2408,7 +2408,7 @@ Summary: {summary}
                         sb.AppendLine(heartLine);
                 }
             }
-            catch { }
+            catch (Exception ex) { KokoSystemLog.Write("BRAIN-CATCH", "BuildPersonalityInjection failed near source line 2411: " + ex); }
 
             // Arousal/valence — виводимо з поточного стану емоції
             var emotionArousal = Emotion.Current switch
@@ -2476,7 +2476,7 @@ Summary: {summary}
                         sb.AppendLine($"Пауза {(int)silence.TotalHours}г. Нормально. Він живе своїм.");
                 }
             }
-            catch { }
+            catch (Exception ex) { KokoSystemLog.Write("BRAIN-CATCH", "BuildPersonalityInjection failed near source line 2479: " + ex); }
 
             return sb.ToString();
         }
@@ -2541,7 +2541,7 @@ Summary: {summary}
                     finally
                     {
                         try { _bgLlmSemaphore.Release(); }
-                        catch (ObjectDisposedException) { }
+                        catch (ObjectDisposedException ex) { KokoSystemLog.Write("BRAIN-CATCH", "SafeThinkAsync failed near source line 2544: " + ex); }
                     }
                 }
             }
@@ -2556,7 +2556,7 @@ Summary: {summary}
                     finally
                     {
                         try { _bgLlmSemaphore.Release(); }
-                        catch (ObjectDisposedException) { }
+                        catch (ObjectDisposedException ex) { KokoSystemLog.Write("BRAIN-CATCH", "SafeThinkAsync failed near source line 2559: " + ex); }
                     }
                 }
             }
@@ -2586,7 +2586,7 @@ Summary: {summary}
                         silenceReminder = $"\n[НАГАДУВАННЯ: він мовчить {(int)silenceHours} годин. Це нормально — він може спати або бути зайнятим. Тиша ≠ криза. isCrisis = false якщо немає прямих слів про це у РЕАЛЬНИХ повідомленнях.]\n";
                 }
             }
-            catch { }
+            catch (Exception ex) { KokoSystemLog.Write("BRAIN-CATCH", "ThinkAsync failed near source line 2589: " + ex); }
 
             var prompt = $@"{context}
 {recentThoughts}
@@ -2718,15 +2718,15 @@ Summary: {summary}
                 // Зберегти спостереження в Memory і StateEngine
                 if (!string.IsNullOrEmpty(obs))
                 {
-                    try { Memory.RecordEpisodeBlocking(obs, _state.LastUserEmotionalTone, _state.MoodScore); } catch { }
-                    try { _stateEngine?.RecordObservation(obs); } catch { }
+                    try { Memory.RecordEpisodeBlocking(obs, _state.LastUserEmotionalTone, _state.MoodScore); } catch (Exception ex) { KokoSystemLog.Write("BRAIN-CATCH", "ThinkAsync failed near source line 2721: " + ex); }
+                    try { _stateEngine?.RecordObservation(obs); } catch (Exception ex) { KokoSystemLog.Write("BRAIN-CATCH", "ThinkAsync failed near source line 2722: " + ex); }
                     // Емоційна пам'ять
-                    try { Emotion.RecordEmotionalEvent($"think: {obs[..Math.Min(60, obs.Length)]}", _state.PersonalityDailyMood); } catch { }
+                    try { Emotion.RecordEmotionalEvent($"think: {obs[..Math.Min(60, obs.Length)]}", _state.PersonalityDailyMood); } catch (Exception ex) { KokoSystemLog.Write("BRAIN-CATCH", "ThinkAsync failed near source line 2724: " + ex); }
                 }
 
                 // Fact aging — раз на тиждень
                 if ((_state.LastThoughtAt - _state.LastDailyAnalyticsAt).TotalDays >= 7)
-                    try { Memory.ImportanceDecay(); } catch { }
+                    try { Memory.ImportanceDecay(); } catch (Exception ex) { KokoSystemLog.Write("BRAIN-CATCH", "ThinkAsync failed near source line 2729: " + ex); }
 
                 // Аналіз емоційного тону — тільки якщо були нові повідомлення за останні 30 хв
                 var recentActivity = _chatRepo.GetMessages(5)
@@ -2754,13 +2754,13 @@ Summary: {summary}
                         Log($"Anomaly detected: {anomaly}");
                     }
                 }
-                catch { }
+                catch (Exception ex) { KokoSystemLog.Write("BRAIN-CATCH", "ThinkAsync failed near source line 2757: " + ex); }
 
                 // Зберегти спостереження у vault
                 if (!string.IsNullOrEmpty(obs))
                 {
                     try { _obsidian.AppendToDailyNote($"\n> [{DateTime.Now:HH:mm}] {obs}"); }
-                    catch { }
+                    catch (Exception ex) { KokoSystemLog.Write("BRAIN-CATCH", "ThinkAsync failed near source line 2763: " + ex); }
 
                     // Асоціативні зв'язки — не частіше 1 раз на 2 години
                     if ((DateTime.Now - previousLastThoughtAt).TotalHours >= 2)
@@ -2842,7 +2842,7 @@ Summary: {summary}
                         Author = "Kokonoe", Timestamp = DateTime.Now
                     });
                 }
-                catch { }
+                catch (Exception ex) { KokoSystemLog.Write("BRAIN-CATCH", "CheckAndSendReminderAsync failed near source line 2845: " + ex); }
 
                 SaveState();
                 Log($"Reminder sent: {result[..Math.Min(60, result.Length)]}");
@@ -2881,7 +2881,7 @@ Summary: {summary}
                     _obsidian.AppendToDailyNote(
                         $"\n\n---\n**[Kokonoe — підсумок дня]**\n{msg}");
                 }
-                catch { }
+                catch (Exception ex) { KokoSystemLog.Write("BRAIN-CATCH", "SendDailyAnalyticsAsync failed near source line 2884: " + ex); }
 
                 _state.LastSpontaneousAt = DateTime.Now;
                 var _h2 = OnNewMessage; _h2?.Invoke("assistant", msg);
@@ -2894,7 +2894,7 @@ Summary: {summary}
                         Author = "Kokonoe", Timestamp = DateTime.Now
                     });
                 }
-                catch { }
+                catch (Exception ex) { KokoSystemLog.Write("BRAIN-CATCH", "SendDailyAnalyticsAsync failed near source line 2897: " + ex); }
 
                 SaveState();
                 Log($"Daily analytics sent.");
@@ -3018,7 +3018,7 @@ Summary: {summary}
                     var lastUserMsg = recentUser.LastOrDefault()?.Content ?? "";
                     Cognition.ProcessUserMessage(lastUserMsg, tone, Emotion.GetStatusLine());
                 }
-                catch { }
+                catch (Exception ex) { KokoSystemLog.Write("BRAIN-CATCH", "AnalyzeRecentEmotionsAsync failed near source line 3021: " + ex); }
 
                 // Якщо розмова хороша — підвищити connection
                 if (tone is "happy" or "excited" or "neutral" && recentUser.Count >= 3)
@@ -3138,7 +3138,7 @@ Summary: {summary}
                     _state.SilenceLevel2At = DateTime.Now;
                 }
                 var _h3 = OnNewMessage; _h3?.Invoke("assistant", msg);
-                try { _chatRepo.InsertMessage(new ChatRepository.ChatMessage { Content = msg, Role = "assistant", Author = "Kokonoe", Timestamp = DateTime.Now }); } catch { }
+                try { _chatRepo.InsertMessage(new ChatRepository.ChatMessage { Content = msg, Role = "assistant", Author = "Kokonoe", Timestamp = DateTime.Now }); } catch (Exception ex) { KokoSystemLog.Write("BRAIN-CATCH", "CheckReactiveTriggersAsync failed near source line 3141: " + ex); }
                 SaveState();
                 Log($"Reactive trigger fired: {fire.Type}");
                 return true;
@@ -3195,7 +3195,7 @@ Summary: {summary}
                         _obsidian.WriteNote(assocNote,
                             $"---\ntype: associations\ntags: [kokonoe, associations]\n---\n\n# Асоціації\n\nМої нетривіальні зв'язки думок.\n{entry}");
                     }
-                    catch { }
+                    catch (Exception ex) { KokoSystemLog.Write("BRAIN-CATCH", "BuildAssociationsAsync failed near source line 3198: " + ex); }
                 }
 
                 Log($"Association built: {assoc[..Math.Min(60, assoc.Length)]}");
@@ -3225,18 +3225,18 @@ Summary: {summary}
                 var msgs = _chatRepo.GetMessages(20).OrderBy(m => m.Timestamp).ToList();
 
                 // 1. Freshness pass: resolve stale intents and detect return/wake signals
-                try { StateFreshness.Refresh(_state, msgs, now); } catch { }
+                try { StateFreshness.Refresh(_state, msgs, now); } catch (Exception ex) { KokoSystemLog.Write("BRAIN-CATCH", "ProcessUserMessage failed near source line 3228: " + ex); }
 
                 // 2. Presence & Day state updates
-                try { Presence.ObserveUserMessage(_state, content, now); } catch { }
-                try { EmotionalMemory.ObserveUserMessage(_state, content, msgs, now); } catch { }
+                try { Presence.ObserveUserMessage(_state, content, now); } catch (Exception ex) { KokoSystemLog.Write("BRAIN-CATCH", "ProcessUserMessage failed near source line 3231: " + ex); }
+                try { EmotionalMemory.ObserveUserMessage(_state, content, msgs, now); } catch (Exception ex) { KokoSystemLog.Write("BRAIN-CATCH", "ProcessUserMessage failed near source line 3232: " + ex); }
                 try 
                 { 
                     var presence = Presence.Evaluate(_state, msgs, now, autonomyLevel);
                     var somatic = Somatic.Evaluate(ServiceContainer.Heart, Emotion, _health, now);
                     var dayFrame = InternalDay.Evaluate(_state, presence, somatic, now, autonomyLevel);
                     InternalDay.Record(_state, dayFrame, now); 
-                } catch { }
+                } catch (Exception ex) { KokoSystemLog.Write("BRAIN-CATCH", "ProcessUserMessage failed near source line 3239: " + ex); }
 
                 ObserveFoodSleepState(content, now);
                 ObserveShortTermIntent(content);
@@ -3250,12 +3250,12 @@ Summary: {summary}
                 Patterns.RecordActivity(wasActive: true, messageCount: 1);
 
                 // Стан зовнішнього State Engine
-                try { _stateEngine?.UpdateContextFromMessage(content, ""); } catch { }
+                try { _stateEngine?.UpdateContextFromMessage(content, ""); } catch (Exception ex) { KokoSystemLog.Write("BRAIN-CATCH", "ProcessUserMessage failed near source line 3253: " + ex); }
 
-                try { RuntimeState.ObserveUserMessage(_state, Emotion, content); } catch { }
-                try { Relationship.ObserveUserTone(_state.LastUserEmotionalTone, _state.PersonalityInCrisis); } catch { }
-                try { GetSelfRegulationFrame(); } catch { }
-                try { RecordCollectiveMind(content, "user-turn", now, publish: true, recentMessages: msgs); } catch { }
+                try { RuntimeState.ObserveUserMessage(_state, Emotion, content); } catch (Exception ex) { KokoSystemLog.Write("BRAIN-CATCH", "ProcessUserMessage failed near source line 3255: " + ex); }
+                try { Relationship.ObserveUserTone(_state.LastUserEmotionalTone, _state.PersonalityInCrisis); } catch (Exception ex) { KokoSystemLog.Write("BRAIN-CATCH", "ProcessUserMessage failed near source line 3256: " + ex); }
+                try { GetSelfRegulationFrame(); } catch (Exception ex) { KokoSystemLog.Write("BRAIN-CATCH", "ProcessUserMessage failed near source line 3257: " + ex); }
+                try { RecordCollectiveMind(content, "user-turn", now, publish: true, recentMessages: msgs); } catch (Exception ex) { KokoSystemLog.Write("BRAIN-CATCH", "ProcessUserMessage failed near source line 3258: " + ex); }
 
                 // Шукати факти в повідомленні і зберегти в пам'ять
                 _ = Task.Run(() => ExtractAndRememberFacts(content));
@@ -3277,7 +3277,7 @@ Summary: {summary}
                             _state.RelevantMemoryCachedAt = DateTime.Now;
                         }
                     }
-                    catch { }
+                    catch (Exception ex) { KokoSystemLog.Write("BRAIN-CATCH", "ProcessUserMessage failed near source line 3280: " + ex); }
                 });
 
                 // Детектувати тривожні ключові слова → crisis mode
@@ -3748,7 +3748,7 @@ Summary: {summary}
         private static void LogSleepIntent(string message)
         {
             try { KokoSystemLog.Write("SLEEP_INTENT", message); }
-            catch { }
+            catch (Exception ex) { KokoSystemLog.Write("BRAIN-CATCH", "LogSleepIntent failed near source line 3751: " + ex); }
         }
 
         private static string BuildIntentQuestion(ShortTermIntent intent) => intent.Kind switch
@@ -3857,7 +3857,7 @@ Summary: {summary}
         private KokoSocialFrame BuildSocialFrame(string? userText, DateTime now)
         {
             KokoWearableState? wearable = null;
-            try { wearable = ServiceContainer.IsInitialized ? ServiceContainer.WearableTelemetry.State : null; } catch { }
+            try { wearable = ServiceContainer.IsInitialized ? ServiceContainer.WearableTelemetry.State : null; } catch (Exception ex) { KokoSystemLog.Write("BRAIN-CATCH", "BuildSocialFrame failed near source line 3860: " + ex); }
             return Social.Analyze(userText ?? "", _state, _chatRepo.GetMessages(12), wearable, now);
         }
 
@@ -3886,7 +3886,7 @@ Summary: {summary}
                 {
                     using var cts = new CancellationTokenSource(Math.Clamp(settings.NeuralGovernorTimeoutMs, 500, 6000));
                     KokoWearableState? wearable = null;
-                    try { wearable = ServiceContainer.WearableTelemetry.State; } catch { }
+                    try { wearable = ServiceContainer.WearableTelemetry.State; } catch (Exception ex) { KokoSystemLog.Write("BRAIN-CATCH", "BuildGovernedResponsePlan failed near source line 3889: " + ex); }
                     var memoryContext = "";
                     try
                     {
@@ -3894,7 +3894,7 @@ Summary: {summary}
                             KokoProfileUpdateService.LooksLikeProfileUpdateRequest(userText.ToLowerInvariant()))
                             memoryContext = new ObsidianPreflightContextService(_obsidian).Build(userText, now, 1600) ?? "";
                     }
-                    catch { }
+                    catch (Exception ex) { KokoSystemLog.Write("BRAIN-CATCH", "BuildGovernedResponsePlan failed near source line 3897: " + ex); }
 
                     var neural = NeuralGovernor.TryBuildFrameAsync(
                             userText,
@@ -4010,7 +4010,7 @@ Summary: {summary}
                     Scheduler.MarkSent(entry.Id);
                     _state.LastSpontaneousAt = DateTime.Now;
                     var _h4 = OnNewMessage; _h4?.Invoke("assistant", msg);
-                    try { _chatRepo.InsertMessage(new ChatRepository.ChatMessage { Content = msg, Role = "assistant", Author = "Kokonoe", Timestamp = DateTime.Now }); } catch { }
+                    try { _chatRepo.InsertMessage(new ChatRepository.ChatMessage { Content = msg, Role = "assistant", Author = "Kokonoe", Timestamp = DateTime.Now }); } catch (Exception ex) { KokoSystemLog.Write("BRAIN-CATCH", "CheckSchedulerAsync failed near source line 4013: " + ex); }
                     SaveState();
                     Log($"Scheduler entry sent: {entry.Id}");
                 }
@@ -4108,7 +4108,7 @@ Summary: {summary}
                 await File.WriteAllTextAsync(dossierPath, result);
 
                 // Оновити зв'язки
-                try { _obsidian.RebuildLinks(); } catch { }
+                try { _obsidian.RebuildLinks(); } catch (Exception ex) { KokoSystemLog.Write("BRAIN-CATCH", "UpdateDossierAsync failed near source line 4111: " + ex); }
 
                 Log($"Dossier updated: {dossierPath}");
             }
@@ -4165,7 +4165,7 @@ Summary: {summary}
                 }
 
                 // 4. Оновити зв'язки між нотатками
-                try { _obsidian.RebuildLinks(); } catch { }
+                try { _obsidian.RebuildLinks(); } catch (Exception ex) { KokoSystemLog.Write("BRAIN-CATCH", "SyncMemoryToVaultAsync failed near source line 4168: " + ex); }
 
                 Log("Memory synced to vault");
             }
@@ -4201,7 +4201,7 @@ Summary: {summary}
                 if (profileNote != null)
                 {
                     try { existingProfile = _obsidian.ReadNote(profileNote); }
-                    catch { }
+                    catch (Exception ex) { KokoSystemLog.Write("BRAIN-CATCH", "ReviewVaultAsync failed near source line 4204: " + ex); }
                 }
 
                 // Останні 30 повідомлень для контексту
@@ -4241,7 +4241,7 @@ Summary: {summary}
                 if (profileNote != null)
                 {
                     try { _obsidian.AppendToNote(profileNote, newInfo); }
-                    catch { }
+                    catch (Exception ex) { KokoSystemLog.Write("BRAIN-CATCH", "ReviewVaultAsync failed near source line 4244: " + ex); }
                 }
                 else
                 {
@@ -4249,7 +4249,7 @@ Summary: {summary}
                     var newPath = "Kokonoe/Творець.md";
                     var header = $"---\ntype: creator-profile\ntags: [kokonoe, creator]\n---\n\n# Мій Творець\n\nВсе що я знаю про нього.\n{newInfo}";
                     try { _obsidian.WriteNote(newPath, header); }
-                    catch { }
+                    catch (Exception ex) { KokoSystemLog.Write("BRAIN-CATCH", "ReviewVaultAsync failed near source line 4252: " + ex); }
                 }
 
                 // Також перевірити чи є orphan chat-логи без посилань
@@ -4273,9 +4273,9 @@ Summary: {summary}
                         }
                     }
                 }
-                catch { }
+                catch (Exception ex) { KokoSystemLog.Write("BRAIN-CATCH", "ReviewVaultAsync failed near source line 4276: " + ex); }
 
-                try { _obsidian.RebuildLinks(); } catch { }
+                try { _obsidian.RebuildLinks(); } catch (Exception ex) { KokoSystemLog.Write("BRAIN-CATCH", "ReviewVaultAsync failed near source line 4278: " + ex); }
 
                 Log($"VaultReview done. Profile: {profileNote ?? "created new"}");
             }
@@ -4350,7 +4350,7 @@ Summary: {summary}
                     {
                         try { _obsidian.WriteNote("Core/Architecture-Plans.md",
                             $"---\ntype: architecture-plans\ntags: [kokonoe, architecture]\ncreated: {DateTime.Now:yyyy-MM-dd}\n---\n\n# Архітектурні плани\n\n## Авто-огляд {DateTime.Now:dd.MM.yyyy}\n{planEntry}"); }
-                        catch { }
+                        catch (Exception ex) { KokoSystemLog.Write("BRAIN-CATCH", "VaultArchitectureReviewAsync failed near source line 4353: " + ex); }
                     }
                 }
 
@@ -4447,7 +4447,7 @@ Summary: {summary}
                         _obsidian.WriteNote(reflectNote,
                             $"---\ntype: reflection\ntags: [kokonoe, reflection]\n---\n\n# Рефлексія\n\nМої думки після розмов.{entry}");
                     }
-                    catch { }
+                    catch (Exception ex) { KokoSystemLog.Write("BRAIN-CATCH", "ReflectAfterConversationAsync failed near source line 4450: " + ex); }
                 }
 
                 // Якщо дізналась щось важливе — записати в спостереження
@@ -4592,7 +4592,7 @@ Summary: {summary}
                     _obsidian.WriteNote(reflectNote,
                         $"---\ntype: reflection\ntags: [kokonoe, reflection]\n---\n\n# Рефлексія\n{entry}");
                 }
-                catch { }
+                catch (Exception ex) { KokoSystemLog.Write("BRAIN-CATCH", "SaveAdvancedReflection failed near source line 4595: " + ex); }
             }
         }
 
@@ -4682,7 +4682,7 @@ Summary: {summary}
                     }
                 }
             }
-            catch { }
+            catch (Exception ex) { KokoSystemLog.Write("BRAIN-CATCH", "UpdateHealthState failed near source line 4685: " + ex); }
         }
 
         // ---- SCREEN CONTEXT ----
@@ -4761,7 +4761,7 @@ Summary: {summary}
                     return;
                 }
             }
-            catch { }
+            catch (Exception ex) { KokoSystemLog.Write("BRAIN-CATCH", "SafeScreenAwarenessAsync failed near source line 4764: " + ex); }
 
             if (!await _bgLlmSemaphore.WaitAsync(0))
             {
@@ -4977,7 +4977,7 @@ Summary: {summary}
                         Timestamp = now
                     });
                 }
-                catch { }
+                catch (Exception ex) { KokoSystemLog.Write("BRAIN-CATCH", "SafeScreenAwarenessAsync failed near source line 4980: " + ex); }
 
                 OnNewMessage?.Invoke("assistant", decision.Message);
                 SaveState();
@@ -5047,13 +5047,13 @@ Summary: {summary}
                 if (!string.IsNullOrWhiteSpace(stress.State))
                     lines.Add($"heart_stress={stress.State}; score={stress.Score:F2}; {stress.Reason}");
             }
-            catch { }
+            catch (Exception ex) { KokoSystemLog.Write("BRAIN-CATCH", "BuildVisionMultimodalContext failed near source line 5050: " + ex); }
 
             try
             {
                 lines.Add($"work_mode={GetCurrentWorkModeLabel()}");
             }
-            catch { }
+            catch (Exception ex) { KokoSystemLog.Write("BRAIN-CATCH", "BuildVisionMultimodalContext failed near source line 5056: " + ex); }
 
             return string.Join("\n", lines.Where(l => !string.IsNullOrWhiteSpace(l)));
         }
@@ -5169,7 +5169,7 @@ Summary: {summary}
 
             _state.LastVisionSelfHealAt = now;
             _state.VisionBackoffUntil = now.AddMinutes(2);
-            try { _llm.ClearHistory(); } catch { }
+            try { _llm.ClearHistory(); } catch (Exception ex) { KokoSystemLog.Write("BRAIN-CATCH", "TrySelfHealVisionPipeline failed near source line 5172: " + ex); }
             Log($"Vision self-heal: failures={_state.VisionFailureCount}; backoff reset to 2m; last={TrimForLog(raw, 160)}");
         }
 
@@ -5292,7 +5292,7 @@ Summary: {summary}
                     if (modified.Any())
                         sb.AppendLine($"Vault вчора: {string.Join(", ", modified.Take(3))}");
                 }
-                catch { }
+                catch (Exception ex) { KokoSystemLog.Write("BRAIN-CATCH", "DailyBriefingAsync failed near source line 5295: " + ex); }
 
                 var contextBlock = sb.ToString();
                 var prompt = $@"Ти — Kokonoe. Ранок. Коротко підсумуй день що починається — 2-3 речення максимум.
@@ -5356,7 +5356,7 @@ Summary: {summary}
                     if (modified.Any())
                         ctx.AppendLine($"В vault нові нотатки: {string.Join(", ", modified.Take(3))}");
                 }
-                catch { }
+                catch (Exception ex) { KokoSystemLog.Write("BRAIN-CATCH", "WhatDidIMissAsync failed near source line 5359: " + ex); }
 
                 try
                 {
@@ -5366,7 +5366,7 @@ Summary: {summary}
                     if (missed.Any())
                         ctx.AppendLine($"Пропущені нагадування поки не було: {string.Join(", ", missed.Select(e => e.Prompt.Split('.')[0]))}");
                 }
-                catch { }
+                catch (Exception ex) { KokoSystemLog.Write("BRAIN-CATCH", "WhatDidIMissAsync failed near source line 5369: " + ex); }
 
                 ctx.AppendLine("Напиши одне коротке повідомлення в стилі Kokonoe — запитай що робив, як справи. Без зайвих слів, без списків. Просто живо і по-людськи.");
 
@@ -5411,7 +5411,7 @@ Summary: {summary}
                         if (!string.IsNullOrEmpty(text))
                             contents.AppendLine($"## {n.p}\n{text[..Math.Min(500, text.Length)]}\n");
                     }
-                    catch { }
+                    catch (Exception ex) { KokoSystemLog.Write("BRAIN-CATCH", "WeeklyVaultDigestAsync failed near source line 5414: " + ex); }
                 }
 
                 var prompt = $@"Ти — Kokonoe. Тижневий дайджест vault за {DateTime.Now:dd.MM.yyyy}.
@@ -5436,7 +5436,7 @@ Summary: {summary}
                     catch { _obsidian.WriteNote(digestNote,
                         $"---\ntype: weekly-digest\n---\n\n# Тижневий дайджест{entry}"); }
                 }
-                catch { }
+                catch (Exception ex) { KokoSystemLog.Write("BRAIN-CATCH", "WeeklyVaultDigestAsync failed near source line 5439: " + ex); }
 
                 await SendTgAndLog($"📋 Тижневий дайджест:\n{digest[..Math.Min(300, digest.Length)]}", "digest");
                 _lastWeeklyDigestAt = DateTime.Now;
@@ -5493,7 +5493,7 @@ Summary: {summary}
                     }
                 }
             }
-            catch { }
+            catch (Exception ex) { KokoSystemLog.Write("BRAIN-CATCH", "CheckInAppSilenceAsync failed near source line 5496: " + ex); }
 
             var personalityBlock = BuildPersonalityInjection();
             var prompt = $@"Ти — Kokonoe Mercury.
@@ -5518,7 +5518,7 @@ Summary: {summary}
                     Content = msg, Role = "assistant", Author = "Kokonoe", Timestamp = now
                 });
             }
-            catch { }
+            catch (Exception ex) { KokoSystemLog.Write("BRAIN-CATCH", "CheckInAppSilenceAsync failed near source line 5521: " + ex); }
         }
 
         // ── Стилі спонтанних повідомлень ──────────────────────────────
@@ -5665,7 +5665,7 @@ Summary: {summary}
                     bpmMod = Math.Clamp(-dev * 0.75, -25, 30);
                 }
             }
-            catch { }
+            catch (Exception ex) { KokoSystemLog.Write("BRAIN-CATCH", "SpontaneousCheckAsync failed near source line 5668: " + ex); }
 
             // Динаміка тиші — окремі рівні cooldown
             try
@@ -5724,7 +5724,7 @@ Summary: {summary}
                     // 12г+ — нічого. Вона не переслідує.
                 }
             }
-            catch { }
+            catch (Exception ex) { KokoSystemLog.Write("BRAIN-CATCH", "SpontaneousCheckAsync failed near source line 5727: " + ex); }
 
             // Поганий сон
             if (_state.ConsecutiveBadSleeps >= 2 &&
@@ -5860,7 +5860,7 @@ Summary: {summary}
                     Timestamp = DateTime.Now
                 });
             }
-            catch { }
+            catch (Exception ex) { KokoSystemLog.Write("BRAIN-CATCH", "SendSilenceReactionAsync failed near source line 5863: " + ex); }
 
             var handler = OnNewMessage; handler?.Invoke("assistant", msg);
             Log($"Silence reaction sent: {level}, silence={silenceText}");
@@ -5876,7 +5876,7 @@ Summary: {summary}
                 var heart = ServiceContainer.Heart;
                 if (heart != null) initiativeBpmDeviation = heart.CurrentBpm - heart.BaselineBpm;
             }
-            catch { }
+            catch (Exception ex) { KokoSystemLog.Write("BRAIN-CATCH", "TryStateTriggeredSpontaneous failed near source line 5879: " + ex); }
 
             var initiativeEmotion = Emotion.Current.ToString();
             if (string.IsNullOrEmpty(_state.LastSentEmotionState))
@@ -6016,7 +6016,7 @@ Summary: {summary}
                 var heart = ServiceContainer.Heart;
                 if (heart != null) isAgitated |= (heart.CurrentBpm - heart.BaselineBpm) > 15;
             }
-            catch { }
+            catch (Exception ex) { KokoSystemLog.Write("BRAIN-CATCH", "ConsumeInitiativeState failed near source line 6019: " + ex); }
 
             if (isAgitated && (now - _state.LastSpontaneousAt).TotalMinutes > 60)
             {
@@ -6140,7 +6140,7 @@ Summary: {summary}
                             : $"Він мовчить більше доби.";
                 }
             }
-            catch { }
+            catch (Exception ex) { KokoSystemLog.Write("BRAIN-CATCH", "SendSpontaneousAsync failed near source line 6143: " + ex); }
 
             // Pending thought якщо є
             var pendingThought = _state.PendingThoughts.LastOrDefault();
@@ -6314,7 +6314,7 @@ Summary: {summary}
                     Timestamp = DateTime.Now
                 });
             }
-            catch { }
+            catch (Exception ex) { KokoSystemLog.Write("BRAIN-CATCH", "SendSpontaneousAsync failed near source line 6317: " + ex); }
 
             // Прибрати використану думку тільки якщо реально відправлено
             if (trigger == "pending_thought" && _state.PendingThoughts.Any())
@@ -6775,7 +6775,7 @@ Summary: {summary}
             sb.AppendLine($"screen: {NullDash(_state.LastScreenAwarenessSummary)}");
             sb.AppendLine($"last_activity: {NullDash(_state.LastKnownUserActivity)}");
             sb.AppendLine($"active_intents: {(active.Length == 0 ? "none" : string.Join("; ", active))}");
-            try { sb.AppendLine(Emotion.BuildEmotionalContextBlock(BuildNarrativeThreadSummary(now))); } catch { }
+            try { sb.AppendLine(Emotion.BuildEmotionalContextBlock(BuildNarrativeThreadSummary(now))); } catch (Exception ex) { KokoSystemLog.Write("BRAIN-CATCH", "BuildUnifiedExternalContext failed near source line 6778: " + ex); }
             sb.AppendLine("Use this as private continuity only. Do not quote labels.");
             var collective = BuildCollectiveMindContext(userText, channel, publish: false);
             if (!string.IsNullOrWhiteSpace(collective))
@@ -6961,7 +6961,7 @@ Summary: {summary}
                 _llm.PersonalityHint    = BuildPersonalityInjection();
                 _llm.DynamicTemperature = ComputeTemperature();
             }
-            catch { }
+            catch (Exception ex) { KokoSystemLog.Write("BRAIN-CATCH", "RefreshPersonalityHint failed near source line 6964: " + ex); }
         }
 
         private double ComputeTemperature()
@@ -7005,7 +7005,7 @@ Summary: {summary}
                     else if (deviation < -10) temp -= Math.Min(0.06, Math.Abs(deviation) / 250.0);
                 }
             }
-            catch { }
+            catch (Exception ex) { KokoSystemLog.Write("BRAIN-CATCH", "ComputeTemperature failed near source line 7008: " + ex); }
 
             // Daily mood nudge
             if (_state.PersonalityDailyMood == "tired") temp -= 0.08;
@@ -7079,7 +7079,7 @@ Summary: {summary}
             finally
             {
                 try { _bgLlmSemaphore.Release(); }
-                catch (ObjectDisposedException) { }
+                catch (ObjectDisposedException ex) { KokoSystemLog.Write("BRAIN-CATCH", "ExtractFactsWithLlmAsync failed near source line 7082: " + ex); }
             }
         }
 
@@ -7197,7 +7197,7 @@ Summary: {summary}
         public KokoSomaticSnapshot GetSomaticSnapshot()
         {
             KokoHeartEngine? heart = null;
-            try { heart = ServiceContainer.Heart; } catch { }
+            try { heart = ServiceContainer.Heart; } catch (Exception ex) { KokoSystemLog.Write("BRAIN-CATCH", "GetSomaticSnapshot failed near source line 7200: " + ex); }
 
             var snapshot = Somatic.Evaluate(heart, Emotion, _health, DateTime.Now);
             _state.LastSomaticState = snapshot.State;
@@ -7759,7 +7759,7 @@ CHAT:
                 if (start >= 0 && end > start)
                 {
                     try { return JObject.Parse(raw[start..(end + 1)]); }
-                    catch { }
+                    catch (Exception ex) { KokoSystemLog.Write("BRAIN-CATCH", "ExtractJsonObject failed near source line 7762: " + ex); }
                 }
             }
             return null;

@@ -251,7 +251,7 @@ namespace KokonoeAssistant
                     KokoNoticeBorder.BeginAnimation(OpacityProperty, fade);
                 });
             }
-            catch (TaskCanceledException) { }
+            catch (TaskCanceledException ex) { KokoSystemLog.Write("UI-CATCH", "HideKokonoeNoticeLaterAsync failed near source line 254: " + ex); }
         }
 
         private void ShowBalloonNotification(string text)
@@ -263,7 +263,7 @@ namespace KokonoeAssistant
                 _notifyIcon.BalloonTipText = text;
                 _notifyIcon.ShowBalloonTip(5000);
             }
-            catch { }
+            catch (Exception ex) { KokoSystemLog.Write("UI-CATCH", "ShowBalloonNotification failed near source line 266: " + ex); }
         }
 
         private WinForms.NotifyIcon CreateNotifyIcon()
@@ -316,7 +316,7 @@ namespace KokonoeAssistant
                 };
                 FlashWindowEx(ref info);
             }
-            catch { }
+            catch (Exception ex) { KokoSystemLog.Write("UI-CATCH", "FlashTaskbar failed near source line 319: " + ex); }
         }
 
         private static string TrimNotificationText(string? text, int max)
@@ -444,7 +444,7 @@ namespace KokonoeAssistant
                     LiveCoreVaultText.Text = ex.Message;
                     RepairVisibleTextTree(this);
                 }
-                catch { }
+                catch (Exception logEx) { KokoSystemLog.Write("UI-CATCH", "UpdateLiveCorePanel failed near source line 447: " + logEx); }
             }
         }
 
@@ -474,7 +474,7 @@ namespace KokonoeAssistant
                     _liveCoreReviewActions = review.Actions.Count;
                     _liveCoreLastVaultScan = DateTime.Now;
                 }
-                catch { }
+                catch (Exception ex) { KokoSystemLog.Write("UI-CATCH", "QueueLiveCoreVaultScan failed near source line 477: " + ex); }
                 finally
                 {
                     _liveCoreVaultScanInFlight = false;
@@ -632,7 +632,7 @@ tags: [kokonoe, live-core, diagnostics]
                 heart.Beat += bpm => Dispatcher.InvokeAsync(() =>
                 {
                     try { _beatStoryboard!.Begin(this, HandoffBehavior.SnapshotAndReplace, true); }
-                    catch { }
+                    catch (Exception ex) { KokoSystemLog.Write("UI-CATCH", "SetupHeartUI failed near source line 635: " + ex); }
                     RecordBeatRR();
                 });
             }
@@ -785,7 +785,7 @@ tags: [kokonoe, live-core, diagnostics]
                     var selfReg = ServiceContainer.BrainEngine.GetSelfRegulationFrame(somatic);
                     DashHeartStateText.Text = $"{somatic.State.ToUpper()} // {selfReg.Reaction} · {selfReg.Regulation} · strain {somatic.Strain:P0}";
                 }
-                catch { }
+                catch (Exception ex) { KokoSystemLog.Write("UI-CATCH", "UpdateHeartStats failed near source line 788: " + ex); }
         }
 
         private async Task StartupSequenceAsync()
@@ -887,7 +887,7 @@ tags: [kokonoe, live-core, diagnostics]
                 c.G = (byte)(Math.Max(0, c.G - 100));
                 c.B = (byte)(Math.Max(0, c.B - 100));
                 trailingBrush = new System.Windows.Media.SolidColorBrush(c);
-            } catch { }
+            } catch (Exception ex) { KokoSystemLog.Write("UI-CATCH", "StartMatrixRain failed near source line 890: " + ex); }
 
             for (int i = 0; i < colCount; i++)
             {
@@ -989,10 +989,10 @@ tags: [kokonoe, live-core, diagnostics]
                 // Беремо останні повідомлення З timestamp
                 var recent = new List<Services.ChatRepository.ChatMessage>();
                 try { recent = ServiceContainer.ChatRepository.GetMessages(40).OrderBy(x => x.Timestamp).TakeLast(30).ToList(); }
-                catch { }
+                catch (Exception ex) { KokoSystemLog.Write("UI-CATCH", "GenerateStartupGreetingWithFallbackAsync failed near source line 992: " + ex); }
 
                 Services.KokoInternalState? startupState = null;
-                try { startupState = ServiceContainer.BrainEngine?.State; } catch { }
+                try { startupState = ServiceContainer.BrainEngine?.State; } catch (Exception ex) { KokoSystemLog.Write("UI-CATCH", "GenerateStartupGreetingWithFallbackAsync failed near source line 995: " + ex); }
                 var frame = service.BuildFrame(recent, now, startupState);
 
                 var brainObs = "";
@@ -1014,12 +1014,12 @@ tags: [kokonoe, live-core, diagnostics]
                         if (!string.IsNullOrWhiteSpace(emotionalBlock))
                             moodContext += "\n" + emotionalBlock;
                     }
-                    catch { }
+                    catch (Exception ex) { KokoSystemLog.Write("UI-CATCH", "GenerateStartupGreetingWithFallbackAsync failed near source line 1017: " + ex); }
                     presenceContext = string.Join(" | ", st.PresenceTrace.TakeLast(4));
                     if (st.Observations.Any())
                         brainObs = $"Твоє останнє спостереження: {st.Observations.TakeLast(2).Last()}\n";
                 }
-                catch { }
+                catch (Exception ex) { KokoSystemLog.Write("UI-CATCH", "GenerateStartupGreetingWithFallbackAsync failed near source line 1022: " + ex); }
 
                 try
                 {
@@ -1030,7 +1030,7 @@ tags: [kokonoe, live-core, diagnostics]
                         $"bond={emotion.Bond}; connection={emotion.ConnectionScore:F2}; stress={stress:F2}; pad={emotion.CurrentPad}";
                     moodContext = string.IsNullOrWhiteSpace(moodContext) ? emotionLine : moodContext + "; " + emotionLine;
                 }
-                catch { }
+                catch (Exception ex) { KokoSystemLog.Write("UI-CATCH", "GenerateStartupGreetingWithFallbackAsync failed near source line 1033: " + ex); }
 
                 service.EnrichFrame(frame, now, moodContext, presenceContext);
                 var fallback = service.BuildFallback(frame);
@@ -1065,7 +1065,7 @@ tags: [kokonoe, live-core, diagnostics]
                 var recent = ServiceContainer.ChatRepository.GetMessages(8);
                 var service = new Services.KokoStartupGreetingService();
                 Services.KokoInternalState? startupState = null;
-                try { startupState = ServiceContainer.BrainEngine?.State; } catch { }
+                try { startupState = ServiceContainer.BrainEngine?.State; } catch (Exception ex) { KokoSystemLog.Write("UI-CATCH", "GenerateFastGreeting failed near source line 1068: " + ex); }
                 return service.BuildFallback(service.BuildFrame(recent, DateTime.Now, startupState));
             }
             catch
@@ -1888,7 +1888,7 @@ tags: [kokonoe, live-core, diagnostics]
                     }
                     PulseRecentEvents.ItemsSource = events;
             }
-            catch { }
+            catch (Exception ex) { KokoSystemLog.Write("UI-CATCH", "UpdatePulseSidePanels failed near source line 1891: " + ex); }
         }
 
         private IReadOnlyList<(DateTime t, double bpm)> GetVerifiedPulseGraphSamples(
@@ -2600,7 +2600,7 @@ tags: [kokonoe, live-core, diagnostics]
                                     Timestamp = DateTime.Now
                                 });
                             }
-                            catch { }
+                            catch (Exception ex) { KokoSystemLog.Write("UI-CATCH", "HookAgentTaskEvents failed near source line 2603: " + ex); }
                             _ = Task.Run(() => ServiceContainer.ChatLogger.LogExchange("agent", task.Objective, visible));
                         }
                         RefreshAgentTaskBoard();
@@ -2650,7 +2650,7 @@ tags: [kokonoe, live-core, diagnostics]
             AgentFocusText.Text = $"focus: {activity.Focus}";
             AgentThoughtText.Text = $"thought: {activity.Thought}";
             var workMode = "Unknown";
-            try { workMode = ServiceContainer.BrainEngine.GetCurrentWorkModeLabel(); } catch { }
+            try { workMode = ServiceContainer.BrainEngine.GetCurrentWorkModeLabel(); } catch (Exception ex) { KokoSystemLog.Write("UI-CATCH", "UpdateAgentActivityPanel failed near source line 2653: " + ex); }
             ThoughtStreamStatusText.Text =
                 $"mode {workMode} | agent {activity.Phase} | {activity.Tool} | {TrimLiveCoreLine(activity.Focus, 120)}";
             ThoughtStreamStatusText.ToolTip =
@@ -2935,7 +2935,7 @@ tags: [kokonoe, live-core, diagnostics]
                     Content = effectiveText, Role = "user", Author = Environment.UserName, Timestamp = DateTime.Now
                 });
             }
-            catch { }
+            catch (Exception ex) { KokoSystemLog.Write("UI-CATCH", "SendMessage failed near source line 2938: " + ex); }
 
             InputBox.Clear();
             var imgBytes = _imgBytes;
@@ -2957,7 +2957,7 @@ tags: [kokonoe, live-core, diagnostics]
                 // It can touch memory/pattern stores, so keep it off the UI thread.
                 await Task.Run(() =>
                 {
-                    try { ServiceContainer.BrainEngine?.ProcessUserMessage(sendText); } catch { }
+                    try { ServiceContainer.BrainEngine?.ProcessUserMessage(sendText); } catch (Exception ex) { KokoSystemLog.Write("UI-CATCH", "SendMessage failed near source line 2960: " + ex); }
                 }, _llmCts?.Token ?? default);
 
                 var overlordDirective = await TryHandleSystemOverlordDirectiveAsync(sendText, _llmCts?.Token ?? default);
@@ -2980,7 +2980,7 @@ tags: [kokonoe, live-core, diagnostics]
                             Timestamp = DateTime.Now
                         });
                     }
-                    catch { }
+                    catch (Exception ex) { KokoSystemLog.Write("UI-CATCH", "SendMessage failed near source line 2983: " + ex); }
                     _ = Task.Run(() => ServiceContainer.ChatLogger.LogExchange("app", sendText, overlordDirective.Reply));
                     ObserveAutonomousProfile("app", sendText, overlordDirective.Reply);
                     return;
@@ -3006,7 +3006,7 @@ tags: [kokonoe, live-core, diagnostics]
                             Timestamp = DateTime.Now
                         });
                     }
-                    catch { }
+                    catch (Exception ex) { KokoSystemLog.Write("UI-CATCH", "SendMessage failed near source line 3009: " + ex); }
                     _ = Task.Run(() => ServiceContainer.ChatLogger.LogExchange("app", sendText, profileUpdate.Reply));
                     ObserveAutonomousProfile("app", sendText, profileUpdate.Reply);
                     return;
@@ -3031,7 +3031,7 @@ tags: [kokonoe, live-core, diagnostics]
                             Timestamp = DateTime.Now
                         });
                     }
-                    catch { }
+                    catch (Exception ex) { KokoSystemLog.Write("UI-CATCH", "SendMessage failed near source line 3034: " + ex); }
                     _ = Task.Run(() => ServiceContainer.ChatLogger.LogExchange("app", sendText, observationReply));
                     ObserveAutonomousProfile("app", sendText, observationReply);
                     return;
@@ -3083,7 +3083,7 @@ tags: [kokonoe, live-core, diagnostics]
                             Timestamp = DateTime.Now
                         });
                     }
-                    catch { }
+                    catch (Exception ex) { KokoSystemLog.Write("UI-CATCH", "SendMessage failed near source line 3086: " + ex); }
 
                     _ = Task.Run(() => ServiceContainer.ChatLogger.LogExchange("app", sendText, obsidianCommand.replyText));
                     ObserveAutonomousProfile("app", sendText, obsidianCommand.replyText);
@@ -3110,7 +3110,7 @@ tags: [kokonoe, live-core, diagnostics]
                             Timestamp = DateTime.Now
                         });
                     }
-                    catch { }
+                    catch (Exception ex) { KokoSystemLog.Write("UI-CATCH", "SendMessage failed near source line 3113: " + ex); }
                     _ = Task.Run(() => ServiceContainer.ChatLogger.LogExchange("app", sendText, controlCommand.Reply));
                     ObserveAutonomousProfile("app", sendText, controlCommand.Reply);
                     return;
@@ -3136,7 +3136,7 @@ tags: [kokonoe, live-core, diagnostics]
                             Timestamp = DateTime.Now
                         });
                     }
-                    catch { }
+                    catch (Exception ex) { KokoSystemLog.Write("UI-CATCH", "SendMessage failed near source line 3139: " + ex); }
                     _ = Task.Run(() => ServiceContainer.ChatLogger.LogExchange("app", sendText, agentDirective.Reply));
                     ObserveAutonomousProfile("app", sendText, agentDirective.Reply);
                     return;
@@ -3179,13 +3179,13 @@ tags: [kokonoe, live-core, diagnostics]
                         Content = reply, Role = "assistant", Author = "Kokonoe", Timestamp = DateTime.Now
                     });
                 }
-                catch { }
+                catch (Exception ex) { KokoSystemLog.Write("UI-CATCH", "SendMessage failed near source line 3182: " + ex); }
 
                 // Auto-log this exchange to Obsidian vault for archival memory
                 _ = Task.Run(() => ServiceContainer.ChatLogger.LogExchange("app", sendText, reply));
                 _ = Task.Run(() =>
                 {
-                    try { ServiceContainer.BrainEngine?.ObserveExchangeForVaultSync(sendText, reply); } catch { }
+                    try { ServiceContainer.BrainEngine?.ObserveExchangeForVaultSync(sendText, reply); } catch (Exception ex) { KokoSystemLog.Write("UI-CATCH", "SendMessage failed near source line 3188: " + ex); }
                 });
                 ObserveAutonomousProfile("app", sendText, reply);
 
@@ -3200,7 +3200,7 @@ tags: [kokonoe, live-core, diagnostics]
                         if (brain != null && sendText.Length > 10)
                             await brain.ExtractFactsWithLlmAsync(sendText);
                     }
-                    catch { }
+                    catch (Exception ex) { KokoSystemLog.Write("UI-CATCH", "SendMessage failed near source line 3203: " + ex); }
                 });
             }
             catch (Exception ex)
@@ -3419,7 +3419,7 @@ tags: [kokonoe, live-core, diagnostics]
                     if (!VisionResponseQuality.LooksUnusable(repaired) && !VisionResponseQuality.LooksGeneric(repaired))
                         reply = repaired;
                 }
-                catch { }
+                catch (Exception ex) { KokoSystemLog.Write("UI-CATCH", "BuildScreenScanReplyAsync failed near source line 3422: " + ex); }
             }
 
             if (string.IsNullOrWhiteSpace(reply))
@@ -3546,7 +3546,7 @@ Full PC context:
                     Content = reply, Role = "assistant", Author = "Kokonoe", Timestamp = DateTime.Now
                 });
             }
-            catch { }
+            catch (Exception ex) { KokoSystemLog.Write("UI-CATCH", "StoreAssistantReply failed near source line 3549: " + ex); }
         }
 
         private string BuildContext(string? userText = null)
@@ -3563,7 +3563,7 @@ Full PC context:
                 if (!string.IsNullOrWhiteSpace(temporal))
                     parts.Add((temporal, 0));
             }
-            catch { }
+            catch (Exception ex) { KokoSystemLog.Write("UI-CATCH", "BuildContext failed near source line 3566: " + ex); }
 
             parts.Add((BuildLiveResponseStyleContext(userText), 0));
 
@@ -3573,7 +3573,7 @@ Full PC context:
                 if (!string.IsNullOrWhiteSpace(cognitive))
                     parts.Add((cognitive, 0));
             }
-            catch { }
+            catch (Exception ex) { KokoSystemLog.Write("UI-CATCH", "BuildContext failed near source line 3576: " + ex); }
 
             try
             {
@@ -3581,7 +3581,7 @@ Full PC context:
                 if (!string.IsNullOrWhiteSpace(responsePlan))
                     parts.Add((responsePlan, 0));
             }
-            catch { }
+            catch (Exception ex) { KokoSystemLog.Write("UI-CATCH", "BuildContext failed near source line 3584: " + ex); }
 
             try
             {
@@ -3589,7 +3589,7 @@ Full PC context:
                 if (!string.IsNullOrWhiteSpace(selfReview))
                     parts.Add((selfReview, 0));
             }
-            catch { }
+            catch (Exception ex) { KokoSystemLog.Write("UI-CATCH", "BuildContext failed near source line 3592: " + ex); }
 
             try
             {
@@ -3597,7 +3597,7 @@ Full PC context:
                 if (!string.IsNullOrWhiteSpace(timeline))
                     parts.Add((timeline, 0));
             }
-            catch { }
+            catch (Exception ex) { KokoSystemLog.Write("UI-CATCH", "BuildContext failed near source line 3600: " + ex); }
 
             try
             {
@@ -3608,7 +3608,7 @@ Full PC context:
                     parts.Add((preflight, 0));
                 }
             }
-            catch { }
+            catch (Exception ex) { KokoSystemLog.Write("UI-CATCH", "BuildContext failed near source line 3611: " + ex); }
 
             // 1. Релевантна пам'ять — НАЙВАЖЛИВІШЕ, бо це факти про користувача
             try
@@ -3626,7 +3626,7 @@ Full PC context:
                         parts.Add(("=== ПАМ'ЯТЬ ===\n" + string.Join("\n", memParts), 1));
                 }
             }
-            catch { }
+            catch (Exception ex) { KokoSystemLog.Write("UI-CATCH", "BuildContext failed near source line 3629: " + ex); }
 
             // 1.5 Емоційний стан — безпосередньо впливає на тон відповіді
             try
@@ -3639,7 +3639,7 @@ Full PC context:
                 if (!string.IsNullOrWhiteSpace(condition))
                     parts.Add((condition, 2));
             }
-            catch { }
+            catch (Exception ex) { KokoSystemLog.Write("UI-CATCH", "BuildContext failed near source line 3642: " + ex); }
 
             // 2. Стан (емоції, здоров'я, scheduler) — важливо але менше
             try
@@ -3648,7 +3648,7 @@ Full PC context:
                 if (!string.IsNullOrEmpty(stateCtx))
                     parts.Add((stateCtx, 3));
             }
-            catch { }
+            catch (Exception ex) { KokoSystemLog.Write("UI-CATCH", "BuildContext failed near source line 3651: " + ex); }
 
             // 2.1 Пульс — завжди в контексті щоб Kokonoe реагувала на зміни
             try
@@ -3660,7 +3660,7 @@ Full PC context:
                     parts.Add(($"=== ПУЛЬС ===\nДжерело: verified Galaxy Watch | Поточний: {bpm:0.0} bpm{bpmNote} | Базовий: {baseline:0.0} bpm", 2));
                 }
             }
-            catch { }
+            catch (Exception ex) { KokoSystemLog.Write("UI-CATCH", "BuildContext failed near source line 3663: " + ex); }
 
             // 2.5 Календар — найближчі важливі дати
             try
@@ -3679,7 +3679,7 @@ Full PC context:
                     parts.Add(("=== КАЛЕНДАР ===\n" + string.Join("\n", calLines), 2));
                 }
             }
-            catch { }
+            catch (Exception ex) { KokoSystemLog.Write("UI-CATCH", "BuildContext failed near source line 3682: " + ex); }
 
             // 3. Здоров'я — агреговані показники за тиждень
             try
@@ -3688,7 +3688,7 @@ Full PC context:
                 if (!string.IsNullOrWhiteSpace(healthCtx) && !healthCtx.StartsWith("No health data"))
                     parts.Add((healthCtx.Trim(), 4));
             }
-            catch { }
+            catch (Exception ex) { KokoSystemLog.Write("UI-CATCH", "BuildContext failed near source line 3691: " + ex); }
 
             // 3.1 Цілі та активні звички
             try
@@ -3705,7 +3705,7 @@ Full PC context:
                     parts.Add(("=== ЦІЛІ/ЗВИЧКИ ===\n" + string.Join("\n", ghLines), 5));
                 }
             }
-            catch { }
+            catch (Exception ex) { KokoSystemLog.Write("UI-CATCH", "BuildContext failed near source line 3708: " + ex); }
 
             // 3.2 Когнітивний контекст
             try
@@ -3714,7 +3714,7 @@ Full PC context:
                 if (!string.IsNullOrEmpty(cogCtx))
                     parts.Add((cogCtx, 5));
             }
-            catch { }
+            catch (Exception ex) { KokoSystemLog.Write("UI-CATCH", "BuildContext failed near source line 3717: " + ex); }
 
             // 3.3 EnhancedMemory — структуровані факти про користувача
             try
@@ -3726,7 +3726,7 @@ Full PC context:
                     parts.Add((enhMem.Trim(), 6));
                 }
             }
-            catch { }
+            catch (Exception ex) { KokoSystemLog.Write("UI-CATCH", "BuildContext failed near source line 3729: " + ex); }
 
             // 4. Vault — ключові нотатки
             try
@@ -3751,7 +3751,7 @@ Full PC context:
                 if (vaultLines.Count > 0)
                     parts.Add(("=== VAULT ===\n" + string.Join(" | ", vaultLines), 7));
             }
-            catch { }
+            catch (Exception ex) { KokoSystemLog.Write("UI-CATCH", "BuildContext failed near source line 3754: " + ex); }
 
             // 4.1 Relevant vault recall - direct Obsidian retrieval for the current message
             try
@@ -3770,7 +3770,7 @@ Full PC context:
                     }
                 }
             }
-            catch { }
+            catch (Exception ex) { KokoSystemLog.Write("UI-CATCH", "BuildContext failed near source line 3773: " + ex); }
 
             // 4.2 Managed task queue / memory health - compact operational state
             try
@@ -3788,7 +3788,7 @@ Full PC context:
                 if (ops.Count > 0)
                     parts.Add(("=== KOKONOE MEMORY OPS ===\n" + string.Join("\n\n", ops), 6));
             }
-            catch { }
+            catch (Exception ex) { KokoSystemLog.Write("UI-CATCH", "BuildContext failed near source line 3791: " + ex); }
 
             // 5. Прогноз (ML.NET) — настрій/енергія на завтра
             try
@@ -3797,7 +3797,7 @@ Full PC context:
                 if (!string.IsNullOrEmpty(forecast))
                     parts.Add((forecast.Trim(), 8));
             }
-            catch { }
+            catch (Exception ex) { KokoSystemLog.Write("UI-CATCH", "BuildContext failed near source line 3800: " + ex); }
 
             // Сортуємо за пріоритетом і збираємо результат
             var orderedParts = parts.OrderBy(p => p.priority).Select(p => p.content).ToList();
@@ -3856,9 +3856,9 @@ Full PC context:
                 if (!string.IsNullOrWhiteSpace(temporal))
                     parts.Add(TrimForPrompt(temporal, 520));
             }
-            catch { }
+            catch (Exception ex) { KokoSystemLog.Write("UI-CATCH", "BuildFastTelegramContext failed near source line 3859: " + ex); }
 
-            try { parts.Add(BuildLiveResponseStyleContext(userText)); } catch { }
+            try { parts.Add(BuildLiveResponseStyleContext(userText)); } catch (Exception ex) { KokoSystemLog.Write("UI-CATCH", "BuildFastTelegramContext failed near source line 3861: " + ex); }
 
             try
             {
@@ -3866,7 +3866,7 @@ Full PC context:
                 if (!string.IsNullOrWhiteSpace(condition))
                     parts.Add(TrimForPrompt(condition, 520));
             }
-            catch { }
+            catch (Exception ex) { KokoSystemLog.Write("UI-CATCH", "BuildFastTelegramContext failed near source line 3869: " + ex); }
 
             try
             {
@@ -3876,7 +3876,7 @@ Full PC context:
                     parts.Add($"=== VERIFIED SOMATIC ===\nsource: Galaxy Watch; bpm={bpm:0.0}; baseline={baseline:0.0}; delta={diff:+0.0;-0.0;0.0}");
                 }
             }
-            catch { }
+            catch (Exception ex) { KokoSystemLog.Write("UI-CATCH", "BuildFastTelegramContext failed near source line 3879: " + ex); }
 
             try
             {
@@ -3895,7 +3895,7 @@ Full PC context:
                         parts.Add("=== LIGHT CONTINUITY ===\n" + string.Join("\n", compact));
                 }
             }
-            catch { }
+            catch (Exception ex) { KokoSystemLog.Write("UI-CATCH", "BuildFastTelegramContext failed near source line 3898: " + ex); }
 
             try
             {
@@ -3903,7 +3903,7 @@ Full PC context:
                 if (!string.IsNullOrWhiteSpace(collective))
                     parts.Add("=== COLLECTIVE MIND FAST ===\n" + collective);
             }
-            catch { }
+            catch (Exception ex) { KokoSystemLog.Write("UI-CATCH", "BuildFastTelegramContext failed near source line 3906: " + ex); }
 
             try
             {
@@ -3913,7 +3913,7 @@ Full PC context:
                 if (recent.Length > 0)
                     parts.Add("=== RECENT CHAT ===\n" + string.Join("\n", recent));
             }
-            catch { }
+            catch (Exception ex) { KokoSystemLog.Write("UI-CATCH", "BuildFastTelegramContext failed near source line 3916: " + ex); }
 
             var result = "=== FAST TELEGRAM CONTEXT ===\n" +
                          $"channel: {channel}\n" +
@@ -3995,7 +3995,7 @@ Character calibration: Kokonoe edge means concise precision and dry wit, not con
                 if (currentUser != null)
                     sb.AppendLine($"Поточне повідомлення користувача: {currentUser.Timestamp:yyyy-MM-dd HH:mm}: \"{TruncateAtWordBoundary(SanitizeForLlm(currentUser.Content ?? userText ?? ""), 180)}\"");
             }
-            catch { }
+            catch (Exception ex) { KokoSystemLog.Write("UI-CATCH", "BuildTemporalAwarenessContext failed near source line 3998: " + ex); }
 
             try
             {
@@ -4010,7 +4010,7 @@ Character calibration: Kokonoe edge means concise precision and dry wit, not con
                     }
                 }
             }
-            catch { }
+            catch (Exception ex) { KokoSystemLog.Write("UI-CATCH", "BuildTemporalAwarenessContext failed near source line 4013: " + ex); }
 
             var lower = (userText ?? "").ToLowerInvariant();
             var isMorningNow = now.Hour is >= 5 and < 13;
@@ -4846,7 +4846,7 @@ tags: []
             MessagesList.Children.Clear();
             _llm.ClearHistory();
 
-            try { ServiceContainer.ChatRepository.ClearAll(); } catch { }
+            try { ServiceContainer.ChatRepository.ClearAll(); } catch (Exception ex) { KokoSystemLog.Write("UI-CATCH", "ClearChat_Click failed near source line 4849: " + ex); }
         }
 
         private void ExportChat_Click(object sender, RoutedEventArgs e)
@@ -4910,7 +4910,7 @@ tags: []
                             prevLink = $"\nПопередня сесія: [[{prev}]]\n";
                         }
                     }
-                    catch { }
+                    catch (Exception ex) { KokoSystemLog.Write("UI-CATCH", "AppendToSessionLog failed near source line 4913: " + ex); }
 
                     var header = $"---\ntype: chat-log\ntags: [kokonoe, chat]\ndate: {DateTime.Now:yyyy-MM-dd}\n---\n\n# Чат {DateTime.Now:dd.MM.yyyy HH:mm}{prevLink}\n\n";
                     _obsidian.WriteNote(_sessionChatPath, header);
@@ -5140,7 +5140,7 @@ tags: []
                             _                          => "#68E6D666"
                         };
                     }
-                    catch { }
+                    catch (Exception ex) { KokoSystemLog.Write("UI-CATCH", "AddMessageBubble failed near source line 5143: " + ex); }
                 }
 
                 // Bubble
@@ -5443,7 +5443,7 @@ tags: []
                 if (EmotionDot.Effect is System.Windows.Media.Effects.DropShadowEffect glow)
                     glow.Color = color;
             }
-            catch { }
+            catch (Exception ex) { KokoSystemLog.Write("UI-CATCH", "UpdateEmotionDot failed near source line 5446: " + ex); }
         }
 
         private static System.Windows.Media.SolidColorBrush MakeBrush(string hex)
@@ -5933,10 +5933,10 @@ tags: []
                         var clean = System.Text.RegularExpressions.Regex.Replace(text, @"[*_`#>]", "");
                         synth.Speak(clean);
                     }
-                    catch { }
+                    catch (Exception ex) { KokoSystemLog.Write("UI-CATCH", "SpeakAsync failed near source line 5936: " + ex); }
                 });
             }
-            catch { }
+            catch (Exception ex) { KokoSystemLog.Write("UI-CATCH", "SpeakAsync failed near source line 5939: " + ex); }
         }
 
         // ------------------------------------------------------------
@@ -6045,7 +6045,7 @@ tags: []
                     });
                 }
             }
-            catch { }
+            catch (Exception ex) { KokoSystemLog.Write("UI-CATCH", "LoadVaultSidebar failed near source line 6048: " + ex); }
         }
 
         private void VaultTree_Selected(object sender, RoutedPropertyChangedEventArgs<object> e)
@@ -6520,7 +6520,7 @@ tags: []
             }
             catch (Exception ex)
             {
-                try { DashFooterComment.Text = $"Навіть діагностика зламалась. ({ex.Message})"; } catch { }
+                try { DashFooterComment.Text = $"Навіть діагностика зламалась. ({ex.Message})"; } catch (Exception logEx) { KokoSystemLog.Write("UI-CATCH", "DashLoadAll failed near source line 6523: " + logEx); }
             }
         }
 
@@ -6557,7 +6557,7 @@ tags: []
                     ? $"{(int)uptime.TotalHours}h {uptime.Minutes}m"
                     : $"{uptime.Minutes}m {uptime.Seconds}s";
             }
-            catch { }
+            catch (Exception ex) { KokoSystemLog.Write("UI-CATCH", "DashUpdateClock failed near source line 6560: " + ex); }
         }
 
         private void DashRefreshLive()
@@ -6788,7 +6788,7 @@ tags: []
                     _                                         => "Обробляю..."
                 };
             }
-            catch { }
+            catch (Exception ex) { KokoSystemLog.Write("UI-CATCH", "DashLoadEmotionalHeader failed near source line 6791: " + ex); }
         }
 
         // ---- Neuro charts ----
@@ -6804,7 +6804,7 @@ tags: []
                 DashDrawMood24h();
                 DashDrawWeeklyHeatmap();
             }
-            catch { }
+            catch (Exception ex) { KokoSystemLog.Write("UI-CATCH", "DashDrawNeuroCharts failed near source line 6807: " + ex); }
         }
 
         private void DashDrawActivityBarChart()
@@ -6891,7 +6891,7 @@ tags: []
                     ? $"{total} повідомлень зараховано"
                     : "немає даних — показано приклад";
             }
-            catch { }
+            catch (Exception ex) { KokoSystemLog.Write("UI-CATCH", "DashDrawActivityBarChart failed near source line 6894: " + ex); }
         }
 
         private void DashDrawEmotionPieChart()
@@ -6959,7 +6959,7 @@ tags: []
                     DashPieLegendPanel.Children.Add(row);
                 }
             }
-            catch { }
+            catch (Exception ex) { KokoSystemLog.Write("UI-CATCH", "DashDrawEmotionPieChart failed near source line 6962: " + ex); }
         }
 
         // ---- MOOD 24H ----
@@ -7208,7 +7208,7 @@ tags: []
                     DashBurndownAxisCanvas.Children.Add(DashLabel(when.ToString("MM/dd"), x, 2, 7, UiMuted));
                 }
             }
-            catch { }
+            catch (Exception ex) { KokoSystemLog.Write("UI-CATCH", "DashDrawConnectionBurndown failed near source line 7211: " + ex); }
         }
 
         // ---- KPI Cards ----
@@ -7244,7 +7244,7 @@ tags: []
                         $"\nrel trust {(int)(rel.Trust * 100)} · protect {(int)(rel.Protectiveness * 100)} · friction {(int)(rel.Friction * 100)}";
                     DashSideBondDirectiveText.Text = BuildDashboardBondContract(rel);
                 }
-                catch { }
+                catch (Exception ex) { KokoSystemLog.Write("UI-CATCH", "DashLoadKpiCards failed near source line 7247: " + ex); }
 
                 var connBrush = emotion.ConnectionScore switch
                 {
@@ -7278,7 +7278,7 @@ tags: []
                     Enumerable.Repeat((double)patCount, 7).ToArray(),
                     MediaColor.FromRgb(0xC9, 0x82, 0x4A));
             }
-            catch { }
+            catch (Exception ex) { KokoSystemLog.Write("UI-CATCH", "DashLoadKpiCards failed near source line 7281: " + ex); }
         }
 
         // ---- Thought Stream + Curiosities ----
@@ -7367,7 +7367,7 @@ tags: []
                     });
                 }
 
-                try { brain.ExportInspectorToVault(); } catch { }
+                try { brain.ExportInspectorToVault(); } catch (Exception ex) { KokoSystemLog.Write("UI-CATCH", "DashLoadThoughtStream failed near source line 7370: " + ex); }
 
                 // 2. Recent observations from today's vault daily note
                 try
@@ -7400,7 +7400,7 @@ tags: []
                             _dashThoughts.Add(t);
                     }
                 }
-                catch { }
+                catch (Exception ex) { KokoSystemLog.Write("UI-CATCH", "DashLoadThoughtStream failed near source line 7403: " + ex); }
 
                 // 3. Fallback if nothing
                 if (!_dashThoughts.Any())
@@ -7420,7 +7420,7 @@ tags: []
 
                 DashThoughtStream.ItemsSource = _dashThoughts;
             }
-            catch { }
+            catch (Exception ex) { KokoSystemLog.Write("UI-CATCH", "DashLoadThoughtStream failed near source line 7423: " + ex); }
         }
 
         private void DashLoadCuriosities()
@@ -7440,7 +7440,7 @@ tags: []
                 }
                 DashCuriosityList.ItemsSource = _dashCuriosities;
             }
-            catch { }
+            catch (Exception ex) { KokoSystemLog.Write("UI-CATCH", "DashLoadCuriosities failed near source line 7443: " + ex); }
         }
 
         // ---- Health ----
@@ -7507,7 +7507,7 @@ tags: []
                     RightVaultDoctorText.Text = _rightOpsVaultLine;
                     RepairVisibleTextTree(this);
                 }
-                catch { }
+                catch (Exception ex) { KokoSystemLog.Write("UI-CATCH", "RefreshRightOpsPanel failed near source line 7510: " + ex); }
             }
         }
 
@@ -7536,7 +7536,7 @@ tags: []
                         $"fm {report.FrontmatterIssues.Count} | moj {report.MojibakeSuspects.Count} | miss {report.MissingWikiTargets.Count}";
                     _rightOpsVaultScanAt = DateTime.Now;
                 }
-                catch { }
+                catch (Exception ex) { KokoSystemLog.Write("UI-CATCH", "QueueRightOpsVaultScan failed near source line 7539: " + ex); }
                 finally
                 {
                     _rightOpsVaultScanInFlight = false;
@@ -7580,7 +7580,7 @@ tags: []
                     DashHealthKokoComment.Text = "Ще не перевірила тебе.";
                 }
             }
-            catch { }
+            catch (Exception ex) { KokoSystemLog.Write("UI-CATCH", "DashLoadCreatorHealth failed near source line 7583: " + ex); }
         }
 
         private void DashUpdateFooterComment()
@@ -7612,7 +7612,7 @@ tags: []
                 };
                 DashFooterComment.Text = c[(int)emotion.Current % c.Length];
             }
-            catch { }
+            catch (Exception ex) { KokoSystemLog.Write("UI-CATCH", "DashUpdateFooterComment failed near source line 7615: " + ex); }
         }
 
         private static string DashboardEmotionLabel(KokoEmotionEngine.EmotionState state) => state switch
@@ -7922,7 +7922,7 @@ tags: [kokonoe, dashboard, live]
                 DashDrawSprintBurndown();
                 DashLoadDevKpis();
             }
-            catch { }
+            catch (Exception ex) { KokoSystemLog.Write("UI-CATCH", "DashDrawDevSection failed near source line 7925: " + ex); }
         }
 
         private void DashDrawGitActivityChart()
@@ -8016,7 +8016,7 @@ tags: [kokonoe, dashboard, live]
                 var totalStoryPts = (int)(commits.Sum() * 1.5 + prMerge.Sum() * 3);
                 DashGitVelocityLabel.Text = $"{totalStoryPts} Story Points computed";
             }
-            catch { }
+            catch (Exception ex) { KokoSystemLog.Write("UI-CATCH", "DashDrawGitActivityChart failed near source line 8019: " + ex); }
         }
 
         private void DashDrawTimeDistPie()
@@ -8085,7 +8085,7 @@ tags: [kokonoe, dashboard, live]
                     DashTimeDistLegendPanel.Children.Add(row);
                 }
             }
-            catch { }
+            catch (Exception ex) { KokoSystemLog.Write("UI-CATCH", "DashDrawTimeDistPie failed near source line 8088: " + ex); }
         }
 
         private void DashDrawSprintBurndown()
@@ -8169,7 +8169,7 @@ tags: [kokonoe, dashboard, live]
 
                 DashSprintAxisCanvas.Children.Add(DashLabel($"// день {sprintDay}, факт", 0, 9, 7, UiInfo));
             }
-            catch { }
+            catch (Exception ex) { KokoSystemLog.Write("UI-CATCH", "DashDrawSprintBurndown failed near source line 8172: " + ex); }
         }
 
         private void DashLoadDevKpis()
@@ -8529,7 +8529,7 @@ tags: [kokonoe, dashboard, live]
 
                 _ = Task.Run(() =>
                 {
-                    try { brain.InitVault(); } catch { }
+                    try { brain.InitVault(); } catch (Exception ex) { KokoSystemLog.Write("UI-CATCH", "InitBrain failed near source line 8532: " + ex); }
                     Dispatcher.InvokeAsync(UpdateEmotionDot, DispatcherPriority.Background);
                 });
             }
@@ -8685,12 +8685,12 @@ tags: [kokonoe, dashboard, live]
                             AddMessageBubble(new ChatMessageVm { Role = "user",      Content = $"[TG: {from}] 📷 {caption}" });
                             AddMessageBubble(new ChatMessageVm { Role = "assistant", Content = imgReply });
                         });
-                        try { await bot.SendMessage(chatId, imgReply, cancellationToken: ct); } catch { }
+                        try { await bot.SendMessage(chatId, imgReply, cancellationToken: ct); } catch (Exception ex) { KokoSystemLog.Write("UI-CATCH", "HandleTgUpdate failed near source line 8688: " + ex); }
                     }
                     catch (Exception ex)
                     {
                         System.Diagnostics.Debug.WriteLine($"[TG] Photo error: {ex.Message}");
-                        try { await bot.SendMessage(chatId, "Не змогла прочитати фото.", cancellationToken: ct); } catch { }
+                        try { await bot.SendMessage(chatId, "Не змогла прочитати фото.", cancellationToken: ct); } catch (Exception logEx) { KokoSystemLog.Write("UI-CATCH", "HandleTgUpdate failed near source line 8693: " + logEx); }
                     }
                     return;
                 }
@@ -8708,7 +8708,7 @@ tags: [kokonoe, dashboard, live]
                         Timestamp = DateTime.Now
                     });
                 }
-                catch { }
+                catch (Exception ex) { KokoSystemLog.Write("UI-CATCH", "HandleTgUpdate failed near source line 8711: " + ex); }
 
                 // ---- Commands ----
                 if (text.StartsWith("/start") || text == "/menu")
@@ -8732,7 +8732,7 @@ tags: [kokonoe, dashboard, live]
                 var awaiting = ConsumeTgAwaiting(chatId);
                 if (awaiting == TgAwaitingMode.Note)
                 {
-                    try { ServiceContainer.BrainEngine?.ProcessUserMessage(text); } catch { }
+                    try { ServiceContainer.BrainEngine?.ProcessUserMessage(text); } catch (Exception ex) { KokoSystemLog.Write("UI-CATCH", "HandleTgUpdate failed near source line 8735: " + ex); }
                     try { ServiceContainer.BrainEngine?.Memory?.RecordEpisodeBlocking(text, "neutral", 0.6f); }
                     catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[ERROR] TG note memory: {ex.Message}"); }
                     try { _obsidian.AppendToDailyNote($"\n> 📝 [TG {DateTime.Now:HH:mm}] {text}"); }
@@ -8782,12 +8782,12 @@ tags: [kokonoe, dashboard, live]
                         AddMessageBubble(new ChatMessageVm { Role = "user", Content = $"[TG: {from}] {text}" });
                         AddMessageBubble(new ChatMessageVm { Role = "assistant", Content = observationReply });
                     });
-                    try { await bot.SendMessage(chatId, observationReply, cancellationToken: ct); } catch { }
+                    try { await bot.SendMessage(chatId, observationReply, cancellationToken: ct); } catch (Exception ex) { KokoSystemLog.Write("UI-CATCH", "HandleTgUpdate failed near source line 8785: " + ex); }
                     try
                     {
                         ServiceContainer.ChatRepository.InsertMessage(new ChatRepository.ChatMessage { Content = observationReply, Role = "assistant", Author = "Kokonoe", Timestamp = DateTime.Now });
                     }
-                    catch { }
+                    catch (Exception ex) { KokoSystemLog.Write("UI-CATCH", "HandleTgUpdate failed near source line 8790: " + ex); }
                     _ = Task.Run(() => ServiceContainer.ChatLogger.LogExchange("tg", text, observationReply));
                     ObserveAutonomousProfile("tg", text, observationReply);
                     return;
@@ -8806,12 +8806,12 @@ tags: [kokonoe, dashboard, live]
                         AddMessageBubble(new ChatMessageVm { Role = "user", Content = $"[TG: {from}] {text}" });
                         AddMessageBubble(new ChatMessageVm { Role = "assistant", Content = overlordDirective.Reply });
                     });
-                    try { await bot.SendMessage(chatId, overlordDirective.Reply, cancellationToken: ct); } catch { }
+                    try { await bot.SendMessage(chatId, overlordDirective.Reply, cancellationToken: ct); } catch (Exception ex) { KokoSystemLog.Write("UI-CATCH", "HandleTgUpdate failed near source line 8809: " + ex); }
                     try
                     {
                         ServiceContainer.ChatRepository.InsertMessage(new ChatRepository.ChatMessage { Content = overlordDirective.Reply, Role = "assistant", Author = "Kokonoe", Timestamp = DateTime.Now });
                     }
-                    catch { }
+                    catch (Exception ex) { KokoSystemLog.Write("UI-CATCH", "HandleTgUpdate failed near source line 8814: " + ex); }
                     _ = Task.Run(() => ServiceContainer.ChatLogger.LogExchange("tg", text, overlordDirective.Reply));
                     ObserveAutonomousProfile("tg", text, overlordDirective.Reply);
                     return;
@@ -8827,12 +8827,12 @@ tags: [kokonoe, dashboard, live]
                         AddMessageBubble(new ChatMessageVm { Role = "user", Content = $"[TG: {from}] {text}" });
                         AddMessageBubble(new ChatMessageVm { Role = "assistant", Content = controlCommand.Reply });
                     });
-                    try { await bot.SendMessage(chatId, controlCommand.Reply, cancellationToken: ct); } catch { }
+                    try { await bot.SendMessage(chatId, controlCommand.Reply, cancellationToken: ct); } catch (Exception ex) { KokoSystemLog.Write("UI-CATCH", "HandleTgUpdate failed near source line 8830: " + ex); }
                     try
                     {
                         ServiceContainer.ChatRepository.InsertMessage(new ChatRepository.ChatMessage { Content = controlCommand.Reply, Role = "assistant", Author = "Kokonoe", Timestamp = DateTime.Now });
                     }
-                    catch { }
+                    catch (Exception ex) { KokoSystemLog.Write("UI-CATCH", "HandleTgUpdate failed near source line 8835: " + ex); }
                     _ = Task.Run(() => ServiceContainer.ChatLogger.LogExchange("tg", text, controlCommand.Reply));
                     ObserveAutonomousProfile("tg", text, controlCommand.Reply);
                     return;
@@ -8848,7 +8848,7 @@ tags: [kokonoe, dashboard, live]
                         AddMessageBubble(new ChatMessageVm { Role = "user", Content = $"[TG: {from}] {text}" });
                         AddMessageBubble(new ChatMessageVm { Role = "assistant", Content = profileUpdate.Reply });
                     });
-                    try { await bot.SendMessage(chatId, profileUpdate.Reply, cancellationToken: ct); } catch { }
+                    try { await bot.SendMessage(chatId, profileUpdate.Reply, cancellationToken: ct); } catch (Exception ex) { KokoSystemLog.Write("UI-CATCH", "HandleTgUpdate failed near source line 8851: " + ex); }
                     try
                     {
                         ServiceContainer.ChatRepository.InsertMessage(new ChatRepository.ChatMessage
@@ -8859,7 +8859,7 @@ tags: [kokonoe, dashboard, live]
                             Timestamp = DateTime.Now
                         });
                     }
-                    catch { }
+                    catch (Exception ex) { KokoSystemLog.Write("UI-CATCH", "HandleTgUpdate failed near source line 8862: " + ex); }
                     _ = Task.Run(() => ServiceContainer.ChatLogger.LogExchange("tg", text, profileUpdate.Reply));
                     ObserveAutonomousProfile("tg", text, profileUpdate.Reply);
                     return;
@@ -8874,7 +8874,7 @@ tags: [kokonoe, dashboard, live]
                         AddMessageBubble(new ChatMessageVm { Role = "user", Content = $"[TG: {from}] {text}" });
                         AddMessageBubble(new ChatMessageVm { Role = "assistant", Content = obsidianReply });
                     });
-                    try { await bot.SendMessage(chatId, obsidianReply, cancellationToken: ct); } catch { }
+                    try { await bot.SendMessage(chatId, obsidianReply, cancellationToken: ct); } catch (Exception ex) { KokoSystemLog.Write("UI-CATCH", "HandleTgUpdate failed near source line 8877: " + ex); }
                     try
                     {
                         ServiceContainer.ChatRepository.InsertMessage(new ChatRepository.ChatMessage
@@ -8885,7 +8885,7 @@ tags: [kokonoe, dashboard, live]
                             Timestamp = DateTime.Now
                         });
                     }
-                    catch { }
+                    catch (Exception ex) { KokoSystemLog.Write("UI-CATCH", "HandleTgUpdate failed near source line 8888: " + ex); }
                     _ = Task.Run(() => ServiceContainer.ChatLogger.LogExchange("tg", text, obsidianReply));
                     ObserveAutonomousProfile("tg", text, obsidianReply);
                     return;
@@ -8901,7 +8901,7 @@ tags: [kokonoe, dashboard, live]
                         AddMessageBubble(new ChatMessageVm { Role = "user", Content = $"[TG: {from}] {text}" });
                         AddMessageBubble(new ChatMessageVm { Role = "assistant", Content = agentDirective.Reply });
                     });
-                    try { await bot.SendMessage(chatId, agentDirective.Reply, cancellationToken: ct); } catch { }
+                    try { await bot.SendMessage(chatId, agentDirective.Reply, cancellationToken: ct); } catch (Exception ex) { KokoSystemLog.Write("UI-CATCH", "HandleTgUpdate failed near source line 8904: " + ex); }
                     try
                     {
                         ServiceContainer.ChatRepository.InsertMessage(new ChatRepository.ChatMessage
@@ -8912,7 +8912,7 @@ tags: [kokonoe, dashboard, live]
                             Timestamp = DateTime.Now
                         });
                     }
-                    catch { }
+                    catch (Exception ex) { KokoSystemLog.Write("UI-CATCH", "HandleTgUpdate failed near source line 8915: " + ex); }
                     _ = Task.Run(() => ServiceContainer.ChatLogger.LogExchange("tg", text, agentDirective.Reply));
                     ObserveAutonomousProfile("tg", text, agentDirective.Reply);
                     return;
@@ -8920,7 +8920,7 @@ tags: [kokonoe, dashboard, live]
 
                 await Task.Run(() =>
                 {
-                    try { ServiceContainer.BrainEngine?.ProcessUserMessage(text); } catch { }
+                    try { ServiceContainer.BrainEngine?.ProcessUserMessage(text); } catch (Exception ex) { KokoSystemLog.Write("UI-CATCH", "HandleTgUpdate failed near source line 8923: " + ex); }
                 }, ct);
                 var tgTotalWatch = Stopwatch.StartNew();
                 var tgContextResult = await Task.Run(() =>
@@ -8950,7 +8950,7 @@ tags: [kokonoe, dashboard, live]
                     AddMessageBubble(new ChatMessageVm { Role = "user",      Content = $"[TG: {from}] {text}" });
                     AddMessageBubble(new ChatMessageVm { Role = "assistant", Content = reply });
                 });
-                try { await bot.SendMessage(chatId, reply, cancellationToken: ct); } catch { }
+                try { await bot.SendMessage(chatId, reply, cancellationToken: ct); } catch (Exception ex) { KokoSystemLog.Write("UI-CATCH", "HandleTgUpdate failed near source line 8953: " + ex); }
                 try
                 {
                     ServiceContainer.ChatRepository.InsertMessage(new ChatRepository.ChatMessage
@@ -8961,7 +8961,7 @@ tags: [kokonoe, dashboard, live]
                         Timestamp = DateTime.Now
                     });
                 }
-                catch { }
+                catch (Exception ex) { KokoSystemLog.Write("UI-CATCH", "HandleTgUpdate failed near source line 8964: " + ex); }
 
                 // Log TG exchange to vault archive
                 _ = Task.Run(() => ServiceContainer.ChatLogger.LogExchange("tg", text, reply));
@@ -9006,7 +9006,7 @@ tags: [kokonoe, dashboard, live]
                 System.Diagnostics.Debug.WriteLine($"[TG] rejected unauthorized callback chat {chatId}");
                 return;
             }
-            try { await bot.AnswerCallbackQuery(cb.Id, cancellationToken: ct); } catch { }
+            try { await bot.AnswerCallbackQuery(cb.Id, cancellationToken: ct); } catch (Exception ex) { KokoSystemLog.Write("UI-CATCH", "HandleTgCallback failed near source line 9009: " + ex); }
 
             switch (data)
             {
@@ -9380,9 +9380,9 @@ tags: [kokonoe, dashboard, live]
             if (!moodMap.TryGetValue(mood, out var m)) return;
 
             // Зберегти в health + emotion
-            try { ServiceContainer.BrainEngine?.Memory?.RecordEpisodeBlocking($"настрій: {m.Label}", m.Tone, m.Score); } catch { }
-            try { ServiceContainer.EmotionEngine.UpdateFromUserTone(m.Tone, m.Score); } catch { }
-            try { _obsidian.AppendToDailyNote($"\n> ❤️ [{DateTime.Now:HH:mm}] Настрій: {m.Label}"); } catch { }
+            try { ServiceContainer.BrainEngine?.Memory?.RecordEpisodeBlocking($"настрій: {m.Label}", m.Tone, m.Score); } catch (Exception ex) { KokoSystemLog.Write("UI-CATCH", "TgHandleMood failed near source line 9383: " + ex); }
+            try { ServiceContainer.EmotionEngine.UpdateFromUserTone(m.Tone, m.Score); } catch (Exception ex) { KokoSystemLog.Write("UI-CATCH", "TgHandleMood failed near source line 9384: " + ex); }
+            try { _obsidian.AppendToDailyNote($"\n> ❤️ [{DateTime.Now:HH:mm}] Настрій: {m.Label}"); } catch (Exception ex) { KokoSystemLog.Write("UI-CATCH", "TgHandleMood failed near source line 9385: " + ex); }
 
             // Kokonoe коротко реагує
             var prompt = $"Він написав що почувається: {m.Label}. Одне коротке речення від Kokonoe — природньо, без зайвих слів.";
@@ -9515,7 +9515,7 @@ tags: [kokonoe, dashboard, live]
             if (oldSvc != null)
             {
                 ServiceContainer.TelegramUser = null;
-                try { oldSvc.Dispose(); } catch { }
+                try { oldSvc.Dispose(); } catch (Exception ex) { KokoSystemLog.Write("UI-CATCH", "InitTelegramUserAsync failed near source line 9518: " + ex); }
                 _tgUserCts.Cancel();
                 _tgUserCts = new CancellationTokenSource();
                 await Task.Delay(300); // даємо WTelegramClient відпустити файл
@@ -9600,7 +9600,7 @@ tags: [kokonoe, dashboard, live]
 
             try
             {
-                try { ServiceContainer.BrainEngine?.ProcessUserMessage($"[TG {msg.Sender}]: {msg.Text}"); } catch { }
+                try { ServiceContainer.BrainEngine?.ProcessUserMessage($"[TG {msg.Sender}]: {msg.Text}"); } catch (Exception ex) { KokoSystemLog.Write("UI-CATCH", "HandleTgUserMessageAsync failed near source line 9603: " + ex); }
                 try
                 {
                     ServiceContainer.ChatRepository.InsertMessage(new ChatRepository.ChatMessage
@@ -9611,7 +9611,7 @@ tags: [kokonoe, dashboard, live]
                         Timestamp = DateTime.Now
                     });
                 }
-                catch { }
+                catch (Exception ex) { KokoSystemLog.Write("UI-CATCH", "HandleTgUserMessageAsync failed near source line 9614: " + ex); }
 
                 if (await TryHandleTelegramUserScreenScanAsync(msg, svc, _tgUserCts.Token))
                     return;
@@ -9636,7 +9636,7 @@ tags: [kokonoe, dashboard, live]
                             Timestamp = DateTime.Now
                         });
                     }
-                    catch { }
+                    catch (Exception ex) { KokoSystemLog.Write("UI-CATCH", "HandleTgUserMessageAsync failed near source line 9639: " + ex); }
                     await svc.SendAsync(msg.ChatId, overlordDirective.Reply, _tgUserCts.Token);
                     _ = Task.Run(() => ServiceContainer.ChatLogger.LogExchange("tg-user", msg.Text, overlordDirective.Reply));
                     ObserveAutonomousProfile("tg-user", msg.Text, overlordDirective.Reply);
@@ -9663,7 +9663,7 @@ tags: [kokonoe, dashboard, live]
                             Timestamp = DateTime.Now
                         });
                     }
-                    catch { }
+                    catch (Exception ex) { KokoSystemLog.Write("UI-CATCH", "HandleTgUserMessageAsync failed near source line 9666: " + ex); }
                     await svc.SendAsync(msg.ChatId, controlCommand.Reply, _tgUserCts.Token);
                     ObserveAutonomousProfile("tg-user", msg.Text, controlCommand.Reply);
                     return;
@@ -9689,7 +9689,7 @@ tags: [kokonoe, dashboard, live]
                             Timestamp = DateTime.Now
                         });
                     }
-                    catch { }
+                    catch (Exception ex) { KokoSystemLog.Write("UI-CATCH", "HandleTgUserMessageAsync failed near source line 9692: " + ex); }
                     await svc.SendAsync(msg.ChatId, profileUpdate.Reply, _tgUserCts.Token);
                     _ = Task.Run(() => ServiceContainer.ChatLogger.LogExchange("tg-user", msg.Text, profileUpdate.Reply));
                     ObserveAutonomousProfile("tg-user", msg.Text, profileUpdate.Reply);
@@ -9715,7 +9715,7 @@ tags: [kokonoe, dashboard, live]
                             Timestamp = DateTime.Now
                         });
                     }
-                    catch { }
+                    catch (Exception ex) { KokoSystemLog.Write("UI-CATCH", "HandleTgUserMessageAsync failed near source line 9718: " + ex); }
                     await svc.SendAsync(msg.ChatId, obsidianReply, _tgUserCts.Token);
                     _ = Task.Run(() => ServiceContainer.ChatLogger.LogExchange("tg-user", msg.Text, obsidianReply));
                     ObserveAutonomousProfile("tg-user", msg.Text, obsidianReply);
@@ -9742,7 +9742,7 @@ tags: [kokonoe, dashboard, live]
                             Timestamp = DateTime.Now
                         });
                     }
-                    catch { }
+                    catch (Exception ex) { KokoSystemLog.Write("UI-CATCH", "HandleTgUserMessageAsync failed near source line 9745: " + ex); }
                     await svc.SendAsync(msg.ChatId, agentDirective.Reply, _tgUserCts.Token);
                     _ = Task.Run(() => ServiceContainer.ChatLogger.LogExchange("tg-user", msg.Text, agentDirective.Reply));
                     ObserveAutonomousProfile("tg-user", msg.Text, agentDirective.Reply);
@@ -9788,7 +9788,7 @@ tags: [kokonoe, dashboard, live]
                         Timestamp = DateTime.Now
                     });
                 }
-                catch { }
+                catch (Exception ex) { KokoSystemLog.Write("UI-CATCH", "HandleTgUserMessageAsync failed near source line 9791: " + ex); }
                 await svc.SendAsync(msg.ChatId, reply, _tgUserCts.Token);
                 _ = Task.Run(() => ServiceContainer.ChatLogger.LogExchange("tg-user", msg.Text, reply));
                 ObserveAutonomousProfile("tg-user", msg.Text, reply);
@@ -9832,7 +9832,7 @@ tags: [kokonoe, dashboard, live]
                 AddMessageBubble(new ChatMessageVm { Role = "assistant", Content = reply });
             });
 
-            try { await bot.SendMessage(chatId, reply, cancellationToken: ct); } catch { }
+            try { await bot.SendMessage(chatId, reply, cancellationToken: ct); } catch (Exception ex) { KokoSystemLog.Write("UI-CATCH", "TryHandleTelegramScreenScanAsync failed near source line 9835: " + ex); }
             StoreAssistantReply(reply);
             _ = Task.Run(() => ServiceContainer.ChatLogger.LogExchange("tg", text, reply));
             ObserveAutonomousProfile("tg", text, reply);
@@ -10423,7 +10423,7 @@ tags: [kokonoe, dashboard, live]
                     System.Windows.Media.ColorConverter.ConvertFromString(hex);
                 SP_ColorPreview.Background = new System.Windows.Media.SolidColorBrush(color);
             }
-            catch { }
+            catch (Exception ex) { KokoSystemLog.Write("UI-CATCH", "UpdateColorPreview failed near source line 10426: " + ex); }
         }
 
         private void SP_ColorPreview_Click(object sender, System.Windows.Input.MouseButtonEventArgs e)
@@ -10470,9 +10470,9 @@ tags: [kokonoe, dashboard, live]
 
         protected override void OnClosed(EventArgs e)
         {
-            try { ServiceContainer.BrainEngine?.RecordClose(); } catch { }
-            try { _notifyIcon?.Dispose(); } catch { }
-            try { ServiceContainer.Heart?.Dispose(); } catch { }
+            try { ServiceContainer.BrainEngine?.RecordClose(); } catch (Exception ex) { KokoSystemLog.Write("UI-CATCH", "OnClosed failed near source line 10473: " + ex); }
+            try { _notifyIcon?.Dispose(); } catch (Exception ex) { KokoSystemLog.Write("UI-CATCH", "OnClosed failed near source line 10474: " + ex); }
+            try { ServiceContainer.Heart?.Dispose(); } catch (Exception ex) { KokoSystemLog.Write("UI-CATCH", "OnClosed failed near source line 10475: " + ex); }
             base.OnClosed(e);
         }
 
@@ -10491,7 +10491,7 @@ tags: [kokonoe, dashboard, live]
                 _tgUserCts?.Cancel();
                 ServiceContainer.Disposing();
             }
-            catch { }
+            catch (Exception ex) { KokoSystemLog.Write("UI-CATCH", "Cleanup failed near source line 10494: " + ex); }
         }
     }
 
