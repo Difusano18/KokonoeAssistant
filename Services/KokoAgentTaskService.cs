@@ -85,6 +85,26 @@ namespace KokonoeAssistant.Services
 
     public sealed class KokoAgentTaskService
     {
+        private sealed class StepExecutionOutcome
+        {
+            public bool Success { get; init; }
+            public string Result { get; init; } = "";
+            public string? Error { get; init; }
+
+            public static StepExecutionOutcome Succeeded(string result) => new()
+            {
+                Success = true,
+                Result = result
+            };
+
+            public static StepExecutionOutcome Failed(string result, string error) => new()
+            {
+                Success = false,
+                Result = result,
+                Error = error
+            };
+        }
+
         private readonly object _lock = new();
         private readonly string _path;
         private readonly LlmService? _llm;
@@ -321,7 +341,7 @@ namespace KokonoeAssistant.Services
 
                 if (task == null || step == null) return;
                 EmitActivity("execute", ToolNameFor(step.Kind), task.Objective, $"Running step {step.Order}: {step.Title}", task.Id, step.Id);
-                step.Result = await ExecuteStepCoreAsync(task, step, ct).ConfigureAwait(false);
+                var outcome = await ExecuteStepCoreAsync(task, step, ct).ConfigureAwait(false);
 
                 lock (_lock)
                 {
@@ -330,10 +350,21 @@ namespace KokonoeAssistant.Services
                     if (task == null || step == null || step.Status != KokoAgentTaskStatus.Running || task.Status == KokoAgentTaskStatus.Canceled)
                         return;
 
-                    step.Status = KokoAgentTaskStatus.Completed;
+                    step.Result = outcome.Result;
+                    step.Error = outcome.Error ?? "";
+                    if (outcome.Success)
+                    {
+                        step.Status = KokoAgentTaskStatus.Completed;
+                    }
+                    else
+                    {
+                        step.Status = KokoAgentTaskStatus.Failed;
+                        task.Status = KokoAgentTaskStatus.Failed;
+                    }
                     step.FinishedAt = DateTime.Now;
                     task.UpdatedAt = DateTime.Now;
-                    if (step.Kind == KokoAgentStepKind.SelfReview &&
+                    if (outcome.Success &&
+                        step.Kind == KokoAgentStepKind.SelfReview &&
                         TryExtractSelfReviewScore(step.Result, out var score) &&
                         score < 7 &&
                         InsertCorrectionStepLocked(task, step, score))
@@ -341,9 +372,10 @@ namespace KokonoeAssistant.Services
                         task.UpdatedAt = DateTime.Now;
                         EmitActivity("plan", "SelfReview", task.Objective, $"Score {score}/10; inserted correction step.", task.Id, step.Id);
                     }
-                    if (task.Steps.All(s => s.Status == KokoAgentTaskStatus.Completed))
+                    if (!outcome.Success || task.Steps.All(s => s.Status == KokoAgentTaskStatus.Completed))
                     {
-                        task.Status = KokoAgentTaskStatus.Completed;
+                        if (outcome.Success)
+                            task.Status = KokoAgentTaskStatus.Completed;
                         var notice = KokoAgentCompletionPolicy.Build(task);
                         task.CompletionNotice = notice.Notice;
                         task.NextQuestion = notice.NextQuestion;
@@ -352,11 +384,12 @@ namespace KokonoeAssistant.Services
                     }
                     SaveLocked();
                 }
-                var done = task.Status == KokoAgentTaskStatus.Completed && !string.IsNullOrWhiteSpace(task.CompletionNotice);
-                EmitActivity(done ? "report" : "observe",
-                    done ? "CompletionPolicy" : ToolNameFor(step.Kind),
-                    done ? task.CompletionNotice : step.Result,
-                    done ? task.NextQuestion : $"Step {step.Order} completed.",
+                var terminal = (task.Status is KokoAgentTaskStatus.Completed or KokoAgentTaskStatus.Failed) &&
+                               !string.IsNullOrWhiteSpace(task.CompletionNotice);
+                EmitActivity(terminal ? "report" : "observe",
+                    terminal ? "CompletionPolicy" : ToolNameFor(step.Kind),
+                    terminal ? task.CompletionNotice : step.Result,
+                    terminal ? task.NextQuestion : $"Step {step.Order} completed.",
                     task.Id,
                     step.Id);
             }
@@ -376,7 +409,13 @@ namespace KokonoeAssistant.Services
             }
         }
 
-        private async Task<string> ExecuteStepCoreAsync(KokoAgentTask task, KokoAgentStep step, CancellationToken ct)
+        private async Task<StepExecutionOutcome> ExecuteStepCoreAsync(KokoAgentTask task, KokoAgentStep step, CancellationToken ct)
+        {
+            var result = await ExecuteStepResultAsync(task, step, ct).ConfigureAwait(false);
+            return ClassifyStepOutcome(step.Kind, result);
+        }
+
+        private async Task<string> ExecuteStepResultAsync(KokoAgentTask task, KokoAgentStep step, CancellationToken ct)
         {
             if (step.Kind == KokoAgentStepKind.InsightExtraction)
             {
@@ -461,6 +500,35 @@ namespace KokonoeAssistant.Services
                 agentId: AgentIdFor(step.Kind)).ConfigureAwait(false);
             return string.IsNullOrWhiteSpace(result) ? "(empty result)" : result.Trim();
         }
+
+        private static StepExecutionOutcome ClassifyStepOutcome(KokoAgentStepKind kind, string? result)
+        {
+            var text = result?.Trim() ?? "";
+            if (string.IsNullOrWhiteSpace(text) || text.Equals("(empty result)", StringComparison.OrdinalIgnoreCase))
+                return StepExecutionOutcome.Failed(text, $"{kind} executor returned an empty result.");
+
+            var operationalFailure = kind switch
+            {
+                KokoAgentStepKind.Vision => StartsWithAny(text,
+                    "Vision failed",
+                    "Vision skipped because no LLM vision route is attached"),
+                KokoAgentStepKind.SystemControl => StartsWithAny(text,
+                    "SystemControl skipped",
+                    "SystemControl blocked"),
+                KokoAgentStepKind.InsightExtraction => StartsWithAny(text,
+                    "InsightExtraction: Obsidian service is unavailable"),
+                KokoAgentStepKind.Observation or KokoAgentStepKind.Report => StartsWithAny(text,
+                    "Observation report: no observation log was produced"),
+                _ => false
+            };
+
+            return operationalFailure
+                ? StepExecutionOutcome.Failed(text, Trim(FirstUsefulLine(text), 320))
+                : StepExecutionOutcome.Succeeded(text);
+        }
+
+        private static bool StartsWithAny(string text, params string[] prefixes)
+            => prefixes.Any(prefix => text.StartsWith(prefix, StringComparison.OrdinalIgnoreCase));
 
         private static string BuildSelfReviewReport(KokoAgentTask task)
         {
@@ -1199,6 +1267,14 @@ Objective: {task.Objective}
                 step.FinishedAt = DateTime.Now;
                 task.Status = status;
                 task.UpdatedAt = DateTime.Now;
+                if (status == KokoAgentTaskStatus.Failed)
+                {
+                    var notice = KokoAgentCompletionPolicy.Build(task);
+                    task.CompletionNotice = notice.Notice;
+                    task.NextQuestion = notice.NextQuestion;
+                    PersistCompletionNotice(task, notice);
+                    try { TaskCompleted?.Invoke(Clone(task), notice); } catch (Exception completionEx) { KokoSystemLog.Write("AGENTTASKSERVICE-CATCH", "Failed-task completion notification failed: " + completionEx); }
+                }
                 SaveLocked();
             }
         }

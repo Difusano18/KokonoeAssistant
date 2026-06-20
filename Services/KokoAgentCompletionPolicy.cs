@@ -21,6 +21,10 @@ namespace KokonoeAssistant.Services
             var completed = task.Steps.Count(s => s.Status == KokoAgentTaskStatus.Completed);
             var total = Math.Max(1, task.Steps.Count);
             var objective = task.Objective.Trim();
+            var firstFailure = failed.OrderBy(s => s.Order).FirstOrDefault();
+            var failureDetail = firstFailure == null
+                ? ""
+                : Trim(string.IsNullOrWhiteSpace(firstFailure.Error) ? firstFailure.Result : firstFailure.Error, 260);
 
             var notice = new KokoAgentCompletionNotice
             {
@@ -28,6 +32,12 @@ namespace KokonoeAssistant.Services
                     ? $"Задача {task.Id}: виконано {completed}/{total}, впало {failed.Count}."
                     : $"Задача {task.Id}: виконано {completed}/{total}.",
             };
+
+            if (firstFailure != null)
+            {
+                notice.Summary = $"Задача {task.Id}: виконано {completed}/{total}, помилок {failed.Count}. " +
+                                 $"Перший збій: {firstFailure.Title}: {failureDetail}";
+            }
 
             var lower = objective.ToLowerInvariant();
             var insightResult = task.Steps
@@ -73,6 +83,9 @@ namespace KokonoeAssistant.Services
                 notice.Mode = "wait";
                 notice.NextQuestion = "";
             }
+
+            if (firstFailure != null)
+                notice.NextQuestion = "Розібрати першу помилку чи повторити задачу іншим маршрутом?";
 
             notice.Notice = string.IsNullOrWhiteSpace(notice.NextQuestion)
                 ? notice.Summary
