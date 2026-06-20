@@ -73,7 +73,7 @@ namespace KokonoeAssistant.Services
         public void Stop()
         {
             if (!_started) return;
-            try { _cts?.Cancel(); } catch { }
+            try { _cts?.Cancel(); } catch (Exception suppressedEx76) { KokoSystemLog.Write("HEARTENGINE-CATCH", "Stop failed near source line 76: " + suppressedEx76); }
             _stateTimer?.Dispose(); _stateTimer = null;
             _beatTimer?.Dispose();  _beatTimer = null;
             _saveTimer?.Dispose();  _saveTimer = null;
@@ -98,7 +98,7 @@ namespace KokonoeAssistant.Services
                     catch (Exception ex) { Debug.WriteLine($"[Heart] state tick failed: {ex}"); }
                 }
             }
-            catch (OperationCanceledException) { }
+            catch (OperationCanceledException suppressedEx101) { KokoSystemLog.Write("HEARTENGINE-CATCH", "RunStateLoopAsync failed near source line 101: " + suppressedEx101); }
         }
 
         private void OnStateTick()

@@ -348,7 +348,7 @@ namespace KokonoeAssistant.Services
                         task.CompletionNotice = notice.Notice;
                         task.NextQuestion = notice.NextQuestion;
                         PersistCompletionNotice(task, notice);
-                        try { TaskCompleted?.Invoke(Clone(task), notice); } catch { }
+                        try { TaskCompleted?.Invoke(Clone(task), notice); } catch (Exception suppressedEx351) { KokoSystemLog.Write("AGENTTASKSERVICE-CATCH", "ExecuteStepAsync failed near source line 351: " + suppressedEx351); }
                     }
                     SaveLocked();
                 }
@@ -749,7 +749,7 @@ namespace KokonoeAssistant.Services
                     if (!VisionResponseQuality.LooksUnusable(repaired) && !VisionResponseQuality.LooksGeneric(repaired))
                         reply = repaired;
                 }
-                catch { }
+                catch (Exception suppressedEx752) { KokoSystemLog.Write("AGENTTASKSERVICE-CATCH", "ExecuteVisionSnapshotAsync failed near source line 752: " + suppressedEx752); }
             }
 
             if (string.IsNullOrWhiteSpace(reply) ||
@@ -893,7 +893,7 @@ namespace KokonoeAssistant.Services
 """;
                 _obsidian.AppendToNote("Kokonoe/Agent/Completions.md", line);
             }
-            catch { }
+            catch (Exception suppressedEx896) { KokoSystemLog.Write("AGENTTASKSERVICE-CATCH", "PersistCompletionNotice failed near source line 896: " + suppressedEx896); }
         }
 
         private async Task<string> BuildInsightExtractionReportAsync(KokoAgentTask task, CancellationToken ct)
@@ -968,7 +968,7 @@ Objective: {task.Objective}
 {report}
 """);
             }
-            catch { }
+            catch (Exception suppressedEx971) { KokoSystemLog.Write("AGENTTASKSERVICE-CATCH", "BuildInsightExtractionReportAsync failed near source line 971: " + suppressedEx971); }
 
             return report;
         }
@@ -1233,7 +1233,7 @@ Objective: {task.Objective}
                 _tasks.Clear();
                 _tasks.AddRange(loaded);
             }
-            catch { }
+            catch (Exception suppressedEx1236) { KokoSystemLog.Write("AGENTTASKSERVICE-CATCH", "Load failed near source line 1236: " + suppressedEx1236); }
         }
 
         private void SaveLocked()
@@ -1259,7 +1259,7 @@ Objective: {task.Objective}
                 snapshot = CloneActivity(_activity);
             }
 
-            try { ActivityChanged?.Invoke(snapshot); } catch { }
+            try { ActivityChanged?.Invoke(snapshot); } catch (Exception suppressedEx1262) { KokoSystemLog.Write("AGENTTASKSERVICE-CATCH", "EmitActivity failed near source line 1262: " + suppressedEx1262); }
         }
 
         private static string ToolNameFor(KokoAgentStepKind kind) => kind switch

@@ -290,7 +290,7 @@ namespace KokonoeAssistant.Services
                 _blackboard.Publish("research-agent", "internal_report", message, 0.45);
                 KokoSystemLog.Write("RESEARCH", "internal report suppressed from chat: " + Trim(message, 260));
             }
-            catch { }
+            catch (Exception suppressedEx293) { KokoSystemLog.Write("RESEARCHSERVICE-CATCH", "AppendActionMessage failed near source line 293: " + suppressedEx293); }
         }
 
         private ResearchState LoadState()
@@ -307,7 +307,7 @@ namespace KokonoeAssistant.Services
         private void SaveState()
         {
             try { File.WriteAllText(_statePath, JsonConvert.SerializeObject(_state, Formatting.Indented)); }
-            catch { }
+            catch (Exception suppressedEx310) { KokoSystemLog.Write("RESEARCHSERVICE-CATCH", "SaveState failed near source line 310: " + suppressedEx310); }
         }
 
         private static void AddTopic(Dictionary<string, int> scores, string? raw, int score)

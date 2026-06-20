@@ -1028,14 +1028,14 @@ namespace KokonoeAssistant.Services
                 if (File.Exists(_path))
                     return JsonConvert.DeserializeObject<CognitionData>(File.ReadAllText(_path)) ?? new();
             }
-            catch { }
+            catch (Exception suppressedEx1031) { KokoSystemLog.Write("COGNITIONENGINE-CATCH", "Load failed near source line 1031: " + suppressedEx1031); }
             return new();
         }
 
         private void Save()
         {
             try { File.WriteAllText(_path, JsonConvert.SerializeObject(_data, Formatting.Indented)); }
-            catch { }
+            catch (Exception suppressedEx1038) { KokoSystemLog.Write("COGNITIONENGINE-CATCH", "Save failed near source line 1038: " + suppressedEx1038); }
         }
 
         private static float Lerp(float a, float b, float t) => a + (b - a) * Math.Clamp(t, 0f, 1f);

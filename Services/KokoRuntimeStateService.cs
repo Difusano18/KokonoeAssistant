@@ -187,7 +187,7 @@ namespace KokonoeAssistant.Services
                 if (today?.SleepHours is < 5) return "user sleep is low; avoid piling on";
                 if (today?.Stress is >= 8) return "user stress is high; be direct and lower-pressure";
             }
-            catch { }
+            catch (Exception suppressedEx190) { KokoSystemLog.Write("RUNTIMESTATESERVICE-CATCH", "DetermineFatigue failed near source line 190: " + suppressedEx190); }
 
             if (emotion.Stress.Fatigue > 0.70f) return "kokonoe fatigue high; shorter replies";
             if (state.ConsecutiveBadSleeps >= 2) return "bad sleep pattern; be more attentive";

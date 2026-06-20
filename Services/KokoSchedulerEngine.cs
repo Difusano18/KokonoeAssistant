@@ -234,7 +234,7 @@ namespace KokonoeAssistant.Services
                 if (File.Exists(_path))
                     return JsonConvert.DeserializeObject<List<ScheduledEntry>>(File.ReadAllText(_path)) ?? new();
             }
-            catch { }
+            catch (Exception suppressedEx237) { KokoSystemLog.Write("SCHEDULERENGINE-CATCH", "Load failed near source line 237: " + suppressedEx237); }
             return new();
         }
 

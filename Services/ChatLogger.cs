@@ -126,7 +126,7 @@ namespace KokonoeAssistant.Services
                     prevLink = $"\nПопередня сесія: [[{name}]]\n";
                 }
             }
-            catch { }
+            catch (Exception suppressedEx129) { KokoSystemLog.Write("CHATLOGGER-CATCH", "EnsureSessionFile failed near source line 129: " + suppressedEx129); }
 
             var header = $"---\ntype: chat-log\ntags: [kokonoe, chat]\ndate: {DateTime.Now:yyyy-MM-dd}\n---\n\n# Чат {DateTime.Now:dd.MM.yyyy HH:mm}{prevLink}\n\n";
             _obsidian.WriteNote(_sessionPath, header);

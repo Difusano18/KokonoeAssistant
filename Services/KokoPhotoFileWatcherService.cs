@@ -85,7 +85,7 @@ namespace KokonoeAssistant.Services
         {
             foreach (var watcher in _watchers)
             {
-                try { watcher.Dispose(); } catch { }
+                try { watcher.Dispose(); } catch (Exception suppressedEx88) { KokoSystemLog.Write("PHOTOFILEWATCHERSERVICE-CATCH", "Dispose failed near source line 88: " + suppressedEx88); }
             }
             _watchers.Clear();
             _visionLock.Dispose();
@@ -154,7 +154,7 @@ namespace KokonoeAssistant.Services
                     Timestamp = DateTime.Now
                 });
 
-                try { _chatLoggerFactory()?.LogOutgoing("file_watcher", comment, "photo_vision"); } catch { }
+                try { _chatLoggerFactory()?.LogOutgoing("file_watcher", comment, "photo_vision"); } catch (Exception suppressedEx157) { KokoSystemLog.Write("PHOTOFILEWATCHERSERVICE-CATCH", "AnalyzeImageAsync failed near source line 157: " + suppressedEx157); }
                 Log($"commented on image: {path}");
             }
             catch (OperationCanceledException)
@@ -187,7 +187,7 @@ namespace KokonoeAssistant.Services
 
                     lastSize = info.Length;
                 }
-                catch { }
+                catch (Exception suppressedEx190) { KokoSystemLog.Write("PHOTOFILEWATCHERSERVICE-CATCH", "WaitForStableFileAsync failed near source line 190: " + suppressedEx190); }
 
                 await Task.Delay(500).ConfigureAwait(false);
             }
@@ -284,7 +284,7 @@ Otherwise answer with one concise Ukrainian Kokonoe-style observation that can b
                     Log($"document note write failed: {ex.Message}");
                 }
 
-                try { _chatLoggerFactory()?.LogOutgoing("file_watcher", $"Document summarized: {Path.GetFileName(path)}", "document_intake"); } catch { }
+                try { _chatLoggerFactory()?.LogOutgoing("file_watcher", $"Document summarized: {Path.GetFileName(path)}", "document_intake"); } catch (Exception suppressedEx287) { KokoSystemLog.Write("PHOTOFILEWATCHERSERVICE-CATCH", "AnalyzeDocumentAsync failed near source line 287: " + suppressedEx287); }
                 Log($"document summarized and stored: {path}");
             }
             catch (OperationCanceledException)
@@ -415,7 +415,7 @@ source_file: {Path.GetFileName(path)}
                 var line = $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] [PHOTO_WATCHER] {message}{Environment.NewLine}";
                 File.AppendAllText(Path.Combine(_dataDir, "photo-watcher.log"), line);
             }
-            catch { }
+            catch (Exception suppressedEx418) { KokoSystemLog.Write("PHOTOFILEWATCHERSERVICE-CATCH", "Log failed near source line 418: " + suppressedEx418); }
             KokoSystemLog.Write("PHOTO_WATCHER", message);
         }
     }

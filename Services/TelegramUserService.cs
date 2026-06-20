@@ -62,7 +62,7 @@ namespace KokonoeAssistant.Services
             // Якщо попередній client ще живий — dispose перед повторним підключенням
             if (_client != null)
             {
-                try { _client.Dispose(); } catch { }
+                try { _client.Dispose(); } catch (Exception suppressedEx65) { KokoSystemLog.Write("TELEGRAMUSERSERVICE-CATCH", "ConnectAsync failed near source line 65: " + suppressedEx65); }
                 _client = null;
                 await Task.Delay(200);
             }
@@ -348,7 +348,7 @@ namespace KokonoeAssistant.Services
 
         public void Dispose()
         {
-            try { _client?.Dispose(); } catch { }
+            try { _client?.Dispose(); } catch (Exception suppressedEx351) { KokoSystemLog.Write("TELEGRAMUSERSERVICE-CATCH", "Dispose failed near source line 351: " + suppressedEx351); }
             _client = null;
             IsConnected = false;
         }

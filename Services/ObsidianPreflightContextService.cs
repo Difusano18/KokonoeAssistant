@@ -32,7 +32,7 @@ namespace KokonoeAssistant.Services
                     var status = _obsidian.GetVaultStatus();
                     sb.AppendLine($"vault: notes={status.TotalNotes}, filled={status.FilledNotes}, empty={status.EmptyNotes.Count}, orphan={status.OrphanNotes.Count}");
                 }
-                catch { }
+                catch (Exception suppressedEx35) { KokoSystemLog.Write("OBSIDIANPREFLIGHTCONTEXTSERVICE-CATCH", "Build failed near source line 35: " + suppressedEx35); }
 
                 var noteSnippets = new List<string>();
                 AddNote(noteSnippets, "Creator/Profile.md", "Creator profile", 1000);

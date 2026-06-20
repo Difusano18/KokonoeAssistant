@@ -267,7 +267,7 @@ namespace KokonoeAssistant.Services
 
         private void Publish(string kind, string summary, double priority, object? payload = null)
         {
-            try { _blackboard?.Publish("GenesisFactory", kind, summary, priority, payload); } catch { }
+            try { _blackboard?.Publish("GenesisFactory", kind, summary, priority, payload); } catch (Exception suppressedEx270) { KokoSystemLog.Write("DYNAMICAGENTFACTORYSERVICE-CATCH", "Publish failed near source line 270: " + suppressedEx270); }
             KokoSystemLog.Write("GENESIS", summary);
         }
 

@@ -46,7 +46,7 @@ namespace KokonoeAssistant.Services
                 var completed = await WaitForExitAsync(proc, TimeSpan.FromSeconds(3), ct).ConfigureAwait(false);
                 if (!completed)
                 {
-                    try { proc.Kill(entireProcessTree: true); } catch { }
+                    try { proc.Kill(entireProcessTree: true); } catch (Exception suppressedEx49) { KokoSystemLog.Write("LIGHTOCRSERVICE-CATCH", "TryReadAsync failed near source line 49: " + suppressedEx49); }
                     return new KokoOcrResult(false, "", "ocr_timeout");
                 }
 
@@ -127,7 +127,7 @@ namespace KokonoeAssistant.Services
                     return true;
                 }
             }
-            catch { }
+            catch (Exception suppressedEx130) { KokoSystemLog.Write("LIGHTOCRSERVICE-CATCH", "WaitForExitAsync failed near source line 130: " + suppressedEx130); }
             return false;
         }
 
@@ -145,14 +145,14 @@ namespace KokonoeAssistant.Services
                     if (File.Exists(candidate))
                         return candidate;
                 }
-                catch { }
+                catch (Exception suppressedEx148) { KokoSystemLog.Write("LIGHTOCRSERVICE-CATCH", "FindExecutable failed near source line 148: " + suppressedEx148); }
             }
             return null;
         }
 
         private static void TryDelete(string path)
         {
-            try { if (File.Exists(path)) File.Delete(path); } catch { }
+            try { if (File.Exists(path)) File.Delete(path); } catch (Exception suppressedEx155) { KokoSystemLog.Write("LIGHTOCRSERVICE-CATCH", "TryDelete failed near source line 155: " + suppressedEx155); }
         }
     }
 

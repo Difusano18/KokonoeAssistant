@@ -33,7 +33,7 @@ namespace KokonoeAssistant.Services
             var python = ResolvePythonCommand();
             if (python == null)
             {
-                try { File.Delete(scriptPath); } catch { }
+                try { File.Delete(scriptPath); } catch (Exception suppressedEx36) { KokoSystemLog.Write("SANDBOXEXECUTOR-CATCH", "ExecutePythonAsync failed near source line 36: " + suppressedEx36); }
                 return "Python sandbox unavailable: neither py nor python was found.";
             }
 
@@ -66,7 +66,7 @@ namespace KokonoeAssistant.Services
                 }
                 catch (OperationCanceledException)
                 {
-                    try { process.Kill(entireProcessTree: true); } catch { }
+                    try { process.Kill(entireProcessTree: true); } catch (Exception suppressedEx69) { KokoSystemLog.Write("SANDBOXEXECUTOR-CATCH", "ExecutePythonAsync failed near source line 69: " + suppressedEx69); }
                     return $"Python sandbox timeout after {timeoutMs} ms.";
                 }
 
@@ -89,10 +89,10 @@ namespace KokonoeAssistant.Services
                         if (!process.HasExited)
                             process.Kill(entireProcessTree: true);
                     }
-                    catch { }
+                    catch (Exception suppressedEx92) { KokoSystemLog.Write("SANDBOXEXECUTOR-CATCH", "ExecutePythonAsync failed near source line 92: " + suppressedEx92); }
                 }
 
-                try { File.Delete(scriptPath); } catch { }
+                try { File.Delete(scriptPath); } catch (Exception suppressedEx95) { KokoSystemLog.Write("SANDBOXEXECUTOR-CATCH", "ExecutePythonAsync failed near source line 95: " + suppressedEx95); }
             }
         }
 
@@ -119,7 +119,7 @@ namespace KokonoeAssistant.Services
                 if (process == null) return false;
                 if (!process.WaitForExit(1500))
                 {
-                    try { process.Kill(entireProcessTree: true); } catch { }
+                    try { process.Kill(entireProcessTree: true); } catch (Exception suppressedEx122) { KokoSystemLog.Write("SANDBOXEXECUTOR-CATCH", "CommandExists failed near source line 122: " + suppressedEx122); }
                     return false;
                 }
                 return process.ExitCode == 0;

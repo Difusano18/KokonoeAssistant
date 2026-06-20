@@ -57,7 +57,7 @@ namespace KokonoeAssistant.Services
                 sleepHours = today?.SleepHours ?? 0;
                 reportedStress = today?.Stress;
             }
-            catch { }
+            catch (Exception suppressedEx60) { KokoSystemLog.Write("SOMATICENGINE-CATCH", "Evaluate failed near source line 60: " + suppressedEx60); }
 
             return Evaluate(new KokoSomaticInput
             {

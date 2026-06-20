@@ -255,14 +255,14 @@ namespace KokonoeAssistant.Services
                 if (File.Exists(_path))
                     return JsonConvert.DeserializeObject<PatternData>(File.ReadAllText(_path)) ?? new();
             }
-            catch { }
+            catch (Exception suppressedEx258) { KokoSystemLog.Write("PATTERNENGINE-CATCH", "Load failed near source line 258: " + suppressedEx258); }
             return new();
         }
 
         private void Save()
         {
             try { File.WriteAllText(_path, JsonConvert.SerializeObject(_data, Formatting.Indented)); }
-            catch { }
+            catch (Exception suppressedEx265) { KokoSystemLog.Write("PATTERNENGINE-CATCH", "Save failed near source line 265: " + suppressedEx265); }
         }
 
         // ── АНАЛІЗ (внутрішній) ───────────────────────────────────────

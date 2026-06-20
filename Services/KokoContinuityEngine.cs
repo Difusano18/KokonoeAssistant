@@ -225,7 +225,7 @@ namespace KokonoeAssistant.Services
                 if (File.Exists(_path))
                     return JsonConvert.DeserializeObject<KokoContinuitySnapshot>(File.ReadAllText(_path)) ?? new();
             }
-            catch { }
+            catch (Exception suppressedEx228) { KokoSystemLog.Write("CONTINUITYENGINE-CATCH", "Load failed near source line 228: " + suppressedEx228); }
             return new KokoContinuitySnapshot();
         }
 
@@ -236,7 +236,7 @@ namespace KokonoeAssistant.Services
                 Directory.CreateDirectory(Path.GetDirectoryName(_path)!);
                 File.WriteAllText(_path, JsonConvert.SerializeObject(_data, Formatting.Indented));
             }
-            catch { }
+            catch (Exception suppressedEx239) { KokoSystemLog.Write("CONTINUITYENGINE-CATCH", "Save failed near source line 239: " + suppressedEx239); }
         }
 
         private static string Normalize(string text)

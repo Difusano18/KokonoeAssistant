@@ -541,14 +541,14 @@ namespace KokonoeAssistant.Services
                 if (File.Exists(_cachePath))
                     return JsonConvert.DeserializeObject<PredictorReport>(File.ReadAllText(_cachePath));
             }
-            catch { }
+            catch (Exception suppressedEx544) { KokoSystemLog.Write("PREDICTORSERVICE-CATCH", "TryLoadCache failed near source line 544: " + suppressedEx544); }
             return null;
         }
 
         private void SaveCache(PredictorReport report)
         {
             try { File.WriteAllText(_cachePath, JsonConvert.SerializeObject(report, Formatting.Indented)); }
-            catch { }
+            catch (Exception suppressedEx551) { KokoSystemLog.Write("PREDICTORSERVICE-CATCH", "SaveCache failed near source line 551: " + suppressedEx551); }
         }
 
         private static void Log(string msg) =>

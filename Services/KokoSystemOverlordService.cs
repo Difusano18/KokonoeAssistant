@@ -394,7 +394,7 @@ namespace KokonoeAssistant.Services
                 if (!roots.Contains(full, StringComparer.OrdinalIgnoreCase))
                     roots.Insert(0, full);
             }
-            catch { }
+            catch (Exception suppressedEx397) { KokoSystemLog.Write("SYSTEMOVERLORDSERVICE-CATCH", "AddRoot failed near source line 397: " + suppressedEx397); }
         }
 
         private static string ResolveDesktop(string? desktopOverride)
@@ -581,8 +581,8 @@ namespace KokonoeAssistant.Services
                         WindowTitle = proc.MainWindowTitle ?? ""
                     };
                 }
-                catch { }
-                finally { try { proc.Dispose(); } catch { } }
+                catch (Exception suppressedEx584) { KokoSystemLog.Write("SYSTEMOVERLORDSERVICE-CATCH", "GetProcessFacts failed near source line 584: " + suppressedEx584); }
+                finally { try { proc.Dispose(); } catch (Exception suppressedEx585) { KokoSystemLog.Write("SYSTEMOVERLORDSERVICE-CATCH", "GetProcessFacts failed near source line 585: " + suppressedEx585); } }
                 if (fact != null)
                     yield return fact;
             }
@@ -607,7 +607,7 @@ namespace KokonoeAssistant.Services
                 if (loaded != null)
                     _last = loaded;
             }
-            catch { }
+            catch (Exception suppressedEx610) { KokoSystemLog.Write("SYSTEMOVERLORDSERVICE-CATCH", "LoadLast failed near source line 610: " + suppressedEx610); }
         }
 
         private void PublishSnapshot(KokoOverlordSnapshot snapshot)

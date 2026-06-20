@@ -120,7 +120,7 @@ namespace KokonoeAssistant.Services
                         Thread.Sleep(Math.Clamp(settleMs, 0, 1200));
                     }
                 }
-                catch { }
+                catch (Exception suppressedEx123) { KokoSystemLog.Write("PCCONTROLSERVICE-CATCH", "TakeScreenshot failed near source line 123: " + suppressedEx123); }
             }
 
             try
@@ -131,7 +131,7 @@ namespace KokonoeAssistant.Services
             {
                 if (restoreSelf && selfHwnd != IntPtr.Zero)
                 {
-                    try { ShowWindow(selfHwnd, SW_RESTORE); } catch { }
+                    try { ShowWindow(selfHwnd, SW_RESTORE); } catch (Exception suppressedEx134) { KokoSystemLog.Write("PCCONTROLSERVICE-CATCH", "TakeScreenshot failed near source line 134: " + suppressedEx134); }
                 }
             }
         }
@@ -201,7 +201,7 @@ namespace KokonoeAssistant.Services
                 info.TopProcesses = CaptureTopProcessResources(10, sampleMs: 220);
                 info.CpuPercent = Math.Clamp(info.TopProcesses.Sum(p => Math.Max(0, p.CpuPercent)), 0.0, 100.0);
             }
-            catch { }
+            catch (Exception suppressedEx204) { KokoSystemLog.Write("PCCONTROLSERVICE-CATCH", "GetSystemInfo failed near source line 204: " + suppressedEx204); }
 
             return info;
         }
@@ -291,7 +291,7 @@ namespace KokonoeAssistant.Services
                         using var proc = Process.GetProcessById((int)pid);
                         info.ProcessName = proc.ProcessName;
                     }
-                    catch { }
+                    catch (Exception suppressedEx294) { KokoSystemLog.Write("PCCONTROLSERVICE-CATCH", "GetForegroundWindow failed near source line 294: " + suppressedEx294); }
                 }
             }
             catch (Exception ex)
@@ -454,7 +454,7 @@ namespace KokonoeAssistant.Services
                             using var proc = Process.GetProcessById((int)pid);
                             processName = proc.ProcessName;
                         }
-                        catch { }
+                        catch (Exception suppressedEx457) { KokoSystemLog.Write("PCCONTROLSERVICE-CATCH", "ListVisibleWindows failed near source line 457: " + suppressedEx457); }
                     }
 
                     windows.Add(new WindowSummary
@@ -466,7 +466,7 @@ namespace KokonoeAssistant.Services
                         ClassName = classBuilder.ToString().Trim()
                     });
                 }
-                catch { }
+                catch (Exception suppressedEx469) { KokoSystemLog.Write("PCCONTROLSERVICE-CATCH", "ListVisibleWindows failed near source line 469: " + suppressedEx469); }
 
                 return true;
             }, IntPtr.Zero);
@@ -717,7 +717,7 @@ namespace KokonoeAssistant.Services
             catch (OperationCanceledException) when (!ct.IsCancellationRequested)
             {
                 step.TimedOut = true;
-                try { if (!proc.HasExited) proc.Kill(entireProcessTree: true); } catch { }
+                try { if (!proc.HasExited) proc.Kill(entireProcessTree: true); } catch (Exception suppressedEx720) { KokoSystemLog.Write("PCCONTROLSERVICE-CATCH", "RunCommandDetailedAsync failed near source line 720: " + suppressedEx720); }
             }
 
             step.Output = (await outTask.ConfigureAwait(false)).Trim();
@@ -859,8 +859,8 @@ namespace KokonoeAssistant.Services
                         title.Contains(q, StringComparison.OrdinalIgnoreCase))
                         return new WindowMatch(p.MainWindowHandle, p.ProcessName, title);
                 }
-                catch { }
-                finally { try { p.Dispose(); } catch { } }
+                catch (Exception suppressedEx862) { KokoSystemLog.Write("PCCONTROLSERVICE-CATCH", "FindWindow failed near source line 862: " + suppressedEx862); }
+                finally { try { p.Dispose(); } catch (Exception suppressedEx863) { KokoSystemLog.Write("PCCONTROLSERVICE-CATCH", "FindWindow failed near source line 863: " + suppressedEx863); } }
             }
             return default;
         }
@@ -903,7 +903,7 @@ namespace KokonoeAssistant.Services
                     while (sorted.ContainsKey(-mem)) mem--;
                     sorted[-mem] = $"{p.ProcessName} ({p.WorkingSet64 / 1024 / 1024} MB)";
                 }
-                catch { }
+                catch (Exception suppressedEx906) { KokoSystemLog.Write("PCCONTROLSERVICE-CATCH", "GetTopProcesses failed near source line 906: " + suppressedEx906); }
             }
 
             int count = 0;
@@ -922,8 +922,8 @@ namespace KokonoeAssistant.Services
             foreach (var p in Process.GetProcesses())
             {
                 try { first[p.Id] = p.TotalProcessorTime; }
-                catch { }
-                finally { try { p.Dispose(); } catch { } }
+                catch (Exception suppressedEx925) { KokoSystemLog.Write("PCCONTROLSERVICE-CATCH", "CaptureTopProcessResources failed near source line 925: " + suppressedEx925); }
+                finally { try { p.Dispose(); } catch (Exception suppressedEx926) { KokoSystemLog.Write("PCCONTROLSERVICE-CATCH", "CaptureTopProcessResources failed near source line 926: " + suppressedEx926); } }
             }
 
             if (sampleMs > 0)
@@ -952,8 +952,8 @@ namespace KokonoeAssistant.Services
                         CpuPercent = cpu
                     });
                 }
-                catch { }
-                finally { try { p.Dispose(); } catch { } }
+                catch (Exception suppressedEx955) { KokoSystemLog.Write("PCCONTROLSERVICE-CATCH", "CaptureTopProcessResources failed near source line 955: " + suppressedEx955); }
+                finally { try { p.Dispose(); } catch (Exception suppressedEx956) { KokoSystemLog.Write("PCCONTROLSERVICE-CATCH", "CaptureTopProcessResources failed near source line 956: " + suppressedEx956); } }
             }
 
             return list
@@ -1000,7 +1000,7 @@ namespace KokonoeAssistant.Services
                 var killed = 0;
                 foreach (var p in Process.GetProcessesByName(nameOrPid))
                 {
-                    try { p.Kill(); killed++; } catch { }
+                    try { p.Kill(); killed++; } catch (Exception suppressedEx1003) { KokoSystemLog.Write("PCCONTROLSERVICE-CATCH", "KillProcess failed near source line 1003: " + suppressedEx1003); }
                 }
                 return killed > 0
                     ? (true,  $"Завершено {killed} процес(ів) '{nameOrPid}'.")

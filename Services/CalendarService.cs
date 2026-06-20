@@ -69,14 +69,14 @@ namespace KokonoeAssistant.Services
                     return JsonConvert.DeserializeObject<List<CalendarEvent>>(
                         File.ReadAllText(_path)) ?? new();
             }
-            catch { }
+            catch (Exception suppressedEx72) { KokoSystemLog.Write("CALENDARSERVICE-CATCH", "Load failed near source line 72: " + suppressedEx72); }
             return new();
         }
 
         public void Save()
         {
             try { File.WriteAllText(_path, JsonConvert.SerializeObject(_events, Formatting.Indented)); }
-            catch { }
+            catch (Exception suppressedEx79) { KokoSystemLog.Write("CALENDARSERVICE-CATCH", "Save failed near source line 79: " + suppressedEx79); }
         }
 
         public List<CalendarEvent> GetAll() =>

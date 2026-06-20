@@ -1474,14 +1474,14 @@ namespace KokonoeAssistant.Services
                 if (File.Exists(_path))
                     return JsonConvert.DeserializeObject<EmotionData>(File.ReadAllText(_path)) ?? new();
             }
-            catch { }
+            catch (Exception suppressedEx1477) { KokoSystemLog.Write("EMOTIONENGINE-CATCH", "Load failed near source line 1477: " + suppressedEx1477); }
             return new();
         }
 
         private void Save()
         {
             try { File.WriteAllText(_path, JsonConvert.SerializeObject(_data, Formatting.Indented)); }
-            catch { }
+            catch (Exception suppressedEx1484) { KokoSystemLog.Write("EMOTIONENGINE-CATCH", "Save failed near source line 1484: " + suppressedEx1484); }
         }
 
         // ══════════════════════════════════════════════════════════════════════

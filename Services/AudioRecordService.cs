@@ -280,9 +280,9 @@ namespace KokonoeAssistant.Services
 
         private void CleanupRecordingObjects(bool deleteFile)
         {
-            try { _waveIn?.StopRecording(); } catch { }
-            try { _waveIn?.Dispose(); } catch { }
-            try { _writer?.Dispose(); } catch { }
+            try { _waveIn?.StopRecording(); } catch (Exception suppressedEx283) { KokoSystemLog.Write("AUDIORECORDSERVICE-CATCH", "CleanupRecordingObjects failed near source line 283: " + suppressedEx283); }
+            try { _waveIn?.Dispose(); } catch (Exception suppressedEx284) { KokoSystemLog.Write("AUDIORECORDSERVICE-CATCH", "CleanupRecordingObjects failed near source line 284: " + suppressedEx284); }
+            try { _writer?.Dispose(); } catch (Exception suppressedEx285) { KokoSystemLog.Write("AUDIORECORDSERVICE-CATCH", "CleanupRecordingObjects failed near source line 285: " + suppressedEx285); }
             _waveIn = null;
             _writer = null;
             _activeDevice = "";
@@ -290,7 +290,7 @@ namespace KokonoeAssistant.Services
 
             if (deleteFile && _currentRecordFile != null)
             {
-                try { if (File.Exists(_currentRecordFile)) File.Delete(_currentRecordFile); } catch { }
+                try { if (File.Exists(_currentRecordFile)) File.Delete(_currentRecordFile); } catch (Exception suppressedEx293) { KokoSystemLog.Write("AUDIORECORDSERVICE-CATCH", "CleanupRecordingObjects failed near source line 293: " + suppressedEx293); }
             }
         }
 
@@ -298,12 +298,12 @@ namespace KokonoeAssistant.Services
         {
             lock (_writeLock)
             {
-                try { _writer?.Flush(); } catch { }
-                try { _writer?.Dispose(); } catch { }
+                try { _writer?.Flush(); } catch (Exception suppressedEx301) { KokoSystemLog.Write("AUDIORECORDSERVICE-CATCH", "FinalizeWriter failed near source line 301: " + suppressedEx301); }
+                try { _writer?.Dispose(); } catch (Exception suppressedEx302) { KokoSystemLog.Write("AUDIORECORDSERVICE-CATCH", "FinalizeWriter failed near source line 302: " + suppressedEx302); }
                 _writer = null;
             }
 
-            try { _waveIn?.Dispose(); } catch { }
+            try { _waveIn?.Dispose(); } catch (Exception suppressedEx306) { KokoSystemLog.Write("AUDIORECORDSERVICE-CATCH", "FinalizeWriter failed near source line 306: " + suppressedEx306); }
             _waveIn = null;
         }
 
@@ -397,7 +397,7 @@ namespace KokonoeAssistant.Services
             {
                 if (_isRecording)
                 {
-                    try { _waveIn?.StopRecording(); } catch { }
+                    try { _waveIn?.StopRecording(); } catch (Exception suppressedEx400) { KokoSystemLog.Write("AUDIORECORDSERVICE-CATCH", "Dispose failed near source line 400: " + suppressedEx400); }
                     _isRecording = false;
                     System.Threading.Thread.Sleep(200);
                 }

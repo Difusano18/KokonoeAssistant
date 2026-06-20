@@ -257,7 +257,7 @@ namespace KokonoeAssistant.Services
                 CleanupAgentKey(entry);
                 s.Save();
             }
-            catch { }
+            catch (Exception suppressedEx260) { KokoSystemLog.Write("LLMSERVICE-CATCH", "RecordSettingsOllamaKeyRequest failed near source line 260: " + suppressedEx260); }
         }
 
         private static void MarkSettingsOllamaKeyUnavailable(string keyUsed, int statusCode)
@@ -274,7 +274,7 @@ namespace KokonoeAssistant.Services
                     s.OllamaActiveKeyIndex = (s.OllamaActiveKeyIndex + 1) % keys.Count;
                 s.Save();
             }
-            catch { }
+            catch (Exception suppressedEx277) { KokoSystemLog.Write("LLMSERVICE-CATCH", "MarkSettingsOllamaKeyUnavailable failed near source line 277: " + suppressedEx277); }
         }
 
         private bool TryRotateOllamaKeyAfterFailure(string? agentId, string? keyUsed, int statusCode)
@@ -327,7 +327,7 @@ namespace KokonoeAssistant.Services
                 s.AgentLlmProfiles = new Dictionary<string, KokoAgentLlmProfile>(_agentProfiles, StringComparer.OrdinalIgnoreCase);
                 s.Save();
             }
-            catch { }
+            catch (Exception suppressedEx330) { KokoSystemLog.Write("LLMSERVICE-CATCH", "PersistAgentProfiles failed near source line 330: " + suppressedEx330); }
         }
 
         private KokoAgentLlmProfile? ResolveAgentProfile(string? agentId)
@@ -428,7 +428,7 @@ namespace KokonoeAssistant.Services
                 sb.AppendLine();
                 sb.AppendLine(ServiceContainer.Capabilities.BuildPromptBlock());
             }
-            catch { }
+            catch (Exception suppressedEx431) { KokoSystemLog.Write("LLMSERVICE-CATCH", "BuildMainSystemContent failed near source line 431: " + suppressedEx431); }
             sb.Append(BuildCriticalThinkingPrompt());
             sb.AppendLine();
             sb.AppendLine("=== RUNTIME ===");
@@ -2287,7 +2287,7 @@ namespace KokonoeAssistant.Services
                             tool_calls = m["tool_calls"]
                         });
                     }
-                    catch { }
+                    catch (Exception suppressedEx2290) { KokoSystemLog.Write("LLMSERVICE-CATCH", "BuildMessages failed near source line 2290: " + suppressedEx2290); }
                 }
                 else if (h.Role == "tool")
                 {
@@ -2358,7 +2358,7 @@ namespace KokonoeAssistant.Services
 
                         messages.Add(new { role = "assistant", content = contentArr });
                     }
-                    catch { }
+                    catch (Exception suppressedEx2361) { KokoSystemLog.Write("LLMSERVICE-CATCH", "BuildClaudeMessages failed near source line 2361: " + suppressedEx2361); }
                 }
                 else if (h.Role == "tool")
                 {
@@ -2885,7 +2885,7 @@ namespace KokonoeAssistant.Services
                         function = new { name = toolName, arguments = argsObj.ToString() }
                     }));
                 }
-                catch { }
+                catch (Exception suppressedEx2888) { KokoSystemLog.Write("LLMSERVICE-CATCH", "TryParseTextToolCalls failed near source line 2888: " + suppressedEx2888); }
             }
 
             // Pattern 4: Gemma-4 backtick/bare function call — `write_note(key="val", ...)` or write_note(key="val")
@@ -3485,7 +3485,7 @@ namespace KokonoeAssistant.Services
                             onChunk(chunk);
                         }
                     }
-                    catch { }
+                    catch (Exception suppressedEx3488) { KokoSystemLog.Write("LLMSERVICE-CATCH", "SendStreamingAsync failed near source line 3488: " + suppressedEx3488); }
                 }
 
                 var rawText = sb.ToString();

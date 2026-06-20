@@ -229,7 +229,7 @@ priority: relationship contract outranks decorative persona. Keep Kokonoe voice,
                 var json = JsonConvert.SerializeObject(_state, Formatting.Indented);
                 File.WriteAllText(_path, json);
             }
-            catch { }
+            catch (Exception suppressedEx232) { KokoSystemLog.Write("RELATIONSHIPENGINE-CATCH", "Save failed near source line 232: " + suppressedEx232); }
         }
 
         private static float ClampDelta(float value) => Math.Clamp(value, -0.15f, 0.15f);

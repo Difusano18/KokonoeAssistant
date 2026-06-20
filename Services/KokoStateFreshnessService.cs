@@ -235,7 +235,7 @@ namespace KokonoeAssistant.Services
         private static void LogSleep(string message)
         {
             try { KokoSystemLog.Write("SLEEP_INTENT", message); }
-            catch { }
+            catch (Exception suppressedEx238) { KokoSystemLog.Write("STATEFRESHNESSSERVICE-CATCH", "LogSleep failed near source line 238: " + suppressedEx238); }
         }
 
         private static TimeSpan GraceFor(string kind) => kind switch

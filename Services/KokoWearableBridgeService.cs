@@ -204,9 +204,9 @@ namespace KokonoeAssistant.Services
         {
             lock (_lock)
             {
-                try { _cts?.Cancel(); } catch { }
-                try { _listener?.Stop(); } catch { }
-                try { _udp?.Close(); } catch { }
+                try { _cts?.Cancel(); } catch (Exception suppressedEx207) { KokoSystemLog.Write("WEARABLEBRIDGESERVICE-CATCH", "Stop failed near source line 207: " + suppressedEx207); }
+                try { _listener?.Stop(); } catch (Exception suppressedEx208) { KokoSystemLog.Write("WEARABLEBRIDGESERVICE-CATCH", "Stop failed near source line 208: " + suppressedEx208); }
+                try { _udp?.Close(); } catch (Exception suppressedEx209) { KokoSystemLog.Write("WEARABLEBRIDGESERVICE-CATCH", "Stop failed near source line 209: " + suppressedEx209); }
                 _listener = null;
                 _udp = null;
                 _cts?.Dispose();
@@ -252,7 +252,7 @@ namespace KokonoeAssistant.Services
             catch (Exception ex)
             {
                 LogBridge($"udp bind failed: {ex.Message}");
-                try { _udp?.Close(); } catch { }
+                try { _udp?.Close(); } catch (Exception suppressedEx255) { KokoSystemLog.Write("WEARABLEBRIDGESERVICE-CATCH", "TryStartUdpDiscoveryLocked failed near source line 255: " + suppressedEx255); }
                 _udp = null;
             }
         }
@@ -321,7 +321,7 @@ namespace KokonoeAssistant.Services
                     {
                         await WriteJsonAsync(client.GetStream(), 500, new { ok = false, error = "bridge_loop_failed", detail = ex.Message }).ConfigureAwait(false);
                     }
-                    catch { }
+                    catch (Exception suppressedEx324) { KokoSystemLog.Write("WEARABLEBRIDGESERVICE-CATCH", "HandleTcpClientAsync failed near source line 324: " + suppressedEx324); }
                 }
             }
         }
@@ -931,7 +931,7 @@ namespace KokonoeAssistant.Services
                     urls.Add($"http://{ip}:{Port}");
                 }
             }
-            catch { }
+            catch (Exception suppressedEx934) { KokoSystemLog.Write("WEARABLEBRIDGESERVICE-CATCH", "GetLanUrls failed near source line 934: " + suppressedEx934); }
             return urls;
         }
 
@@ -1099,7 +1099,7 @@ namespace KokonoeAssistant.Services
                     if (IsUsableDeviceId(existing)) return existing;
                 }
             }
-            catch { }
+            catch (Exception suppressedEx1102) { KokoSystemLog.Write("WEARABLEBRIDGESERVICE-CATCH", "LoadPairedDeviceId failed near source line 1102: " + suppressedEx1102); }
 
             try
             {
@@ -1111,7 +1111,7 @@ namespace KokonoeAssistant.Services
                     return migrated;
                 }
             }
-            catch { }
+            catch (Exception suppressedEx1114) { KokoSystemLog.Write("WEARABLEBRIDGESERVICE-CATCH", "LoadPairedDeviceId failed near source line 1114: " + suppressedEx1114); }
 
             return "";
         }

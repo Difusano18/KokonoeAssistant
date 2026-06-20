@@ -224,7 +224,7 @@ tags: [kokonoe, automation, profile-curator]
 
 Ця нотатка службова. Людський профіль не повинен містити сирий чат або службовий changelog.
 """;
-            try { _obsidian.WriteNote("Kokonoe/Automation/Profile Curator.md", content); } catch { }
+            try { _obsidian.WriteNote("Kokonoe/Automation/Profile Curator.md", content); } catch (Exception suppressedEx227) { KokoSystemLog.Write("AUTONOMOUSPROFILECURATORSERVICE-CATCH", "WriteCuratorStatus failed near source line 227: " + suppressedEx227); }
         }
 
         private CuratorState LoadState()
@@ -244,7 +244,7 @@ tags: [kokonoe, automation, profile-curator]
                 Directory.CreateDirectory(Path.GetDirectoryName(_statePath)!);
                 File.WriteAllText(_statePath, JsonConvert.SerializeObject(_state, Formatting.Indented));
             }
-            catch { }
+            catch (Exception suppressedEx247) { KokoSystemLog.Write("AUTONOMOUSPROFILECURATORSERVICE-CATCH", "SaveState failed near source line 247: " + suppressedEx247); }
         }
 
         private static string? ExtractJson(string? raw)
