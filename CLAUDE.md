@@ -137,6 +137,91 @@ All persistent data is stored in `kokonoe-data/` within the vault path:
 - `calendar-events.json` - Calendar events
 - `chats/` - Chat logs
 
++## Service Reachability Audit (2026-06-20)
+
+Scope: all 76 `Services/Koko*.cs` files, excluding `Tests/`, `bin/`, `obj/`, and each declaration file itself.
+Result: every type has at least one external production reference. No file is safe to delete in this phase.
+Types without an explicit constructor call are static utilities or target-typed DTOs; they are not dead code.
+
+| Type | Runtime evidence | Production callers |
+|---|---:|---|
+| `KokoActionDirectiveRouter` | static; refs=2 | MainWindow.Agent.cs, Services/KokoSystemOverlordService.cs |
+| `KokoActiveAgencyService` | constructed=1; refs=1 | ServiceContainer.cs |
+| `KokoAgentCompletionPolicy` | static; refs=2 | Services/KokoAgentRuntimeService.cs, Services/KokoAgentTaskService.cs |
+| `KokoAgentRuntimeService` | constructed=1; refs=1 | ServiceContainer.cs |
+| `KokoAgentTaskService` | constructed=1; refs=3 | ServiceContainer.cs, Services/KokoDynamicAgentFactoryService.cs, Services/LlmService.cs |
+| `KokoAsyncPersonalityEngine` | constructed=1; refs=1 | Services/KokoBrainEngine.cs |
+| `KokoAutonomousProfileCuratorService` | constructed=1; refs=1 | ServiceContainer.cs |
+| `KokoAutonomyDecisionEngine` | constructed=2; refs=2 | Services/KokoBrainEngine.cs, Services/KokoScenarioSimulationService.cs |
+| `KokoBrainEngine` | constructed=1; refs=6 | ServiceContainer.cs, Services/KokoActiveAgencyService.cs, Services/KokoAgentTaskService.cs (+3) |
+| `KokoCapabilityManifestService` | constructed=1; refs=1 | ServiceContainer.cs |
+| `KokoCognitionEngine` | constructed=1; refs=2 | Services/KokoBrainEngine.cs, Services/KokoResponsePlannerEngine.cs |
+| `KokoCollectiveMindService` | constructed=1; refs=1 | Services/KokoBrainEngine.cs |
+| `KokoContinuityEngine` | constructed=1; refs=1 | Services/KokoBrainEngine.cs |
+| `KokoConversationBoundary` | static; refs=3 | Services/KokoBrainEngine.cs, Services/KokoPostReplyGuard.cs, Services/KokoProactiveContextService.cs |
+| `KokoConversationStagnationGuard` | static; refs=1 | Services/KokoBrainEngine.cs |
+| `KokoConversationTimelineEngine` | constructed=1; refs=1 | Services/KokoBrainEngine.cs |
+| `KokoDynamicAgentFactoryService` | constructed=1; refs=1 | ServiceContainer.cs |
+| `KokoEmbeddingService` | constructed=1; refs=3 | ServiceContainer.cs, Services/KokoBrainEngine.cs, Services/KokoMemoryEngine.cs |
+| `KokoEmotionalMemoryService` | constructed=1; refs=1 | Services/KokoBrainEngine.cs |
+| `KokoEmotionEngine` | constructed=2; refs=20 | MainWindow.ChatUi.cs, MainWindow.Context.cs, MainWindow.DashboardDev.cs (+17) |
+| `KokoFileSystemToolService` | constructed=3; refs=3 | ServiceContainer.cs, ToolExecutor.cs, Services/KokoActiveAgencyService.cs |
+| `KokoHeartEngine` | constructed=1; refs=4 | MainWindow.xaml.cs, ServiceContainer.cs, Services/KokoBrainEngine.cs (+1) |
+| `KokoHyperAutomationService` | constructed=1; refs=1 | ServiceContainer.cs |
+| `KokoInitiativeEngine` | constructed=1; refs=1 | Services/KokoBrainEngine.cs |
+| `KokoInternalBlackboardService` | constructed=1; refs=8 | ServiceContainer.cs, Services/KokoActiveAgencyService.cs, Services/KokoAgentRuntimeService.cs (+5) |
+| `KokoInternalDayEngine` | constructed=2; refs=2 | Services/KokoBrainEngine.cs, Services/KokoScenarioSimulationService.cs |
+| `KokoLightOcrService` | constructed=1; refs=2 | ServiceContainer.cs, Services/KokoHyperAutomationService.cs |
+| `KokoLivingConversationEngine` | constructed=1; refs=2 | Services/KokoBrainEngine.cs, Services/KokoResponseStyleEngine.cs |
+| `KokoMemoryEngine` | constructed=2; refs=8 | MainWindow.Memory.cs, ServiceContainer.cs, Services/KokoBrainEngine.cs (+5) |
+| `KokoMemoryWritePolicyEngine` | constructed=1; refs=1 | Services/KokoBrainEngine.cs |
+| `KokoNaturalSynthesisPolicy` | static; refs=2 | Services/KokoBrainEngine.cs, Services/KokoPostReplyGuard.cs |
+| `KokoNeuralGovernorService` | constructed=1; refs=1 | Services/KokoBrainEngine.cs |
+| `KokoObservationService` | constructed=1; refs=2 | MainWindow.Agent.cs, Services/KokoAgentTaskService.cs |
+| `KokoObsidianExplorationService` | constructed=2; refs=4 | MainWindow.Chat.cs, MainWindow.Context.cs, Services/KokoBrainEngine.cs (+1) |
+| `KokoPatternEngine` | constructed=2; refs=7 | ServiceContainer.cs, Services/KokoAutonomyDecisionEngine.cs, Services/KokoBrainEngine.cs (+4) |
+| `KokoPersonaEngine` | constructed=1; refs=3 | Services/KokoBrainEngine.cs, Services/KokoPostReplyGuard.cs, Services/KokoSubconsciousMonologueEngine.cs |
+| `KokoPersonaGuardDirective` | static; refs=4 | Services/KokoBrainEngine.cs, Services/KokoPostReplyGuard.cs, Services/KokoStartupGreetingService.cs (+1) |
+| `KokoPhotoFileWatcherService` | constructed=1; refs=1 | ServiceContainer.cs |
+| `KokoPostReplyGuard` | constructed=1; refs=1 | Services/KokoBrainEngine.cs |
+| `KokoPredictorService` | constructed=1; refs=1 | ServiceContainer.cs |
+| `KokoPresenceContinuityEngine` | constructed=2; refs=2 | Services/KokoBrainEngine.cs, Services/KokoScenarioSimulationService.cs |
+| `KokoProactiveContextService` | constructed=1; refs=1 | Services/KokoBrainEngine.cs |
+| `KokoProfileUpdateService` | constructed=1; refs=7 | MainWindow.Context.cs, ServiceContainer.cs, Services/KokoAutonomousProfileCuratorService.cs (+4) |
+| `KokoRelationshipEngine` | constructed=1; refs=4 | Services/KokoBrainEngine.cs, Services/KokoInitiativeEngine.cs, Services/KokoSomaticSelfRegulationEngine.cs (+1) |
+| `KokoResearchService` | constructed=1; refs=1 | ServiceContainer.cs |
+| `KokoResourceGuardianService` | static; refs=1 | Services/KokoBrainEngine.cs |
+| `KokoResponsePlannerEngine` | constructed=1; refs=6 | MainWindow.Agent.cs, Services/KokoAgentRuntimeService.cs, Services/KokoBrainEngine.cs (+3) |
+| `KokoResponseStyleEngine` | static; refs=1 | Services/KokoBrainEngine.cs |
+| `KokoRuntimeStateService` | constructed=1; refs=1 | Services/KokoBrainEngine.cs |
+| `KokoSandboxExecutor` | constructed=3; refs=3 | Services/KokoAgentRuntimeService.cs, Services/KokoAgentTaskService.cs, Services/LlmService.cs |
+| `KokoScenarioSimulationService` | constructed=1; refs=1 | Services/KokoBrainEngine.cs |
+| `KokoSchedulerEngine` | constructed=1; refs=3 | MainWindow.Chat.cs, Services/KokoBrainEngine.cs, Services/LlmService.cs |
+| `KokoScreenAwarenessService` | constructed=1; refs=4 | Services/KokoBrainEngine.cs, Services/KokoPresenceContinuityEngine.cs, Services/KokoProactiveContextService.cs (+1) |
+| `KokoScreenIntent` | static; refs=7 | MainWindow.Chat.cs, MainWindow.TelegramUser.cs, Services/KokoAgentTaskService.cs (+4) |
+| `KokoSelfReviewEngine` | constructed=2; refs=2 | Services/KokoBrainEngine.cs, Services/KokoScenarioSimulationService.cs |
+| `KokoSemanticCacheService` | constructed=1; refs=2 | ServiceContainer.cs, Services/LlmService.cs |
+| `KokoSemanticVisionEngine` | constructed=1; refs=1 | Services/KokoBrainEngine.cs |
+| `KokoServiceHeartbeatService` | constructed=1; refs=6 | ServiceContainer.cs, Services/KokoActiveAgencyService.cs, Services/KokoHyperAutomationService.cs (+3) |
+| `KokoSocialEngine` | constructed=1; refs=1 | Services/KokoBrainEngine.cs |
+| `KokoSomaticEngine` | constructed=1; refs=1 | Services/KokoBrainEngine.cs |
+| `KokoSomaticSelfRegulationEngine` | constructed=1; refs=1 | Services/KokoBrainEngine.cs |
+| `KokoStartupGreetingService` | constructed=1; refs=1 | MainWindow.xaml.cs |
+| `KokoStateFreshnessService` | constructed=1; refs=1 | Services/KokoBrainEngine.cs |
+| `KokoStateInspectorService` | constructed=1; refs=1 | Services/KokoBrainEngine.cs |
+| `KokoSubconsciousMonologueEngine` | constructed=1; refs=1 | Services/KokoBrainEngine.cs |
+| `KokoSystemLog` | static; refs=77 | KnowledgeGraph.cs, KokonoeDataManager.cs, App.xaml.cs (+74) |
+| `KokoSystemOverlordService` | constructed=1; refs=1 | ServiceContainer.cs |
+| `KokoTelemetrySnapshot` | target-typed/referenced; refs=1 | Services/KokoBrainEngine.cs |
+| `KokoTemperamentEngine` | constructed=1; refs=2 | Services/KokoBrainEngine.cs, Services/KokoResponseStyleEngine.cs |
+| `KokoTemporalPresenceAwarenessEngine` | constructed=2; refs=2 | Services/KokoBrainEngine.cs, Services/KokoStartupGreetingService.cs |
+| `KokoToolGateway` | constructed=3; refs=3 | ServiceContainer.cs, ToolExecutor.cs, Services/KokoActiveAgencyService.cs |
+| `KokoVaultSyncPolicy` | static; refs=1 | Services/KokoBrainEngine.cs |
+| `KokoWarmRestartWatchdogService` | constructed=1; refs=1 | ServiceContainer.cs |
+| `KokoWearableBridgeService` | constructed=1; refs=5 | MainWindow.Telemetry.cs, ServiceContainer.cs, Services/KokoBrainEngine.cs (+2) |
+| `KokoWearableTelemetryService` | constructed=1; refs=4 | ServiceContainer.cs, Services/KokoActiveAgencyService.cs, Services/KokoHeartEngine.cs (+1) |
+| `KokoWearableTrust` | static; refs=4 | MainWindow.Telemetry.cs, ServiceContainer.cs, Services/KokoBrainEngine.cs (+1) |
+
 ## Adding New Features
 
 When adding new functionality:
