@@ -2979,6 +2979,32 @@ tags: [kokonoe, live-core, diagnostics]
                     try { ServiceContainer.BrainEngine?.ProcessUserMessage(sendText); } catch { }
                 }, _llmCts?.Token ?? default);
 
+                var overlordDirective = await TryHandleSystemOverlordDirectiveAsync(sendText, _llmCts?.Token ?? default);
+                if (overlordDirective.Handled)
+                {
+                    RemoveThinkingBubble();
+                    var replyVm = new ChatMessageVm { Role = "assistant", Content = "" };
+                    var replyTb = AddMessageBubble(replyVm);
+                    if (replyTb != null)
+                        await TypeIntoAsync(replyTb, overlordDirective.Reply, _llmCts?.Token ?? default);
+                    else
+                        replyVm.Content = overlordDirective.Reply;
+                    try
+                    {
+                        ServiceContainer.ChatRepository.InsertMessage(new ChatRepository.ChatMessage
+                        {
+                            Content = overlordDirective.Reply,
+                            Role = "assistant",
+                            Author = "Kokonoe",
+                            Timestamp = DateTime.Now
+                        });
+                    }
+                    catch { }
+                    _ = Task.Run(() => ServiceContainer.ChatLogger.LogExchange("app", sendText, overlordDirective.Reply));
+                    ObserveAutonomousProfile("app", sendText, overlordDirective.Reply);
+                    return;
+                }
+
                 var profileUpdate = await TryHandleProfileUpdateAsync(sendText, _llmCts?.Token ?? default);
                 if (profileUpdate.Handled)
                 {
@@ -3109,6 +3135,32 @@ tags: [kokonoe, live-core, diagnostics]
                     return;
                 }
 
+                var agentDirective = await TryHandleSystemOverlordDirectiveAsync(sendText, _llmCts?.Token ?? default, allowAgentTask: true);
+                if (agentDirective.Handled)
+                {
+                    RemoveThinkingBubble();
+                    var replyVm = new ChatMessageVm { Role = "assistant", Content = "" };
+                    var replyTb = AddMessageBubble(replyVm);
+                    if (replyTb != null)
+                        await TypeIntoAsync(replyTb, agentDirective.Reply, _llmCts?.Token ?? default);
+                    else
+                        replyVm.Content = agentDirective.Reply;
+                    try
+                    {
+                        ServiceContainer.ChatRepository.InsertMessage(new ChatRepository.ChatMessage
+                        {
+                            Content = agentDirective.Reply,
+                            Role = "assistant",
+                            Author = "Kokonoe",
+                            Timestamp = DateTime.Now
+                        });
+                    }
+                    catch { }
+                    _ = Task.Run(() => ServiceContainer.ChatLogger.LogExchange("app", sendText, agentDirective.Reply));
+                    ObserveAutonomousProfile("app", sendText, agentDirective.Reply);
+                    return;
+                }
+
                 // Refresh dynamic personality hint before each LLM call (background)
                 _ = Task.Run(() =>
                 {
@@ -3210,6 +3262,44 @@ tags: [kokonoe, live-core, diagnostics]
             catch (OperationCanceledException) { throw; }
             catch { }
             return new PcIntentExecutionResult { Handled = false };
+        }
+
+        private async Task<(bool Handled, string Reply)> TryHandleSystemOverlordDirectiveAsync(
+            string userText,
+            CancellationToken ct,
+            bool allowAgentTask = false)
+        {
+            var directive = KokoActionDirectiveRouter.Analyze(userText);
+            if (directive.Route == KokoActionDirectiveRoute.None)
+                return (false, "");
+
+            try
+            {
+                if (directive.Route == KokoActionDirectiveRoute.LocalArtifact)
+                {
+                    await ShowKokoActivityAsync("Overlord: сканую локальні файли і пишу артефакт");
+                    var result = await ServiceContainer.SystemOverlord.CreateSurpriseNoteAsync(userText, ct);
+                    return (true, result.ToUserReply());
+                }
+
+                if (allowAgentTask && directive.Route == KokoActionDirectiveRoute.AgentTask)
+                {
+                    HookAgentTaskEvents();
+                    var task = ServiceContainer.AgentTasks.AddTask(userText, priority: Math.Clamp(directive.Confidence / 10, 5, 9));
+                    ServiceContainer.AgentTasks.Start();
+                    RefreshAgentTaskBoard();
+                    KokoSystemLog.Write("ACTION-DIRECTIVE", $"agent task {task.Id}: {directive.Reason}; confidence={directive.Confidence}; objective={userText}");
+                    return (true, $"Взяла в agent-task `{task.Id}`. Route: {directive.Reason}. Не балакаю замість виконання.");
+                }
+            }
+            catch (OperationCanceledException) { throw; }
+            catch (Exception ex)
+            {
+                KokoSystemLog.Write("ACTION-DIRECTIVE", "UI directive failed: " + ex.Message);
+                return (true, "Не зробила. Action route зламався на: " + ex.Message);
+            }
+
+            return (false, "");
         }
 
         private static async Task<string> ExecuteLivePcActionPlanAsync(PcActionPlan plan, CancellationToken ct)
@@ -8829,6 +8919,27 @@ tags: [kokonoe, dashboard, live]
                 if (await TryHandleTelegramScreenScanAsync(bot, chatId, from, text, ct))
                     return;
 
+                var overlordDirective = await TryHandleSystemOverlordDirectiveAsync(text, ct);
+                if (overlordDirective.Handled)
+                {
+                    await Dispatcher.InvokeAsync(() =>
+                    {
+                        _tgMessages.Add($"[Kokonoe]: {overlordDirective.Reply}");
+                        TgScroll.ScrollToBottom();
+                        AddMessageBubble(new ChatMessageVm { Role = "user", Content = $"[TG: {from}] {text}" });
+                        AddMessageBubble(new ChatMessageVm { Role = "assistant", Content = overlordDirective.Reply });
+                    });
+                    try { await bot.SendMessage(chatId, overlordDirective.Reply, cancellationToken: ct); } catch { }
+                    try
+                    {
+                        ServiceContainer.ChatRepository.InsertMessage(new ChatRepository.ChatMessage { Content = overlordDirective.Reply, Role = "assistant", Author = "Kokonoe", Timestamp = DateTime.Now });
+                    }
+                    catch { }
+                    _ = Task.Run(() => ServiceContainer.ChatLogger.LogExchange("tg", text, overlordDirective.Reply));
+                    ObserveAutonomousProfile("tg", text, overlordDirective.Reply);
+                    return;
+                }
+
                 var controlCommand = await TryHandleDirectControlCommandAsync(text, ct);
                 if (controlCommand.Handled)
                 {
@@ -8900,6 +9011,33 @@ tags: [kokonoe, dashboard, live]
                     catch { }
                     _ = Task.Run(() => ServiceContainer.ChatLogger.LogExchange("tg", text, obsidianReply));
                     ObserveAutonomousProfile("tg", text, obsidianReply);
+                    return;
+                }
+
+                var agentDirective = await TryHandleSystemOverlordDirectiveAsync(text, ct, allowAgentTask: true);
+                if (agentDirective.Handled)
+                {
+                    await Dispatcher.InvokeAsync(() =>
+                    {
+                        _tgMessages.Add($"[Kokonoe]: {agentDirective.Reply}");
+                        TgScroll.ScrollToBottom();
+                        AddMessageBubble(new ChatMessageVm { Role = "user", Content = $"[TG: {from}] {text}" });
+                        AddMessageBubble(new ChatMessageVm { Role = "assistant", Content = agentDirective.Reply });
+                    });
+                    try { await bot.SendMessage(chatId, agentDirective.Reply, cancellationToken: ct); } catch { }
+                    try
+                    {
+                        ServiceContainer.ChatRepository.InsertMessage(new ChatRepository.ChatMessage
+                        {
+                            Content = agentDirective.Reply,
+                            Role = "assistant",
+                            Author = "Kokonoe",
+                            Timestamp = DateTime.Now
+                        });
+                    }
+                    catch { }
+                    _ = Task.Run(() => ServiceContainer.ChatLogger.LogExchange("tg", text, agentDirective.Reply));
+                    ObserveAutonomousProfile("tg", text, agentDirective.Reply);
                     return;
                 }
 
@@ -9601,6 +9739,33 @@ tags: [kokonoe, dashboard, live]
                 if (await TryHandleTelegramUserScreenScanAsync(msg, svc, _tgUserCts.Token))
                     return;
 
+                var overlordDirective = await TryHandleSystemOverlordDirectiveAsync(msg.Text, _tgUserCts.Token);
+                if (overlordDirective.Handled)
+                {
+                    await Dispatcher.InvokeAsync(() =>
+                    {
+                        _tgMessages.Add($"[Kokonoe → {msg.ChatName}]: {overlordDirective.Reply}");
+                        TgScroll.ScrollToBottom();
+                        AddMessageBubble(new ChatMessageVm { Role = "user", Content = $"[TG {msg.Sender}]: {msg.Text}" });
+                        AddMessageBubble(new ChatMessageVm { Role = "assistant", Content = overlordDirective.Reply });
+                    });
+                    try
+                    {
+                        ServiceContainer.ChatRepository.InsertMessage(new ChatRepository.ChatMessage
+                        {
+                            Content = overlordDirective.Reply,
+                            Role = "assistant",
+                            Author = "Kokonoe",
+                            Timestamp = DateTime.Now
+                        });
+                    }
+                    catch { }
+                    await svc.SendAsync(msg.ChatId, overlordDirective.Reply, _tgUserCts.Token);
+                    _ = Task.Run(() => ServiceContainer.ChatLogger.LogExchange("tg-user", msg.Text, overlordDirective.Reply));
+                    ObserveAutonomousProfile("tg-user", msg.Text, overlordDirective.Reply);
+                    return;
+                }
+
                 var controlCommand = await TryHandleDirectControlCommandAsync(msg.Text, _tgUserCts.Token);
                 if (controlCommand.Handled)
                 {
@@ -9677,6 +9842,33 @@ tags: [kokonoe, dashboard, live]
                     await svc.SendAsync(msg.ChatId, obsidianReply, _tgUserCts.Token);
                     _ = Task.Run(() => ServiceContainer.ChatLogger.LogExchange("tg-user", msg.Text, obsidianReply));
                     ObserveAutonomousProfile("tg-user", msg.Text, obsidianReply);
+                    return;
+                }
+
+                var agentDirective = await TryHandleSystemOverlordDirectiveAsync(msg.Text, _tgUserCts.Token, allowAgentTask: true);
+                if (agentDirective.Handled)
+                {
+                    await Dispatcher.InvokeAsync(() =>
+                    {
+                        _tgMessages.Add($"[Kokonoe -> {msg.ChatName}]: {agentDirective.Reply}");
+                        TgScroll.ScrollToBottom();
+                        AddMessageBubble(new ChatMessageVm { Role = "user", Content = $"[TG {msg.Sender}]: {msg.Text}" });
+                        AddMessageBubble(new ChatMessageVm { Role = "assistant", Content = agentDirective.Reply });
+                    });
+                    try
+                    {
+                        ServiceContainer.ChatRepository.InsertMessage(new ChatRepository.ChatMessage
+                        {
+                            Content = agentDirective.Reply,
+                            Role = "assistant",
+                            Author = "Kokonoe",
+                            Timestamp = DateTime.Now
+                        });
+                    }
+                    catch { }
+                    await svc.SendAsync(msg.ChatId, agentDirective.Reply, _tgUserCts.Token);
+                    _ = Task.Run(() => ServiceContainer.ChatLogger.LogExchange("tg-user", msg.Text, agentDirective.Reply));
+                    ObserveAutonomousProfile("tg-user", msg.Text, agentDirective.Reply);
                     return;
                 }
 

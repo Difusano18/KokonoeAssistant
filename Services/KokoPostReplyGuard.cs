@@ -171,6 +171,9 @@ namespace KokonoeAssistant.Services
             if (LooksLikeFabricatedExternalFact(userText, reply, messages))
                 violations.Add("відповідь вигадує зовнішній факт про користувача або його акаунти без контексту");
 
+            if (LooksLikeFabricatedLocalFileAction(userLower, replyLower, reply))
+                violations.Add("local filesystem action was claimed without a verified execution route");
+
             if (LooksGeneric(userText, reply))
                 violations.Add("відповідь занадто шаблонна для наявного контексту");
 
@@ -239,6 +242,9 @@ namespace KokonoeAssistant.Services
                 violations.Any(v => v.Contains("greeting", StringComparison.OrdinalIgnoreCase) ||
                                     v.Contains("привіт", StringComparison.OrdinalIgnoreCase)))
                 return "Привіт. Кажи, що робимо.";
+
+            if (violations.Any(v => v.Contains("local filesystem action", StringComparison.OrdinalIgnoreCase)))
+                return "Не підтверджую виконання без реального tool-result. Якщо треба дія з файлами, пускаю це через Overlord/System Control, а не через фантазії.";
 
             return null;
         }
@@ -792,6 +798,27 @@ Timeline:
             }
 
             return false;
+        }
+
+        private static bool LooksLikeFabricatedLocalFileAction(string userLower, string replyLower, string reply)
+        {
+            var userAskedAction = ContainsAny(userLower,
+                "пошукай", "знайди", "найди", "проскануй", "подивись", "глянь",
+                "залиш", "остав", "створи", "создай", "запиши", "напиши файл",
+                "сюрприз", "gift", "desktop", "робочий стіл", "на компі", "на пк");
+            if (!userAskedAction)
+                return false;
+
+            var claimsFileAction = ContainsAny(replyLower,
+                "залишила", "оставила", "створила", "создала", "записала", "написала файл",
+                "saved", "created", "wrote", "file:", "файл:");
+            var mentionsLocalPath =
+                reply.Contains(@":\", StringComparison.Ordinal) ||
+                ContainsAny(replyLower, "desktop", "робочий стіл", @"c:\users\user", "kokonoe_gift");
+            var verifiedExecution = ContainsAny(replyLower,
+                "скан:", "сигналів", "signals", "overlord", "tool-result", "system control");
+
+            return claimsFileAction && mentionsLocalPath && !verifiedExecution;
         }
 
         private static IEnumerable<string> ExtractRiskTerms(string replyLower)

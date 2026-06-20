@@ -54,6 +54,27 @@ namespace KokonoeAssistant.Services
         public string Error { get; set; } = "";
     }
 
+    public sealed class KokoOverlordSurpriseResult
+    {
+        public bool Success { get; set; }
+        public string FilePath { get; set; } = "";
+        public int ScannedFiles { get; set; }
+        public int SignalCount { get; set; }
+        public string Error { get; set; } = "";
+        public List<string> Highlights { get; set; } = new();
+
+        public string ToUserReply()
+        {
+            if (!Success)
+                return "Не зробила. Причина: " + (string.IsNullOrWhiteSpace(Error) ? "невідома помилка" : Error);
+
+            var shortSignal = Highlights.Count == 0
+                ? "нічого драматичного, але індекс оновлений"
+                : string.Join("; ", Highlights.Take(2));
+            return $"Зроблено. Файл: `{FilePath}`. Скан: {ScannedFiles} файлів, сигналів {SignalCount}. {shortSignal}";
+        }
+    }
+
     public sealed class KokoSystemOverlordService
     {
         private readonly object _lock = new();
@@ -234,6 +255,54 @@ namespace KokonoeAssistant.Services
             return proposal;
         }
 
+        public static bool LooksLikeSystemOverlordDirective(string? text)
+        {
+            return KokoActionDirectiveRouter.ShouldCreateLocalArtifact(text);
+        }
+
+        public async Task<KokoOverlordSurpriseResult> CreateSurpriseNoteAsync(
+            string userRequest,
+            CancellationToken ct = default,
+            IEnumerable<string>? rootsOverride = null,
+            string? desktopOverride = null)
+        {
+            var result = new KokoOverlordSurpriseResult();
+            try
+            {
+                var desktop = ResolveDesktop(desktopOverride);
+                Directory.CreateDirectory(desktop);
+
+                var roots = ResolveSurpriseRoots(rootsOverride, desktop);
+                var settings = AppSettings.Load();
+                var limit = Math.Clamp(Math.Max(settings.SystemOverlordMaxFiles, 450), 100, 1200);
+                var snapshot = await ScanAsync(roots, maxFiles: limit, ct).ConfigureAwait(false);
+
+                var highlights = BuildSurpriseHighlights(snapshot);
+                var filePath = Path.Combine(desktop, $"Kokonoe_Gift_{DateTime.Now:yyyyMMdd-HHmmss}.txt");
+                var content = BuildSurpriseNote(userRequest, snapshot, highlights);
+                await File.WriteAllTextAsync(filePath, content, Encoding.UTF8, ct).ConfigureAwait(false);
+
+                result.Success = true;
+                result.FilePath = filePath;
+                result.ScannedFiles = snapshot.ScannedFiles;
+                result.SignalCount = snapshot.Files.Count(f => !string.Equals(f.Signal, "indexed", StringComparison.OrdinalIgnoreCase));
+                result.Highlights = highlights.Take(4).ToList();
+
+                var summary = $"created surprise note {filePath}; scanned={result.ScannedFiles}; signals={result.SignalCount}";
+                _blackboard?.Publish("system-overlord", "surprise_note", summary, 0.82, result, "done");
+                _heartbeat?.Update("SYSTEM_OVERLORD", "surprise-note", summary);
+                KokoSystemLog.Write("OVERLORD", summary);
+            }
+            catch (Exception ex)
+            {
+                result.Success = false;
+                result.Error = ex.Message;
+                KokoSystemLog.Write("OVERLORD", "surprise note failed: " + ex.Message);
+            }
+
+            return result;
+        }
+
         private List<KokoOverlordProposal> BuildProposals(KokoOverlordSnapshot snapshot)
         {
             var proposals = new List<KokoOverlordProposal>();
@@ -290,6 +359,133 @@ namespace KokonoeAssistant.Services
             }
 
             return proposals;
+        }
+
+        private static List<string> ResolveSurpriseRoots(IEnumerable<string>? rootsOverride, string desktop)
+        {
+            var roots = ResolveRoots(rootsOverride ?? SplitRoots(AppSettings.Load().SystemOverlordRoots));
+            AddRoot(roots, desktop);
+            if (rootsOverride != null)
+            {
+                return roots
+                    .Where(Directory.Exists)
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .Take(8)
+                    .ToList();
+            }
+
+            AddRoot(roots, Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads"));
+            AddRoot(roots, Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments));
+            AddRoot(roots, Environment.GetFolderPath(Environment.SpecialFolder.MyPictures));
+            return roots
+                .Where(Directory.Exists)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Take(8)
+                .ToList();
+        }
+
+        private static void AddRoot(List<string> roots, string? path)
+        {
+            if (string.IsNullOrWhiteSpace(path))
+                return;
+            try
+            {
+                var full = Path.GetFullPath(Environment.ExpandEnvironmentVariables(path));
+                if (!roots.Contains(full, StringComparer.OrdinalIgnoreCase))
+                    roots.Insert(0, full);
+            }
+            catch { }
+        }
+
+        private static string ResolveDesktop(string? desktopOverride)
+        {
+            if (!string.IsNullOrWhiteSpace(desktopOverride))
+                return Path.GetFullPath(desktopOverride);
+
+            var desktop = Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory);
+            if (!string.IsNullOrWhiteSpace(desktop))
+                return desktop;
+
+            return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Desktop");
+        }
+
+        private static List<string> BuildSurpriseHighlights(KokoOverlordSnapshot snapshot)
+        {
+            var lines = new List<string>();
+
+            foreach (var file in snapshot.Files
+                         .Where(f => !string.Equals(f.Signal, "indexed", StringComparison.OrdinalIgnoreCase))
+                         .OrderByDescending(f => f.SizeBytes)
+                         .Take(5))
+            {
+                lines.Add($"{file.Signal}: {file.Name} ({FormatBytes(file.SizeBytes)})");
+            }
+
+            foreach (var file in snapshot.Files
+                         .OrderByDescending(f => f.ModifiedAt)
+                         .Take(5))
+            {
+                if (lines.Any(l => l.Contains(file.Name, StringComparison.OrdinalIgnoreCase)))
+                    continue;
+                lines.Add($"recent: {file.Name} ({file.Bucket}, {file.ModifiedAt:yyyy-MM-dd HH:mm})");
+            }
+
+            foreach (var proc in snapshot.Processes
+                         .Where(p => p.WorkingSetMb >= 500 || !string.IsNullOrWhiteSpace(p.WindowTitle))
+                         .Take(4))
+            {
+                var title = string.IsNullOrWhiteSpace(proc.WindowTitle) ? "" : " / " + Trim(proc.WindowTitle, 55);
+                lines.Add($"process: {proc.ProcessName} {proc.WorkingSetMb:0}MB{title}");
+            }
+
+            return lines.Distinct(StringComparer.OrdinalIgnoreCase).Take(10).ToList();
+        }
+
+        private static string BuildSurpriseNote(
+            string userRequest,
+            KokoOverlordSnapshot snapshot,
+            IReadOnlyList<string> highlights)
+        {
+            var sb = new StringBuilder();
+            sb.AppendLine("Kokonoe local scan artifact");
+            sb.AppendLine("Created: " + DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"));
+            sb.AppendLine("Request: " + Trim(userRequest, 240));
+            sb.AppendLine();
+            sb.AppendLine($"Scanned files: {snapshot.ScannedFiles}");
+            sb.AppendLine($"Roots: {string.Join("; ", snapshot.Roots.Take(8))}");
+            sb.AppendLine($"Signals: {snapshot.Files.Count(f => !string.Equals(f.Signal, "indexed", StringComparison.OrdinalIgnoreCase))}");
+            sb.AppendLine();
+            sb.AppendLine("Highlights:");
+            if (highlights.Count == 0)
+            {
+                sb.AppendLine("- No dramatic cleanup target found. Boring, but at least real.");
+            }
+            else
+            {
+                foreach (var item in highlights)
+                    sb.AppendLine("- " + item);
+            }
+
+            sb.AppendLine();
+            sb.AppendLine("Concrete paths sampled:");
+            foreach (var file in snapshot.Files
+                         .OrderByDescending(f => f.ModifiedAt)
+                         .Take(12))
+            {
+                sb.AppendLine($"- [{file.Bucket}/{file.Signal}] {file.Path}");
+            }
+
+            if (snapshot.Proposals.Count > 0)
+            {
+                sb.AppendLine();
+                sb.AppendLine("Non-destructive proposals:");
+                foreach (var proposal in snapshot.Proposals.Take(5))
+                    sb.AppendLine($"- {proposal.Title}: {proposal.Reason}");
+            }
+
+            sb.AppendLine();
+            sb.AppendLine("No delete/move was executed. I wrote only this note, because losing files for drama is idiot behavior.");
+            return sb.ToString();
         }
 
         private static KokoOverlordFileFact? BuildFileFact(string path)
@@ -460,6 +656,9 @@ namespace KokonoeAssistant.Services
         private static bool IsDownloadsPath(string path)
             => path.Contains($"{Path.DirectorySeparatorChar}Downloads{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase) ||
                path.Contains($"{Path.AltDirectorySeparatorChar}Downloads{Path.AltDirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase);
+
+        private static bool ContainsAny(string text, params string[] values)
+            => values.Any(v => text.Contains(v, StringComparison.OrdinalIgnoreCase));
 
         private static long SafeWorkingSet(Process p)
         {

@@ -239,6 +239,10 @@ internal static class Program
             Run("Genesis agent factory disables profile", GenesisAgentFactoryDisablesProfile);
             Run("System overlord scans metadata and proposes cleanup", SystemOverlordScansMetadataAndProposesCleanup);
             Run("System overlord cleanup requires permission", SystemOverlordCleanupRequiresPermission);
+            Run("Action directive router generalizes local artifacts", ActionDirectiveRouterGeneralizesLocalArtifacts);
+            Run("Action directive router sends non artifact tasks to agents", ActionDirectiveRouterSendsNonArtifactTasksToAgents);
+            Run("System overlord detects retry surprise directive", SystemOverlordDetectsRetrySurpriseDirective);
+            Run("System overlord creates real surprise note", SystemOverlordCreatesRealSurpriseNote);
             Run("Collective mind builds agent debate frame", CollectiveMindBuildsAgentDebateFrame);
             Run("Unified context includes collective mind", UnifiedContextIncludesCollectiveMind);
             Run("Narrative continue stays conversational", NarrativeContinueStaysConversational);
@@ -5664,6 +5668,68 @@ Insight: bridge stability and pulse quality are linked.
         AssertEqual(PcPolicyDecisionKind.NeedsConfirmation, proposal.Decision, "delete cleanup should require confirmation");
         AssertTrue(!string.IsNullOrWhiteSpace(proposal.PendingActionId), "pending confirmation id should be created");
         AssertTrue(File.Exists(target), "prepare step must not delete the file");
+    }
+
+    private static void SystemOverlordDetectsRetrySurpriseDirective()
+    {
+        AssertTrue(
+            KokoSystemOverlordService.LooksLikeSystemOverlordDirective("я зробив апдейт, спробуй ще раз залишити сюрприз"),
+            "retry surprise request should route to real system overlord instead of LLM roleplay");
+        AssertTrue(
+            KokoSystemOverlordService.LooksLikeSystemOverlordDirective("давай актуально створи файл на робочому столі"),
+            "desktop artifact request should route to real file action");
+    }
+
+    private static void ActionDirectiveRouterGeneralizesLocalArtifacts()
+    {
+        var variants = new[]
+        {
+            "поклади щось цікаве на робочий стіл",
+            "зроби мені файл-сюрприз",
+            "розбери downloads і залиш короткий звіт",
+            "find something interesting on my pc and save a note"
+        };
+
+        foreach (var text in variants)
+        {
+            var route = KokoActionDirectiveRouter.Analyze(text);
+            AssertEqual(KokoActionDirectiveRoute.LocalArtifact, route.Route, "local artifact wording should not depend on one exact phrase: " + text);
+        }
+    }
+
+    private static void ActionDirectiveRouterSendsNonArtifactTasksToAgents()
+    {
+        var task = KokoActionDirectiveRouter.Analyze("пофікси gui і прожени тести нормально");
+        AssertEqual(KokoActionDirectiveRoute.AgentTask, task.Route, "multi-step project work should become agent task");
+        AssertTrue(task.Confidence >= 60, "agent task confidence should be high enough to bypass LLM-only answer");
+
+        var chat = KokoActionDirectiveRouter.Analyze("просто поговоримо про дурниці");
+        AssertEqual(KokoActionDirectiveRoute.None, chat.Route, "plain conversation should not become fake action");
+    }
+
+    private static void SystemOverlordCreatesRealSurpriseNote()
+    {
+        using var ctx = TestContext.Create();
+        var root = Path.Combine(ctx.TestDir, "ScanRoot");
+        var desktop = Path.Combine(ctx.TestDir, "Desktop");
+        Directory.CreateDirectory(root);
+        Directory.CreateDirectory(desktop);
+
+        var interesting = Path.Combine(root, "project-idea.md");
+        File.WriteAllText(interesting, "real local artifact for system overlord");
+
+        var service = new KokoSystemOverlordService(ctx.TestDir);
+        var result = service.CreateSurpriseNoteAsync(
+            "пошукай щось цікаве на компі і залиш файл сюрприз",
+            rootsOverride: new[] { root },
+            desktopOverride: desktop).GetAwaiter().GetResult();
+
+        AssertTrue(result.Success, "surprise route should succeed");
+        AssertTrue(File.Exists(result.FilePath), "surprise file should be created for real");
+        AssertTrue(result.FilePath.StartsWith(desktop, StringComparison.OrdinalIgnoreCase), "surprise file should use the actual desktop target");
+        AssertTrue(!result.FilePath.Contains(@"\Users\User\", StringComparison.OrdinalIgnoreCase), "surprise path must not use fake C:\\Users\\User");
+        var content = File.ReadAllText(result.FilePath);
+        AssertTrue(content.Contains("project-idea.md", StringComparison.OrdinalIgnoreCase), "note should include scanned real file path");
     }
 
     private static void CollectiveMindBuildsAgentDebateFrame()
