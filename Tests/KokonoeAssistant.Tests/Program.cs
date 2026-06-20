@@ -251,6 +251,7 @@ internal static class Program
             Run("Action directive router generalizes local artifacts", ActionDirectiveRouterGeneralizesLocalArtifacts);
             Run("Action directive router sends non artifact tasks to agents", ActionDirectiveRouterSendsNonArtifactTasksToAgents);
             Run("Action directive router handles inflected targets", ActionDirectiveRouterHandlesInflectedTargets);
+            Run("Generated content route stays separate from surprise scan", GeneratedContentRouteStaysSeparateFromSurpriseScan);
             Run("System overlord detects retry surprise directive", SystemOverlordDetectsRetrySurpriseDirective);
             Run("System overlord creates real surprise note", SystemOverlordCreatesRealSurpriseNote);
             Run("Collective mind builds agent debate frame", CollectiveMindBuildsAgentDebateFrame);
@@ -5790,6 +5791,35 @@ Insight: bridge stability and pulse quality are linked.
 
         var chat = KokoActionDirectiveRouter.Analyze("просто поговоримо про дурниці");
         AssertEqual(KokoActionDirectiveRoute.None, chat.Route, "plain conversation should not become fake action");
+    }
+
+    private static void GeneratedContentRouteStaysSeparateFromSurpriseScan()
+    {
+        var generated = new[]
+        {
+            "створи нотатку про дракона",
+            "напиши вірш про нічне місто",
+            "создай файл с текстом о проекте Mercury",
+            "write a short poem about Mercury"
+        };
+        foreach (var phrase in generated)
+        {
+            var directive = KokoActionDirectiveRouter.Analyze(phrase);
+            AssertEqual(KokoActionDirectiveRoute.GeneratedContentArtifact, directive.Route,
+                "specific content must use generated artifact route: " + phrase);
+            AssertTrue(!KokoSystemOverlordService.LooksLikeSystemOverlordDirective(phrase),
+                "specific content must not enter surprise scan: " + phrase);
+        }
+
+        var vague = new[]
+        {
+            "зроби мені файл-сюрприз",
+            "поклади щось цікаве на робочий стіл",
+            "find something interesting on my pc and save a note"
+        };
+        foreach (var phrase in vague)
+            AssertEqual(KokoActionDirectiveRoute.LocalArtifact, KokoActionDirectiveRouter.Analyze(phrase).Route,
+                "vague surprise/search must retain local scan route: " + phrase);
     }
 
     private static void ActionDirectiveRouterHandlesInflectedTargets()

@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using KokonoeAssistant.Services;
@@ -58,6 +60,12 @@ namespace KokonoeAssistant
                     return (true, result.ToUserReply());
                 }
 
+                if (directive.Route == KokoActionDirectiveRoute.GeneratedContentArtifact)
+                {
+                    await ShowKokoActivityAsync("Generating requested content and writing a verified artifact");
+                    return (true, await CreateGeneratedContentArtifactAsync(userText, ct));
+                }
+
                 if (allowAgentTask && directive.Route == KokoActionDirectiveRoute.AgentTask)
                 {
                     HookAgentTaskEvents();
@@ -83,6 +91,47 @@ namespace KokonoeAssistant
             }
 
             return (false, "");
+        }
+
+        private static async Task<string> CreateGeneratedContentArtifactAsync(string userText, CancellationToken ct)
+        {
+            var prompt = $"""
+            Generate the actual body of the file requested below.
+            Request: {userText}
+
+            Return only finished file content. Do not discuss the task, promise future work, invent a path,
+            or wrap the content in markdown fences. Match the user's language and requested format.
+            """;
+            var content = (await ServiceContainer.LlmService
+                .SendSystemQueryAsync(prompt, useTools: false, ct: ct, agentId: "writer")
+                .ConfigureAwait(false))?.Trim();
+            if (string.IsNullOrWhiteSpace(content))
+                return "Content generation failed: the model returned an empty result. No file was created.";
+
+            var extension = userText.Contains(".txt", StringComparison.OrdinalIgnoreCase) ||
+                            userText.Contains(" txt", StringComparison.OrdinalIgnoreCase)
+                ? ".txt"
+                : ".md";
+            var relativePath = Path.Combine(
+                "generated-content",
+                $"Kokonoe_Content_{DateTime.Now:yyyyMMdd_HHmmss}_{Guid.NewGuid().ToString("N")[..8]}{extension}");
+            var result = await ServiceContainer.ToolGateway.ExecuteAsync(new KokoToolCall
+            {
+                Name = "fs_write_text",
+                Confirmed = true,
+                Arguments = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["path"] = relativePath,
+                    ["content"] = content
+                }
+            }, ct).ConfigureAwait(false);
+
+            if (!result.Success || !result.Verified)
+                return "Content was generated, but the file write failed verification: " + result.Reason;
+
+            var fullPath = ServiceContainer.FileTools.ResolvePath(relativePath);
+            KokoSystemLog.Write("GENERATED-CONTENT", $"verified artifact path={fullPath} chars={content.Length}");
+            return $"Готово. Створено й перевірено файл: `{fullPath}` ({content.Length} символів).";
         }
 
         private static async Task<string> ExecuteLivePcActionPlanAsync(PcActionPlan plan, CancellationToken ct)

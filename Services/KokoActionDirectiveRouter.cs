@@ -7,6 +7,7 @@ namespace KokonoeAssistant.Services
     {
         None,
         LocalArtifact,
+        GeneratedContentArtifact,
         AgentTask
     }
 
@@ -31,7 +32,8 @@ namespace KokonoeAssistant.Services
             var hasSearchVerb = ContainsAny(lower, SearchVerbs);
             var hasFixVerb = ContainsAny(lower, FixVerbs);
             var localTarget = ContainsAny(lower, LocalTargets);
-            var artifactTarget = ContainsAny(lower, ArtifactTargets);
+            var contentArtifactTarget = ContainsAny(lower, ContentArtifactTargets);
+            var artifactTarget = ContainsAny(lower, ArtifactTargets) || contentArtifactTarget;
             var projectTarget = ContainsAny(lower, ProjectTargets);
             var autonomyCue = ContainsAny(lower, AutonomyCues);
             var riskyDestructive = ContainsAny(lower, RiskyDestructiveCues);
@@ -42,6 +44,18 @@ namespace KokonoeAssistant.Services
             var isAction = hasActionVerb || hasCreationVerb || hasSearchVerb || hasFixVerb;
             if (!isAction)
                 return None("no executable directive");
+
+            if (hasCreationVerb && !hasSearchVerb && artifactTarget &&
+                HasSpecificContentSubject(lower, contentArtifactTarget))
+            {
+                return new KokoActionDirective
+                {
+                    IsAction = true,
+                    Route = KokoActionDirectiveRoute.GeneratedContentArtifact,
+                    Confidence = 90,
+                    Reason = "specific generated content artifact"
+                };
+            }
 
             if ((hasCreationVerb || hasSearchVerb || autonomyCue || (hasActionVerb && artifactTarget && !projectTarget)) &&
                 (artifactTarget || localTarget))
@@ -170,6 +184,27 @@ namespace KokonoeAssistant.Services
             "лог", "у лозі", "в логе", "log", "документ", "у документі", "в документе"
         };
 
+        private static readonly string[] ContentArtifactTargets =
+        {
+            "вірш", "вірша", "поезі", "оповідан", "історі", "лист", "есе", "текст",
+            "стих", "стихотвор", "рассказ", "истори", "письмо", "эссе",
+            "poem", "story", "letter", "essay", "lyrics"
+        };
+
+        private static readonly string[] SubjectMarkers =
+        {
+            " про ", " про:", " на тему ", " щодо ", " присвячен", " для ", " із текстом ", " з текстом ",
+            " о ", " об ", " на тему ", " про:", " со словами ",
+            " about ", " on the topic ", " for ", " containing ", " with the text "
+        };
+
+        private static readonly string[] VagueContentTails =
+        {
+            "щось", "щось цікаве", "це", "сюрприз", "подарунок",
+            "что-то", "что-нибудь", "это", "сюрприз", "подарок",
+            "something", "something interesting", "it", "surprise", "gift"
+        };
+
         private static readonly string[] ProjectTargets =
         {
             "код", "у коді", "над кодом", "в коде", "code",
@@ -199,5 +234,25 @@ namespace KokonoeAssistant.Services
 
         private static bool ContainsAny(string text, params string[] values)
             => values.Any(v => text.Contains(v, StringComparison.OrdinalIgnoreCase));
+
+        private static bool HasSpecificContentSubject(string text, bool contentArtifactTarget)
+        {
+            foreach (var marker in SubjectMarkers)
+            {
+                var index = text.IndexOf(marker, StringComparison.OrdinalIgnoreCase);
+                if (index < 0)
+                    continue;
+
+                var tail = text[(index + marker.Length)..].Trim(' ', '.', ',', ':', ';', '-', '!', '?', '"', '\'');
+                if (tail.Length >= 3 && !VagueContentTails.Contains(tail, StringComparer.OrdinalIgnoreCase))
+                    return true;
+            }
+
+            if (!contentArtifactTarget)
+                return false;
+
+            var words = text.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            return words.Length >= 4 && !ContainsAny(text, "щось", "что-то", "что-нибудь", "something", "сюрприз", "surprise");
+        }
     }
 }
