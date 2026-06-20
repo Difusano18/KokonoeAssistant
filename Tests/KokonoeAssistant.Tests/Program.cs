@@ -2153,7 +2153,7 @@ internal static class Program
         }
         finally
         {
-            try { Directory.Delete(dir, recursive: true); } catch { }
+            TryDeleteDir(dir);
         }
     }
 
@@ -6710,7 +6710,7 @@ Insight: bridge stability and pulse quality are linked.
         }
         finally
         {
-            try { Directory.Delete(dir, recursive: true); } catch { }
+            TryDeleteDir(dir);
         }
     }
 
@@ -6743,7 +6743,7 @@ Insight: bridge stability and pulse quality are linked.
         }
         finally
         {
-            try { Directory.Delete(dir, recursive: true); } catch { }
+            TryDeleteDir(dir);
         }
     }
 
@@ -6769,7 +6769,7 @@ Insight: bridge stability and pulse quality are linked.
         }
         finally
         {
-            try { Directory.Delete(dir, recursive: true); } catch { }
+            TryDeleteDir(dir);
         }
     }
 
@@ -6822,7 +6822,7 @@ type: creator-profile
         }
         finally
         {
-            try { Directory.Delete(dir, recursive: true); } catch { }
+            TryDeleteDir(dir);
         }
     }
 
@@ -6858,7 +6858,7 @@ type: creator-profile
         }
         finally
         {
-            try { Directory.Delete(dir, recursive: true); } catch { }
+            TryDeleteDir(dir);
         }
     }
 
@@ -6945,7 +6945,7 @@ type: creator-profile
         }
         finally
         {
-            try { Directory.Delete(dir, recursive: true); } catch { }
+            TryDeleteDir(dir);
         }
     }
 
@@ -6974,7 +6974,7 @@ type: creator-profile
         }
         finally
         {
-            try { Directory.Delete(parent, recursive: true); } catch { }
+            TryDeleteDir(parent);
         }
     }
 
@@ -7028,7 +7028,7 @@ type: creator-profile
         }
         finally
         {
-            try { Directory.Delete(dir, recursive: true); } catch { }
+            TryDeleteDir(dir);
         }
     }
 
@@ -7062,7 +7062,7 @@ type: creator-profile
         }
         finally
         {
-            try { Directory.Delete(dir, recursive: true); } catch { }
+            TryDeleteDir(dir);
         }
     }
 
@@ -7107,7 +7107,7 @@ type: creator-profile
         }
         finally
         {
-            try { Directory.Delete(dir, recursive: true); } catch { }
+            TryDeleteDir(dir);
         }
     }
 
@@ -7151,7 +7151,7 @@ Kokonoe should stay plain in prose. Project should be linked here, not in YAML t
         }
         finally
         {
-            try { Directory.Delete(dir, recursive: true); } catch { }
+            TryDeleteDir(dir);
         }
     }
 
@@ -7194,7 +7194,7 @@ Kokonoe should stay plain. Project should be linked.
         }
         finally
         {
-            try { Directory.Delete(dir, recursive: true); } catch { }
+            TryDeleteDir(dir);
         }
     }
 
@@ -7252,7 +7252,7 @@ tags: [[[kokonoe]], chat]
         }
         finally
         {
-            try { Directory.Delete(dir, recursive: true); } catch { }
+            TryDeleteDir(dir);
         }
     }
 
@@ -7362,7 +7362,7 @@ Persistent Obsidian context is now a core project requirement.
         }
         finally
         {
-            try { Directory.Delete(dir, recursive: true); } catch { }
+            TryDeleteDir(dir);
         }
     }
 
@@ -7396,7 +7396,7 @@ Persistent Obsidian context is now a core project requirement.
         }
         finally
         {
-            try { Directory.Delete(dir, recursive: true); } catch { }
+            TryDeleteDir(dir);
         }
     }
 
@@ -7419,7 +7419,7 @@ Persistent Obsidian context is now a core project requirement.
         }
         finally
         {
-            try { Directory.Delete(dir, recursive: true); } catch { }
+            TryDeleteDir(dir);
         }
     }
 
@@ -7449,7 +7449,7 @@ Persistent Obsidian context is now a core project requirement.
         }
         finally
         {
-            try { Directory.Delete(dir, recursive: true); } catch { }
+            TryDeleteDir(dir);
         }
     }
 
@@ -7477,7 +7477,7 @@ Persistent Obsidian context is now a core project requirement.
         }
         finally
         {
-            try { Directory.Delete(dir, recursive: true); } catch { }
+            TryDeleteDir(dir);
         }
     }
 
@@ -7509,7 +7509,7 @@ Persistent Obsidian context is now a core project requirement.
         }
         finally
         {
-            try { Directory.Delete(dir, recursive: true); } catch { }
+            TryDeleteDir(dir);
         }
     }
 
@@ -7621,7 +7621,7 @@ Persistent Obsidian context is now a core project requirement.
         }
         finally
         {
-            try { Directory.Delete(dir, recursive: true); } catch { }
+            TryDeleteDir(dir);
         }
     }
 
@@ -7696,7 +7696,7 @@ Persistent Obsidian context is now a core project requirement.
         }
         finally
         {
-            try { Directory.Delete(dir, recursive: true); } catch { }
+            TryDeleteDir(dir);
         }
     }
 
@@ -7758,7 +7758,7 @@ Persistent Obsidian context is now a core project requirement.
         }
         finally
         {
-            try { Directory.Delete(dir, recursive: true); } catch { }
+            TryDeleteDir(dir);
         }
     }
 
@@ -7797,7 +7797,7 @@ Persistent Obsidian context is now a core project requirement.
         }
         finally
         {
-            try { Directory.Delete(dir, recursive: true); } catch { }
+            TryDeleteDir(dir);
         }
     }
 
@@ -7824,7 +7824,7 @@ Persistent Obsidian context is now a core project requirement.
         }
         finally
         {
-            try { Directory.Delete(dir, recursive: true); } catch { }
+            TryDeleteDir(dir);
         }
     }
 
@@ -7860,7 +7860,7 @@ Persistent Obsidian context is now a core project requirement.
         }
         finally
         {
-            try { Directory.Delete(dir, recursive: true); } catch { }
+            TryDeleteDir(dir);
         }
     }
 
@@ -8100,7 +8100,7 @@ Persistent Obsidian context is now a core project requirement.
         }
         finally
         {
-            try { Directory.Delete(vault, recursive: true); } catch { }
+            TryDeleteDir(vault);
         }
     }
 
@@ -8118,7 +8118,7 @@ Persistent Obsidian context is now a core project requirement.
         }
         finally
         {
-            try { Directory.Delete(dir, recursive: true); } catch { }
+            TryDeleteDir(dir);
         }
     }
 
@@ -8158,7 +8158,7 @@ Persistent Obsidian context is now a core project requirement.
         }
         finally
         {
-            try { Directory.Delete(dir, recursive: true); } catch { }
+            TryDeleteDir(dir);
         }
     }
 
@@ -8201,7 +8201,7 @@ Persistent Obsidian context is now a core project requirement.
         }
         finally
         {
-            try { Directory.Delete(dir, recursive: true); } catch { }
+            TryDeleteDir(dir);
         }
     }
 
@@ -8232,7 +8232,14 @@ Persistent Obsidian context is now a core project requirement.
 
     private static void TryDeleteDir(string dir)
     {
-        try { Directory.Delete(dir, recursive: true); } catch { }
+        try
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"TEST CLEANUP FAILED [{dir}]: {ex}");
+        }
     }
 
     private sealed class TestContext : IDisposable
@@ -8264,7 +8271,7 @@ Persistent Obsidian context is now a core project requirement.
         public void Dispose()
         {
             Chat.Dispose();
-            try { Directory.Delete(_dir, recursive: true); } catch { }
+            TryDeleteDir(_dir);
         }
     }
 }
