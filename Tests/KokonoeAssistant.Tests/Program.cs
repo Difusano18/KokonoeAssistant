@@ -12,11 +12,17 @@ namespace KokonoeAssistant.Tests;
 internal static class Program
 {
     private static int _passed;
+    private static int _selected;
+    private static string? _filter;
 
-    private static int Main()
+    private static int Main(string[] args)
     {
         try
         {
+            var filterIndex = Array.FindIndex(args, arg => arg.Equals("--filter", StringComparison.OrdinalIgnoreCase));
+            if (filterIndex >= 0 && filterIndex + 1 < args.Length)
+                _filter = args[filterIndex + 1];
+
             Run("Somatic wired from pulse spike", SomaticWiredFromPulseSpike);
             Run("Somatic tired from low charge", SomaticTiredFromLowCharge);
             Run("Wearable telemetry infers likely sleep", WearableTelemetryInfersLikelySleep);
@@ -244,6 +250,7 @@ internal static class Program
             Run("System overlord cleanup requires permission", SystemOverlordCleanupRequiresPermission);
             Run("Action directive router generalizes local artifacts", ActionDirectiveRouterGeneralizesLocalArtifacts);
             Run("Action directive router sends non artifact tasks to agents", ActionDirectiveRouterSendsNonArtifactTasksToAgents);
+            Run("Action directive router handles inflected targets", ActionDirectiveRouterHandlesInflectedTargets);
             Run("System overlord detects retry surprise directive", SystemOverlordDetectsRetrySurpriseDirective);
             Run("System overlord creates real surprise note", SystemOverlordCreatesRealSurpriseNote);
             Run("Collective mind builds agent debate frame", CollectiveMindBuildsAgentDebateFrame);
@@ -339,6 +346,9 @@ internal static class Program
             Run("Reminder parser handles relative and vague time", ReminderParserHandlesRelativeAndVagueTime);
             Run("Reminder parser handles wake and absolute time", ReminderParserHandlesWakeAndAbsoluteTime);
             Run("Reminder parser ignores later continuation status", ReminderParserIgnoresLaterContinuationStatus);
+
+            if (!string.IsNullOrWhiteSpace(_filter) && _selected == 0)
+                throw new InvalidOperationException($"FAIL: no tests matched filter '{_filter}'.");
 
             Console.WriteLine($"PASS {_passed} tests");
             return 0;
@@ -5782,6 +5792,62 @@ Insight: bridge stability and pulse quality are linked.
         AssertEqual(KokoActionDirectiveRoute.None, chat.Route, "plain conversation should not become fake action");
     }
 
+    private static void ActionDirectiveRouterHandlesInflectedTargets()
+    {
+        var localTargets = new[]
+        {
+            "створи щось на робочому столі",
+            "залиш сюрприз на рабочем столе",
+            "запиши файл у папці завантажень",
+            "поклади звіт на диску",
+            "збережи нотатку на комп'ютері",
+            "оставь документ в каталоге"
+        };
+        var artifactTargets = new[]
+        {
+            "напиши щось у документі",
+            "залиш результат у нотатці",
+            "збережи дані у файлі",
+            "создай запись в документе",
+            "залиш коротко у звіті",
+            "сохрани результат в заметке"
+        };
+        var projectTargets = new[]
+        {
+            "пофікси помилку у проєкті",
+            "дороби логіку в репозитории",
+            "покращ код у репозиторії",
+            "виправ відступи в інтерфейсі",
+            "прожени перевірки у тестах",
+            "онови віджет на годиннику"
+        };
+        var autonomyCues = new[]
+        {
+            "на власний розсуд покращ код у проєкті",
+            "без мого втручання дороби інтерфейс",
+            "без додаткових питань онови тести",
+            "повністю автономно виправ код",
+            "по-своєму покращ проєкт",
+            "на свое усмотрение доработай проект"
+        };
+
+        AssertRoutes(localTargets, KokoActionDirectiveRoute.LocalArtifact, "local target inflection");
+        AssertRoutes(artifactTargets, KokoActionDirectiveRoute.LocalArtifact, "artifact target inflection");
+        AssertRoutes(projectTargets, KokoActionDirectiveRoute.AgentTask, "project target inflection");
+        AssertRoutes(autonomyCues, KokoActionDirectiveRoute.AgentTask, "autonomy cue inflection");
+
+        static void AssertRoutes(IEnumerable<string> phrases, KokoActionDirectiveRoute expected, string context)
+        {
+            foreach (var phrase in phrases)
+            {
+                var directive = KokoActionDirectiveRouter.Analyze(phrase);
+                AssertEqual(expected, directive.Route, $"{context}: {phrase}; reason={directive.Reason}");
+                AssertTrue(!directive.Reason.Contains("generic", StringComparison.OrdinalIgnoreCase),
+                    $"{context} must not use generic fallback: {phrase}");
+            }
+        }
+    }
+
     private static void SystemOverlordCreatesRealSurpriseNote()
     {
         using var ctx = TestContext.Create();
@@ -8207,9 +8273,24 @@ Persistent Obsidian context is now a core project requirement.
 
     private static void Run(string name, Action test)
     {
+        if (!MatchesFilter(name))
+            return;
+
+        _selected++;
         test();
         _passed++;
         Console.WriteLine($"PASS {name}");
+    }
+
+    private static bool MatchesFilter(string name)
+    {
+        if (string.IsNullOrWhiteSpace(_filter))
+            return true;
+
+        static string NormalizeFilterText(string value)
+            => new(value.Where(char.IsLetterOrDigit).Select(char.ToLowerInvariant).ToArray());
+
+        return NormalizeFilterText(name).Contains(NormalizeFilterText(_filter), StringComparison.Ordinal);
     }
 
     private static void AssertTrue(bool condition, string message)
