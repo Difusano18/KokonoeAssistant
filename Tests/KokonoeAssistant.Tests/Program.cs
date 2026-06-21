@@ -259,6 +259,7 @@ internal static class Program
             Run("Web chat bridge resets partial stream before fallback", WebChatBridgeResetsPartialStreamBeforeFallback);
             Run("Web agent bridge returns camel case snapshot", WebAgentBridgeReturnsCamelCaseSnapshot);
             Run("Web agent bridge publishes live activity", WebAgentBridgePublishesLiveActivity);
+            Run("Web vault bridge caches and refreshes status", WebVaultBridgeCachesAndRefreshesStatus);
             Run("System overlord detects retry surprise directive", SystemOverlordDetectsRetrySurpriseDirective);
             Run("System overlord creates real surprise note", SystemOverlordCreatesRealSurpriseNote);
             Run("Collective mind builds agent debate frame", CollectiveMindBuildsAgentDebateFrame);
@@ -5958,6 +5959,42 @@ Insight: bridge stability and pulse quality are linked.
         agent.Dispose();
         tasks.AddTask("Do not publish after dispose");
         AssertEqual(beforeDispose, envelopes.Count, "disposed bridge must detach task event handlers");
+    }
+
+    private static void WebVaultBridgeCachesAndRefreshesStatus()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "KokonoeAssistant.Tests", "web-vault-" + Guid.NewGuid().ToString("N"));
+        var obsidian = new ObsidianMcpService(dir);
+        obsidian.WriteNote("Projects/First.md", "# First\n\nInitial note.");
+        var envelopes = new List<string>();
+        using var bridge = new KokoWebBridgeService(envelopes.Add);
+        using var vault = new KokoWebVaultBridgeService(bridge, obsidian);
+
+        bridge.HandleMessageAsync("""{"type":"request","id":"vault-1","method":"vault.status","payload":null}""")
+            .GetAwaiter().GetResult();
+        var first = envelopes.Select(Newtonsoft.Json.Linq.JObject.Parse)
+            .Single(x => x["id"]?.ToString() == "vault-1");
+        AssertEqual("1", first["result"]?["noteCount"]?.ToString(), "initial vault status must count notes");
+        AssertEqual("1", first["result"]?["folderCount"]?.ToString(), "initial vault status must count folders");
+        AssertTrue(first["result"]?["available"]?.Value<bool>() == true, "existing vault must report online");
+        AssertTrue(first["result"]?["recentNotes"]?[0]?["path"]?.ToString() == "Projects/First.md",
+            "vault status must expose recent relative paths");
+
+        obsidian.WriteNote("Second.md", "# Second\n\nNew note.");
+        bridge.HandleMessageAsync("""{"type":"request","id":"vault-2","method":"vault.status","payload":null}""")
+            .GetAwaiter().GetResult();
+        var cached = envelopes.Select(Newtonsoft.Json.Linq.JObject.Parse)
+            .Single(x => x["id"]?.ToString() == "vault-2");
+        AssertEqual("1", cached["result"]?["noteCount"]?.ToString(), "ordinary status must reuse the short UI cache");
+
+        bridge.HandleMessageAsync("""{"type":"request","id":"vault-3","method":"vault.refresh","payload":null}""")
+            .GetAwaiter().GetResult();
+        var refreshed = envelopes.Select(Newtonsoft.Json.Linq.JObject.Parse)
+            .Single(x => x["id"]?.ToString() == "vault-3");
+        AssertEqual("2", refreshed["result"]?["noteCount"]?.ToString(), "forced refresh must rescan changed notes");
+        AssertTrue(envelopes.Select(Newtonsoft.Json.Linq.JObject.Parse)
+                .Any(x => x["channel"]?.ToString() == "vault.status" && x["payload"]?["noteCount"]?.ToString() == "2"),
+            "forced refresh must publish the updated vault status event");
     }
 
     private static void ActionDirectiveRouterHandlesInflectedTargets()
