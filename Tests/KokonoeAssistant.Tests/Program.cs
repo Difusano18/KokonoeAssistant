@@ -260,6 +260,8 @@ internal static class Program
             Run("Web agent bridge returns camel case snapshot", WebAgentBridgeReturnsCamelCaseSnapshot);
             Run("Web agent bridge publishes live activity", WebAgentBridgePublishesLiveActivity);
             Run("Web vault bridge caches and refreshes status", WebVaultBridgeCachesAndRefreshesStatus);
+            Run("Web settings bridge masks and preserves secrets", WebSettingsBridgeMasksAndPreservesSecrets);
+            Run("Web settings bridge rejects invalid values", WebSettingsBridgeRejectsInvalidValues);
             Run("System overlord detects retry surprise directive", SystemOverlordDetectsRetrySurpriseDirective);
             Run("System overlord creates real surprise note", SystemOverlordCreatesRealSurpriseNote);
             Run("Collective mind builds agent debate frame", CollectiveMindBuildsAgentDebateFrame);
@@ -5995,6 +5997,71 @@ Insight: bridge stability and pulse quality are linked.
         AssertTrue(envelopes.Select(Newtonsoft.Json.Linq.JObject.Parse)
                 .Any(x => x["channel"]?.ToString() == "vault.status" && x["payload"]?["noteCount"]?.ToString() == "2"),
             "forced refresh must publish the updated vault status event");
+    }
+
+    private static void WebSettingsBridgeMasksAndPreservesSecrets()
+    {
+        var settings = new AppSettings
+        {
+            TelegramToken = "telegram-secret-value",
+            TgApiId = 12345,
+            TgApiHash = "telegram-api-hash",
+            OpenAiApiKey = "openai-secret-value",
+            ClaudeApiKey = "claude-secret-value",
+            OllamaApiKey = "ollama-secret-value",
+            ProactiveAutonomyLevel = 1,
+            WearBridgeEnabled = true
+        };
+        AppSettings? saved = null;
+        var envelopes = new List<string>();
+        using var bridge = new KokoWebBridgeService(envelopes.Add);
+        using var webSettings = new KokoWebSettingsBridgeService(
+            bridge,
+            () => settings,
+            value => { saved = value; return null; });
+
+        bridge.HandleMessageAsync("""{"type":"request","id":"settings-1","method":"settings.get","payload":null}""")
+            .GetAwaiter().GetResult();
+        var getResponse = envelopes.Select(Newtonsoft.Json.Linq.JObject.Parse)
+            .Single(x => x["id"]?.ToString() == "settings-1");
+        var serialized = getResponse.ToString(Newtonsoft.Json.Formatting.None);
+        AssertTrue(!serialized.Contains("telegram-secret-value", StringComparison.Ordinal), "settings snapshot must not expose Telegram token");
+        AssertTrue(!serialized.Contains("openai-secret-value", StringComparison.Ordinal), "settings snapshot must not expose API keys");
+        AssertTrue(getResponse["result"]?["credentials"]?["telegramBot"]?.Value<bool>() == true,
+            "settings snapshot should expose credential presence only");
+
+        bridge.HandleMessageAsync("""{"type":"request","id":"settings-2","method":"settings.update","payload":{"proactiveAutonomyLevel":3,"wearBridgeEnabled":false,"matrixColor":"#12abef"}}""")
+            .GetAwaiter().GetResult();
+        AssertTrue(saved != null, "valid settings update must persist");
+        AssertEqual("telegram-secret-value", saved!.TelegramToken, "merge update must preserve Telegram token");
+        AssertEqual("telegram-api-hash", saved.TgApiHash, "merge update must preserve MTProto credentials");
+        AssertEqual("openai-secret-value", saved.OpenAiApiKey, "merge update must preserve OpenAI key");
+        AssertEqual(3, saved.ProactiveAutonomyLevel, "allowlisted setting must update");
+        AssertTrue(!saved.WearBridgeEnabled, "wear bridge setting must update");
+        AssertEqual("#12ABEF", saved.MatrixColor, "accent color must normalize");
+        var updateResponse = envelopes.Select(Newtonsoft.Json.Linq.JObject.Parse)
+            .Single(x => x["id"]?.ToString() == "settings-2");
+        AssertTrue(updateResponse["result"]?["restartRequired"]?.Value<bool>() == true,
+            "device service change must report restart requirement");
+    }
+
+    private static void WebSettingsBridgeRejectsInvalidValues()
+    {
+        var saves = 0;
+        var envelopes = new List<string>();
+        using var bridge = new KokoWebBridgeService(envelopes.Add);
+        using var webSettings = new KokoWebSettingsBridgeService(
+            bridge,
+            () => new AppSettings(),
+            value => { saves++; return null; });
+
+        bridge.HandleMessageAsync("""{"type":"request","id":"settings-bad","method":"settings.update","payload":{"proactiveAutonomyLevel":99}}""")
+            .GetAwaiter().GetResult();
+        var response = envelopes.Select(Newtonsoft.Json.Linq.JObject.Parse)
+            .Single(x => x["id"]?.ToString() == "settings-bad");
+        AssertTrue(response["error"]?.ToString().Contains("between 0 and 3", StringComparison.OrdinalIgnoreCase) == true,
+            "invalid setting must return a structured validation error");
+        AssertEqual(0, saves, "invalid settings must not touch persistence");
     }
 
     private static void ActionDirectiveRouterHandlesInflectedTargets()

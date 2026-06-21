@@ -32,6 +32,7 @@ namespace KokonoeAssistant
 
     public class AppSettings
     {
+        private static readonly object SettingsIoLock = new();
         public const string DefaultOllamaCloudModel = "gemma4:31b-cloud";
         public const string DefaultVisionModel = "gemma4:31b-cloud";
         public const string FallbackVisionModel = "";
@@ -139,29 +140,102 @@ namespace KokonoeAssistant
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
             "KokonoeAssistant",
             "settings.json");
+        private static readonly string _backupPath = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+            "KokonoeAssistant",
+            "settings.backup.json");
 
         public static AppSettings Load()
         {
-            try
+            lock (SettingsIoLock)
             {
-                if (File.Exists(_path))
+                if (TryLoadFile(_path, out var loaded, out var primaryError))
                 {
-                    var loaded = JsonConvert.DeserializeObject<AppSettings>(File.ReadAllText(_path))
-                                 ?? new AppSettings();
-                    var changed = RecoverMissingSecretsFromLegacySettings(loaded);
-                    if (NormalizeDefaults(loaded))
+                    var changed = RecoverMissingSecretsFromLegacySettings(loaded!);
+                    if (NormalizeDefaults(loaded!))
                         changed = true;
                     if (changed)
-                        loaded.Save();
-                    return loaded;
+                        loaded!.TrySave(out _);
+                    return loaded!;
                 }
-            }
-            catch (Exception suppressedEx158) { KokoSystemLog.Write("APPSETTINGS-CATCH", "Load failed near source line 158: " + suppressedEx158); }
 
-            var def = new AppSettings();
-            RecoverMissingSecretsFromLegacySettings(def);
-            def.Save();
-            return def;
+                if (File.Exists(_path))
+                {
+                    KokoSystemLog.Write("APPSETTINGS", "Primary settings unreadable: " + primaryError);
+                    if (TryLoadFile(_backupPath, out var backup, out var backupError))
+                    {
+                        RecoverMissingSecretsFromLegacySettings(backup!);
+                        NormalizeDefaults(backup!);
+                        if (TryRestoreBackup(out var restoreError))
+                            KokoSystemLog.Write("APPSETTINGS", "Recovered settings from atomic backup.");
+                        else
+                            KokoSystemLog.Write("APPSETTINGS", "Backup loaded but primary restore failed: " + restoreError);
+                        return backup!;
+                    }
+                    KokoSystemLog.Write("APPSETTINGS", "Settings backup unavailable: " + backupError);
+                    var safeFallback = new AppSettings();
+                    RecoverMissingSecretsFromLegacySettings(safeFallback);
+                    NormalizeDefaults(safeFallback);
+                    return safeFallback;
+                }
+
+                var def = new AppSettings();
+                RecoverMissingSecretsFromLegacySettings(def);
+                NormalizeDefaults(def);
+                def.TrySave(out _);
+                return def;
+            }
+        }
+
+        private static bool TryLoadFile(string path, out AppSettings? settings, out string error)
+        {
+            settings = null;
+            error = "not found";
+            if (!File.Exists(path))
+                return false;
+            try
+            {
+                settings = JsonConvert.DeserializeObject<AppSettings>(File.ReadAllText(path));
+                if (settings == null)
+                {
+                    error = "deserialized to null";
+                    return false;
+                }
+                error = "";
+                return true;
+            }
+            catch (Exception ex)
+            {
+                error = ex.Message;
+                return false;
+            }
+        }
+
+        private static bool TryRestoreBackup(out string error)
+        {
+            string? tempPath = null;
+            try
+            {
+                var dir = Path.GetDirectoryName(_path)!;
+                tempPath = Path.Combine(dir, $"settings.restore.{Guid.NewGuid():N}.tmp");
+                File.Copy(_backupPath, tempPath, overwrite: true);
+                File.Move(tempPath, _path, overwrite: true);
+                error = "";
+                return true;
+            }
+            catch (Exception ex)
+            {
+                error = ex.Message;
+                try
+                {
+                    if (!string.IsNullOrWhiteSpace(tempPath) && File.Exists(tempPath))
+                        File.Delete(tempPath);
+                }
+                catch
+                {
+                }
+                return false;
+            }
         }
 
         private static bool RecoverMissingSecretsFromLegacySettings(AppSettings settings)
@@ -362,13 +436,42 @@ namespace KokonoeAssistant
 
         public void Save()
         {
-            try
+            if (!TrySave(out var error))
+                KokoSystemLog.Write("APPSETTINGS-CATCH", "Save failed: " + error);
+        }
+
+        public bool TrySave(out string error)
+        {
+            lock (SettingsIoLock)
             {
-                var dir = Path.GetDirectoryName(_path)!;
-                Directory.CreateDirectory(dir);
-                File.WriteAllText(_path, JsonConvert.SerializeObject(this, Formatting.Indented));
+                string? tempPath = null;
+                try
+                {
+                    var dir = Path.GetDirectoryName(_path)!;
+                    Directory.CreateDirectory(dir);
+                    tempPath = Path.Combine(dir, $"settings.{Guid.NewGuid():N}.tmp");
+                    File.WriteAllText(tempPath, JsonConvert.SerializeObject(this, Formatting.Indented));
+                    if (File.Exists(_path))
+                        File.Replace(tempPath, _path, _backupPath, ignoreMetadataErrors: true);
+                    else
+                        File.Move(tempPath, _path);
+                    error = "";
+                    return true;
+                }
+                catch (Exception ex)
+                {
+                    error = ex.Message;
+                    try
+                    {
+                        if (!string.IsNullOrWhiteSpace(tempPath) && File.Exists(tempPath))
+                            File.Delete(tempPath);
+                    }
+                    catch
+                    {
+                    }
+                    return false;
+                }
             }
-            catch (Exception suppressedEx370) { KokoSystemLog.Write("APPSETTINGS-CATCH", "Save failed near source line 370: " + suppressedEx370); }
         }
     }
 }

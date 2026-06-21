@@ -133,6 +133,41 @@
     .vault-note time { color: #64717c; font: 9px Consolas, monospace; }
     .vault-meta { margin-top: 9px; color: #5e6a75; font: 9px Consolas, monospace; }
 
+    .settings-backdrop { position: fixed; inset: 54px 0 34px 72px; z-index: 8; background: rgba(3,6,10,.56); opacity: 0; pointer-events: none; transition: opacity 160ms ease; }
+    .settings-backdrop.open { opacity: 1; pointer-events: auto; }
+    .settings-drawer { position: fixed; top: 54px; right: 0; bottom: 34px; z-index: 9; display: grid; grid-template-rows: auto minmax(0,1fr); width: min(520px, calc(100% - 72px)); border-left: 1px solid #32404e; background: #0b1017; transform: translateX(100%); transition: transform 180ms ease; }
+    .settings-drawer.open { transform: translateX(0); }
+    .settings-header { display: flex; align-items: center; gap: 12px; min-height: 58px; padding: 0 18px; border-bottom: 1px solid #263241; }
+    .settings-header h2 { margin: 0; font-size: 15px; }
+    .settings-header span { color: #65727e; font: 10px Consolas, monospace; }
+    .settings-header .icon-button { margin-left: auto; }
+    .settings-form { min-height: 0; overflow-y: auto; padding: 4px 20px 22px; }
+    .settings-group { padding: 20px 0; border-bottom: 1px solid #202b36; }
+    .settings-group h3 { margin: 0 0 14px; color: #71808c; font: 10px Consolas, monospace; text-transform: uppercase; }
+    .setting-row { display: grid; grid-template-columns: minmax(0,1fr) auto; align-items: center; gap: 18px; min-height: 38px; }
+    .setting-row label { color: #bdc8d0; font-size: 12px; }
+    .setting-row input[type="number"] { width: 76px; height: 30px; padding: 0 8px; border: 1px solid #2a3744; border-radius: 5px; outline: none; background: #0d141c; color: #d8e1e8; font: 11px Consolas, monospace; }
+    .setting-row input[type="number"]:focus { border-color: #4f8f88; }
+    .setting-row input[type="checkbox"] { appearance: none; position: relative; width: 34px; height: 18px; margin: 0; border: 1px solid #3a4651; border-radius: 9px; background: #252f39; cursor: pointer; transition: background 120ms ease, border-color 120ms ease; }
+    .setting-row input[type="checkbox"]::after { content: ""; position: absolute; top: 2px; left: 2px; width: 12px; height: 12px; border-radius: 50%; background: #8a96a0; transition: transform 120ms ease, background 120ms ease; }
+    .setting-row input[type="checkbox"]:checked { border-color: #4f8f88; background: #285c57; }
+    .setting-row input[type="checkbox"]:checked::after { transform: translateX(16px); background: #a6ddd5; }
+    .setting-row input[type="checkbox"]:focus-visible { outline: 2px solid #4f8f88; outline-offset: 2px; }
+    .segment { display: grid; grid-template-columns: repeat(4,1fr); gap: 4px; }
+    .segment button { height: 32px; border: 1px solid #293642; border-radius: 5px; background: #0d141c; color: #73808b; font-size: 11px; }
+    .segment button.selected { border-color: #4f8f88; background: #14232a; color: #82c9bf; }
+    .color-control { display: flex; align-items: center; gap: 9px; }
+    .color-control input[type="color"] { width: 30px; height: 30px; padding: 2px; border: 1px solid #2a3744; border-radius: 5px; background: #0d141c; }
+    .color-control code { color: #aeb9c2; font: 11px Consolas, monospace; }
+    .credential-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 18px; }
+    .credential { display: flex; align-items: center; justify-content: space-between; min-height: 30px; border-bottom: 1px solid #1b252f; color: #9eabb5; font-size: 11px; }
+    .credential output { color: #697681; font: 9px Consolas, monospace; }
+    .credential output.configured { color: #5cb7aa; }
+    .settings-actions { display: flex; align-items: center; gap: 12px; padding-top: 18px; }
+    .settings-actions output { min-width: 0; flex: 1; color: #6f7c87; font: 10px Consolas, monospace; overflow-wrap: anywhere; }
+    .save-button { height: 34px; padding: 0 16px; border: 1px solid #4f8f88; border-radius: 5px; background: #18302f; color: #8ed2c8; }
+    .save-button:disabled { opacity: .45; }
+
     .messages { width: min(920px, 100%); margin: 0 auto; display: flex; flex-direction: column; gap: 18px; }
     .message { display: grid; gap: 6px; max-width: min(760px, 88%); }
     .message.user { align-self: flex-end; }
@@ -168,7 +203,7 @@
       <button title="Tasks" aria-label="Tasks">□</button>
       <button title="Memory" aria-label="Memory">◇</button>
       <button title="Telemetry" aria-label="Telemetry">⌁</button>
-      <button class="bottom" title="Settings" aria-label="Settings">⚙</button>
+      <button id="settings-open" class="bottom" title="Settings" aria-label="Settings">⚙</button>
     </nav>
 
     <main>
@@ -220,12 +255,53 @@
       <div class="metric"><label>CHAT PARITY</label><output id="chat-status" class="pending">WAITING FOR HOST</output></div>
     </aside>
 
-    <footer><span class="ready">● HOST READY</span><span>local index.html</span><span>no backend mutations</span></footer>
+    <footer><span class="ready">● HOST READY</span><span>local index.html</span><span>protected settings merge</span></footer>
+    <div id="settings-backdrop" class="settings-backdrop"></div>
+    <section id="settings-drawer" class="settings-drawer" aria-hidden="true">
+      <header class="settings-header">
+        <h2>Settings</h2><span>runtime behavior</span>
+        <button id="settings-close" class="icon-button" type="button" title="Close settings" aria-label="Close settings">&#x2715;</button>
+      </header>
+      <form id="settings-form" class="settings-form">
+        <section class="settings-group">
+          <h3>Autonomy</h3>
+          <div id="autonomy-segment" class="segment" role="group" aria-label="Proactive autonomy">
+            <button type="button" data-value="0">Quiet</button><button type="button" data-value="1">Guarded</button><button type="button" data-value="2">Active</button><button type="button" data-value="3">Alive</button>
+          </div>
+          <div class="setting-row"><label for="spontaneous-enabled">Spontaneous messages</label><input id="spontaneous-enabled" type="checkbox"></div>
+          <div class="setting-row"><label for="spontaneous-mins">Message interval</label><input id="spontaneous-mins" type="number" min="10" max="240" step="5"></div>
+          <div class="setting-row"><label for="neural-governor">Neural governor</label><input id="neural-governor" type="checkbox"></div>
+        </section>
+        <section class="settings-group">
+          <h3>Awareness</h3>
+          <div class="setting-row"><label for="screen-enabled">Screen awareness</label><input id="screen-enabled" type="checkbox"></div>
+          <div class="setting-row"><label for="screen-comments">Screen comments</label><input id="screen-comments" type="checkbox"></div>
+          <div class="setting-row"><label for="screen-interval">Scan interval</label><input id="screen-interval" type="number" min="10" max="240" step="5"></div>
+          <div class="setting-row"><label for="screen-cooldown">Comment cooldown</label><input id="screen-cooldown" type="number" min="5" max="240" step="5"></div>
+          <div class="setting-row"><label for="overlord-enabled">System observer</label><input id="overlord-enabled" type="checkbox"></div>
+        </section>
+        <section class="settings-group">
+          <h3>Devices and interface</h3>
+          <div class="setting-row"><label for="voice-enabled">Microphone input</label><input id="voice-enabled" type="checkbox"></div>
+          <div class="setting-row"><label for="tts-enabled">Voice output</label><input id="tts-enabled" type="checkbox"></div>
+          <div class="setting-row"><label for="wear-enabled">Wear bridge</label><input id="wear-enabled" type="checkbox"></div>
+          <div class="setting-row"><label for="wear-context">Wear context in prompts</label><input id="wear-context" type="checkbox"></div>
+          <div class="setting-row"><label for="tray-enabled">Minimize to tray</label><input id="tray-enabled" type="checkbox"></div>
+          <div class="setting-row"><label>Accent</label><div class="color-control"><input id="matrix-color" type="color"><code id="matrix-color-text">#6366F1</code></div></div>
+        </section>
+        <section class="settings-group">
+          <h3>Protected credentials</h3>
+          <div id="credential-grid" class="credential-grid"></div>
+        </section>
+        <div class="settings-actions"><output id="settings-status">Host connection required.</output><button id="settings-save" class="save-button" type="submit" disabled>Save</button></div>
+      </form>
+    </section>
   </div>
   <script src="bridge.js"></script>
   <script src="chat.js"></script>
   <script src="agent-board.js"></script>
   <script src="vault-panel.js"></script>
+  <script src="settings-panel.js"></script>
   <script>
     console.info("[Kokonoe Web Shell] B1 static host rendered");
     document.documentElement.dataset.renderedAt = new Date().toISOString();
@@ -237,6 +313,7 @@
         window.kokoChat.setAvailable(true);
         window.kokoAgentBoard.connect();
         window.kokoVaultPanel.connect();
+        window.kokoSettingsPanel.setAvailable(true);
         console.info("[Kokonoe Web Bridge] ping ->", result);
       })
       .catch(error => {

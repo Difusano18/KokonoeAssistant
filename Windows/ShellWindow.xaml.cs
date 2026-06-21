@@ -12,6 +12,7 @@ namespace KokonoeAssistant.Windows
         private KokoWebChatBridgeService? _chatBridge;
         private KokoWebAgentBridgeService? _agentBridge;
         private KokoWebVaultBridgeService? _vaultBridge;
+        private KokoWebSettingsBridgeService? _settingsBridge;
 
         public ShellWindow()
         {
@@ -19,6 +20,7 @@ namespace KokonoeAssistant.Windows
             Loaded += OnLoaded;
             Closed += (_, _) =>
             {
+                _settingsBridge?.Dispose();
                 _vaultBridge?.Dispose();
                 _agentBridge?.Dispose();
                 _chatBridge?.Dispose();
@@ -49,6 +51,9 @@ namespace KokonoeAssistant.Windows
                         : null);
                 _agentBridge = new KokoWebAgentBridgeService(_bridge, ServiceContainer.AgentTasks);
                 _vaultBridge = new KokoWebVaultBridgeService(_bridge, ServiceContainer.ObsidianMcp);
+                _settingsBridge = new KokoWebSettingsBridgeService(
+                    _bridge,
+                    settings => ThemeManager.ApplyTheme(settings.MatrixColor));
                 WebView.NavigationCompleted += (_, args) =>
                 {
                     var state = args.IsSuccess ? "ready" : $"failed:{args.WebErrorStatus}";
