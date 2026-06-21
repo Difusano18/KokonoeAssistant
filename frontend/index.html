@@ -1,11 +1,16 @@
 <!doctype html>
-<html lang="uk" data-koko-shell="b1">
+<html lang="uk" data-koko-shell="b6">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Kokonoe Web Shell</title>
   <style>
     :root {
+      --accent: #5cb7aa;
+      --accent-border: color-mix(in srgb, var(--accent) 58%, #263241);
+      --accent-soft: color-mix(in srgb, var(--accent) 14%, #0d141c);
+      --motion-fast: 120ms;
+      --motion-base: 180ms;
       color-scheme: dark;
       font-family: "Segoe UI Variable", "Segoe UI", sans-serif;
       background: #080b10;
@@ -15,7 +20,14 @@
 
     * { box-sizing: border-box; }
     html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; }
+    body { -webkit-font-smoothing: antialiased; }
     button { font: inherit; }
+    button:not(:disabled) { cursor: pointer; }
+    button:focus-visible, input:focus-visible { outline: 2px solid var(--accent-border); outline-offset: 2px; }
+    * { scrollbar-width: thin; scrollbar-color: #3b4854 transparent; }
+    *::-webkit-scrollbar { width: 9px; height: 9px; }
+    *::-webkit-scrollbar-track { background: transparent; }
+    *::-webkit-scrollbar-thumb { border: 3px solid transparent; border-radius: 6px; background: #3b4854; background-clip: padding-box; }
 
     .shell {
       display: grid;
@@ -39,7 +51,10 @@
     .brand { font-size: 13px; font-weight: 700; color: #eef3f7; }
     .version { font: 11px Consolas, monospace; color: #65717d; }
     .runtime { margin-left: auto; display: flex; align-items: center; gap: 8px; font-size: 11px; color: #8f9ca8; }
-    .runtime-dot { width: 7px; height: 7px; border-radius: 50%; background: #5cb7aa; box-shadow: 0 0 12px #5cb7aa; }
+    .runtime-dot { width: 7px; height: 7px; border-radius: 50%; background: #c7a66b; transition: background var(--motion-base) ease, box-shadow var(--motion-base) ease; }
+    .runtime-dot.ready { background: var(--accent); box-shadow: 0 0 12px color-mix(in srgb, var(--accent) 75%, transparent); }
+    .runtime-dot.busy { background: #c7a66b; box-shadow: 0 0 10px rgba(199,166,107,.5); animation: runtime-pulse 1.25s ease-in-out infinite; }
+    .runtime-dot.error { background: #d96570; box-shadow: 0 0 10px rgba(217,101,112,.45); }
 
     .rail {
       grid-row: 2 / 4;
@@ -62,12 +77,16 @@
       cursor: default;
     }
 
-    .rail button.active { border-color: #36505b; background: #14212a; color: #74c7bb; }
+    .rail button { transition: color var(--motion-fast) ease, border-color var(--motion-fast) ease, background var(--motion-fast) ease, transform var(--motion-fast) ease; }
+    .rail button:not(:disabled):hover { color: #b5c1ca; background: #101821; }
+    .rail button:not(:disabled):active { transform: translateY(1px); }
+    .rail button.active { border-color: var(--accent-border); background: var(--accent-soft); color: var(--accent); }
+    .rail #settings-open { cursor: pointer; }
     .rail .bottom { margin-top: auto; }
 
     main { min-width: 0; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; background: #090d13; }
     .context { padding: 24px 28px 18px; border-bottom: 1px solid #1c2631; }
-    .eyebrow { margin: 0 0 7px; font: 10px Consolas, monospace; color: #5cb7aa; text-transform: uppercase; }
+    .eyebrow { margin: 0 0 7px; font: 10px Consolas, monospace; color: var(--accent); text-transform: uppercase; }
     h1 { margin: 0; font-size: 20px; line-height: 1.25; font-weight: 650; }
     .subhead { margin: 7px 0 0; max-width: 680px; color: #82909c; font-size: 13px; line-height: 1.5; }
 
@@ -79,8 +98,12 @@
 
     .composer { display: flex; gap: 10px; padding: 16px 20px; border-top: 1px solid #1c2631; background: #0b1017; }
     .composer input { flex: 1; min-width: 0; height: 42px; padding: 0 13px; border: 1px solid #2a3744; border-radius: 6px; outline: none; background: #0d141c; color: #b7c2cc; }
-    .composer input:focus { border-color: #4f8f88; }
-    .composer button { width: 42px; height: 42px; border: 1px solid #806f4b; border-radius: 6px; background: #2a261d; color: #d7bd83; }
+    .composer input { transition: border-color var(--motion-fast) ease, background var(--motion-fast) ease; }
+    .composer input:focus { border-color: var(--accent-border); background: #101923; }
+    .composer button { width: 42px; height: 42px; border: 1px solid #806f4b; border-radius: 6px; background: #2a261d; color: #d7bd83; transition: transform var(--motion-fast) ease, border-color var(--motion-fast) ease, background var(--motion-fast) ease; }
+    .composer button:not(:disabled):hover { border-color: #b4965e; background: #352f21; }
+    .composer button:not(:disabled):active { transform: translateY(1px); }
+    .composer button:disabled { opacity: .45; }
 
     aside { min-width: 0; overflow-y: auto; padding: 20px; border-left: 1px solid #263241; background: #0b1017; }
     aside h2 { margin: 0 0 18px; font: 10px Consolas, monospace; color: #788692; text-transform: uppercase; }
@@ -88,7 +111,7 @@
     .metric:first-of-type { border-top: 0; }
     .metric label { display: block; margin-bottom: 5px; color: #65727e; font-size: 10px; }
     .metric output { font: 12px Consolas, monospace; color: #d4dde5; }
-    .ok { color: #5cb7aa !important; }
+    .ok { color: var(--accent) !important; }
     .pending { color: #c7a66b !important; }
 
     .agent-activity { margin-bottom: 18px; padding: 12px; border: 1px solid #2a3744; border-radius: 6px; background: #0d141c; }
@@ -100,26 +123,27 @@
     .agent-task-head { display: flex; align-items: center; gap: 8px; margin-bottom: 7px; }
     .agent-task-head strong { min-width: 0; flex: 1; color: #cfd9e1; font-size: 11px; line-height: 1.35; overflow-wrap: anywhere; }
     .agent-status { flex: 0 0 auto; font: 9px Consolas, monospace; color: #87939e; }
-    .agent-status.running { color: #5cb7aa; }
+    .agent-status.running { color: var(--accent); }
     .agent-status.completed { color: #79aa78; }
     .agent-status.failed { color: #d96570; }
     .agent-status.pending { color: #c7a66b; }
     .agent-steps { display: flex; gap: 4px; }
     .agent-step { height: 3px; min-width: 8px; flex: 1; border-radius: 2px; background: #26313b; }
-    .agent-step.running { background: #5cb7aa; box-shadow: 0 0 7px rgba(92,183,170,.45); }
+    .agent-step.running { background: var(--accent); box-shadow: 0 0 7px color-mix(in srgb, var(--accent) 45%, transparent); }
     .agent-step.completed { background: #678d69; }
     .agent-step.failed { background: #b44f59; }
     .agent-empty { color: #687581; font-size: 11px; line-height: 1.5; }
 
     .panel-heading { display: flex; align-items: center; gap: 8px; margin: 24px 0 12px; }
     .panel-heading h2 { margin: 0; }
-    .icon-button { width: 28px; height: 28px; margin-left: auto; border: 1px solid #2a3744; border-radius: 5px; background: #0d141c; color: #8996a1; cursor: pointer; }
-    .icon-button:hover { border-color: #4f8f88; color: #8cd0c6; }
+    .icon-button { width: 28px; height: 28px; margin-left: auto; border: 1px solid #2a3744; border-radius: 5px; background: #0d141c; color: #8996a1; transition: transform var(--motion-fast) ease, border-color var(--motion-fast) ease, color var(--motion-fast) ease; }
+    .icon-button:hover { border-color: var(--accent-border); color: var(--accent); }
+    .icon-button:not(:disabled):active { transform: rotate(18deg); }
     .icon-button:disabled { cursor: default; opacity: .45; }
     .vault-state { display: flex; align-items: center; gap: 7px; color: #87939e; font: 10px Consolas, monospace; }
     .vault-state i { width: 7px; height: 7px; border-radius: 50%; background: #697681; }
-    .vault-state.online { color: #5cb7aa; }
-    .vault-state.online i { background: #5cb7aa; box-shadow: 0 0 9px rgba(92,183,170,.55); }
+    .vault-state.online { color: var(--accent); }
+    .vault-state.online i { background: var(--accent); box-shadow: 0 0 9px color-mix(in srgb, var(--accent) 55%, transparent); }
     .vault-state.offline { color: #d96570; }
     .vault-state.offline i { background: #d96570; }
     .vault-counts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 12px 0; }
@@ -140,8 +164,8 @@
     .telegram-head i { width: 7px; height: 7px; border-radius: 50%; background: #687581; }
     .telegram-head strong { flex: 1; color: #aeb9c2; font-size: 10px; }
     .telegram-head output { color: #788590; font: 9px Consolas, monospace; text-transform: uppercase; }
-    .telegram-channel.online .telegram-head i { background: #5cb7aa; box-shadow: 0 0 9px rgba(92,183,170,.55); }
-    .telegram-channel.online .telegram-head output { color: #5cb7aa; }
+    .telegram-channel.online .telegram-head i { background: var(--accent); box-shadow: 0 0 9px color-mix(in srgb, var(--accent) 55%, transparent); }
+    .telegram-channel.online .telegram-head output { color: var(--accent); }
     .telegram-channel.error .telegram-head i { background: #d96570; }
     .telegram-channel.error .telegram-head output { color: #d96570; }
     .telegram-channel.pending .telegram-head i { background: #c7a66b; }
@@ -149,9 +173,9 @@
     .telegram-detail { margin: 6px 0 0 14px; color: #65727e; font: 9px Consolas, monospace; line-height: 1.45; overflow-wrap: anywhere; }
     .telegram-error { color: #b96870; }
 
-    .settings-backdrop { position: fixed; inset: 54px 0 34px 72px; z-index: 8; background: rgba(3,6,10,.56); opacity: 0; pointer-events: none; transition: opacity 160ms ease; }
+    .settings-backdrop { position: fixed; inset: 54px 0 34px 72px; z-index: 8; background: rgba(3,6,10,.56); opacity: 0; pointer-events: none; transition: opacity var(--motion-base) ease; }
     .settings-backdrop.open { opacity: 1; pointer-events: auto; }
-    .settings-drawer { position: fixed; top: 54px; right: 0; bottom: 34px; z-index: 9; display: grid; grid-template-rows: auto minmax(0,1fr); width: min(520px, calc(100% - 72px)); border-left: 1px solid #32404e; background: #0b1017; transform: translateX(100%); transition: transform 180ms ease; }
+    .settings-drawer { position: fixed; top: 54px; right: 0; bottom: 34px; z-index: 9; display: grid; grid-template-rows: auto minmax(0,1fr); width: min(520px, calc(100% - 72px)); border-left: 1px solid #32404e; background: #0b1017; box-shadow: -18px 0 44px rgba(0,0,0,.24); transform: translateX(100%); transition: transform var(--motion-base) cubic-bezier(.2,.8,.2,1); will-change: transform; }
     .settings-drawer.open { transform: translateX(0); }
     .settings-header { display: flex; align-items: center; gap: 12px; min-height: 58px; padding: 0 18px; border-bottom: 1px solid #263241; }
     .settings-header h2 { margin: 0; font-size: 15px; }
@@ -163,29 +187,33 @@
     .setting-row { display: grid; grid-template-columns: minmax(0,1fr) auto; align-items: center; gap: 18px; min-height: 38px; }
     .setting-row label { color: #bdc8d0; font-size: 12px; }
     .setting-row input[type="number"] { width: 76px; height: 30px; padding: 0 8px; border: 1px solid #2a3744; border-radius: 5px; outline: none; background: #0d141c; color: #d8e1e8; font: 11px Consolas, monospace; }
-    .setting-row input[type="number"]:focus { border-color: #4f8f88; }
+    .setting-row input[type="number"]:focus { border-color: var(--accent-border); }
     .setting-row input[type="checkbox"] { appearance: none; position: relative; width: 34px; height: 18px; margin: 0; border: 1px solid #3a4651; border-radius: 9px; background: #252f39; cursor: pointer; transition: background 120ms ease, border-color 120ms ease; }
     .setting-row input[type="checkbox"]::after { content: ""; position: absolute; top: 2px; left: 2px; width: 12px; height: 12px; border-radius: 50%; background: #8a96a0; transition: transform 120ms ease, background 120ms ease; }
-    .setting-row input[type="checkbox"]:checked { border-color: #4f8f88; background: #285c57; }
+    .setting-row input[type="checkbox"]:checked { border-color: var(--accent-border); background: var(--accent-soft); }
     .setting-row input[type="checkbox"]:checked::after { transform: translateX(16px); background: #a6ddd5; }
-    .setting-row input[type="checkbox"]:focus-visible { outline: 2px solid #4f8f88; outline-offset: 2px; }
+    .setting-row input[type="checkbox"]:focus-visible { outline: 2px solid var(--accent-border); outline-offset: 2px; }
     .segment { display: grid; grid-template-columns: repeat(4,1fr); gap: 4px; }
     .segment button { height: 32px; border: 1px solid #293642; border-radius: 5px; background: #0d141c; color: #73808b; font-size: 11px; }
-    .segment button.selected { border-color: #4f8f88; background: #14232a; color: #82c9bf; }
+    .segment button { transition: border-color var(--motion-fast) ease, background var(--motion-fast) ease, color var(--motion-fast) ease; }
+    .segment button.selected { border-color: var(--accent-border); background: var(--accent-soft); color: var(--accent); }
     .color-control { display: flex; align-items: center; gap: 9px; }
     .color-control input[type="color"] { width: 30px; height: 30px; padding: 2px; border: 1px solid #2a3744; border-radius: 5px; background: #0d141c; }
     .color-control code { color: #aeb9c2; font: 11px Consolas, monospace; }
     .credential-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 18px; }
     .credential { display: flex; align-items: center; justify-content: space-between; min-height: 30px; border-bottom: 1px solid #1b252f; color: #9eabb5; font-size: 11px; }
     .credential output { color: #697681; font: 9px Consolas, monospace; }
-    .credential output.configured { color: #5cb7aa; }
+    .credential output.configured { color: var(--accent); }
     .settings-actions { display: flex; align-items: center; gap: 12px; padding-top: 18px; }
     .settings-actions output { min-width: 0; flex: 1; color: #6f7c87; font: 10px Consolas, monospace; overflow-wrap: anywhere; }
-    .save-button { height: 34px; padding: 0 16px; border: 1px solid #4f8f88; border-radius: 5px; background: #18302f; color: #8ed2c8; }
+    .save-button { height: 34px; padding: 0 16px; border: 1px solid var(--accent-border); border-radius: 5px; background: var(--accent-soft); color: var(--accent); transition: transform var(--motion-fast) ease, filter var(--motion-fast) ease; }
+    .save-button:not(:disabled):hover { filter: brightness(1.14); }
+    .save-button:not(:disabled):active { transform: translateY(1px); }
     .save-button:disabled { opacity: .45; }
 
     .messages { width: min(920px, 100%); margin: 0 auto; display: flex; flex-direction: column; gap: 18px; }
     .message { display: grid; gap: 6px; max-width: min(760px, 88%); }
+    .message.entering { animation: message-in 220ms cubic-bezier(.2,.8,.2,1) both; }
     .message.user { align-self: flex-end; }
     .message.assistant { align-self: flex-start; }
     .message-meta { font: 10px Consolas, monospace; color: #687581; }
@@ -193,12 +221,22 @@
     .message-body { margin: 0; padding: 13px 15px; border: 1px solid #2a3744; border-radius: 6px; background: #101821; color: #dbe4eb; font-size: 14px; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; }
     .message.user .message-body { border-color: #36505b; background: #14232c; }
     .message.streaming .message-body { border-color: #806f4b; }
+    .message.streaming .message-body::after { content: ""; display: inline-block; width: 5px; height: 13px; margin-left: 4px; vertical-align: -2px; background: #c7a66b; animation: blink .8s steps(1) infinite; }
     .message.error .message-body { border-color: #82464c; color: #e18b92; }
     .stream-caret { display: inline-block; width: 6px; height: 14px; margin-left: 3px; vertical-align: -2px; background: #c7a66b; animation: blink .8s steps(1) infinite; }
     @keyframes blink { 50% { opacity: 0; } }
 
     footer { display: flex; align-items: center; gap: 14px; padding: 0 14px; border-top: 1px solid #263241; color: #5d6974; font: 10px Consolas, monospace; }
-    footer .ready { color: #5cb7aa; }
+    footer .ready { color: var(--accent); }
+    .live-update { animation: live-update 420ms ease-out; }
+
+    @keyframes runtime-pulse { 50% { opacity: .45; transform: scale(.82); } }
+    @keyframes message-in { from { opacity: 0; transform: translateY(7px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes live-update { 0% { background-color: color-mix(in srgb, var(--accent) 16%, transparent); } 100% { background-color: transparent; } }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+    }
 
     @media (max-width: 760px) {
       .shell { grid-template-columns: 60px minmax(0, 1fr); }
@@ -210,15 +248,15 @@
   <div class="shell">
     <header class="topbar">
       <span class="brand">KOKONOE</span>
-      <span class="version">web-shell / B5</span>
-      <span class="runtime"><i class="runtime-dot"></i><span id="runtime">WebView2 ready</span></span>
+      <span class="version">web-shell / B6</span>
+      <span class="runtime"><i id="runtime-dot" class="runtime-dot"></i><span id="runtime">Connecting to host</span></span>
     </header>
 
     <nav class="rail" aria-label="Workspace">
       <button class="active" title="Chat" aria-label="Chat">●</button>
-      <button title="Tasks" aria-label="Tasks">□</button>
-      <button title="Memory" aria-label="Memory">◇</button>
-      <button title="Telemetry" aria-label="Telemetry">⌁</button>
+      <button title="Tasks" aria-label="Tasks" disabled>□</button>
+      <button title="Memory" aria-label="Memory" disabled>◇</button>
+      <button title="Telemetry" aria-label="Telemetry" disabled>⌁</button>
       <button id="settings-open" class="bottom" title="Settings" aria-label="Settings">⚙</button>
     </nav>
 
@@ -285,7 +323,7 @@
       <div class="metric"><label>CHAT PARITY</label><output id="chat-status" class="pending">WAITING FOR HOST</output></div>
     </aside>
 
-    <footer><span class="ready">● HOST READY</span><span>local index.html</span><span>protected settings merge</span></footer>
+    <footer><span id="footer-state" class="ready">● CONNECTING</span><span>local index.html</span><span>protected settings merge</span></footer>
     <div id="settings-backdrop" class="settings-backdrop"></div>
     <section id="settings-drawer" class="settings-drawer" aria-hidden="true">
       <header class="settings-header">
@@ -333,8 +371,9 @@
   <script src="vault-panel.js"></script>
   <script src="settings-panel.js"></script>
   <script src="telegram-panel.js"></script>
+  <script src="motion.js"></script>
   <script>
-    console.info("[Kokonoe Web Shell] B1 static host rendered");
+    console.info("[Kokonoe Web Shell] B6 host rendered");
     document.documentElement.dataset.renderedAt = new Date().toISOString();
     const bridgeStatus = document.getElementById("bridge-status");
     window.koko.call("ping", { source: "web-shell" })
@@ -346,12 +385,14 @@
         window.kokoVaultPanel.connect();
         window.kokoSettingsPanel.setAvailable(true);
         window.kokoTelegramPanel.connect();
+        window.kokoMotion.setHostState("ready");
         console.info("[Kokonoe Web Bridge] ping ->", result);
       })
       .catch(error => {
         bridgeStatus.textContent = window.koko.available ? "PING FAILED" : "HOST ONLY";
         bridgeStatus.className = "pending";
         window.kokoChat.setAvailable(false);
+        window.kokoMotion.setHostState(window.koko.available ? "error" : "preview");
         console.warn("[Kokonoe Web Bridge]", error.message);
       });
   </script>

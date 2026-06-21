@@ -43,6 +43,7 @@
     }
     color.value = /^#[0-9a-f]{6}$/i.test(values.matrixColor || "") ? values.matrixColor : "#6366F1";
     colorText.textContent = color.value.toUpperCase();
+    document.documentElement.style.setProperty("--accent", color.value);
     renderCredentials(snapshot.credentials || {});
   }
   function renderCredentials(values) {
@@ -67,7 +68,10 @@
     return values;
   }
   segment.addEventListener("click", event => { const button = event.target.closest("button[data-value]"); if (button) setAutonomy(button.dataset.value); });
-  color.addEventListener("input", () => { colorText.textContent = color.value.toUpperCase(); });
+  color.addEventListener("input", () => {
+    colorText.textContent = color.value.toUpperCase();
+    document.documentElement.style.setProperty("--accent", color.value);
+  });
   openButton.addEventListener("click", show); closeButton.addEventListener("click", hide); backdrop.addEventListener("click", hide);
   form.addEventListener("submit", async event => {
     event.preventDefault(); saveButton.disabled = true; status.textContent = "Saving...";
@@ -77,6 +81,15 @@
     } catch (error) { status.textContent = error instanceof Error ? error.message : String(error); }
     finally { saveButton.disabled = false; }
   });
-  window.kokoSettingsPanel = { setAvailable: value => { available = Boolean(value); saveButton.disabled = !available; }, open: show, close: hide, fill };
+  window.kokoSettingsPanel = {
+    setAvailable: value => {
+      available = Boolean(value);
+      saveButton.disabled = !available;
+      if (available && drawer.getAttribute("aria-hidden") === "true") load();
+    },
+    open: show,
+    close: hide,
+    fill
+  };
   if (window.location.hash === "#settings") show();
 })();

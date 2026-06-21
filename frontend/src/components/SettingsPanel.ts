@@ -31,13 +31,18 @@ export class SettingsPanelController {
       const button = (event.target as HTMLElement).closest<HTMLButtonElement>("button[data-value]");
       if (button) this.setAutonomy(Number(button.dataset.value));
     });
-    this.color.addEventListener("input", () => { this.colorText.textContent = this.color.value.toUpperCase(); });
+    this.color.addEventListener("input", () => {
+      this.colorText.textContent = this.color.value.toUpperCase();
+      document.documentElement.style.setProperty("--accent", this.color.value);
+    });
     this.form.addEventListener("submit", event => { event.preventDefault(); void this.persist(); });
   }
 
   setAvailable(value: boolean): void {
     this.available = value;
     this.save.disabled = !value;
+    if (value && this.drawer.getAttribute("aria-hidden") === "true")
+      void this.load();
   }
 
   async open(): Promise<void> {
@@ -100,6 +105,7 @@ export class SettingsPanelController {
     }
     this.color.value = /^#[0-9a-f]{6}$/i.test(String(values.matrixColor ?? "")) ? String(values.matrixColor) : "#6366F1";
     this.colorText.textContent = this.color.value.toUpperCase();
+    document.documentElement.style.setProperty("--accent", this.color.value);
     this.renderCredentials(snapshot.credentials ?? {});
   }
 
