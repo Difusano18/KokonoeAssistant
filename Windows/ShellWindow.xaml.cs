@@ -8,11 +8,17 @@ namespace KokonoeAssistant.Windows
 {
     public partial class ShellWindow : Window
     {
+        private KokoWebBridgeService? _bridge;
+
         public ShellWindow()
         {
             InitializeComponent();
             Loaded += OnLoaded;
-            Closed += (_, _) => WebView.Dispose();
+            Closed += (_, _) =>
+            {
+                _bridge?.Dispose();
+                WebView.Dispose();
+            };
         }
 
         private async void OnLoaded(object sender, RoutedEventArgs e)
@@ -28,6 +34,7 @@ namespace KokonoeAssistant.Windows
                 WebView.CoreWebView2.Settings.AreDevToolsEnabled = true;
                 WebView.CoreWebView2.Settings.IsStatusBarEnabled = false;
                 WebView.CoreWebView2.Settings.AreDefaultContextMenusEnabled = true;
+                _bridge = new KokoWebBridgeService(WebView.CoreWebView2);
                 WebView.NavigationCompleted += (_, args) =>
                 {
                     var state = args.IsSuccess ? "ready" : $"failed:{args.WebErrorStatus}";

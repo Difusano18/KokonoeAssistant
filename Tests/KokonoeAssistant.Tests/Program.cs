@@ -253,6 +253,8 @@ internal static class Program
             Run("Action directive router handles inflected targets", ActionDirectiveRouterHandlesInflectedTargets);
             Run("Generated content route stays separate from surprise scan", GeneratedContentRouteStaysSeparateFromSurpriseScan);
             Run("Chat runtime defaults to streaming with bounded token budget", ChatRuntimeDefaultsToStreamingWithBoundedTokenBudget);
+            Run("Web bridge completes ping pong round trip", WebBridgeCompletesPingPongRoundTrip);
+            Run("Web bridge reports unknown methods", WebBridgeReportsUnknownMethods);
             Run("System overlord detects retry surprise directive", SystemOverlordDetectsRetrySurpriseDirective);
             Run("System overlord creates real surprise note", SystemOverlordCreatesRealSurpriseNote);
             Run("Collective mind builds agent debate frame", CollectiveMindBuildsAgentDebateFrame);
@@ -5834,6 +5836,32 @@ Insight: bridge stability and pulse quality are linked.
         AssertTrue(field != null, "main token budget constant must exist");
         AssertEqual(4096, (int)(field!.GetRawConstantValue() ?? 0),
             "ordinary chat must not reserve a 16k completion by default");
+    }
+
+    private static void WebBridgeCompletesPingPongRoundTrip()
+    {
+        string? responseJson = null;
+        using var bridge = new KokoWebBridgeService(json => responseJson = json);
+        bridge.HandleMessageAsync("""{"type":"request","id":"ping-1","method":"ping","payload":{"source":"test"}}""")
+            .GetAwaiter().GetResult();
+
+        var response = Newtonsoft.Json.Linq.JObject.Parse(responseJson ?? "{}");
+        AssertEqual("response", response["type"]?.ToString(), "bridge must emit response envelope");
+        AssertEqual("ping-1", response["id"]?.ToString(), "bridge must preserve correlation id");
+        AssertEqual("pong", response["result"]?.ToString(), "ping must return pong");
+    }
+
+    private static void WebBridgeReportsUnknownMethods()
+    {
+        string? responseJson = null;
+        using var bridge = new KokoWebBridgeService(json => responseJson = json);
+        bridge.HandleMessageAsync("""{"type":"request","id":"bad-1","method":"missing","payload":null}""")
+            .GetAwaiter().GetResult();
+
+        var response = Newtonsoft.Json.Linq.JObject.Parse(responseJson ?? "{}");
+        AssertEqual("bad-1", response["id"]?.ToString(), "error response must preserve correlation id");
+        AssertTrue(response["error"]?.ToString().Contains("Unknown bridge method", StringComparison.OrdinalIgnoreCase) == true,
+            "unknown bridge method must return a structured error");
     }
 
     private static void ActionDirectiveRouterHandlesInflectedTargets()

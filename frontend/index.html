@@ -139,15 +139,28 @@
       <h2>Runtime diagnostics</h2>
       <div class="metric"><label>WEBVIEW2</label><output class="ok">INITIALIZED</output></div>
       <div class="metric"><label>STATIC ASSETS</label><output class="ok">LOCAL</output></div>
-      <div class="metric"><label>C# BRIDGE</label><output class="pending">B2 PENDING</output></div>
+      <div class="metric"><label>C# BRIDGE</label><output id="bridge-status" class="pending">CONNECTING</output></div>
       <div class="metric"><label>CHAT PARITY</label><output>B3 CHECKPOINT</output></div>
     </aside>
 
     <footer><span class="ready">● HOST READY</span><span>local index.html</span><span>no backend mutations</span></footer>
   </div>
+  <script src="bridge.js"></script>
   <script>
     console.info("[Kokonoe Web Shell] B1 static host rendered");
     document.documentElement.dataset.renderedAt = new Date().toISOString();
+    const bridgeStatus = document.getElementById("bridge-status");
+    window.koko.call("ping", { source: "web-shell" })
+      .then(result => {
+        bridgeStatus.textContent = String(result).toUpperCase();
+        bridgeStatus.className = "ok";
+        console.info("[Kokonoe Web Bridge] ping ->", result);
+      })
+      .catch(error => {
+        bridgeStatus.textContent = window.koko.available ? "PING FAILED" : "HOST ONLY";
+        bridgeStatus.className = "pending";
+        console.warn("[Kokonoe Web Bridge]", error.message);
+      });
   </script>
 </body>
 </html>
