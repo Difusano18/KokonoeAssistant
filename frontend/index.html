@@ -133,6 +133,22 @@
     .vault-note time { color: #64717c; font: 9px Consolas, monospace; }
     .vault-meta { margin-top: 9px; color: #5e6a75; font: 9px Consolas, monospace; }
 
+    .telegram-channels { display: grid; gap: 8px; }
+    .telegram-channel { padding: 10px 0; border-top: 1px solid #202b36; }
+    .telegram-channel:first-child { border-top: 0; }
+    .telegram-head { display: flex; align-items: center; gap: 7px; }
+    .telegram-head i { width: 7px; height: 7px; border-radius: 50%; background: #687581; }
+    .telegram-head strong { flex: 1; color: #aeb9c2; font-size: 10px; }
+    .telegram-head output { color: #788590; font: 9px Consolas, monospace; text-transform: uppercase; }
+    .telegram-channel.online .telegram-head i { background: #5cb7aa; box-shadow: 0 0 9px rgba(92,183,170,.55); }
+    .telegram-channel.online .telegram-head output { color: #5cb7aa; }
+    .telegram-channel.error .telegram-head i { background: #d96570; }
+    .telegram-channel.error .telegram-head output { color: #d96570; }
+    .telegram-channel.pending .telegram-head i { background: #c7a66b; }
+    .telegram-channel.pending .telegram-head output { color: #c7a66b; }
+    .telegram-detail { margin: 6px 0 0 14px; color: #65727e; font: 9px Consolas, monospace; line-height: 1.45; overflow-wrap: anywhere; }
+    .telegram-error { color: #b96870; }
+
     .settings-backdrop { position: fixed; inset: 54px 0 34px 72px; z-index: 8; background: rgba(3,6,10,.56); opacity: 0; pointer-events: none; transition: opacity 160ms ease; }
     .settings-backdrop.open { opacity: 1; pointer-events: auto; }
     .settings-drawer { position: fixed; top: 54px; right: 0; bottom: 34px; z-index: 9; display: grid; grid-template-rows: auto minmax(0,1fr); width: min(520px, calc(100% - 72px)); border-left: 1px solid #32404e; background: #0b1017; transform: translateX(100%); transition: transform 180ms ease; }
@@ -248,6 +264,20 @@
         <div id="vault-recent" class="vault-recent"><p class="agent-empty">No recent notes.</p></div>
         <p id="vault-meta" class="vault-meta">scan --</p>
       </section>
+      <div class="panel-heading">
+        <h2>Telegram</h2>
+        <button id="telegram-refresh" class="icon-button" type="button" title="Refresh Telegram status" aria-label="Refresh Telegram status" disabled>&#x21bb;</button>
+      </div>
+      <section id="telegram-panel" class="telegram-channels" aria-live="polite">
+        <article id="telegram-bot" class="telegram-channel">
+          <div class="telegram-head"><i></i><strong>BOT API</strong><output>WAITING</output></div>
+          <p class="telegram-detail">Host connection required.</p>
+        </article>
+        <article id="telegram-user" class="telegram-channel">
+          <div class="telegram-head"><i></i><strong>USER CLIENT</strong><output>WAITING</output></div>
+          <p class="telegram-detail">Host connection required.</p>
+        </article>
+      </section>
       <h2 style="margin-top:24px">Runtime diagnostics</h2>
       <div class="metric"><label>WEBVIEW2</label><output class="ok">INITIALIZED</output></div>
       <div class="metric"><label>STATIC ASSETS</label><output class="ok">LOCAL</output></div>
@@ -302,6 +332,7 @@
   <script src="agent-board.js"></script>
   <script src="vault-panel.js"></script>
   <script src="settings-panel.js"></script>
+  <script src="telegram-panel.js"></script>
   <script>
     console.info("[Kokonoe Web Shell] B1 static host rendered");
     document.documentElement.dataset.renderedAt = new Date().toISOString();
@@ -314,6 +345,7 @@
         window.kokoAgentBoard.connect();
         window.kokoVaultPanel.connect();
         window.kokoSettingsPanel.setAvailable(true);
+        window.kokoTelegramPanel.connect();
         console.info("[Kokonoe Web Bridge] ping ->", result);
       })
       .catch(error => {

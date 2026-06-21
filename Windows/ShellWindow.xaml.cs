@@ -13,6 +13,7 @@ namespace KokonoeAssistant.Windows
         private KokoWebAgentBridgeService? _agentBridge;
         private KokoWebVaultBridgeService? _vaultBridge;
         private KokoWebSettingsBridgeService? _settingsBridge;
+        private KokoWebTelegramBridgeService? _telegramBridge;
 
         public ShellWindow()
         {
@@ -20,6 +21,7 @@ namespace KokonoeAssistant.Windows
             Loaded += OnLoaded;
             Closed += (_, _) =>
             {
+                _telegramBridge?.Dispose();
                 _settingsBridge?.Dispose();
                 _vaultBridge?.Dispose();
                 _agentBridge?.Dispose();
@@ -54,6 +56,7 @@ namespace KokonoeAssistant.Windows
                 _settingsBridge = new KokoWebSettingsBridgeService(
                     _bridge,
                     settings => ThemeManager.ApplyTheme(settings.MatrixColor));
+                _telegramBridge = new KokoWebTelegramBridgeService(_bridge, ServiceContainer.TelegramStatus);
                 WebView.NavigationCompleted += (_, args) =>
                 {
                     var state = args.IsSuccess ? "ready" : $"failed:{args.WebErrorStatus}";

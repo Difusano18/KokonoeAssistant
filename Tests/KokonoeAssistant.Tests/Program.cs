@@ -262,6 +262,7 @@ internal static class Program
             Run("Web vault bridge caches and refreshes status", WebVaultBridgeCachesAndRefreshesStatus);
             Run("Web settings bridge masks and preserves secrets", WebSettingsBridgeMasksAndPreservesSecrets);
             Run("Web settings bridge rejects invalid values", WebSettingsBridgeRejectsInvalidValues);
+            Run("Web Telegram bridge publishes safe live status", WebTelegramBridgePublishesSafeLiveStatus);
             Run("System overlord detects retry surprise directive", SystemOverlordDetectsRetrySurpriseDirective);
             Run("System overlord creates real surprise note", SystemOverlordCreatesRealSurpriseNote);
             Run("Collective mind builds agent debate frame", CollectiveMindBuildsAgentDebateFrame);
@@ -6062,6 +6063,50 @@ Insight: bridge stability and pulse quality are linked.
         AssertTrue(response["error"]?.ToString().Contains("between 0 and 3", StringComparison.OrdinalIgnoreCase) == true,
             "invalid setting must return a structured validation error");
         AssertEqual(0, saves, "invalid settings must not touch persistence");
+    }
+
+    private static void WebTelegramBridgePublishesSafeLiveStatus()
+    {
+        var settings = new AppSettings
+        {
+            TelegramEnabled = true,
+            TelegramToken = "bot-token-must-not-leak",
+            TelegramChatId = 99887766,
+            TgUserEnabled = true,
+            TgApiId = 12345,
+            TgApiHash = "api-hash-must-not-leak",
+            TgPhone = "+49123456789"
+        };
+        var runtime = new KokoTelegramRuntimeStatusService();
+        var envelopes = new List<string>();
+        using var bridge = new KokoWebBridgeService(envelopes.Add);
+        var telegram = new KokoWebTelegramBridgeService(bridge, runtime, () => settings);
+
+        bridge.HandleMessageAsync("""{"type":"request","id":"telegram-1","method":"telegram.status","payload":null}""")
+            .GetAwaiter().GetResult();
+        var response = envelopes.Select(Newtonsoft.Json.Linq.JObject.Parse)
+            .Single(x => x["id"]?.ToString() == "telegram-1");
+        var json = response.ToString(Newtonsoft.Json.Formatting.None);
+        AssertTrue(response["result"]?["bot"]?["configured"]?.Value<bool>() == true, "bot credentials should report configured");
+        AssertTrue(response["result"]?["user"]?["configured"]?.Value<bool>() == true, "user client credentials should report configured");
+        AssertTrue(!json.Contains(settings.TelegramToken, StringComparison.Ordinal), "Telegram token must not cross web bridge");
+        AssertTrue(!json.Contains(settings.TgApiHash, StringComparison.Ordinal), "Telegram API hash must not cross web bridge");
+        AssertTrue(!json.Contains(settings.TgPhone, StringComparison.Ordinal), "Telegram phone must not cross web bridge");
+        AssertTrue(!json.Contains(settings.TelegramChatId.ToString(), StringComparison.Ordinal), "Telegram chat id must not cross web bridge");
+
+        runtime.MarkBotState("listening");
+        runtime.RecordBotActivity("incoming");
+        runtime.MarkUserState("connected", "Kokonoe Account");
+        var latest = envelopes.Select(Newtonsoft.Json.Linq.JObject.Parse)
+            .Last(x => x["channel"]?.ToString() == "telegram.status");
+        AssertEqual("listening", latest["payload"]?["bot"]?["state"]?.ToString(), "bot state must update live");
+        AssertEqual("incoming", latest["payload"]?["bot"]?["lastActivity"]?.ToString(), "bot activity must update live");
+        AssertEqual("connected", latest["payload"]?["user"]?["state"]?.ToString(), "user client state must update live");
+
+        var beforeDispose = envelopes.Count;
+        telegram.Dispose();
+        runtime.RecordUserError("network unavailable");
+        AssertEqual(beforeDispose, envelopes.Count, "disposed Telegram bridge must detach status events");
     }
 
     private static void ActionDirectiveRouterHandlesInflectedTargets()

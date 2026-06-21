@@ -52,9 +52,11 @@ namespace KokonoeAssistant
             try
             {
                 var s = AppSettings.Load();
+                ServiceContainer.TelegramStatus.RefreshConfiguration(s);
 
                 if (!s.TelegramEnabled)
                 {
+                    ServiceContainer.TelegramStatus.MarkBotState("disabled");
                     TgStatusLabel.Text = " · вимкнено";
                     TgStatusDot.Tag = "offline";
                     return;
@@ -62,12 +64,14 @@ namespace KokonoeAssistant
 
                 if (string.IsNullOrWhiteSpace(s.TelegramToken) || s.TelegramChatId <= 0)
                 {
+                    ServiceContainer.TelegramStatus.MarkBotState("not_configured");
                     TgStatusLabel.Text = " · не налаштовано";
                     TgStatusDot.Tag = "offline";
                     System.Diagnostics.Debug.WriteLine("[Telegram] skipped: token or allowed chat id is missing");
                     return;
                 }
 
+                ServiceContainer.TelegramStatus.MarkBotState("connecting");
                 _tgBot = new TelegramBotClient(s.TelegramToken);
 
                 _tgBot.StartReceiving(
@@ -115,9 +119,11 @@ namespace KokonoeAssistant
                 TgStatusLabel.Text    = " · підключено ✓";
                 TgStatusDot.Tag       = "online";
                 TgStatusDot.Background = (System.Windows.Media.SolidColorBrush)System.Windows.Application.Current.Resources["AccentBase"];
+                ServiceContainer.TelegramStatus.MarkBotState("listening");
             }
             catch (Exception ex)
             {
+                ServiceContainer.TelegramStatus.RecordBotError(ex.Message);
                 TgStatusLabel.Text = $" · помилка: {ex.Message}";
                 System.Diagnostics.Debug.WriteLine($"[Telegram] Init failed: {ex}");
             }
@@ -146,6 +152,7 @@ namespace KokonoeAssistant
             {
                 if (update.CallbackQuery is { } cb)
                 {
+                    ServiceContainer.TelegramStatus.RecordBotActivity("callback");
                     await HandleTgCallback(bot, cb, ct);
                     return;
                 }
@@ -160,6 +167,7 @@ namespace KokonoeAssistant
                     System.Diagnostics.Debug.WriteLine($"[TG] rejected unauthorized chat {chatId}");
                     return;
                 }
+                ServiceContainer.TelegramStatus.RecordBotActivity("incoming");
 
                 // ---- Photo message ----
                 if (msg.Photo != null && msg.Photo.Length > 0)
@@ -939,6 +947,7 @@ namespace KokonoeAssistant
         private void HandleTgError(ITelegramBotClient bot, Exception ex, CancellationToken ct)
         {
             System.Diagnostics.Debug.WriteLine($"[Telegram] Error: {ex.Message}");
+            ServiceContainer.TelegramStatus.RecordBotError(ex.Message);
         }
 
         private async void TgSend_Click(object sender, RoutedEventArgs e)
@@ -952,6 +961,7 @@ namespace KokonoeAssistant
             try
             {
                 await _tgBot.SendMessage(s.TelegramChatId, text);
+                ServiceContainer.TelegramStatus.RecordBotActivity("sent");
                 _tgMessages.Add($"[You → TG]: {text}");
                 TgInput.Clear();
                 TgScroll.ScrollToBottom();

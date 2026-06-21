@@ -89,14 +89,17 @@ namespace KokonoeAssistant
         private async Task InitTelegramUserAsync(bool force = false)
         {
             var s = AppSettings.Load();
+            ServiceContainer.TelegramStatus.RefreshConfiguration(s);
             if (!force && !s.TgUserEnabled)
             {
+                ServiceContainer.TelegramStatus.MarkUserState("disabled");
                 await Dispatcher.InvokeAsync(() => _tgMessages.Add("[MTProto] вимкнено в Settings"));
                 return;
             }
 
             if (s.TgApiId == 0 || string.IsNullOrEmpty(s.TgApiHash))
             {
+                ServiceContainer.TelegramStatus.MarkUserState("not_configured");
                 await Dispatcher.InvokeAsync(() => _tgMessages.Add("[MTProto] Помилка: api_id або api_hash не задані в Settings"));
                 return;
             }
@@ -114,6 +117,7 @@ namespace KokonoeAssistant
 
             try
             {
+                ServiceContainer.TelegramStatus.MarkUserState("connecting");
                 var dataDir = System.IO.Path.Combine(
                     s.VaultPath, "kokonoe-data");
 
@@ -141,10 +145,13 @@ namespace KokonoeAssistant
                 });
 
                 svc.OnMessage += msg => _ = HandleTgUserMessageAsync(msg);
+                svc.OnTransportActivity += activity => ServiceContainer.TelegramStatus.RecordUserActivity(activity);
+                svc.OnTransportError += error => ServiceContainer.TelegramStatus.RecordUserError(error);
 
                 ServiceContainer.TelegramUser = svc;
 
                 await svc.ConnectAsync(_tgUserCts.Token);
+                ServiceContainer.TelegramStatus.MarkUserState("connected", svc.MySelf);
 
                 await Dispatcher.InvokeAsync(() =>
                 {
@@ -154,6 +161,7 @@ namespace KokonoeAssistant
             }
             catch (Exception ex)
             {
+                ServiceContainer.TelegramStatus.RecordUserError(ex.Message);
                 System.Diagnostics.Debug.WriteLine($"[TgUser] Init failed: {ex}");
                 await Dispatcher.InvokeAsync(() =>
                 {

@@ -18,6 +18,8 @@ namespace KokonoeAssistant.Services
         // ── Events ─────────────────────────────────────────────────
         public event Action<TgIncomingMessage>? OnMessage;
         public event Action<string>?            OnStatusChanged;
+        public event Action<string>?            OnTransportActivity;
+        public event Action<string>?            OnTransportError;
 
         // ── State ──────────────────────────────────────────────────
         public bool   IsConnected { get; private set; }
@@ -81,6 +83,7 @@ namespace KokonoeAssistant.Services
             IsConnected = true;
 
             OnStatusChanged?.Invoke($"✓ {MySelf}");
+            OnTransportActivity?.Invoke("connected");
             System.Diagnostics.Debug.WriteLine($"[TgUser] Logged in as {MySelf} (id={MyUserId})");
 
             await PreloadDialogsAsync();
@@ -193,10 +196,12 @@ namespace KokonoeAssistant.Services
                     $"[TgUser] {chatType} '{chatName}' від '{senderName}': {text[..Math.Min(80, text.Length)]}");
 
                 OnMessage?.Invoke(incoming);
+                OnTransportActivity?.Invoke(isOutgoing ? "outgoing" : "incoming");
             }
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"[TgUser] ProcessMessage error: {ex.Message}");
+                OnTransportError?.Invoke(ex.Message);
             }
         }
 
@@ -222,11 +227,13 @@ namespace KokonoeAssistant.Services
                 {
                     await _client.SendMessageAsync(peer, text);
                     RememberServiceSend(chatId, text);
+                    OnTransportActivity?.Invoke("sent");
                 }
             }
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"[TgUser] Send failed to {chatId}: {ex.Message}");
+                OnTransportError?.Invoke(ex.Message);
             }
         }
 
@@ -351,6 +358,7 @@ namespace KokonoeAssistant.Services
             try { _client?.Dispose(); } catch (Exception suppressedEx351) { KokoSystemLog.Write("TELEGRAMUSERSERVICE-CATCH", "Dispose failed near source line 351: " + suppressedEx351); }
             _client = null;
             IsConnected = false;
+            OnStatusChanged?.Invoke("disconnected");
         }
     }
 

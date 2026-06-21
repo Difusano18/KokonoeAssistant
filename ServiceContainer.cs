@@ -31,6 +31,7 @@ namespace KokonoeAssistant
         private static CalendarService?     _calendar;
         private static ChatLogger?          _chatLogger;
         private static TelegramUserService? _tgUser;
+        private static KokoTelegramRuntimeStatusService? _telegramStatus;
         private static PcControlService?      _pcControl;
         private static KokoEmbeddingService?   _embedding;
         private static KokoPredictorService?   _predictor;
@@ -564,6 +565,11 @@ namespace KokonoeAssistant
             set { lock (_lock) { _tgUser = value; } }
         }
 
+        public static KokoTelegramRuntimeStatusService TelegramStatus
+        {
+            get { lock (_lock) { return _telegramStatus ??= new KokoTelegramRuntimeStatusService(); } }
+        }
+
         public static KokoBrainEngine BrainEngine
         {
             get
@@ -615,6 +621,8 @@ namespace KokonoeAssistant
                     _goals = null; _habits = null;
                     _emotion = null; _kokoMemory = null; _kokoPatterns = null;
                     _chatLogger = null;
+                    _telegramStatus?.MarkBotState("stopped");
+                    _telegramStatus?.MarkUserState("stopped");
                     _tgUser?.Dispose(); _tgUser = null;
                     _brain?.Dispose(); _brain = null;
                     _heart?.Dispose(); _heart = null;
