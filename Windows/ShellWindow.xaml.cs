@@ -10,6 +10,7 @@ namespace KokonoeAssistant.Windows
     {
         private KokoWebBridgeService? _bridge;
         private KokoWebChatBridgeService? _chatBridge;
+        private KokoWebAgentBridgeService? _agentBridge;
 
         public ShellWindow()
         {
@@ -17,6 +18,7 @@ namespace KokonoeAssistant.Windows
             Loaded += OnLoaded;
             Closed += (_, _) =>
             {
+                _agentBridge?.Dispose();
                 _chatBridge?.Dispose();
                 _bridge?.Dispose();
                 WebView.Dispose();
@@ -43,6 +45,7 @@ namespace KokonoeAssistant.Windows
                     text => ServiceContainer.IsInitialized
                         ? ServiceContainer.BrainEngine.BuildUnifiedExternalContext("web", text)
                         : null);
+                _agentBridge = new KokoWebAgentBridgeService(_bridge, ServiceContainer.AgentTasks);
                 WebView.NavigationCompleted += (_, args) =>
                 {
                     var state = args.IsSuccess ? "ready" : $"failed:{args.WebErrorStatus}";

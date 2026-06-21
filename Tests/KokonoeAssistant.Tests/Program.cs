@@ -257,6 +257,8 @@ internal static class Program
             Run("Web bridge reports unknown methods", WebBridgeReportsUnknownMethods);
             Run("Web chat bridge streams correlated chunks", WebChatBridgeStreamsCorrelatedChunks);
             Run("Web chat bridge resets partial stream before fallback", WebChatBridgeResetsPartialStreamBeforeFallback);
+            Run("Web agent bridge returns camel case snapshot", WebAgentBridgeReturnsCamelCaseSnapshot);
+            Run("Web agent bridge publishes live activity", WebAgentBridgePublishesLiveActivity);
             Run("System overlord detects retry surprise directive", SystemOverlordDetectsRetrySurpriseDirective);
             Run("System overlord creates real surprise note", SystemOverlordCreatesRealSurpriseNote);
             Run("Collective mind builds agent debate frame", CollectiveMindBuildsAgentDebateFrame);
@@ -5913,6 +5915,49 @@ Insight: bridge stability and pulse quality are linked.
         var completeIndex = parsed.FindIndex(x => x["channel"]?.ToString() == "chat.completed");
         AssertTrue(resetIndex >= 0 && completeIndex > resetIndex, "fallback must reset partial stream before completion");
         AssertEqual("tool result", parsed[completeIndex]["payload"]?["reply"]?.ToString(), "fallback reply must be authoritative");
+    }
+
+    private static void WebAgentBridgeReturnsCamelCaseSnapshot()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "KokonoeAssistant.Tests", Guid.NewGuid().ToString("N"));
+        var envelopes = new List<string>();
+        var tasks = new KokoAgentTaskService(dir) { AutoStartOnAdd = false, MaxParallel = 3 };
+        tasks.AddTask("Inspect the current workspace", priority: 7);
+        using var bridge = new KokoWebBridgeService(envelopes.Add);
+        using var agent = new KokoWebAgentBridgeService(bridge, tasks);
+
+        bridge.HandleMessageAsync("""{"type":"request","id":"agent-1","method":"agent.snapshot","payload":null}""")
+            .GetAwaiter().GetResult();
+
+        var response = envelopes.Select(Newtonsoft.Json.Linq.JObject.Parse)
+            .Single(x => x["type"]?.ToString() == "response");
+        AssertEqual("3", response["result"]?["maxParallel"]?.ToString(), "snapshot must expose camel-case runtime fields");
+        AssertEqual("1", response["result"]?["tasks"]?.Count().ToString(), "snapshot must include current tasks");
+        AssertEqual("Inspect the current workspace", response["result"]?["tasks"]?[0]?["objective"]?.ToString(),
+            "task objective must cross the bridge");
+    }
+
+    private static void WebAgentBridgePublishesLiveActivity()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "KokonoeAssistant.Tests", Guid.NewGuid().ToString("N"));
+        var envelopes = new List<string>();
+        var tasks = new KokoAgentTaskService(dir) { AutoStartOnAdd = false };
+        using var bridge = new KokoWebBridgeService(envelopes.Add);
+        var agent = new KokoWebAgentBridgeService(bridge, tasks);
+
+        tasks.AddTask("Create a live activity event");
+        var activityEvent = envelopes.Select(Newtonsoft.Json.Linq.JObject.Parse)
+            .LastOrDefault(x => x["channel"]?.ToString() == "agent.activity");
+        AssertTrue(activityEvent != null, "task activity must be pushed without polling");
+        AssertEqual("plan", activityEvent!["payload"]?["activity"]?["phase"]?.ToString(),
+            "activity event must carry the current phase");
+        AssertEqual("1", activityEvent["payload"]?["snapshot"]?["tasks"]?.Count().ToString(),
+            "activity event must carry a fresh board snapshot");
+
+        var beforeDispose = envelopes.Count;
+        agent.Dispose();
+        tasks.AddTask("Do not publish after dispose");
+        AssertEqual(beforeDispose, envelopes.Count, "disposed bridge must detach task event handlers");
     }
 
     private static void ActionDirectiveRouterHandlesInflectedTargets()
