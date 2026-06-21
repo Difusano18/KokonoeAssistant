@@ -255,6 +255,8 @@ internal static class Program
             Run("Chat runtime defaults to streaming with bounded token budget", ChatRuntimeDefaultsToStreamingWithBoundedTokenBudget);
             Run("Web bridge completes ping pong round trip", WebBridgeCompletesPingPongRoundTrip);
             Run("Web bridge reports unknown methods", WebBridgeReportsUnknownMethods);
+            Run("Web chat bridge streams correlated chunks", WebChatBridgeStreamsCorrelatedChunks);
+            Run("Web chat bridge resets partial stream before fallback", WebChatBridgeResetsPartialStreamBeforeFallback);
             Run("System overlord detects retry surprise directive", SystemOverlordDetectsRetrySurpriseDirective);
             Run("System overlord creates real surprise note", SystemOverlordCreatesRealSurpriseNote);
             Run("Collective mind builds agent debate frame", CollectiveMindBuildsAgentDebateFrame);
@@ -5862,6 +5864,55 @@ Insight: bridge stability and pulse quality are linked.
         AssertEqual("bad-1", response["id"]?.ToString(), "error response must preserve correlation id");
         AssertTrue(response["error"]?.ToString().Contains("Unknown bridge method", StringComparison.OrdinalIgnoreCase) == true,
             "unknown bridge method must return a structured error");
+    }
+
+    private static void WebChatBridgeStreamsCorrelatedChunks()
+    {
+        var envelopes = new List<string>();
+        using var bridge = new KokoWebBridgeService(envelopes.Add);
+        using var chat = new KokoWebChatBridgeService(
+            bridge,
+            (text, context, chunk, ct) =>
+            {
+                chunk("Hel");
+                chunk("lo");
+                return Task.FromResult<string?>("Hello");
+            },
+            (text, context, ct) => Task.FromResult("fallback"));
+
+        bridge.HandleMessageAsync("""{"type":"request","id":"chat-1","method":"chat.send","payload":{"streamId":"stream-1","text":"hello"}}""")
+            .GetAwaiter().GetResult();
+
+        var parsed = envelopes.Select(Newtonsoft.Json.Linq.JObject.Parse).ToList();
+        var chunks = parsed.Where(x => x["type"]?.ToString() == "event" && x["channel"]?.ToString() == "chat.chunk").ToList();
+        AssertEqual(2, chunks.Count, "streaming chat must publish separate chunks");
+        AssertEqual("Hel", chunks[0]["payload"]?["chunk"]?.ToString(), "first chunk must be preserved");
+        AssertEqual("1", chunks[1]["payload"]?["sequence"]?.ToString(), "chunk sequence must increment");
+        AssertTrue(parsed.Any(x => x["channel"]?.ToString() == "chat.completed" && x["payload"]?["streamed"]?.Value<bool>() == true),
+            "streamed chat must publish completion state");
+    }
+
+    private static void WebChatBridgeResetsPartialStreamBeforeFallback()
+    {
+        var envelopes = new List<string>();
+        using var bridge = new KokoWebBridgeService(envelopes.Add);
+        using var chat = new KokoWebChatBridgeService(
+            bridge,
+            (text, context, chunk, ct) =>
+            {
+                chunk("partial");
+                return Task.FromResult<string?>(null);
+            },
+            (text, context, ct) => Task.FromResult("tool result"));
+
+        bridge.HandleMessageAsync("""{"type":"request","id":"chat-2","method":"chat.send","payload":{"streamId":"stream-2","text":"use a tool"}}""")
+            .GetAwaiter().GetResult();
+
+        var parsed = envelopes.Select(Newtonsoft.Json.Linq.JObject.Parse).ToList();
+        var resetIndex = parsed.FindIndex(x => x["channel"]?.ToString() == "chat.reset");
+        var completeIndex = parsed.FindIndex(x => x["channel"]?.ToString() == "chat.completed");
+        AssertTrue(resetIndex >= 0 && completeIndex > resetIndex, "fallback must reset partial stream before completion");
+        AssertEqual("tool result", parsed[completeIndex]["payload"]?["reply"]?.ToString(), "fallback reply must be authoritative");
     }
 
     private static void ActionDirectiveRouterHandlesInflectedTargets()

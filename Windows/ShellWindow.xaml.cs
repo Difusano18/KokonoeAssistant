@@ -9,6 +9,7 @@ namespace KokonoeAssistant.Windows
     public partial class ShellWindow : Window
     {
         private KokoWebBridgeService? _bridge;
+        private KokoWebChatBridgeService? _chatBridge;
 
         public ShellWindow()
         {
@@ -16,6 +17,7 @@ namespace KokonoeAssistant.Windows
             Loaded += OnLoaded;
             Closed += (_, _) =>
             {
+                _chatBridge?.Dispose();
                 _bridge?.Dispose();
                 WebView.Dispose();
             };
@@ -35,6 +37,12 @@ namespace KokonoeAssistant.Windows
                 WebView.CoreWebView2.Settings.IsStatusBarEnabled = false;
                 WebView.CoreWebView2.Settings.AreDefaultContextMenusEnabled = true;
                 _bridge = new KokoWebBridgeService(WebView.CoreWebView2);
+                _chatBridge = new KokoWebChatBridgeService(
+                    _bridge,
+                    ServiceContainer.LlmService,
+                    text => ServiceContainer.IsInitialized
+                        ? ServiceContainer.BrainEngine.BuildUnifiedExternalContext("web", text)
+                        : null);
                 WebView.NavigationCompleted += (_, args) =>
                 {
                     var state = args.IsSuccess ? "ready" : $"failed:{args.WebErrorStatus}";

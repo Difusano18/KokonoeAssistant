@@ -15,12 +15,14 @@ namespace KokonoeAssistant.Services
         private readonly Action<string> _postJson;
         private readonly CoreWebView2? _webView;
         private readonly CancellationTokenSource _lifetime = new();
+        private SynchronizationContext? _postContext;
         private bool _disposed;
 
         public KokoWebBridgeService(CoreWebView2 webView)
             : this(json => webView.PostWebMessageAsJson(json))
         {
             _webView = webView ?? throw new ArgumentNullException(nameof(webView));
+            _postContext = SynchronizationContext.Current;
             _webView.WebMessageReceived += OnWebMessageReceived;
         }
 
@@ -111,8 +113,26 @@ namespace KokonoeAssistant.Services
         {
             if (_disposed)
                 return;
-            _postJson(envelope.ToString(Formatting.None));
+            var json = envelope.ToString(Formatting.None);
+            if (_postContext != null && SynchronizationContext.Current != _postContext)
+            {
+                _postContext.Post(static state =>
+                {
+                    var post = (PendingPost)state!;
+                    post.Owner.PostNow(post.Json);
+                }, new PendingPost(this, json));
+                return;
+            }
+            PostNow(json);
         }
+
+        private void PostNow(string json)
+        {
+            if (!_disposed)
+                _postJson(json);
+        }
+
+        private sealed record PendingPost(KokoWebBridgeService Owner, string Json);
 
         public void Dispose()
         {
@@ -123,6 +143,7 @@ namespace KokonoeAssistant.Services
             if (_webView != null)
                 _webView.WebMessageReceived -= OnWebMessageReceived;
             _lifetime.Dispose();
+            _postContext = null;
         }
     }
 }
