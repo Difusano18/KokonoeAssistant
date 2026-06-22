@@ -65,32 +65,20 @@
     <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.3967.48" />
   </ItemGroup>
 
-  <ItemGroup>
-    <None Update="frontend\index.html">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Update="frontend\bridge.js">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Update="frontend\chat.js">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Update="frontend\agent-board.js">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Update="frontend\vault-panel.js">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Update="frontend\settings-panel.js">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Update="frontend\telegram-panel.js">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Update="frontend\motion.js">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-  </ItemGroup>
+  <Target Name="BuildWebFrontend" BeforeTargets="Build"
+          Condition="'$(DesignTimeBuild)' != 'true' and '$(SkipFrontendBuild)' != 'true'">
+    <Exec WorkingDirectory="$(MSBuildProjectDirectory)\frontend"
+          Command="npm ci --no-audit --no-fund"
+          Condition="!Exists('$(MSBuildProjectDirectory)\frontend\node_modules\.bin\vite.cmd')" />
+    <Exec WorkingDirectory="$(MSBuildProjectDirectory)\frontend" Command="npm run build" />
+    <ItemGroup>
+      <_FrontendDist Include="$(MSBuildProjectDirectory)\frontend\dist\**\*" />
+    </ItemGroup>
+    <MakeDir Directories="$(OutDir)frontend" />
+    <Copy SourceFiles="@(_FrontendDist)"
+          DestinationFiles="@(_FrontendDist->'$(OutDir)frontend\%(RecursiveDir)%(Filename)%(Extension)')"
+          SkipUnchangedFiles="true" />
+  </Target>
 
   <!--
     Debug-only development guard: closes a stuck local instance before build.

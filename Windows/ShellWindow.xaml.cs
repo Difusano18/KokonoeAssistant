@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Windows;
 using KokonoeAssistant.Services;
+using Microsoft.Web.WebView2.Core;
 
 namespace KokonoeAssistant.Windows
 {
@@ -55,10 +56,6 @@ namespace KokonoeAssistant.Windows
             Loaded -= OnLoaded;
             try
             {
-                var indexPath = ResolveIndexPath();
-                if (!File.Exists(indexPath))
-                    throw new FileNotFoundException("Web shell entry point was not copied to the output directory.", indexPath);
-
                 var settings = AppSettings.Load();
                 await Task.Run(() =>
                 {
@@ -96,7 +93,24 @@ namespace KokonoeAssistant.Windows
                     var state = args.IsSuccess ? "ready" : $"failed:{args.WebErrorStatus}";
                     KokoSystemLog.Write("WEB-SHELL", $"navigation {state} source={WebView.Source}");
                 };
-                WebView.Source = new Uri(indexPath, UriKind.Absolute);
+                var developmentUri = ResolveDevelopmentUri(Environment.GetEnvironmentVariable("KOKONOE_WEB_DEV_URL"));
+                if (developmentUri != null)
+                {
+                    KokoSystemLog.Write("WEB-SHELL", $"using development frontend {developmentUri}");
+                    WebView.Source = developmentUri;
+                }
+                else
+                {
+                    var frontendRoot = ResolveFrontendRootPath();
+                    var indexPath = Path.Combine(frontendRoot, "index.html");
+                    if (!File.Exists(indexPath))
+                        throw new FileNotFoundException("Built web shell entry point was not copied to the output directory.", indexPath);
+                    WebView.CoreWebView2.SetVirtualHostNameToFolderMapping(
+                        "kokonoe.local",
+                        frontendRoot,
+                        CoreWebView2HostResourceAccessKind.DenyCors);
+                    WebView.Source = new Uri("https://kokonoe.local/index.html");
+                }
             }
             catch (Exception ex)
             {
@@ -118,8 +132,18 @@ namespace KokonoeAssistant.Windows
             }
         }
 
-        internal static string ResolveIndexPath()
-            => Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "frontend", "index.html"));
+        internal static string ResolveFrontendRootPath()
+            => Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "frontend"));
+
+        internal static Uri? ResolveDevelopmentUri(string? value)
+        {
+            if (string.IsNullOrWhiteSpace(value) ||
+                !Uri.TryCreate(value.Trim(), UriKind.Absolute, out var uri) ||
+                !uri.IsLoopback ||
+                (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
+                return null;
+            return uri;
+        }
 
         private static string BuildFailurePage(string message)
         {

@@ -16,8 +16,8 @@ export class AgentBoardController {
   private readonly tasks = document.getElementById("agent-tasks")!;
 
   constructor() {
-    window.koko.on("agent.activity", payload => this.render(payload.snapshot as AgentSnapshot));
-    window.koko.on("agent.completed", payload => this.render(payload.snapshot as AgentSnapshot));
+    window.koko.on("agent.activity", payload => this.render((payload as { snapshot: AgentSnapshot }).snapshot));
+    window.koko.on("agent.completed", payload => this.render((payload as { snapshot: AgentSnapshot }).snapshot));
   }
 
   async connect(): Promise<void> {

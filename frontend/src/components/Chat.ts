@@ -20,7 +20,7 @@ export class ChatController {
   private busy = false;
 
   constructor(
-    private readonly form: HTMLFormElement,
+    form: HTMLFormElement,
     private readonly input: HTMLInputElement,
     private readonly send: HTMLButtonElement,
     private readonly messages: HTMLElement,

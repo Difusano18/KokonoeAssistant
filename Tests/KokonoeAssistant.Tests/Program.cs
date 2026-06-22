@@ -262,6 +262,7 @@ internal static class Program
             Run("Web bridge reports unknown methods", WebBridgeReportsUnknownMethods);
             Run("Web bridge contract covers frontend and compatibility methods", WebBridgeContractCoversFrontendAndCompatibilityMethods);
             Run("Web startup policy defaults to web with explicit rollback", WebStartupPolicyDefaultsToWebWithExplicitRollback);
+            Run("Web shell development URL allows loopback only", WebShellDevelopmentUrlAllowsLoopbackOnly);
             Run("Web chat bridge streams correlated chunks", WebChatBridgeStreamsCorrelatedChunks);
             Run("Web chat bridge resets partial stream before fallback", WebChatBridgeResetsPartialStreamBeforeFallback);
             Run("Web chat bridge streams tool fallback after reset", WebChatBridgeStreamsToolFallbackAfterReset);
@@ -6125,6 +6126,24 @@ Insight: bridge stability and pulse quality are linked.
 
         AssertEqual("web", KokoUiStartupPolicy.NormalizeConfiguredMode("nonsense"),
             "invalid persisted modes must recover to the supported web shell");
+    }
+
+    private static void WebShellDevelopmentUrlAllowsLoopbackOnly()
+    {
+        var method = typeof(KokonoeAssistant.Windows.ShellWindow).GetMethod(
+            "ResolveDevelopmentUri",
+            System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)
+            ?? throw new InvalidOperationException("Shell development URL policy was not found.");
+
+        Uri? Resolve(string? value) => method.Invoke(null, new object?[] { value }) as Uri;
+
+        AssertEqual("http://localhost:5173/", Resolve("http://localhost:5173")?.ToString(),
+            "localhost Vite URL must be accepted");
+        AssertEqual("https://127.0.0.1:5173/", Resolve("https://127.0.0.1:5173")?.ToString(),
+            "loopback HTTPS URL must be accepted");
+        AssertTrue(Resolve("https://example.com") == null, "remote development origins must be rejected");
+        AssertTrue(Resolve("file:///C:/temp/index.html") == null, "file development origins must be rejected");
+        AssertTrue(Resolve("not-a-url") == null, "malformed development URLs must be rejected");
     }
 
     private static void WebChatBridgeStreamsCorrelatedChunks()
