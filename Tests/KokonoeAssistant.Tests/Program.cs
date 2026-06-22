@@ -262,6 +262,9 @@ internal static class Program
             Run("Web startup policy defaults to web with explicit rollback", WebStartupPolicyDefaultsToWebWithExplicitRollback);
             Run("Web chat bridge streams correlated chunks", WebChatBridgeStreamsCorrelatedChunks);
             Run("Web chat bridge resets partial stream before fallback", WebChatBridgeResetsPartialStreamBeforeFallback);
+            Run("Web chat bridge streams tool fallback after reset", WebChatBridgeStreamsToolFallbackAfterReset);
+            Run("OpenAI stream parser joins content chunks", OpenAiStreamParserJoinsContentChunks);
+            Run("LLM streaming policy limits tool final streaming", LlmStreamingPolicyLimitsToolFinalStreaming);
             Run("Web chat bridge publishes proactive brain messages", WebChatBridgePublishesProactiveBrainMessages);
             Run("Web agent bridge returns camel case snapshot", WebAgentBridgeReturnsCamelCaseSnapshot);
             Run("Web agent bridge creates task from shell", WebAgentBridgeCreatesTaskFromShell);
@@ -6068,6 +6071,69 @@ Insight: bridge stability and pulse quality are linked.
         var completeIndex = parsed.FindIndex(x => x["channel"]?.ToString() == "chat.completed");
         AssertTrue(resetIndex >= 0 && completeIndex > resetIndex, "fallback must reset partial stream before completion");
         AssertEqual("tool result", parsed[completeIndex]["payload"]?["reply"]?.ToString(), "fallback reply must be authoritative");
+    }
+
+    private static void WebChatBridgeStreamsToolFallbackAfterReset()
+    {
+        var envelopes = new List<string>();
+        using var bridge = new KokoWebBridgeService(envelopes.Add);
+        using var chat = new KokoWebChatBridgeService(
+            bridge,
+            (text, context, chunk, ct) =>
+            {
+                chunk("discard me");
+                return Task.FromResult<string?>(null);
+            },
+            (text, context, chunk, ct) =>
+            {
+                chunk("tool ");
+                chunk("done");
+                return Task.FromResult("tool done");
+            });
+
+        bridge.HandleMessageAsync("""{"type":"request","id":"chat-3","method":"chat.send","payload":{"streamId":"stream-3","text":"use a tool"}}""")
+            .GetAwaiter().GetResult();
+
+        var parsed = envelopes.Select(JObject.Parse).ToList();
+        var resetIndex = parsed.FindIndex(x => x["channel"]?.ToString() == "chat.reset");
+        var fallbackChunks = parsed
+            .Skip(resetIndex + 1)
+            .Where(x => x["channel"]?.ToString() == "chat.chunk")
+            .Select(x => x["payload"]?["chunk"]?.ToString())
+            .ToArray();
+        AssertTrue(resetIndex >= 0, "tool fallback must reset speculative stream output");
+        AssertEqual("tool done", string.Concat(fallbackChunks), "tool final response must continue as visible chunks");
+        AssertTrue(parsed.Any(x => x["channel"]?.ToString() == "chat.completed" &&
+                                   x["payload"]?["streamed"]?.Value<bool>() == true),
+            "completion must report that the authoritative tool result was streamed");
+    }
+
+    private static void OpenAiStreamParserJoinsContentChunks()
+    {
+        const string sse = "data: {\"choices\":[{\"delta\":{\"content\":\"Hel\"}}]}\n\n" +
+                           "data: {\"choices\":[{\"delta\":{\"content\":\"lo\"}}]}\n\n" +
+                           "data: [DONE]\n\n";
+        using var stream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(sse));
+        var chunks = new List<string>();
+        var parsed = KokoOpenAiStreamParser.ReadTextAsync(stream, chunks.Add).GetAwaiter().GetResult();
+
+        AssertEqual("Hello", parsed.Text, "SSE parser must join delta content");
+        AssertEqual("Hello", string.Concat(chunks), "SSE parser must forward every visible chunk");
+        AssertTrue(!parsed.ToolCallsDetected, "plain text stream must not be marked as a tool call");
+    }
+
+    private static void LlmStreamingPolicyLimitsToolFinalStreaming()
+    {
+        AssertTrue(KokoLlmStreamingPolicy.ShouldStreamFinalAfterTools(true, 1, false, false),
+            "user-visible OpenAI-compatible tool result should stream after one completed round");
+        AssertTrue(!KokoLlmStreamingPolicy.ShouldStreamFinalAfterTools(false, 1, false, false),
+            "background callers without a chunk sink must remain atomic");
+        AssertTrue(!KokoLlmStreamingPolicy.ShouldStreamFinalAfterTools(true, 0, false, false),
+            "initial tool decision must remain atomic");
+        AssertTrue(!KokoLlmStreamingPolicy.ShouldStreamFinalAfterTools(true, 1, true, false),
+            "vision responses must remain atomic");
+        AssertTrue(!KokoLlmStreamingPolicy.ShouldStreamFinalAfterTools(true, 1, false, true),
+            "Claude response framing is not OpenAI SSE and must remain atomic");
     }
 
     private static void WebChatBridgePublishesProactiveBrainMessages()

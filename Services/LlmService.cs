@@ -1618,7 +1618,8 @@ namespace KokonoeAssistant.Services
             string? extraContext = null,
             CancellationToken ct = default,
             string? agentId = null,
-            int? maxTokensOverride = null)
+            int? maxTokensOverride = null,
+            Action<string>? onChunk = null)
         {
             // Checkpoint: зберігаємо стан історії для можливого відкату
             int checkpoint;
@@ -1715,7 +1716,14 @@ namespace KokonoeAssistant.Services
                     var useTools = Obsidian != null && !toolsFailedFallback && !isImageRequest;
 
                     // На останніх раундах примушуємо модель відповісти текстом без tool_calls
-                    var forceNoTools = round >= 6;
+                    // User-visible fallback: after a real tool round, force a final text response and stream it.
+                    // Background/tool-only callers keep the full multi-round tool loop.
+                    var streamFinalAfterTools = KokoLlmStreamingPolicy.ShouldStreamFinalAfterTools(
+                        onChunk != null,
+                        round,
+                        isImageRequest,
+                        isClaude);
+                    var forceNoTools = round >= 6 || streamFinalAfterTools;
 
                     // Детектуємо чи запит вимагає vault-операції
                     // якщо так — підштовхуємо модель через tool_choice
@@ -1783,10 +1791,11 @@ namespace KokonoeAssistant.Services
                             var toolChoice = looksLikeVaultOp && round == 0
                                 ? (object)new { type = "function", function = new { name = DetectBestTool(userText!) } }
                                 : "auto";
+                            // intentional: structured tool-decision round must be parsed atomically
                             reqBody = new { model = targetModel, messages, tools = TOOLS, tool_choice = toolChoice, max_tokens = maxTokens, temperature = agentTarget.Temperature, stream = false };
                         }
                         else
-                            reqBody = new { model = targetModel, messages, max_tokens = maxTokens, temperature = agentTarget.Temperature, stream = false };
+                            reqBody = new { model = targetModel, messages, max_tokens = maxTokens, temperature = agentTarget.Temperature, stream = streamFinalAfterTools };
                     }
 
                     var json = JsonConvert.SerializeObject(reqBody);
@@ -1814,7 +1823,9 @@ namespace KokonoeAssistant.Services
                                 llmReq.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", usedOllamaKey);
                         }
 
-                        resp = await _http.SendAsync(llmReq, ct);
+                        resp = streamFinalAfterTools
+                            ? await _http.SendAsync(llmReq, HttpCompletionOption.ResponseHeadersRead, ct)
+                            : await _http.SendAsync(llmReq, ct);
 
                         // Успіх — записати запит у пул і вийти
                         if (resp.IsSuccessStatusCode)
@@ -1983,6 +1994,32 @@ namespace KokonoeAssistant.Services
 
                         RecordLlmFailure(diagProvider, diagModel, diagChannel, (int)resp.StatusCode, err, diagWatch, "friendly_error");
                         return BuildFriendlyLlmError((int)resp.StatusCode, err, isOllamaCloud ? "Ollama Cloud" : targetModel);
+                    }
+
+                    if (streamFinalAfterTools)
+                    {
+                        await using var responseStream = await resp.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
+                        var streamed = await KokoOpenAiStreamParser.ReadTextAsync(responseStream, onChunk, ct).ConfigureAwait(false);
+                        if (streamed.ToolCallsDetected)
+                            throw new InvalidOperationException("Final no-tools stream unexpectedly returned tool calls.");
+                        var streamedText = streamed.Text;
+                        if (string.IsNullOrWhiteSpace(streamedText) && !string.IsNullOrWhiteSpace(streamed.Reasoning))
+                        {
+                            streamedText = ExtractResponseFromReasoning(streamed.Reasoning);
+                            if (!string.IsNullOrWhiteSpace(streamedText))
+                                onChunk?.Invoke(streamedText);
+                        }
+                        var streamedReply = CleanGarbage(streamedText);
+                        if (IsBadFinalReply(streamedReply))
+                            streamedReply = BuildCleanFallbackReply(userText, toolCallsAttempted: true);
+                        lock (_histLock)
+                        {
+                            _history.Add(new HistoryEntry("assistant", streamedReply));
+                            if (_history.Count > MAX_HISTORY_ENTRIES)
+                                CompressHistoryLocked();
+                        }
+                        RecordLlmSuccess(diagProvider, diagModel, diagChannel, diagWatch, "tool_final_stream");
+                        return streamedReply;
                     }
 
                     var respText = await resp.Content.ReadAsStringAsync(ct);

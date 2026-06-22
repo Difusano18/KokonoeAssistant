@@ -9,7 +9,7 @@ namespace KokonoeAssistant.Services
     {
         private readonly KokoWebBridgeService _bridge;
         private readonly Func<string, string?, Action<string>, CancellationToken, Task<string?>> _stream;
-        private readonly Func<string, string?, CancellationToken, Task<string>> _fallback;
+        private readonly Func<string, string?, Action<string>, CancellationToken, Task<string>> _fallback;
         private readonly Func<string, string?> _contextBuilder;
         private bool _disposed;
 
@@ -20,7 +20,7 @@ namespace KokonoeAssistant.Services
             : this(
                 bridge,
                 (text, context, onChunk, ct) => llm.SendStreamingAsync(text, context, onChunk, ct),
-                (text, context, ct) => llm.SendAsync(text, extraContext: context, ct: ct),
+                (text, context, onChunk, ct) => llm.SendAsync(text, extraContext: context, ct: ct, onChunk: onChunk),
                 contextBuilder)
         {
         }
@@ -29,6 +29,20 @@ namespace KokonoeAssistant.Services
             KokoWebBridgeService bridge,
             Func<string, string?, Action<string>, CancellationToken, Task<string?>> stream,
             Func<string, string?, CancellationToken, Task<string>> fallback,
+            Func<string, string?>? contextBuilder = null)
+            : this(
+                bridge,
+                stream,
+                (text, context, _, ct) => fallback(text, context, ct),
+                contextBuilder)
+        {
+            if (fallback == null) throw new ArgumentNullException(nameof(fallback));
+        }
+
+        public KokoWebChatBridgeService(
+            KokoWebBridgeService bridge,
+            Func<string, string?, Action<string>, CancellationToken, Task<string?>> stream,
+            Func<string, string?, Action<string>, CancellationToken, Task<string>> fallback,
             Func<string, string?>? contextBuilder = null)
         {
             _bridge = bridge ?? throw new ArgumentNullException(nameof(bridge));
@@ -71,7 +85,15 @@ namespace KokonoeAssistant.Services
                 {
                     if (emittedChunks > 0)
                         _bridge.Publish("chat.reset", new { streamId, reason = "tool_fallback" });
-                    reply = await _fallback(text, context, ct).ConfigureAwait(false);
+                    var fallbackChunks = 0;
+                    reply = await _fallback(text, context, chunk =>
+                    {
+                        if (string.IsNullOrEmpty(chunk))
+                            return;
+                        fallbackChunks++;
+                        _bridge.Publish("chat.chunk", new { streamId, sequence = sequence++, chunk });
+                    }, ct).ConfigureAwait(false);
+                    usedStreaming = fallbackChunks > 0;
                 }
 
                 reply ??= "";

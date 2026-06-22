@@ -151,7 +151,14 @@ namespace KokonoeAssistant.Services
                 {
                     result.UsedToolFallback = true;
                     await EmitAsync("execute", "ToolLoop", "non-streaming tool-capable pass", "Стрім віддав tool-call. Повторюю чистим проходом, бо сміття в UI — це для аматорів.", request.OnStatus, ct);
-                    result.Reply = await _llm.SendAsync(request.UserText, null, request.ImageMime, request.Context, ct, request.AgentId).ConfigureAwait(false);
+                    result.Reply = await _llm.SendAsync(
+                        request.UserText,
+                        imageBytes: null,
+                        imageMime: request.ImageMime,
+                        extraContext: request.Context,
+                        ct: ct,
+                        agentId: request.AgentId,
+                        onChunk: request.OnChunk).ConfigureAwait(false);
                 }
                 else
                 {
