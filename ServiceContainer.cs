@@ -41,6 +41,7 @@ namespace KokonoeAssistant
         private static OllamaKeyPoolService?   _ollamaPool;
         private static KokoAgentTaskService?   _agentTasks;
         private static KokoAgentRuntimeService? _agentRuntime;
+        private static KokoIterativeAgentLoop? _agentLoop;
         private static KokoFileSystemToolService? _fileTools;
         private static IKokoToolGateway? _toolGateway;
         private static KokoCapabilityManifestService? _capabilities;
@@ -575,6 +576,20 @@ namespace KokonoeAssistant
             set { lock (_lock) { _tgUser = value; } }
         }
 
+        public static KokoIterativeAgentLoop AgentLoop
+        {
+            get
+            {
+                lock (_lock)
+                {
+                    return _agentLoop ??= new KokoIterativeAgentLoop(
+                        Path.Combine(_vault ?? AppDomain.CurrentDomain.BaseDirectory, "kokonoe-data"),
+                        ToolGateway,
+                        Blackboard);
+                }
+            }
+        }
+
         public static KokoTelegramRuntimeStatusService TelegramStatus
         {
             get { lock (_lock) { return _telegramStatus ??= new KokoTelegramRuntimeStatusService(); } }
@@ -638,7 +653,7 @@ namespace KokonoeAssistant
                     _heart?.Dispose(); _heart = null;
                     _wearableBridge?.Dispose(); _wearableBridge = null;
                     _agentTasks?.Stop(); _agentTasks = null;
-                    _agentRuntime = null; _agentFactory = null; _systemOverlord = null;
+                    _agentRuntime = null; _agentLoop = null; _agentFactory = null; _systemOverlord = null;
                     _toolGateway = null;
                     _fileTools = null;
                     _capabilities = null;

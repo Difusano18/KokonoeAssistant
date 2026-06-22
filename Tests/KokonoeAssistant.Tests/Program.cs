@@ -330,6 +330,9 @@ internal static class Program
             Run("Obsidian access report completes task", ObsidianAccessReportCompletesTask);
             Run("Telegram unified context loads Obsidian profile preflight", TelegramUnifiedContextLoadsObsidianProfilePreflight);
             Run("Agent task service plans and persists", AgentTaskServicePlansAndPersists);
+            Run("Iterative agent loop executes one action per turn", IterativeAgentLoopExecutesOneActionPerTurn);
+            Run("Iterative agent loop replans from failed observation", IterativeAgentLoopReplansFromFailedObservation);
+            Run("Iterative agent loop persists confirmation state", IterativeAgentLoopPersistsConfirmationState);
             Run("Agent task service imports Obsidian backlog", AgentTaskServiceImportsObsidianBacklog);
             Run("Response planner adds insight extraction", ResponsePlannerAddsInsightExtraction);
             Run("Response planner adds system control", ResponsePlannerAddsSystemControl);
@@ -7900,6 +7903,115 @@ Persistent Obsidian context is now a core project requirement.
         }
     }
 
+    private static void IterativeAgentLoopExecutesOneActionPerTurn()
+    {
+        var dir = TempDir();
+        try
+        {
+            var gateway = new TestToolGateway((call, _) => new KokoToolResult
+            {
+                CallId = call.Id,
+                ToolName = call.Name,
+                Success = true,
+                Verified = true,
+                Reason = "written",
+                Output = "artifact.txt"
+            });
+            var agent = new TestIterativeAgent(context => context.Observations.Count == 0
+                ? KokoAgentDecision.Execute(new KokoToolCall { Name = "test.write" }, "Need one artifact.", "Write it, then inspect the result.")
+                : KokoAgentDecision.Complete("artifact.txt", "The verified write satisfies the objective."));
+            var loop = new KokoIterativeAgentLoop(dir, gateway);
+
+            var result = loop.RunAsync("Create one verified artifact", agent, "run-one-action", 4)
+                .GetAwaiter().GetResult();
+
+            AssertEqual(KokoAgentRunStatus.Completed, result.Status, "loop should stop when the agent declares completion");
+            AssertEqual(1, gateway.Calls.Count, "one action decision must produce exactly one gateway call");
+            AssertEqual(2, result.Iteration, "agent should observe the action before declaring completion");
+            AssertTrue(result.Observations.Single().Verified, "verified tool evidence must survive in run state");
+        }
+        finally
+        {
+            TryDeleteDir(dir);
+        }
+    }
+
+    private static void IterativeAgentLoopReplansFromFailedObservation()
+    {
+        var dir = TempDir();
+        try
+        {
+            var gateway = new TestToolGateway((call, index) => new KokoToolResult
+            {
+                CallId = call.Id,
+                ToolName = call.Name,
+                Success = index > 1,
+                Verified = index > 1,
+                Reason = index == 1 ? "temporary failure" : "recovered",
+                Output = index == 1 ? "" : "ok"
+            });
+            var agent = new TestIterativeAgent(context => context.Observations.Count switch
+            {
+                0 => KokoAgentDecision.Execute(new KokoToolCall { Name = "test.probe" }, "Probe the target.", "Use the primary probe."),
+                1 => KokoAgentDecision.Execute(new KokoToolCall { Name = "test.retry" }, "The probe failed; use the fallback.", "Retry once with another tool."),
+                _ => KokoAgentDecision.Complete("recovered")
+            });
+            var loop = new KokoIterativeAgentLoop(dir, gateway);
+
+            var result = loop.RunAsync("Recover a transient operation", agent, "run-replan", 5)
+                .GetAwaiter().GetResult();
+
+            AssertEqual(KokoAgentRunStatus.Completed, result.Status, "failed observations should return to the agent for replanning");
+            AssertEqual(2, gateway.Calls.Count, "replan should execute only the selected fallback action");
+            AssertTrue(!result.Observations[0].Success && result.Observations[1].Success,
+                "run history must preserve failure followed by recovery");
+        }
+        finally
+        {
+            TryDeleteDir(dir);
+        }
+    }
+
+    private static void IterativeAgentLoopPersistsConfirmationState()
+    {
+        var dir = TempDir();
+        try
+        {
+            var gateway = new TestToolGateway((call, _) => new KokoToolResult
+            {
+                CallId = call.Id,
+                ToolName = call.Name,
+                RequiresConfirmation = true,
+                PendingActionId = "pending-42",
+                Reason = "confirmation required"
+            });
+            var agent = new TestIterativeAgent(_ => KokoAgentDecision.Execute(
+                new KokoToolCall { Name = "test.risky" },
+                "The action is gated.",
+                "Request policy confirmation and stop."));
+            var loop = new KokoIterativeAgentLoop(dir, gateway);
+
+            var result = loop.RunAsync("Prepare a gated action", agent, "run-confirmation", 4)
+                .GetAwaiter().GetResult();
+            var resumedWithoutConfirmation = loop.RunAsync("Prepare a gated action", agent, "run-confirmation", 4)
+                .GetAwaiter().GetResult();
+            var persisted = new KokoAgentRunStore(dir).Load("run-confirmation");
+
+            AssertEqual(KokoAgentRunStatus.AwaitingConfirmation, result.Status,
+                "confirmation must pause the loop instead of pretending success");
+            AssertTrue(persisted != null, "run state must be recoverable from disk");
+            AssertEqual("pending-42", persisted!.Observations.Single().PendingActionId,
+                "persisted observation must retain the exact pending action id");
+            AssertEqual(KokoAgentRunStatus.AwaitingConfirmation, resumedWithoutConfirmation.Status,
+                "ordinary resume must not bypass a pending policy confirmation");
+            AssertEqual(1, gateway.Calls.Count, "paused confirmation must not execute the risky action twice");
+        }
+        finally
+        {
+            TryDeleteDir(dir);
+        }
+    }
+
     private static void AgentTaskServiceImportsObsidianBacklog()
     {
         var dir = Path.Combine(Path.GetTempPath(), "KokonoeAssistant.Tests", Guid.NewGuid().ToString("N"));
@@ -8673,6 +8785,54 @@ Persistent Obsidian context is now a core project requirement.
         catch (Exception ex)
         {
             Console.Error.WriteLine($"TEST CLEANUP FAILED [{dir}]: {ex}");
+        }
+    }
+
+    private sealed class TestIterativeAgent : IKokoAgent
+    {
+        private readonly Func<KokoAgentTurnContext, KokoAgentDecision> _decide;
+
+        public TestIterativeAgent(Func<KokoAgentTurnContext, KokoAgentDecision> decide)
+            => _decide = decide;
+
+        public string Id => "test-agent";
+        public IReadOnlyCollection<string> Capabilities => new[] { "test" };
+
+        public Task<KokoAgentDecision> DecideAsync(KokoAgentTurnContext context, CancellationToken ct = default)
+        {
+            ct.ThrowIfCancellationRequested();
+            return Task.FromResult(_decide(context));
+        }
+    }
+
+    private sealed class TestToolGateway : IKokoToolGateway
+    {
+        private readonly Func<KokoToolCall, int, KokoToolResult> _execute;
+
+        public TestToolGateway(Func<KokoToolCall, int, KokoToolResult> execute)
+            => _execute = execute;
+
+        public List<KokoToolCall> Calls { get; } = new();
+        public IReadOnlyCollection<string> ToolNames => new[] { "test.write", "test.probe", "test.retry", "test.risky" };
+
+        public void Register(IKokoToolHandler handler)
+            => throw new NotSupportedException();
+
+        public Task<KokoToolResult> ExecuteAsync(KokoToolCall call, CancellationToken ct = default)
+        {
+            ct.ThrowIfCancellationRequested();
+            Calls.Add(call);
+            return Task.FromResult(_execute(call, Calls.Count));
+        }
+
+        public async Task<IReadOnlyList<KokoToolResult>> ExecutePlanAsync(
+            IEnumerable<KokoToolCall> calls,
+            CancellationToken ct = default)
+        {
+            var results = new List<KokoToolResult>();
+            foreach (var call in calls)
+                results.Add(await ExecuteAsync(call, ct));
+            return results;
         }
     }
 
