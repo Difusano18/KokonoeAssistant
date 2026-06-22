@@ -65,7 +65,7 @@ Summary: {summary}
                     _state.LastDailySelfReviewSummary = summary;
                     SaveState();
                 }
-                ServiceContainer.Blackboard.Publish("brain-agent", "daily_self_review", summary, 0.72);
+                _blackboard.Publish("brain-agent", "daily_self_review", summary, 0.72);
                 ServiceContainer.Heartbeat.Update("SELF_REVIEW", "written", path);
                 Log($"Daily self-review wrote {path}");
             }

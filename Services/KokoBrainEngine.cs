@@ -26,6 +26,7 @@ namespace KokonoeAssistant.Services
         private readonly ObsidianMcpService _obsidian;
         private readonly ChatRepository _chatRepo;
         private readonly string _statePath;
+        private readonly KokoInternalBlackboardService _blackboard;
         // ── Нові двигуни ─────────────────────────────────────────────
         public readonly KokoMemoryEngine Memory;
         public readonly KokoEmotionEngine Emotion;
@@ -114,7 +115,7 @@ namespace KokonoeAssistant.Services
         private DateTime _lastInAppSilenceMsgAt = DateTime.MinValue;
         // Callback для відображення повідомлень в UI чаті
         public Action<string, string>? OnNewMessage; // (role, content)
-        public KokoBrainEngine(LlmService llm, HealthService health, ObsidianMcpService obsidian, ChatRepository chatRepo, string dataDir, EnhancedMemory? enhanced = null, StateEngine? stateEngine = null, GoalService? goals = null, HabitService? habits = null, ContextAnalyzer? contextAnalyzer = null, KokoEmbeddingService? embeddings = null)
+        public KokoBrainEngine(LlmService llm, HealthService health, ObsidianMcpService obsidian, ChatRepository chatRepo, string dataDir, EnhancedMemory? enhanced = null, StateEngine? stateEngine = null, GoalService? goals = null, HabitService? habits = null, ContextAnalyzer? contextAnalyzer = null, KokoEmbeddingService? embeddings = null, KokoMemoryEngine? memory = null, KokoEmotionEngine? emotion = null, KokoInternalBlackboardService? blackboard = null)
         {
             _llm = llm;
             _health = health;
@@ -127,10 +128,11 @@ namespace KokonoeAssistant.Services
             _contextAnalyzer = contextAnalyzer;
             Directory.CreateDirectory(dataDir);
             _statePath = Path.Combine(dataDir, "kokonoe-brain.json");
+            _blackboard = blackboard ?? new KokoInternalBlackboardService(dataDir);
             _state = LoadState();
             // Ініціалізація нових двигунів
-            Memory = new KokoMemoryEngine(dataDir, enhanced, embeddings);
-            Emotion = new KokoEmotionEngine(dataDir);
+            Memory = memory ?? new KokoMemoryEngine(dataDir, enhanced, embeddings);
+            Emotion = emotion ?? new KokoEmotionEngine(dataDir);
             Patterns = new KokoPatternEngine(dataDir);
             Scheduler = new KokoSchedulerEngine(dataDir);
             Cognition = new KokoCognitionEngine(dataDir);

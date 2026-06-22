@@ -7,7 +7,7 @@ using Newtonsoft.Json;
 
 namespace KokonoeAssistant.Services
 {
-    public sealed class KokoInternalBlackboardService
+    public sealed class KokoInternalBlackboardService : IKokoInternalBlackboardService
     {
         private readonly object _lock = new();
         private readonly string _path;

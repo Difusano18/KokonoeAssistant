@@ -15,7 +15,7 @@ namespace KokonoeAssistant.Services
     // Підключається до EnhancedMemory для збереження і KnowledgeGraph для зв'язків.
     // ══════════════════════════════════════════════════════════════════
 
-    public class KokoMemoryEngine
+    public class KokoMemoryEngine : IKokoMemoryEngine
     {
         // ── Типи записів ──────────────────────────────────────────────
 

@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using KokonoeAssistant;
 using KokonoeAssistant.Services;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace KokonoeAssistant
 {
@@ -9,6 +10,7 @@ namespace KokonoeAssistant
     {
         private static readonly object _lock = new();
         private static string? _vault;
+        private static ServiceProvider? _serviceProvider;
 
         private static ChatRepository?      _chatRepo;
         private static AudioRecordService?  _audio;
@@ -59,7 +61,7 @@ namespace KokonoeAssistant
         private static KokoDynamicAgentFactoryService? _agentFactory;
         private static KokoSystemOverlordService? _systemOverlord;
 
-        public static void Initialize(string vaultPath)
+        public static void Initialize(string vaultPath, bool startHostedServices = true)
         {
             var normalizedVault = Path.GetFullPath(vaultPath);
             lock (_lock)
@@ -71,8 +73,11 @@ namespace KokonoeAssistant
                     return;
                 }
                 _vault = normalizedVault;
+                _serviceProvider = BuildServiceProvider(normalizedVault);
             }
             KokoSystemLog.Configure(Path.Combine(_vault ?? AppDomain.CurrentDomain.BaseDirectory, "kokonoe-data"));
+            if (!startHostedServices)
+                return;
             try { _ = WearableBridge; } catch (Exception ex) { KokoSystemLog.Write("BOOT", "wearable bridge start failed: " + ex.Message); }
             try { PhotoFileWatcher.Start(); } catch (Exception ex) { KokoSystemLog.Write("BOOT", "photo watcher start failed: " + ex.Message); }
             try { ProfileCurator.Start(); } catch (Exception ex) { KokoSystemLog.Write("BOOT", "profile curator start failed: " + ex.Message); }
@@ -87,6 +92,31 @@ namespace KokonoeAssistant
             catch (Exception ex) { KokoSystemLog.Write("BOOT", "system overlord scan failed: " + ex.Message); }
             try { _ = ProcessWatchdog; } catch (Exception ex) { KokoSystemLog.Write("BOOT", "process watchdog start failed: " + ex.Message); }
         }
+
+        private static ServiceProvider BuildServiceProvider(string vaultPath)
+        {
+            var dataDir = Path.Combine(vaultPath, "kokonoe-data");
+            var services = new ServiceCollection();
+            services.AddSingleton<LlmService>();
+            services.AddSingleton<ILlmService>(provider => provider.GetRequiredService<LlmService>());
+            services.AddSingleton(_ => new KokoEmotionEngine(dataDir));
+            services.AddSingleton<IKokoEmotionEngine>(provider => provider.GetRequiredService<KokoEmotionEngine>());
+            services.AddSingleton(_ => new KokoMemoryEngine(dataDir, EnhancedMemory, EmbeddingService));
+            services.AddSingleton<IKokoMemoryEngine>(provider => provider.GetRequiredService<KokoMemoryEngine>());
+            services.AddSingleton(_ => new KokoInternalBlackboardService(dataDir));
+            services.AddSingleton<IKokoInternalBlackboardService>(provider => provider.GetRequiredService<KokoInternalBlackboardService>());
+            services.AddSingleton(_ => new KokoProfileUpdateService(ObsidianMcp, ChatRepository));
+            services.AddSingleton<IKokoProfileUpdateService>(provider => provider.GetRequiredService<KokoProfileUpdateService>());
+            return services.BuildServiceProvider(new ServiceProviderOptions
+            {
+                ValidateOnBuild = true,
+                ValidateScopes = true
+            });
+        }
+
+        private static T ResolveRequired<T>() where T : notnull
+            => (_serviceProvider ?? throw new InvalidOperationException("ServiceContainer is not initialized."))
+                .GetRequiredService<T>();
 
         public static bool IsInitialized
         {
@@ -191,7 +221,7 @@ namespace KokonoeAssistant
                 {
                     if (_llm == null)
                     {
-                        _llm = new LlmService();
+                        _llm = ResolveRequired<LlmService>();
                         _llm.Obsidian   = ObsidianMcp;
                         _llm.Health     = HealthService;
                         _llm.State      = StateEngine;
@@ -333,8 +363,9 @@ namespace KokonoeAssistant
             {
                 lock (_lock)
                 {
-                    return _blackboard ??= new KokoInternalBlackboardService(
-                        Path.Combine(_vault ?? AppDomain.CurrentDomain.BaseDirectory, "kokonoe-data"));
+                    if (_blackboard == null)
+                        _blackboard = ResolveRequired<KokoInternalBlackboardService>();
+                    return _blackboard;
                 }
             }
         }
@@ -406,7 +437,15 @@ namespace KokonoeAssistant
 
         public static KokoProfileUpdateService ProfileUpdater
         {
-            get { lock (_lock) { return _profileUpdater ??= new KokoProfileUpdateService(ObsidianMcp, ChatRepository); } }
+            get
+            {
+                lock (_lock)
+                {
+                    if (_profileUpdater == null)
+                        _profileUpdater = ResolveRequired<KokoProfileUpdateService>();
+                    return _profileUpdater;
+                }
+            }
         }
 
         public static KokoAutonomousProfileCuratorService ProfileCurator
@@ -484,12 +523,28 @@ namespace KokonoeAssistant
 
         public static KokoEmotionEngine EmotionEngine
         {
-            get { lock (_lock) { return _emotion ??= new KokoEmotionEngine(Path.Combine(_vault ?? AppDomain.CurrentDomain.BaseDirectory, "kokonoe-data")); } }
+            get
+            {
+                lock (_lock)
+                {
+                    if (_emotion == null)
+                        _emotion = ResolveRequired<KokoEmotionEngine>();
+                    return _emotion;
+                }
+            }
         }
 
         public static KokoMemoryEngine KokoMemory
         {
-            get { lock (_lock) { return _kokoMemory ??= new KokoMemoryEngine(Path.Combine(_vault ?? AppDomain.CurrentDomain.BaseDirectory, "kokonoe-data"), EnhancedMemory, EmbeddingService); } }
+            get
+            {
+                lock (_lock)
+                {
+                    if (_kokoMemory == null)
+                        _kokoMemory = ResolveRequired<KokoMemoryEngine>();
+                    return _kokoMemory;
+                }
+            }
         }
 
         public static KokoHeartEngine Heart
@@ -616,7 +671,10 @@ namespace KokonoeAssistant
                             stateEngine: StateEngine,
                             goals:       GoalService,
                             habits:      HabitService,
-                            embeddings:  EmbeddingService);
+                            embeddings:  EmbeddingService,
+                            memory:      KokoMemory,
+                            emotion:     EmotionEngine,
+                            blackboard:  Blackboard);
                         // Wire brain's internal engines to LlmService
                         LlmService.Emotion    = _brain.Emotion;
                         LlmService.Memory     = _brain.Memory;
@@ -632,6 +690,7 @@ namespace KokonoeAssistant
 
         public static void Disposing()
         {
+            ServiceProvider? provider = null;
             lock (_lock)
             {
                 try
@@ -671,7 +730,14 @@ namespace KokonoeAssistant
                     _hyperAutomation = null; _processWatchdog = null;
                 }
                 catch (Exception suppressedEx634) { KokoSystemLog.Write("SERVICECONTAINER-CATCH", "Disposing failed near source line 634: " + suppressedEx634); }
+                finally
+                {
+                    provider = _serviceProvider;
+                    _serviceProvider = null;
+                    _vault = null;
+                }
             }
+            provider?.Dispose();
         }
     }
 }

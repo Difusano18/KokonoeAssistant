@@ -49,6 +49,7 @@ internal static class Program
             Run("Heartbeat dashboard writes markdown and html", HeartbeatDashboardWritesMarkdownAndHtml);
             Run("Semantic cache returns similar cached answer", SemanticCacheReturnsSimilarCachedAnswer);
             Run("Capability manifest advertises runtime routes", CapabilityManifestAdvertisesRuntimeRoutes);
+            Run("Service container DI preserves core singleton identity", ServiceContainerDiPreservesCoreSingletonIdentity);
             Run("Tool gateway verifies file writes and directories", ToolGatewayVerifiesFileWritesAndDirectories);
             Run("Tool gateway exposes confirmation and failures", ToolGatewayExposesConfirmationAndFailures);
             Run("Tool gateway stops execution plan after failure", ToolGatewayStopsExecutionPlanAfterFailure);
@@ -1364,6 +1365,50 @@ internal static class Program
         AssertTrue(manifest.Contains("PC control"), "manifest should advertise local PC control");
         AssertTrue(manifest.Contains("Wearable telemetry"), "manifest should advertise wearable telemetry");
         AssertTrue(manifest.Contains("never claim a capability is absent"), "manifest should block helpless stock replies");
+    }
+
+    private static void ServiceContainerDiPreservesCoreSingletonIdentity()
+    {
+        var dir = TempDir();
+        try
+        {
+            ServiceContainer.Initialize(dir, startHostedServices: false);
+            var providerField = typeof(ServiceContainer).GetField(
+                "_serviceProvider",
+                System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)
+                ?? throw new InvalidOperationException("DI provider field was not found.");
+            var provider = providerField.GetValue(null) as IServiceProvider
+                ?? throw new InvalidOperationException("DI provider was not initialized.");
+
+            AssertTrue(ReferenceEquals(provider.GetService(typeof(IKokoEmotionEngine)), ServiceContainer.EmotionEngine),
+                "emotion interface and legacy facade must resolve the same singleton");
+            AssertTrue(ReferenceEquals(provider.GetService(typeof(IKokoMemoryEngine)), ServiceContainer.KokoMemory),
+                "memory interface and legacy facade must resolve the same singleton");
+            AssertTrue(ReferenceEquals(provider.GetService(typeof(IKokoInternalBlackboardService)), ServiceContainer.Blackboard),
+                "blackboard interface and legacy facade must resolve the same singleton");
+            AssertTrue(ReferenceEquals(provider.GetService(typeof(IKokoProfileUpdateService)), ServiceContainer.ProfileUpdater),
+                "profile interface and legacy facade must resolve the same singleton");
+            AssertTrue(ReferenceEquals(provider.GetService(typeof(ILlmService)), provider.GetService(typeof(LlmService))),
+                "LLM interface and concrete registration must resolve the same singleton");
+            AssertTrue(ReferenceEquals(ServiceContainer.BrainEngine.Emotion, ServiceContainer.EmotionEngine),
+                "brain must use the DI emotion singleton instead of creating a split state");
+            AssertTrue(ReferenceEquals(ServiceContainer.BrainEngine.Memory, ServiceContainer.KokoMemory),
+                "brain must use the DI memory singleton instead of creating a split state");
+
+            var firstEmotion = ServiceContainer.EmotionEngine;
+            AssertTrue(ServiceContainer.IsInitialized, "container must report initialized while provider is alive");
+            ServiceContainer.Disposing();
+            AssertTrue(!ServiceContainer.IsInitialized, "disposing must reset initialization state");
+
+            ServiceContainer.Initialize(dir, startHostedServices: false);
+            AssertTrue(!ReferenceEquals(firstEmotion, ServiceContainer.EmotionEngine),
+                "reinitialization after disposal must create a fresh singleton graph");
+        }
+        finally
+        {
+            ServiceContainer.Disposing();
+            TryDeleteDir(dir);
+        }
     }
 
     private static void SelfRegulationClampsPulseSpike()

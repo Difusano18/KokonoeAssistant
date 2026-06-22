@@ -63,6 +63,7 @@
     <!-- Markdown rendering -->
     <PackageReference Include="Markdig" Version="0.38.0" />
     <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.3967.48" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="8.0.1" />
   </ItemGroup>
 
   <Target Name="BuildWebFrontend" BeforeTargets="Build"

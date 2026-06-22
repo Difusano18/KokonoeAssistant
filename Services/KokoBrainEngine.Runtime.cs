@@ -290,7 +290,7 @@ namespace KokonoeAssistant.Services
                 var frame = RecordCollectiveMind(userText ?? "", channel, now, publish, recentMessages);
                 var sb = new StringBuilder();
                 sb.AppendLine(frame.PromptBlock);
-                var recentBlackboard = ServiceContainer.Blackboard.BuildPromptBlock(6);
+                var recentBlackboard = _blackboard.BuildPromptBlock(6);
                 if (!string.IsNullOrWhiteSpace(recentBlackboard))
                 {
                     sb.AppendLine();
@@ -313,14 +313,14 @@ namespace KokonoeAssistant.Services
             IReadOnlyList<ChatRepository.ChatMessage>? recentMessages = null)
         {
             recentMessages ??= Array.Empty<ChatRepository.ChatMessage>();
-            var recentEvents = ServiceContainer.Blackboard.Recent(12);
+            var recentEvents = _blackboard.Recent(12);
             var frame = CollectiveMind.Build(userText, _state, recentMessages, recentEvents, channel, now);
             var shouldPublish = publish && ShouldPublishCollectiveFrame(now, frame.Decision);
             _state.LastCollectiveMindAt = now;
             _state.LastCollectiveMindDecision = frame.Decision;
             _state.LastCollectiveMindTrace = frame.TraceLine;
             if (shouldPublish)
-                KokoCollectiveMindService.PublishFrame(ServiceContainer.Blackboard, frame);
+                KokoCollectiveMindService.PublishFrame(_blackboard, frame);
             return frame;
         }
 

@@ -34,7 +34,7 @@ namespace KokonoeAssistant.Services
         }
     }
 
-    public sealed class KokoProfileUpdateService
+    public sealed class KokoProfileUpdateService : IKokoProfileUpdateService
     {
         private static readonly string[] PreferredProfilePaths =
         {

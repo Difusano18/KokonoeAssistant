@@ -22,7 +22,7 @@ namespace KokonoeAssistant.Services
     // Kokonoe активно регулює свій вираз — більша частина ніжних емоцій прихована.
     // ══════════════════════════════════════════════════════════════════════════
 
-    public class KokoEmotionEngine
+    public class KokoEmotionEngine : IKokoEmotionEngine
     {
         // ══════════════════════════════════════════════════════════════════════
         // ENUMS & CORE TYPES

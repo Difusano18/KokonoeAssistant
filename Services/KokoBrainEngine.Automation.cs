@@ -105,7 +105,7 @@ namespace KokonoeAssistant.Services
                     SaveState();
                 }
 
-                ServiceContainer.Blackboard.Publish("heart-agent", "watch_action", $"{name}: {action.Payload}", 0.9, action);
+                _blackboard.Publish("heart-agent", "watch_action", $"{name}: {action.Payload}", 0.9, action);
                 ServiceContainer.Heartbeat.Update("WATCH_ACTION", "received", name);
                 Log($"Watch action received: {name}; payload={TrimForLog(action.Payload, 120)}");
 
@@ -148,7 +148,7 @@ namespace KokonoeAssistant.Services
                 var path = $"Kokonoe/Watch Notes/{now:yyyy-MM-dd HHmmss} - quick note.md";
                 _obsidian.WriteNote(path, $"---\ntype: watch-note\ntags: [kokonoe, wearable, quick-note]\ncreated: {now:O}\n---\n\n# Watch note\n\n{text}\n\nForeground: `{foreground.ProcessName}` / {foreground.Title}\n");
                 Memory.RecordEpisodeBlocking(text, "watch_note", 0.72f, new[] { "wearable", "watch-action" });
-                ServiceContainer.Blackboard.Publish("vault-agent", "watch_note", path, 0.78);
+                _blackboard.Publish("vault-agent", "watch_note", path, 0.78);
                 Log($"Watch note wrote {path}");
             }
             catch (Exception ex)
@@ -214,7 +214,7 @@ namespace KokonoeAssistant.Services
                     return;
 
                 ServiceContainer.Heartbeat.Update("HEART_AGENT", "sample", state.Summary);
-                ServiceContainer.Blackboard.Publish("heart-agent", "sample", state.Summary, state.LiveStressScore / 100.0);
+                _blackboard.Publish("heart-agent", "sample", state.Summary, state.LiveStressScore / 100.0);
 
                 if (state.ContextSignal == "woke_up" &&
                     (_state.LastMorningBriefingAt <= DateTime.MinValue || now - _state.LastMorningBriefingAt > TimeSpan.FromHours(8)))
@@ -238,7 +238,7 @@ namespace KokonoeAssistant.Services
                         SaveState();
                     }
                     ServiceContainer.Heartbeat.Update("SOMATIC_MODE", "coach", "workout/running detected");
-                    ServiceContainer.Blackboard.Publish("heart-agent", "somatic_mode", "coach mode; nonessential proactive muted", 0.82);
+                    _blackboard.Publish("heart-agent", "somatic_mode", "coach mode; nonessential proactive muted", 0.82);
                 }
 
                 var highStrain = state.LiveStressScore >= 78 ||
@@ -268,7 +268,7 @@ namespace KokonoeAssistant.Services
                     }
 
                     ServiceContainer.Heartbeat.Update("SOMATIC_MODE", "quiet_operator", $"stress {state.LiveStressScore}/100");
-                    ServiceContainer.Blackboard.Publish("heart-agent", "quiet_operator", state.Summary, 0.88);
+                    _blackboard.Publish("heart-agent", "quiet_operator", state.Summary, 0.88);
                 }
             }
             catch (Exception ex)
@@ -313,7 +313,7 @@ Wearable: {state.Summary}
                     _state.LastMorningBriefingSummary = path;
                     SaveState();
                 }
-                ServiceContainer.Blackboard.Publish("vault-agent", "morning_briefing", path, 0.86);
+                _blackboard.Publish("vault-agent", "morning_briefing", path, 0.86);
                 Log($"Morning briefing wrote {path}");
             }
             catch (Exception ex)
@@ -335,7 +335,7 @@ Wearable: {state.Summary}
                 ServiceContainer.Heartbeat.Update("BRAIN", "online", $"mood={_state.CurrentMood}; thoughts={_state.PendingThoughts.Count}; autonomy={TrimForLog(_state.LastAutonomyDecision, 80)}");
                 ServiceContainer.Heartbeat.Update("VISION", _screenAwarenessInFlight == 1 ? "scanning" : "idle", $"last={FormatAge(_state.LastScreenAwarenessAt)}; failures={_state.VisionFailureCount}");
                 ServiceContainer.Heartbeat.Update("WATCH", ServiceContainer.WearableBridge.GetConnectionSnapshot().State, ServiceContainer.WearableTelemetry.State.Summary);
-                ServiceContainer.Heartbeat.Update("BLACKBOARD", "online", $"{ServiceContainer.Blackboard.Recent(10).Count} recent events");
+                ServiceContainer.Heartbeat.Update("BLACKBOARD", "online", $"{_blackboard.Recent(10).Count} recent events");
                 KokoSystemLog.Write("BRAIN", "state checkpoint saved");
             }
             catch (Exception ex)

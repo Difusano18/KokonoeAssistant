@@ -14,7 +14,7 @@ using Newtonsoft.Json.Linq;
 
 namespace KokonoeAssistant.Services
 {
-    public class LlmService
+    public class LlmService : ILlmService
     {
         public event Action<string, string>? OnProgress; // type, content
 
