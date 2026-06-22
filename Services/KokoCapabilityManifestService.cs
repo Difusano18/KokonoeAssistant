@@ -16,6 +16,7 @@ namespace KokonoeAssistant.Services
                 "- Screen/Vision: local screenshot, foreground window, browser/window titles, visible windows, CPU/RAM/top processes, and image/vision routes are available when host context provides them.",
                 "- PC control: safe local OS actions, app open, volume, process/system context, screenshot, shell-chain policy and confirmations for risky actions.",
                 "- Agent runtime: autonomous task board, background tasks, Obsidian backlog import, system-control execution through policy.",
+                "- CodeAct: restricted Python calculations and data transformations run through IKokoToolGateway; host filesystem, process, network, unsafe imports, and reflection are blocked, while code/output artifacts are retained for recovery.",
                 "- Wearable telemetry: Galaxy Watch bridge endpoint exists; pulse/location/body state must come from wearable samples when fresh, otherwise say data is stale/offline.",
                 "- Audio/voice: recording and Whisper transcription routes exist when configured.",
                 "- Calendar/goals/habits: local reminder, event, goal, and habit services exist.",

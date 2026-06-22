@@ -52,6 +52,9 @@ internal static class Program
             Run("Tool gateway verifies file writes and directories", ToolGatewayVerifiesFileWritesAndDirectories);
             Run("Tool gateway exposes confirmation and failures", ToolGatewayExposesConfirmationAndFailures);
             Run("Tool gateway stops execution plan after failure", ToolGatewayStopsExecutionPlanAfterFailure);
+            Run("CodeAct policy blocks host access", CodeActPolicyBlocksHostAccess);
+            Run("CodeAct tool executes restricted Python", CodeActToolExecutesRestrictedPython);
+            Run("CodeAct tool preserves syntax failure evidence", CodeActToolPreservesSyntaxFailureEvidence);
             Run("Self regulation clamps pulse spike", SelfRegulationClampsPulseSpike);
             Run("Self regulation protects vulnerable tone", SelfRegulationProtectsVulnerableTone);
             Run("Initiative respects low-power silence", InitiativeRespectsLowPowerSilence);
@@ -5733,6 +5736,89 @@ Insight: bridge stability and pulse quality are linked.
 
         AssertEqual(1, results.Count, "execution plan must stop after first failed tool");
         AssertTrue(!Directory.Exists(Path.Combine(workspace, "must-not-run")), "steps after failure must not execute");
+    }
+
+    private static void CodeActPolicyBlocksHostAccess()
+    {
+        AssertTrue(KokoCodeActPolicy.Validate("import math\nprint(math.sqrt(81))").Allowed,
+            "pure calculation imports should be available to CodeAct");
+        AssertTrue(!KokoCodeActPolicy.Validate("import os\nprint(os.getcwd())").Allowed,
+            "host OS imports must be rejected before execution");
+        AssertTrue(!KokoCodeActPolicy.Validate("print(open('secret.txt').read())").Allowed,
+            "direct file access must stay behind ToolGateway");
+        AssertTrue(!KokoCodeActPolicy.Validate("print((1).__class__)").Allowed,
+            "dunder traversal must be blocked to protect the restricted runtime");
+        AssertTrue(new LlmService().GetAvailableToolNames().Contains("codeact_python"),
+            "CodeAct must be exposed to the LLM tool catalog");
+        AssertTrue(new KokoCapabilityManifestService().BuildPromptBlock().Contains("CodeAct", StringComparison.Ordinal),
+            "orchestrator capability context must advertise the restricted CodeAct route");
+    }
+
+    private static void CodeActToolExecutesRestrictedPython()
+    {
+        var dir = TempDir();
+        try
+        {
+            var handler = new KokoCodeActToolHandler(dir);
+            var call = new KokoToolCall
+            {
+                Id = "calculation-1",
+                Name = "codeact_python",
+                Arguments = new Dictionary<string, string>
+                {
+                    ["runId"] = "test-calculation",
+                    ["code"] = "import math\nvalues = [4, 9, 16]\nprint(sum(math.sqrt(v) for v in values))"
+                }
+            };
+            var result = handler.ExecuteAsync(call, CancellationToken.None).GetAwaiter().GetResult();
+            var execution = result.RawResult as KokoCodeActExecutionResult;
+
+            AssertTrue(execution != null && execution.Executed, "accepted CodeAct code must reach the restricted runner");
+            AssertTrue(result.Success || result.Output.Contains("unavailable", StringComparison.OrdinalIgnoreCase),
+                "calculation should execute when Python is installed or report the missing runtime explicitly");
+            if (result.Success)
+                AssertTrue(result.Output.Contains("9.0", StringComparison.Ordinal), "CodeAct output must contain the real calculation result");
+            AssertTrue(File.Exists(Path.Combine(dir, "codeact-runs", execution!.CodeArtifact)),
+                "generated code must be preserved as recoverable context");
+            AssertTrue(File.Exists(Path.Combine(dir, "codeact-runs", execution.ResultArtifact)),
+                "execution output must be preserved as recoverable context");
+        }
+        finally
+        {
+            TryDeleteDir(dir);
+        }
+    }
+
+    private static void CodeActToolPreservesSyntaxFailureEvidence()
+    {
+        var dir = TempDir();
+        try
+        {
+            var handler = new KokoCodeActToolHandler(dir);
+            var result = handler.ExecuteAsync(new KokoToolCall
+            {
+                Id = "syntax-failure",
+                Name = "codeact_python",
+                Arguments = new Dictionary<string, string>
+                {
+                    ["runId"] = "test-errors",
+                    ["code"] = "for value in:\n    print(value)"
+                }
+            }, CancellationToken.None).GetAwaiter().GetResult();
+            var execution = result.RawResult as KokoCodeActExecutionResult;
+
+            AssertTrue(!result.Success, "invalid generated code must not be reported as success");
+            AssertTrue(execution != null && execution.Executed, "syntax validation belongs to the restricted runtime evidence");
+            AssertTrue(result.Output.Contains("SyntaxError", StringComparison.OrdinalIgnoreCase) ||
+                       result.Output.Contains("unavailable", StringComparison.OrdinalIgnoreCase),
+                "failure observation must explain syntax failure or missing Python");
+            AssertTrue(File.Exists(Path.Combine(dir, "codeact-runs", execution!.ResultArtifact)),
+                "failed output must remain available for replanning and reflection");
+        }
+        finally
+        {
+            TryDeleteDir(dir);
+        }
     }
 
     private static void SystemOverlordScansMetadataAndProposesCleanup()

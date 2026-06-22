@@ -314,9 +314,15 @@ namespace KokonoeAssistant
             {
                 lock (_lock)
                 {
-                    return _toolGateway ??= new KokoToolGateway(
+                    if (_toolGateway != null)
+                        return _toolGateway;
+                    var gateway = new KokoToolGateway(
                         FileTools,
                         new PcActionExecutor(pc: PcControl));
+                    gateway.Register(new KokoCodeActToolHandler(
+                        Path.Combine(_vault ?? AppDomain.CurrentDomain.BaseDirectory, "kokonoe-data")));
+                    _toolGateway = gateway;
+                    return _toolGateway;
                 }
             }
         }

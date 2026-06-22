@@ -715,6 +715,17 @@ namespace KokonoeAssistant.Services
                     },
                     required = new[] { "code" }
                 }),
+            Tool("codeact_python",
+                "Execute restricted Python for multi-step calculations and data transformations through IKokoToolGateway. Host filesystem, process, network, reflection, and unsafe imports are blocked. Failed code and output are preserved as run artifacts.",
+                new {
+                    type = "object",
+                    properties = new {
+                        code = new { type = "string", description = "Restricted Python code. Use print() for observable results." },
+                        runId = new { type = "string", description = "Stable agent run id used to group code and result artifacts." },
+                        timeoutMs = new { type = "integer", description = "Execution timeout from 500 to 15000 ms. Default 8000." }
+                    },
+                    required = new[] { "code" }
+                }),
 
             Tool("fs_read_text",
                 "Read a UTF-8 text file inside the Kokonoe agent file workspace.",
@@ -2589,6 +2600,9 @@ namespace KokonoeAssistant.Services
                         .ConfigureAwait(false);
                 }
 
+                if (name == "codeact_python")
+                    return await ExecuteCodeActToolAsync(args, ct).ConfigureAwait(false);
+
                 if (name is "create_agent_task" or "get_agent_board" or "sync_agent_backlog")
                     return ExecuteAgentTaskTool(name, args);
 
@@ -2608,6 +2622,9 @@ namespace KokonoeAssistant.Services
             if (name == "execute_python")
                 return new KokoSandboxExecutor(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "kokonoe-data", "agent-runtime-sandbox"))
                     .ExecutePythonAsync(Req(args, "code")).GetAwaiter().GetResult();
+
+            if (name == "codeact_python")
+                return ExecuteCodeActToolAsync(args, CancellationToken.None).GetAwaiter().GetResult();
 
             if (name is "create_agent_task" or "get_agent_board" or "sync_agent_backlog")
                 return ExecuteAgentTaskTool(name, args);
@@ -2719,6 +2736,22 @@ namespace KokonoeAssistant.Services
 
         private static string ExecuteFileTool(string name, JObject args)
             => ExecuteFileToolAsync(name, args, CancellationToken.None).GetAwaiter().GetResult();
+
+        private static async Task<string> ExecuteCodeActToolAsync(JObject args, CancellationToken ct)
+        {
+            var call = new KokoToolCall
+            {
+                Name = "codeact_python",
+                Arguments = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["code"] = Req(args, "code"),
+                    ["runId"] = args["runId"]?.ToString() ?? "llm",
+                    ["timeoutMs"] = args["timeoutMs"]?.ToString() ?? "8000"
+                }
+            };
+            var result = await ServiceContainer.ToolGateway.ExecuteAsync(call, ct).ConfigureAwait(false);
+            return result.ToLlmText();
+        }
 
         private string ExecuteAgentTaskTool(string name, JObject args)
         {
