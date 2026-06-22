@@ -256,6 +256,8 @@ internal static class Program
             Run("Action directive router handles inflected targets", ActionDirectiveRouterHandlesInflectedTargets);
             Run("Generated content route stays separate from surprise scan", GeneratedContentRouteStaysSeparateFromSurpriseScan);
             Run("Chat runtime defaults to streaming with bounded token budget", ChatRuntimeDefaultsToStreamingWithBoundedTokenBudget);
+            Run("Brain static context cache honors TTL", BrainStaticContextCacheHonorsTtl);
+            Run("Brain context keeps recent chat dynamic", BrainContextKeepsRecentChatDynamic);
             Run("Web bridge completes ping pong round trip", WebBridgeCompletesPingPongRoundTrip);
             Run("Web bridge reports unknown methods", WebBridgeReportsUnknownMethods);
             Run("Web bridge contract covers frontend and compatibility methods", WebBridgeContractCoversFrontendAndCompatibilityMethods);
@@ -5953,6 +5955,107 @@ Insight: bridge stability and pulse quality are linked.
         AssertEqual("response", response["type"]?.ToString(), "bridge must emit response envelope");
         AssertEqual("ping-1", response["id"]?.ToString(), "bridge must preserve correlation id");
         AssertEqual("pong", response["result"]?.ToString(), "ping must return pong");
+    }
+
+    private static void BrainStaticContextCacheHonorsTtl()
+    {
+        var dir = TempDir();
+        try
+        {
+            var obsidian = new ObsidianMcpService(dir);
+            obsidian.WriteNote("Creator/Profile.md", "# Profile\n\nCache version alpha");
+            using var health = new HealthService(dir);
+            using var chat = new ChatRepository(dir);
+            using var brain = new KokoBrainEngine(new LlmService(), health, obsidian, chat, dir);
+
+            var first = InvokePrivateStringTask(brain, "BuildStaticContextBlockAsync");
+            obsidian.WriteNote("Creator/Profile.md", "# Profile\n\nCache version beta");
+            var cached = InvokePrivateStringTask(brain, "BuildStaticContextBlockAsync");
+
+            AssertTrue(first.Contains("Cache version alpha"), "initial static block must read the vault profile");
+            AssertTrue(cached.Contains("Cache version alpha") && !cached.Contains("Cache version beta"),
+                "static block must be reused before TTL expiry");
+
+            SetPrivateField(brain, "_staticContextExpiry", DateTime.MinValue);
+            var refreshed = InvokePrivateStringTask(brain, "BuildStaticContextBlockAsync");
+            AssertTrue(refreshed.Contains("Cache version beta"), "expired static block must refresh from disk");
+            AssertEqual("1", GetPrivateField<long>(brain, "_staticContextCacheHits").ToString(),
+                "second static read should be one cache hit");
+            AssertEqual("2", GetPrivateField<long>(brain, "_staticContextCacheMisses").ToString(),
+                "initial and expired reads should be cache misses");
+        }
+        finally
+        {
+            TryDeleteDir(dir);
+        }
+    }
+
+    private static void BrainContextKeepsRecentChatDynamic()
+    {
+        var dir = TempDir();
+        try
+        {
+            var obsidian = new ObsidianMcpService(dir);
+            using var health = new HealthService(dir);
+            using var chat = new ChatRepository(dir);
+            using var brain = new KokoBrainEngine(new LlmService(), health, obsidian, chat, dir);
+            chat.InsertMessage(new ChatRepository.ChatMessage
+            {
+                Role = "user",
+                Content = "dynamic-context-first",
+                Timestamp = DateTime.Now.AddSeconds(-2)
+            });
+            _ = InvokePrivateStringTask(brain, "BuildContextAsync");
+
+            chat.InsertMessage(new ChatRepository.ChatMessage
+            {
+                Role = "user",
+                Content = "dynamic-context-second",
+                Timestamp = DateTime.Now
+            });
+            var second = InvokePrivateStringTask(brain, "BuildContextAsync");
+
+            AssertTrue(second.Contains("dynamic-context-second"),
+                "recent chat must be rebuilt even while static context is cached");
+            AssertTrue(GetPrivateField<long>(brain, "_staticContextCacheHits") >= 1,
+                "second full context build should reuse the static block");
+        }
+        finally
+        {
+            TryDeleteDir(dir);
+        }
+    }
+
+    private static string InvokePrivateStringTask(object target, string methodName)
+    {
+        var method = target.GetType().GetMethod(
+            methodName,
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)
+            ?? throw new InvalidOperationException($"Private method not found: {methodName}");
+        var arguments = method.GetParameters()
+            .Select(parameter => parameter.HasDefaultValue ? parameter.DefaultValue : null)
+            .ToArray();
+        var task = method.Invoke(target, arguments) as Task<string>
+            ?? throw new InvalidOperationException($"Private method did not return Task<string>: {methodName}");
+        return task.GetAwaiter().GetResult();
+    }
+
+    private static void SetPrivateField(object target, string fieldName, object value)
+    {
+        var field = target.GetType().GetField(
+            fieldName,
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)
+            ?? throw new InvalidOperationException($"Private field not found: {fieldName}");
+        field.SetValue(target, value);
+    }
+
+    private static T GetPrivateField<T>(object target, string fieldName)
+    {
+        var field = target.GetType().GetField(
+            fieldName,
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)
+            ?? throw new InvalidOperationException($"Private field not found: {fieldName}");
+        return (T)(field.GetValue(target) ?? throw new InvalidOperationException($"Private field is null: {fieldName}"));
     }
 
     private static void WebBridgeReportsUnknownMethods()

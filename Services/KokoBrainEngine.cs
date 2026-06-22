@@ -395,6 +395,13 @@ namespace KokonoeAssistant.Services
         private ContextAnalyzer?   _contextAnalyzer;
         private readonly ActivityAnalyzer _screenActivityAnalyzer = new();
 
+        private const int StaticContextTtlSeconds = 45;
+        private readonly SemaphoreSlim _staticContextCacheGate = new(1, 1);
+        private string? _cachedStaticContext;
+        private DateTime _staticContextExpiry = DateTime.MinValue;
+        private long _staticContextCacheHits;
+        private long _staticContextCacheMisses;
+
         // Screen context cache
         private string   _cachedScreenContext     = "";
         private DateTime _screenContextCachedAt   = DateTime.MinValue;
@@ -1902,29 +1909,15 @@ Summary: {summary}
             // Vault activity
             try
             {
-                var notes = _obsidian.ListNotes();
-                sb.AppendLine($"\n--- VAULT: {notes.Count} нотаток ---");
-                var recentNotes = notes
-                    .Select(p => new { p, time = File.GetLastWriteTime(Path.Combine(AppSettings.Load().VaultPath, p)) })
-                    .OrderByDescending(x => x.time)
-                    .Take(3)
-                    .ToList();
-                var vaultSyncLine = _state.LastAutoVaultSyncAt > DateTime.MinValue
-                    ? $"  Auto sync: {_state.LastAutoVaultSyncAt:dd.MM HH:mm}, pending exchanges: {_state.PendingVaultExchangeCount}/5"
-                    : "";
-                var vaultMaintenanceLine = _state.LastVaultMaintenanceAt > DateTime.MinValue
-                    ? $"  Architecture: {_state.LastVaultMaintenanceAt:dd.MM HH:mm} ({_state.LastVaultMaintenanceReason}) {_state.LastVaultMaintenanceSummary}"
-                    : "";
-                var vaultMaintenanceErrorLine = !string.IsNullOrWhiteSpace(_state.LastVaultMaintenanceError)
-                    ? $"  Architecture error: {_state.LastVaultMaintenanceError}"
-                    : "";
-                foreach (var n in recentNotes)
-                    sb.AppendLine($"  {n.p} (змінено {n.time:dd.MM HH:mm})");
-                if (!string.IsNullOrEmpty(vaultSyncLine)) sb.AppendLine(vaultSyncLine);
-                if (!string.IsNullOrEmpty(vaultMaintenanceLine)) sb.AppendLine(vaultMaintenanceLine);
-                if (!string.IsNullOrEmpty(vaultMaintenanceErrorLine)) sb.AppendLine(vaultMaintenanceErrorLine);
+                sb.Append(await BuildStaticContextBlockAsync().ConfigureAwait(false));
+                if (_state.LastAutoVaultSyncAt > DateTime.MinValue)
+                    sb.AppendLine($"  Auto sync: {_state.LastAutoVaultSyncAt:dd.MM HH:mm}, pending exchanges: {_state.PendingVaultExchangeCount}/5");
+                if (_state.LastVaultMaintenanceAt > DateTime.MinValue)
+                    sb.AppendLine($"  Architecture: {_state.LastVaultMaintenanceAt:dd.MM HH:mm} ({_state.LastVaultMaintenanceReason}) {_state.LastVaultMaintenanceSummary}");
+                if (!string.IsNullOrWhiteSpace(_state.LastVaultMaintenanceError))
+                    sb.AppendLine($"  Architecture error: {_state.LastVaultMaintenanceError}");
             }
-            catch (Exception ex) { KokoSystemLog.Write("BRAIN-CATCH", "BuildContextAsync failed near source line 1927: " + ex); }
+            catch (Exception ex) { KokoSystemLog.Write("BRAIN-CATCH", "BuildContextAsync static context failed: " + ex); }
 
             // Internal state
             sb.AppendLine($"\n--- ВНУТРІШНІЙ СТАН KOKONOE ---");
@@ -2109,24 +2102,6 @@ Summary: {summary}
             }
             catch (Exception ex) { KokoSystemLog.Write("BRAIN-CATCH", "BuildContextAsync failed near source line 2110: " + ex); }
 
-            // ── Vault: Досьє (хто він для Kokonoe) ───────────────────
-            try
-            {
-                var dossier = _obsidian.ReadNote("Kokonoe/Досьє.md");
-                if (!string.IsNullOrEmpty(dossier))
-                    sb.AppendLine($"\n--- ДОСЬЄ (Kokonoe про нього) ---\n{dossier[..Math.Min(700, dossier.Length)]}");
-            }
-            catch (Exception ex) { KokoSystemLog.Write("BRAIN-CATCH", "BuildContextAsync failed near source line 2119: " + ex); }
-
-            // ── Vault: Рефлексія (остання) ────────────────────────────
-            try
-            {
-                var reflection = _obsidian.ReadNote("Kokonoe/Рефлексія.md");
-                if (!string.IsNullOrEmpty(reflection))
-                    sb.AppendLine($"\n--- РЕФЛЕКСІЯ ---\n{reflection[..Math.Min(500, reflection.Length)]}");
-            }
-            catch (Exception ex) { KokoSystemLog.Write("BRAIN-CATCH", "BuildContextAsync failed near source line 2128: " + ex); }
-
             // ── Внутрішні монологи (останні 5) ───────────────────────
             try
             {
@@ -2141,6 +2116,75 @@ Summary: {summary}
             catch (Exception ex) { KokoSystemLog.Write("BRAIN-CATCH", "BuildContextAsync failed near source line 2141: " + ex); }
 
             return sb.ToString();
+        }
+
+        private async Task<string> BuildStaticContextBlockAsync()
+        {
+            var now = DateTime.UtcNow;
+            lock (_lock)
+            {
+                if (_cachedStaticContext != null && now < _staticContextExpiry)
+                {
+                    _staticContextCacheHits++;
+                    return _cachedStaticContext;
+                }
+            }
+
+            await _staticContextCacheGate.WaitAsync().ConfigureAwait(false);
+            try
+            {
+                now = DateTime.UtcNow;
+                lock (_lock)
+                {
+                    if (_cachedStaticContext != null && now < _staticContextExpiry)
+                    {
+                        _staticContextCacheHits++;
+                        return _cachedStaticContext;
+                    }
+                }
+
+                var sb = new StringBuilder();
+                var notes = _obsidian.ListNotes();
+                sb.AppendLine($"\n--- VAULT: {notes.Count} notes ---");
+                foreach (var note in notes
+                             .Select(path => new
+                             {
+                                 Path = path,
+                                 ModifiedAt = File.GetLastWriteTime(Path.Combine(_obsidian.VaultPath, path))
+                             })
+                             .OrderByDescending(note => note.ModifiedAt)
+                             .Take(3))
+                {
+                    sb.AppendLine($"  {note.Path} (modified {note.ModifiedAt:dd.MM HH:mm})");
+                }
+
+                AppendStaticVaultNote(sb, "Creator/Profile.md", "CREATOR PROFILE", 900);
+                AppendStaticVaultNote(sb, "Kokonoe/Досьє.md", "DOSSIER", 700);
+                AppendStaticVaultNote(sb, "Kokonoe/Рефлексія.md", "REFLECTION", 500);
+
+                var built = sb.ToString();
+                lock (_lock)
+                {
+                    _cachedStaticContext = built;
+                    _staticContextExpiry = now.AddSeconds(StaticContextTtlSeconds);
+                    _staticContextCacheMisses++;
+                }
+                KokoSystemLog.Write("BRAIN-CONTEXT", $"static context refreshed; ttl={StaticContextTtlSeconds}s notes={notes.Count}");
+                return built;
+            }
+            finally
+            {
+                _staticContextCacheGate.Release();
+            }
+        }
+
+        private void AppendStaticVaultNote(StringBuilder sb, string path, string heading, int maxChars)
+        {
+            var content = _obsidian.ReadNote(path);
+            if (string.IsNullOrWhiteSpace(content))
+                return;
+            sb.AppendLine($"\n--- {heading} ---");
+            sb.AppendLine(content[..Math.Min(maxChars, content.Length)]);
         }
 
         // ---- PERSONALITY INJECTION ----
@@ -7793,6 +7837,7 @@ CHAT:
             _stateCheckpointTimer.Dispose();
             _dailyReviewTimer.Dispose();
             _bgLlmSemaphore.Dispose();
+            _staticContextCacheGate.Dispose();
         }
     }
 }
