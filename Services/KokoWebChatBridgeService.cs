@@ -36,6 +36,7 @@ namespace KokonoeAssistant.Services
             _fallback = fallback ?? throw new ArgumentNullException(nameof(fallback));
             _contextBuilder = contextBuilder ?? (_ => null);
             _bridge.Register("chat.send", HandleSendAsync);
+            _bridge.Register("send_message", HandleSendAsync);
         }
 
         private async Task<object?> HandleSendAsync(JToken? payload, CancellationToken ct)

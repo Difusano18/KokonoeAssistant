@@ -258,11 +258,13 @@ internal static class Program
             Run("Chat runtime defaults to streaming with bounded token budget", ChatRuntimeDefaultsToStreamingWithBoundedTokenBudget);
             Run("Web bridge completes ping pong round trip", WebBridgeCompletesPingPongRoundTrip);
             Run("Web bridge reports unknown methods", WebBridgeReportsUnknownMethods);
+            Run("Web bridge contract covers frontend and compatibility methods", WebBridgeContractCoversFrontendAndCompatibilityMethods);
             Run("Web startup policy defaults to web with explicit rollback", WebStartupPolicyDefaultsToWebWithExplicitRollback);
             Run("Web chat bridge streams correlated chunks", WebChatBridgeStreamsCorrelatedChunks);
             Run("Web chat bridge resets partial stream before fallback", WebChatBridgeResetsPartialStreamBeforeFallback);
             Run("Web chat bridge publishes proactive brain messages", WebChatBridgePublishesProactiveBrainMessages);
             Run("Web agent bridge returns camel case snapshot", WebAgentBridgeReturnsCamelCaseSnapshot);
+            Run("Web agent bridge creates task from shell", WebAgentBridgeCreatesTaskFromShell);
             Run("Web agent bridge publishes live activity", WebAgentBridgePublishesLiveActivity);
             Run("Web vault bridge caches and refreshes status", WebVaultBridgeCachesAndRefreshesStatus);
             Run("Web settings bridge masks and preserves secrets", WebSettingsBridgeMasksAndPreservesSecrets);
@@ -5963,6 +5965,47 @@ Insight: bridge stability and pulse quality are linked.
             "unknown bridge method must return a structured error");
     }
 
+    private static void WebBridgeContractCoversFrontendAndCompatibilityMethods()
+    {
+        var dir = TempDir();
+        try
+        {
+            var envelopes = new List<string>();
+            using var bridge = new KokoWebBridgeService(envelopes.Add);
+            using var chat = new KokoWebChatBridgeService(
+                bridge,
+                (text, context, chunk, ct) => Task.FromResult<string?>("ok"),
+                (text, context, ct) => Task.FromResult("ok"));
+            var tasks = new KokoAgentTaskService(Path.Combine(dir, "tasks")) { AutoStartOnAdd = false };
+            using var agents = new KokoWebAgentBridgeService(bridge, tasks);
+            using var settings = new KokoWebSettingsBridgeService(
+                bridge,
+                () => new AppSettings(),
+                _ => null);
+            using var vault = new KokoWebVaultBridgeService(bridge, new ObsidianMcpService(Path.Combine(dir, "vault")));
+            using var telegram = new KokoWebTelegramBridgeService(
+                bridge,
+                new KokoTelegramRuntimeStatusService(),
+                () => new AppSettings());
+
+            var required = new[]
+            {
+                "ping", "chat.send", "agent.snapshot", "agent.start", "settings.get", "settings.update",
+                "vault.status", "vault.refresh", "telegram.status",
+                "send_message", "get_agent_tasks", "start_agent_task", "load_settings", "save_settings",
+                "vault_status", "telegram_status"
+            };
+            foreach (var method in required)
+                AssertTrue(bridge.RegisteredMethods.Contains(method, StringComparer.OrdinalIgnoreCase),
+                    "bridge contract is missing method: " + method);
+            AssertTrue(bridge.RegisteredMethods.Count >= 16, "composed shell bridge should expose the full contract");
+        }
+        finally
+        {
+            TryDeleteDir(dir);
+        }
+    }
+
     private static void WebStartupPolicyDefaultsToWebWithExplicitRollback()
     {
         var normal = KokoUiStartupPolicy.Resolve(Array.Empty<string>(), null, null);
@@ -6064,6 +6107,33 @@ Insight: bridge stability and pulse quality are linked.
         AssertEqual("1", response["result"]?["tasks"]?.Count().ToString(), "snapshot must include current tasks");
         AssertEqual("Inspect the current workspace", response["result"]?["tasks"]?[0]?["objective"]?.ToString(),
             "task objective must cross the bridge");
+    }
+
+    private static void WebAgentBridgeCreatesTaskFromShell()
+    {
+        var dir = TempDir();
+        try
+        {
+            var envelopes = new List<string>();
+            var tasks = new KokoAgentTaskService(dir) { AutoStartOnAdd = false };
+            using var bridge = new KokoWebBridgeService(envelopes.Add);
+            using var agent = new KokoWebAgentBridgeService(bridge, tasks);
+
+            bridge.HandleMessageAsync("""{"type":"request","id":"agent-start","method":"agent.start","payload":{"objective":"Inspect bridge contract","priority":8,"start":false}}""")
+                .GetAwaiter().GetResult();
+
+            var response = envelopes.Select(Newtonsoft.Json.Linq.JObject.Parse)
+                .Single(x => x["id"]?.ToString() == "agent-start");
+            AssertTrue(string.IsNullOrWhiteSpace(response["error"]?.ToString()), "agent.start must return a normal response");
+            AssertTrue(!string.IsNullOrWhiteSpace(response["result"]?["taskId"]?.ToString()), "agent.start must return task id");
+            AssertTrue(response["result"]?["started"]?.Value<bool>() == false, "start=false must keep runner paused");
+            AssertTrue(tasks.GetSnapshot().Tasks.Any(task => task.Objective == "Inspect bridge contract" && task.Priority == 8),
+                "web handler must create a real task in KokoAgentTaskService");
+        }
+        finally
+        {
+            TryDeleteDir(dir);
+        }
     }
 
     private static void WebAgentBridgePublishesLiveActivity()

@@ -21,6 +21,7 @@ namespace KokonoeAssistant.Services
             _status = status ?? throw new ArgumentNullException(nameof(status));
             _settings = settings ?? AppSettings.Load;
             _bridge.Register("telegram.status", HandleStatusAsync);
+            _bridge.Register("telegram_status", HandleStatusAsync);
             _status.Changed += OnChanged;
         }
 

@@ -40,6 +40,8 @@ namespace KokonoeAssistant.Services
             _applied = applied;
             _bridge.Register("settings.get", HandleGetAsync);
             _bridge.Register("settings.update", HandleUpdateAsync);
+            _bridge.Register("load_settings", HandleGetAsync);
+            _bridge.Register("save_settings", HandleUpdateAsync);
         }
 
         private Task<object?> HandleGetAsync(JToken? payload, CancellationToken ct)

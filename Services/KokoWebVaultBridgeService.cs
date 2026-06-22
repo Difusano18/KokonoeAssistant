@@ -25,6 +25,7 @@ namespace KokonoeAssistant.Services
             _vault = vault ?? throw new ArgumentNullException(nameof(vault));
             _bridge.Register("vault.status", (_, ct) => GetStatusAsync(force: false, publish: false, ct));
             _bridge.Register("vault.refresh", (_, ct) => GetStatusAsync(force: true, publish: true, ct));
+            _bridge.Register("vault_status", (_, ct) => GetStatusAsync(force: false, publish: false, ct));
         }
 
         private async Task<object?> GetStatusAsync(bool force, bool publish, CancellationToken ct)

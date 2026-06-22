@@ -39,6 +39,9 @@ namespace KokonoeAssistant.Services
             _handlers[method.Trim()] = handler ?? throw new ArgumentNullException(nameof(handler));
         }
 
+        public IReadOnlyCollection<string> RegisteredMethods
+            => _handlers.Keys.OrderBy(name => name, StringComparer.OrdinalIgnoreCase).ToArray();
+
         public async Task HandleMessageAsync(string json, CancellationToken ct = default)
         {
             if (_disposed)

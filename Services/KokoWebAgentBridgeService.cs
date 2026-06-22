@@ -17,6 +17,9 @@ namespace KokonoeAssistant.Services
             _bridge = bridge ?? throw new ArgumentNullException(nameof(bridge));
             _tasks = tasks ?? throw new ArgumentNullException(nameof(tasks));
             _bridge.Register("agent.snapshot", HandleSnapshotAsync);
+            _bridge.Register("get_agent_tasks", HandleSnapshotAsync);
+            _bridge.Register("agent.start", HandleStartAsync);
+            _bridge.Register("start_agent_task", HandleStartAsync);
             _tasks.ActivityChanged += OnActivityChanged;
             _tasks.TaskCompleted += OnTaskCompleted;
         }
@@ -25,6 +28,30 @@ namespace KokonoeAssistant.Services
         {
             ct.ThrowIfCancellationRequested();
             return Task.FromResult<object?>(BuildSnapshotPayload());
+        }
+
+        private Task<object?> HandleStartAsync(JToken? payload, CancellationToken ct)
+        {
+            ct.ThrowIfCancellationRequested();
+            if (_disposed)
+                throw new ObjectDisposedException(nameof(KokoWebAgentBridgeService));
+            var objective = payload?["objective"]?.ToString()?.Trim() ?? "";
+            if (string.IsNullOrWhiteSpace(objective))
+                throw new InvalidOperationException("Agent objective is empty.");
+            if (objective.Length > 16_000)
+                throw new InvalidOperationException("Agent objective exceeds 16000 characters.");
+
+            var priority = Math.Clamp(payload?["priority"]?.Value<int?>() ?? 5, 1, 10);
+            var start = payload?["start"]?.Value<bool?>() ?? true;
+            var task = _tasks.AddTask(objective, priority);
+            if (start)
+                _tasks.Start();
+            return Task.FromResult<object?>(new
+            {
+                taskId = task.Id,
+                started = start,
+                snapshot = BuildSnapshotPayload()
+            });
         }
 
         private void OnActivityChanged(KokoAgentActivitySnapshot activity)
