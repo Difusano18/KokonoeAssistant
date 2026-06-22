@@ -38,6 +38,8 @@ namespace KokonoeAssistant.Services
         public int Iteration { get; init; }
         public IReadOnlyList<KokoAgentObservation> Observations { get; init; } = Array.Empty<KokoAgentObservation>();
         public IReadOnlyCollection<string> AvailableTools { get; init; } = Array.Empty<string>();
+        public IReadOnlyCollection<KokoToolDescriptor> AvailableToolDescriptors { get; init; } = Array.Empty<KokoToolDescriptor>();
+        public string ToolPromptBlock { get; init; } = "";
         public IReadOnlyList<BlackboardEvent> Blackboard { get; init; } = Array.Empty<BlackboardEvent>();
     }
 

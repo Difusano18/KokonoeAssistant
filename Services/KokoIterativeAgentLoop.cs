@@ -63,13 +63,16 @@ namespace KokonoeAssistant.Services
                 while (state.Iteration < state.MaxIterations)
                 {
                     ct.ThrowIfCancellationRequested();
+                    var availableTools = _tools.GetToolsForCapabilities(agent.Capabilities);
                     var context = new KokoAgentTurnContext
                     {
                         RunId = state.RunId,
                         Objective = state.Objective,
                         Iteration = state.Iteration + 1,
                         Observations = state.Observations.ToList(),
-                        AvailableTools = _tools.ToolNames,
+                        AvailableTools = availableTools.Select(tool => tool.Name).ToArray(),
+                        AvailableToolDescriptors = availableTools,
+                        ToolPromptBlock = _tools.BuildToolPromptBlock(agent.Capabilities),
                         Blackboard = _blackboard?.Recent(8) ?? Array.Empty<BlackboardEvent>()
                     };
 

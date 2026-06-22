@@ -53,6 +53,7 @@ internal static class Program
             Run("Tool gateway verifies file writes and directories", ToolGatewayVerifiesFileWritesAndDirectories);
             Run("Tool gateway exposes confirmation and failures", ToolGatewayExposesConfirmationAndFailures);
             Run("Tool gateway stops execution plan after failure", ToolGatewayStopsExecutionPlanAfterFailure);
+            Run("Tool registry exposes capability scoped manifest", ToolRegistryExposesCapabilityScopedManifest);
             Run("CodeAct policy blocks host access", CodeActPolicyBlocksHostAccess);
             Run("CodeAct tool executes restricted Python", CodeActToolExecutesRestrictedPython);
             Run("CodeAct tool preserves syntax failure evidence", CodeActToolPreservesSyntaxFailureEvidence);
@@ -5791,6 +5792,34 @@ Insight: bridge stability and pulse quality are linked.
         AssertTrue(!Directory.Exists(Path.Combine(workspace, "must-not-run")), "steps after failure must not execute");
     }
 
+    private static void ToolRegistryExposesCapabilityScopedManifest()
+    {
+        var workspace = TempDir();
+        try
+        {
+            var gateway = new KokoToolGateway(new KokoFileSystemToolService(workspace), new PcActionExecutor());
+            gateway.Register(new KokoCodeActToolHandler(workspace));
+
+            AssertEqual(9, gateway.Tools.Count, "registry must describe every executable gateway handler");
+            var delete = gateway.Tools.Single(tool => tool.Name == "fs_delete");
+            AssertEqual(KokoToolRisk.Destructive, delete.Risk, "delete must be classified as destructive");
+            AssertTrue(delete.RequiresConfirmation, "delete descriptor must advertise confirmation");
+
+            var coderTools = gateway.GetToolsForCapabilities(new[] { "code", "sandbox" });
+            AssertTrue(coderTools.Any(tool => tool.Name == "codeact_python"), "coder manifest must include CodeAct");
+            AssertTrue(coderTools.Any(tool => tool.Name == "fs_write_text"), "coder manifest must include workspace writes");
+            AssertTrue(coderTools.All(tool => !tool.Name.StartsWith("pc_", StringComparison.Ordinal)), "coder manifest must mask unrelated PC controls");
+
+            var prompt = gateway.BuildToolPromptBlock(new[] { "files", "maintenance" });
+            AssertTrue(prompt.Contains("fs_delete [filesystem/Destructive]", StringComparison.Ordinal), "prompt must expose risk metadata");
+            AssertTrue(prompt.Contains("confirmation required", StringComparison.OrdinalIgnoreCase), "prompt must expose confirmation policy");
+        }
+        finally
+        {
+            TryDeleteDir(workspace);
+        }
+    }
+
     private static void CodeActPolicyBlocksHostAccess()
     {
         AssertTrue(KokoCodeActPolicy.Validate("import math\nprint(math.sqrt(81))").Allowed,
@@ -9203,6 +9232,12 @@ Persistent Obsidian context is now a core project requirement.
 
         public List<KokoToolCall> Calls { get; } = new();
         public IReadOnlyCollection<string> ToolNames => new[] { "test.write", "test.probe", "test.retry", "test.risky" };
+        public IReadOnlyCollection<KokoToolDescriptor> Tools => ToolNames.Select(KokoToolRegistry.InferDescriptor).ToArray();
+
+        public IReadOnlyCollection<KokoToolDescriptor> GetToolsForCapabilities(IEnumerable<string>? capabilities) => Tools;
+
+        public string BuildToolPromptBlock(IEnumerable<string>? capabilities = null)
+            => "AVAILABLE TOOLS\n" + string.Join("\n", ToolNames.Select(name => "- " + name));
 
         public void Register(IKokoToolHandler handler)
             => throw new NotSupportedException();

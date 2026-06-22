@@ -48,6 +48,9 @@ namespace KokonoeAssistant.Services
     public interface IKokoToolGateway
     {
         IReadOnlyCollection<string> ToolNames { get; }
+        IReadOnlyCollection<KokoToolDescriptor> Tools { get; }
+        IReadOnlyCollection<KokoToolDescriptor> GetToolsForCapabilities(IEnumerable<string>? capabilities);
+        string BuildToolPromptBlock(IEnumerable<string>? capabilities = null);
         void Register(IKokoToolHandler handler);
         Task<KokoToolResult> ExecuteAsync(KokoToolCall call, CancellationToken ct = default);
         Task<IReadOnlyList<KokoToolResult>> ExecutePlanAsync(IEnumerable<KokoToolCall> calls, CancellationToken ct = default);
@@ -55,8 +58,7 @@ namespace KokonoeAssistant.Services
 
     public sealed class KokoToolGateway : IKokoToolGateway
     {
-        private readonly Dictionary<string, IKokoToolHandler> _handlers = new(StringComparer.OrdinalIgnoreCase);
-        private readonly object _lock = new();
+        private readonly KokoToolRegistry _registry = new();
 
         public KokoToolGateway(IKokoFileSystemToolService fileSystem, PcActionExecutor pcExecutor)
         {
@@ -68,16 +70,18 @@ namespace KokonoeAssistant.Services
         }
 
         public IReadOnlyCollection<string> ToolNames
-        {
-            get { lock (_lock) return _handlers.Keys.OrderBy(x => x).ToArray(); }
-        }
+            => _registry.Tools.Select(tool => tool.Name).ToArray();
+
+        public IReadOnlyCollection<KokoToolDescriptor> Tools => _registry.Tools;
+
+        public IReadOnlyCollection<KokoToolDescriptor> GetToolsForCapabilities(IEnumerable<string>? capabilities)
+            => _registry.SelectForCapabilities(capabilities);
+
+        public string BuildToolPromptBlock(IEnumerable<string>? capabilities = null)
+            => _registry.BuildPromptBlock(capabilities);
 
         public void Register(IKokoToolHandler handler)
-        {
-            if (handler == null) throw new ArgumentNullException(nameof(handler));
-            if (string.IsNullOrWhiteSpace(handler.Name)) throw new ArgumentException("Tool handler name is empty.", nameof(handler));
-            lock (_lock) _handlers[handler.Name.Trim()] = handler;
-        }
+            => _registry.Register(handler);
 
         public async Task<KokoToolResult> ExecuteAsync(KokoToolCall call, CancellationToken ct = default)
         {
@@ -85,9 +89,7 @@ namespace KokonoeAssistant.Services
             if (string.IsNullOrWhiteSpace(call.Name))
                 return Failure(call, "tool name is empty");
 
-            IKokoToolHandler? handler;
-            lock (_lock) _handlers.TryGetValue(call.Name.Trim(), out handler);
-            if (handler == null)
+            if (!_registry.TryResolve(call.Name, out var handler) || handler == null)
                 return Failure(call, $"tool is not registered: {call.Name}");
 
             var watch = Stopwatch.StartNew();

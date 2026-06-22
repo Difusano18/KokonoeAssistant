@@ -478,7 +478,9 @@ namespace KokonoeAssistant.Services
                 ? "\nVault tools are allowed. Read before writing."
                 : "";
             var toolCatalog = step.Kind is KokoAgentStepKind.Plan or KokoAgentStepKind.Implement or KokoAgentStepKind.Vault
-                ? "\nAvailable tools:\n" + _llm.DescribeAvailableTools()
+                ? "\nAvailable model tools:\n" + _llm.DescribeAvailableTools()
+                    + "\n\nVerified gateway tools:\n"
+                    + ServiceContainer.ToolGateway.BuildToolPromptBlock(ToolCapabilitiesFor(step.Kind))
                 : "";
             EmitActivity("analyze", ToolNameFor(step.Kind), task.Objective, $"Asking model for {step.Kind} result.", task.Id, step.Id);
             var prompt = $"""
@@ -1355,6 +1357,14 @@ Objective: {task.Objective}
             KokoAgentStepKind.HardReset => "HardReset",
             KokoAgentStepKind.Report => "Reporter",
             _ => "unknown"
+        };
+
+        private static IReadOnlyCollection<string> ToolCapabilitiesFor(KokoAgentStepKind kind) => kind switch
+        {
+            KokoAgentStepKind.Vault => new[] { "vault-read", "vault-write" },
+            KokoAgentStepKind.Implement => new[] { "code", "sandbox", "files" },
+            KokoAgentStepKind.Plan => new[] { "routing" },
+            _ => Array.Empty<string>()
         };
 
         private static string AgentIdFor(KokoAgentStepKind kind) => kind switch
