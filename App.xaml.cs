@@ -3,6 +3,7 @@ using System.IO;
 using System.Windows;
 using System.Windows.Threading;
 using KokonoeAssistant.Services;
+using KokonoeAssistant.Windows;
 using WinApp    = System.Windows.Application;
 using WMsgBox   = System.Windows.MessageBox;
 
@@ -19,12 +20,17 @@ namespace KokonoeAssistant
             // "Cannot re-initialize ResourceDictionary instance"
             base.OnStartup(e);
 
+            AppSettings settings;
             try
             {
-                var settings = AppSettings.Load();
+                settings = AppSettings.Load();
                 ThemeManager.ApplyTheme(settings.MatrixColor);
             }
-            catch (Exception suppressedEx26) { KokoSystemLog.Write("APP.XAML-CATCH", "OnStartup failed near source line 26: " + suppressedEx26); }
+            catch (Exception suppressedEx26)
+            {
+                KokoSystemLog.Write("APP.XAML-CATCH", "OnStartup failed near source line 26: " + suppressedEx26);
+                settings = new AppSettings();
+            }
 
             // Global unhandled exception handlers
             AppDomain.CurrentDomain.UnhandledException += (s, ex) =>
@@ -54,6 +60,45 @@ namespace KokonoeAssistant
             };
 
             StartUiWatchdog();
+            OpenInitialWindow(e.Args, settings);
+        }
+
+        private void OpenInitialWindow(string[] args, AppSettings settings)
+        {
+            var decision = KokoUiStartupPolicy.Resolve(
+                args,
+                Environment.GetEnvironmentVariable(KokoUiStartupPolicy.EnvironmentVariable),
+                settings.UiShell);
+            KokoSystemLog.Write("UI-STARTUP", $"mode={decision.Mode} source={decision.Source}");
+
+            if (decision.Mode == KokoUiMode.LegacyWpf)
+            {
+                ShowAsMainWindow(new MainWindow());
+                return;
+            }
+
+            var shell = new ShellWindow();
+            shell.InitializationFailed += error => Dispatcher.Invoke(() => FallBackToLegacy(shell, error));
+            ShowAsMainWindow(shell);
+        }
+
+        private void FallBackToLegacy(ShellWindow shell, string error)
+        {
+            if (!ReferenceEquals(MainWindow, shell))
+                return;
+
+            KokoSystemLog.Write("UI-STARTUP", "Web shell failed; activating frozen WPF fallback: " + error);
+            shell.TransferServiceLifetimeToFallback();
+            var legacy = new MainWindow();
+            ShowAsMainWindow(legacy);
+            shell.Close();
+        }
+
+        private void ShowAsMainWindow(Window window)
+        {
+            MainWindow = window;
+            ShutdownMode = ShutdownMode.OnMainWindowClose;
+            window.Show();
         }
 
         private void StartUiWatchdog()

@@ -255,8 +255,10 @@ internal static class Program
             Run("Chat runtime defaults to streaming with bounded token budget", ChatRuntimeDefaultsToStreamingWithBoundedTokenBudget);
             Run("Web bridge completes ping pong round trip", WebBridgeCompletesPingPongRoundTrip);
             Run("Web bridge reports unknown methods", WebBridgeReportsUnknownMethods);
+            Run("Web startup policy defaults to web with explicit rollback", WebStartupPolicyDefaultsToWebWithExplicitRollback);
             Run("Web chat bridge streams correlated chunks", WebChatBridgeStreamsCorrelatedChunks);
             Run("Web chat bridge resets partial stream before fallback", WebChatBridgeResetsPartialStreamBeforeFallback);
+            Run("Web chat bridge publishes proactive brain messages", WebChatBridgePublishesProactiveBrainMessages);
             Run("Web agent bridge returns camel case snapshot", WebAgentBridgeReturnsCamelCaseSnapshot);
             Run("Web agent bridge publishes live activity", WebAgentBridgePublishesLiveActivity);
             Run("Web vault bridge caches and refreshes status", WebVaultBridgeCachesAndRefreshesStatus);
@@ -5872,6 +5874,21 @@ Insight: bridge stability and pulse quality are linked.
             "unknown bridge method must return a structured error");
     }
 
+    private static void WebStartupPolicyDefaultsToWebWithExplicitRollback()
+    {
+        var normal = KokoUiStartupPolicy.Resolve(Array.Empty<string>(), null, null);
+        AssertEqual(KokoUiMode.Web, normal.Mode, "new installations must start the web shell");
+
+        var environment = KokoUiStartupPolicy.Resolve(Array.Empty<string>(), "legacy", "web");
+        AssertEqual(KokoUiMode.LegacyWpf, environment.Mode, "environment rollback must override settings");
+
+        var argument = KokoUiStartupPolicy.Resolve(new[] { "--web-shell", "--legacy-wpf" }, "web", "web");
+        AssertEqual(KokoUiMode.Web, argument.Mode, "the first explicit UI argument must win deterministically");
+
+        AssertEqual("web", KokoUiStartupPolicy.NormalizeConfiguredMode("nonsense"),
+            "invalid persisted modes must recover to the supported web shell");
+    }
+
     private static void WebChatBridgeStreamsCorrelatedChunks()
     {
         var envelopes = new List<string>();
@@ -5919,6 +5936,25 @@ Insight: bridge stability and pulse quality are linked.
         var completeIndex = parsed.FindIndex(x => x["channel"]?.ToString() == "chat.completed");
         AssertTrue(resetIndex >= 0 && completeIndex > resetIndex, "fallback must reset partial stream before completion");
         AssertEqual("tool result", parsed[completeIndex]["payload"]?["reply"]?.ToString(), "fallback reply must be authoritative");
+    }
+
+    private static void WebChatBridgePublishesProactiveBrainMessages()
+    {
+        var envelopes = new List<string>();
+        using var bridge = new KokoWebBridgeService(envelopes.Add);
+        using var chat = new KokoWebChatBridgeService(
+            bridge,
+            (text, context, chunk, ct) => Task.FromResult<string?>("unused"),
+            (text, context, ct) => Task.FromResult("unused"));
+
+        chat.PublishExternalMessage("assistant", "Background observation");
+
+        var proactive = envelopes.Select(Newtonsoft.Json.Linq.JObject.Parse)
+            .Single(x => x["channel"]?.ToString() == "chat.external");
+        AssertEqual("assistant", proactive["payload"]?["role"]?.ToString(),
+            "proactive event must retain the assistant role");
+        AssertEqual("Background observation", proactive["payload"]?["content"]?.ToString(),
+            "proactive event must carry the actual brain message");
     }
 
     private static void WebAgentBridgeReturnsCamelCaseSnapshot()

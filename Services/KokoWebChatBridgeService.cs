@@ -89,6 +89,22 @@ namespace KokonoeAssistant.Services
             }
         }
 
+        public void PublishExternalMessage(string role, string content)
+        {
+            if (_disposed || string.IsNullOrWhiteSpace(content))
+                return;
+
+            var safeRole = role.Equals("system", StringComparison.OrdinalIgnoreCase)
+                ? "system"
+                : "assistant";
+            _bridge.Publish("chat.external", new
+            {
+                role = safeRole,
+                content = content.Trim(),
+                receivedAt = DateTimeOffset.UtcNow
+            });
+        }
+
         public void Dispose()
         {
             _disposed = true;

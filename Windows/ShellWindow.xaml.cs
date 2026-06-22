@@ -14,6 +14,10 @@ namespace KokonoeAssistant.Windows
         private KokoWebVaultBridgeService? _vaultBridge;
         private KokoWebSettingsBridgeService? _settingsBridge;
         private KokoWebTelegramBridgeService? _telegramBridge;
+        private Action<string, string>? _brainMessageHandler;
+        private bool _preserveServicesOnClose;
+
+        public event Action<string>? InitializationFailed;
 
         public ShellWindow()
         {
@@ -21,6 +25,13 @@ namespace KokonoeAssistant.Windows
             Loaded += OnLoaded;
             Closed += (_, _) =>
             {
+                try
+                {
+                    if (_brainMessageHandler != null && ServiceContainer.IsInitialized &&
+                        ServiceContainer.BrainEngine.OnNewMessage == _brainMessageHandler)
+                        ServiceContainer.BrainEngine.OnNewMessage = null;
+                }
+                catch (Exception ex) { KokoSystemLog.Write("WEB-SHELL", "brain callback cleanup failed: " + ex.Message); }
                 _telegramBridge?.Dispose();
                 _settingsBridge?.Dispose();
                 _vaultBridge?.Dispose();
@@ -28,8 +39,16 @@ namespace KokonoeAssistant.Windows
                 _chatBridge?.Dispose();
                 _bridge?.Dispose();
                 WebView.Dispose();
+                if (!_preserveServicesOnClose)
+                {
+                    try { ServiceContainer.BrainEngine.RecordClose(); } catch (Exception ex) { KokoSystemLog.Write("WEB-SHELL", "record close failed: " + ex.Message); }
+                    ServiceContainer.Disposing();
+                }
             };
         }
+
+        public void TransferServiceLifetimeToFallback()
+            => _preserveServicesOnClose = true;
 
         private async void OnLoaded(object sender, RoutedEventArgs e)
         {
@@ -39,6 +58,14 @@ namespace KokonoeAssistant.Windows
                 var indexPath = ResolveIndexPath();
                 if (!File.Exists(indexPath))
                     throw new FileNotFoundException("Web shell entry point was not copied to the output directory.", indexPath);
+
+                var settings = AppSettings.Load();
+                await Task.Run(() =>
+                {
+                    Directory.CreateDirectory(settings.VaultPath);
+                    ServiceContainer.Initialize(settings.VaultPath);
+                    _ = ServiceContainer.BrainEngine;
+                });
 
                 await WebView.EnsureCoreWebView2Async();
                 WebView.CoreWebView2.Settings.AreDevToolsEnabled = true;
@@ -57,6 +84,13 @@ namespace KokonoeAssistant.Windows
                     _bridge,
                     settings => ThemeManager.ApplyTheme(settings.MatrixColor));
                 _telegramBridge = new KokoWebTelegramBridgeService(_bridge, ServiceContainer.TelegramStatus);
+                _brainMessageHandler = (role, content) => _chatBridge?.PublishExternalMessage(role, content);
+                ServiceContainer.BrainEngine.OnNewMessage = _brainMessageHandler;
+                _ = Task.Run(() =>
+                {
+                    try { ServiceContainer.BrainEngine.InitVault(); }
+                    catch (Exception ex) { KokoSystemLog.Write("WEB-SHELL", "vault brain init failed: " + ex.Message); }
+                });
                 WebView.NavigationCompleted += (_, args) =>
                 {
                     var state = args.IsSuccess ? "ready" : $"failed:{args.WebErrorStatus}";
@@ -68,6 +102,11 @@ namespace KokonoeAssistant.Windows
             {
                 KokoSystemLog.Write("WEB-SHELL", "initialization failed: " + ex);
                 Debug.WriteLine("[WEB-SHELL] " + ex);
+                if (InitializationFailed != null)
+                {
+                    InitializationFailed(ex.Message);
+                    return;
+                }
                 try
                 {
                     WebView.NavigateToString(BuildFailurePage(ex.Message));

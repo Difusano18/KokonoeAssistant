@@ -20,6 +20,7 @@
       window.koko.on("chat.reset", payload => this.onReset(payload));
       window.koko.on("chat.completed", payload => this.onCompleted(payload));
       window.koko.on("chat.error", payload => this.onError(payload));
+      window.koko.on("chat.external", payload => this.onExternal(payload));
     }
 
     setAvailable(available) {
@@ -74,6 +75,12 @@
     onError(event) {
       if (event.streamId === this.activeStreamId)
         this.fail(event.error || "Chat failed.");
+    }
+
+    onExternal(event) {
+      const text = typeof event.content === "string" ? event.content.trim() : "";
+      if (!text) return;
+      this.appendMessage(event.role === "system" ? "system" : "assistant", text);
     }
 
     appendMessage(role, text, streaming = false) {

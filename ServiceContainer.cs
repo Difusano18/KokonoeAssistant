@@ -60,7 +60,17 @@ namespace KokonoeAssistant
 
         public static void Initialize(string vaultPath)
         {
-            lock (_lock) { _vault = vaultPath; }
+            var normalizedVault = Path.GetFullPath(vaultPath);
+            lock (_lock)
+            {
+                if (!string.IsNullOrWhiteSpace(_vault))
+                {
+                    if (!string.Equals(Path.GetFullPath(_vault), normalizedVault, StringComparison.OrdinalIgnoreCase))
+                        throw new InvalidOperationException("ServiceContainer is already initialized for another vault.");
+                    return;
+                }
+                _vault = normalizedVault;
+            }
             KokoSystemLog.Configure(Path.Combine(_vault ?? AppDomain.CurrentDomain.BaseDirectory, "kokonoe-data"));
             try { _ = WearableBridge; } catch (Exception ex) { KokoSystemLog.Write("BOOT", "wearable bridge start failed: " + ex.Message); }
             try { PhotoFileWatcher.Start(); } catch (Exception ex) { KokoSystemLog.Write("BOOT", "photo watcher start failed: " + ex.Message); }

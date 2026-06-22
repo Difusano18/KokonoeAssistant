@@ -129,6 +129,7 @@ namespace KokonoeAssistant
         public bool MinimizeToTray      { get; set; } = true;
         public int  MemoryUpdateEveryN  { get; set; } = 6;
         public string MatrixColor       { get; set; } = "#6366F1";
+        public string UiShell           { get; set; } = "web";
 
         // Voice
         public bool VoiceInputEnabled { get; set; } = true;
@@ -328,6 +329,13 @@ namespace KokonoeAssistant
         private static bool NormalizeDefaults(AppSettings settings)
         {
             var changed = false;
+
+            var normalizedUiShell = KokoUiStartupPolicy.NormalizeConfiguredMode(settings.UiShell);
+            if (!string.Equals(settings.UiShell, normalizedUiShell, StringComparison.Ordinal))
+            {
+                settings.UiShell = normalizedUiShell;
+                changed = true;
+            }
 
             if (string.IsNullOrWhiteSpace(settings.OllamaModel) ||
                 settings.OllamaModel.Equals("gpt-oss:120b-cloud", StringComparison.OrdinalIgnoreCase))

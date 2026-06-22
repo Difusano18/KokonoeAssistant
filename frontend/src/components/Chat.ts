@@ -4,6 +4,8 @@ type ChatEvent = {
   chunk?: string;
   reply?: string;
   error?: string;
+  role?: string;
+  content?: string;
 };
 
 type ChatSendResult = {
@@ -33,6 +35,7 @@ export class ChatController {
     window.koko.on("chat.reset", payload => this.onReset(payload as ChatEvent));
     window.koko.on("chat.completed", payload => this.onCompleted(payload as ChatEvent));
     window.koko.on("chat.error", payload => this.onError(payload as ChatEvent));
+    window.koko.on("chat.external", payload => this.onExternal(payload as ChatEvent));
   }
 
   setAvailable(available: boolean): void {
@@ -86,7 +89,13 @@ export class ChatController {
       this.fail(event.error ?? "Chat failed.");
   }
 
-  private appendMessage(role: "user" | "assistant", text: string, streaming = false): HTMLElement {
+  private onExternal(event: ChatEvent): void {
+    const text = event.content?.trim() ?? "";
+    if (!text) return;
+    this.appendMessage(event.role === "system" ? "system" : "assistant", text);
+  }
+
+  private appendMessage(role: "user" | "assistant" | "system", text: string, streaming = false): HTMLElement {
     const article = document.createElement("article");
     article.className = `message ${role}${streaming ? " streaming" : ""}`;
     const meta = document.createElement("span");
