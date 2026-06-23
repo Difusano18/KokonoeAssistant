@@ -15,6 +15,7 @@ namespace KokonoeAssistant.Windows
         private KokoWebVaultBridgeService? _vaultBridge;
         private KokoWebSettingsBridgeService? _settingsBridge;
         private KokoWebTelegramBridgeService? _telegramBridge;
+        private KokoWebRuntimeBridgeService? _runtimeBridge;
         private Action<string, string>? _brainMessageHandler;
         private bool _preserveServicesOnClose;
 
@@ -34,6 +35,7 @@ namespace KokonoeAssistant.Windows
                 }
                 catch (Exception ex) { KokoSystemLog.Write("WEB-SHELL", "brain callback cleanup failed: " + ex.Message); }
                 _telegramBridge?.Dispose();
+                _runtimeBridge?.Dispose();
                 _settingsBridge?.Dispose();
                 _vaultBridge?.Dispose();
                 _agentBridge?.Dispose();
@@ -81,6 +83,7 @@ namespace KokonoeAssistant.Windows
                     _bridge,
                     settings => ThemeManager.ApplyTheme(settings.MatrixColor));
                 _telegramBridge = new KokoWebTelegramBridgeService(_bridge, ServiceContainer.TelegramStatus);
+                _runtimeBridge = new KokoWebRuntimeBridgeService(_bridge);
                 _brainMessageHandler = (role, content) => _chatBridge?.PublishExternalMessage(role, content);
                 ServiceContainer.BrainEngine.OnNewMessage = _brainMessageHandler;
                 _ = Task.Run(() =>

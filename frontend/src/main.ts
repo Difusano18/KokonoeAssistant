@@ -49,6 +49,12 @@ async function connectHost(): Promise<void> {
       window.koko.call("vault.status")
     ]);
     workspacePanels.renderInitial(agentSnapshot, vaultStatus);
+    workspacePanels.renderRuntime(await window.koko.call("runtime.snapshot"));
+    window.setInterval(() => {
+      window.koko.call("runtime.refresh", null, 5000)
+        .then(snapshot => workspacePanels.renderRuntime(snapshot))
+        .catch(error => workspacePanels.setHost("error", error instanceof Error ? error.message : String(error)));
+    }, 15000);
     console.info("[Kokonoe Web Bridge] ping ->", result);
   } catch (error) {
     bridgeStatus.textContent = window.koko.available ? "PING FAILED" : "HOST ONLY";

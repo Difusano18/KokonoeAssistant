@@ -17,6 +17,52 @@ interface AgentSnapshot {
   tasks: unknown[];
 }
 
+interface RuntimeHeartbeatEntry {
+  service: string;
+  status: string;
+  detail: string;
+  updatedAt: string;
+  ageSeconds: number;
+}
+
+interface RuntimeSnapshot {
+  takenAt: string;
+  process?: {
+    pid: number;
+    workingSetMb: number;
+    privateMemoryMb: number;
+    uptimeSeconds: number;
+    responding: boolean;
+  };
+  llm?: {
+    status: string;
+    provider: string;
+    model: string;
+    inFlight: number;
+    totalRequests: number;
+    totalFailures: number;
+    lastLatencyMs: number;
+    lastError: string;
+  };
+  wearable?: {
+    currentBpm: number;
+    deviceId: string;
+    fresh: boolean;
+    bridgeState: string;
+    bridgeReason: string;
+    bridgePort: number;
+    bridgeSamples: number;
+    bridgeAuthFailures: number;
+    bridgePendingCommands: number;
+    summary: string;
+  };
+  heartbeat?: {
+    markdownPath: string;
+    htmlPath: string;
+    entries: RuntimeHeartbeatEntry[];
+  };
+}
+
 export class WorkspacePanelsController {
   private chatCompleted = 0;
   private chatErrors = 0;
@@ -38,6 +84,7 @@ export class WorkspacePanelsController {
     window.koko.on("agent.activity", payload => this.renderAgent((payload as { snapshot: AgentSnapshot }).snapshot));
     window.koko.on("agent.completed", payload => this.renderAgent((payload as { snapshot: AgentSnapshot }).snapshot));
     window.koko.on("vault.status", payload => this.renderVault(payload as VaultStatus));
+    window.koko.on("runtime.snapshot", payload => this.renderRuntime(payload as RuntimeSnapshot));
   }
 
   setHost(status: "linked" | "preview" | "error", detail: string): void {
@@ -49,6 +96,37 @@ export class WorkspacePanelsController {
   renderInitial(agent: unknown, vault: unknown): void {
     this.renderAgent(agent as AgentSnapshot);
     this.renderVault(vault as VaultStatus);
+  }
+
+  renderRuntime(snapshot: unknown): void {
+    const runtime = snapshot as RuntimeSnapshot;
+    const process = runtime.process;
+    const llm = runtime.llm;
+    const wearable = runtime.wearable;
+
+    if (process) {
+      this.setText("telemetry-host", process.responding ? "healthy" : "hung");
+      this.setText("telemetry-host-detail", `pid ${process.pid} / ${process.workingSetMb} MB / uptime ${this.duration(process.uptimeSeconds)}`);
+    }
+    if (llm) {
+      this.setText("telemetry-agent", llm.status || "idle");
+      const model = [llm.provider, llm.model].filter(Boolean).join(" / ") || "model unknown";
+      this.setText("telemetry-agent-detail", `${model}; ${llm.inFlight} active; ${llm.totalRequests} req; ${llm.totalFailures} fail; ${llm.lastLatencyMs} ms`);
+    }
+    if (wearable) {
+      const bpm = wearable.currentBpm > 0 ? `${Math.round(wearable.currentBpm)} bpm` : "no bpm";
+      this.setText("telemetry-vault", wearable.bridgeState || "wearable");
+      this.setText("telemetry-vault-detail", `${bpm}; ${wearable.deviceId || "no device"}; samples ${wearable.bridgeSamples}; auth ${wearable.bridgeAuthFailures}; queue ${wearable.bridgePendingCommands}`);
+    }
+    const feed = document.getElementById("runtime-feed");
+    const entries = runtime.heartbeat?.entries ?? [];
+    if (feed) {
+      feed.replaceChildren(...entries.slice(0, 10).map(entry => this.runtimeRow(entry)));
+      if (!entries.length)
+        feed.append(Object.assign(document.createElement("p"), { className: "agent-empty", textContent: "No heartbeat entries." }));
+    }
+    this.setText("telemetry-updated", this.time(runtime.takenAt));
+    this.bump();
   }
 
   private renderAgent(snapshot: AgentSnapshot): void {
@@ -91,6 +169,15 @@ export class WorkspacePanelsController {
     return row;
   }
 
+  private runtimeRow(entry: RuntimeHeartbeatEntry): HTMLElement {
+    const row = document.createElement("div");
+    row.append(
+      Object.assign(document.createElement("span"), { textContent: `${entry.service}: ${entry.status} — ${entry.detail}`, title: entry.detail }),
+      Object.assign(document.createElement("time"), { textContent: `${Math.round(entry.ageSeconds)}s` })
+    );
+    return row;
+  }
+
   private bump(): void {
     this.events++;
     this.setText("telemetry-events", String(this.events));
@@ -108,5 +195,12 @@ export class WorkspacePanelsController {
     return Number.isNaN(date.getTime())
       ? "--"
       : date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  }
+
+  private duration(seconds: number): string {
+    const total = Math.max(0, Math.floor(seconds));
+    const hours = Math.floor(total / 3600);
+    const minutes = Math.floor((total % 3600) / 60);
+    return hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
   }
 }

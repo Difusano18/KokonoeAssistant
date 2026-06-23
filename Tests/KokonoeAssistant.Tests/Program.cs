@@ -263,6 +263,7 @@ internal static class Program
             Run("Web bridge completes ping pong round trip", WebBridgeCompletesPingPongRoundTrip);
             Run("Web bridge reports unknown methods", WebBridgeReportsUnknownMethods);
             Run("Web bridge contract covers frontend and compatibility methods", WebBridgeContractCoversFrontendAndCompatibilityMethods);
+            Run("Web runtime bridge returns snapshot and publishes refresh", WebRuntimeBridgeReturnsSnapshotAndPublishesRefresh);
             Run("Web startup policy defaults to web with explicit rollback", WebStartupPolicyDefaultsToWebWithExplicitRollback);
             Run("Web shell development URL allows loopback only", WebShellDevelopmentUrlAllowsLoopbackOnly);
             Run("Web chat bridge streams correlated chunks", WebChatBridgeStreamsCorrelatedChunks);
@@ -6170,11 +6171,16 @@ Insight: bridge stability and pulse quality are linked.
                 bridge,
                 new KokoTelegramRuntimeStatusService(),
                 () => new AppSettings());
+            using var runtime = new KokoWebRuntimeBridgeService(bridge, () => new
+            {
+                takenAt = DateTime.UtcNow,
+                heartbeat = new { entries = Array.Empty<object>() }
+            });
 
             var required = new[]
             {
                 "ping", "chat.send", "agent.snapshot", "agent.start", "settings.get", "settings.update",
-                "vault.status", "vault.refresh", "telegram.status",
+                "vault.status", "vault.refresh", "telegram.status", "runtime.snapshot", "runtime.refresh",
                 "send_message", "get_agent_tasks", "start_agent_task", "load_settings", "save_settings",
                 "vault_status", "telegram_status"
             };
@@ -6187,6 +6193,39 @@ Insight: bridge stability and pulse quality are linked.
         {
             TryDeleteDir(dir);
         }
+    }
+
+    private static void WebRuntimeBridgeReturnsSnapshotAndPublishesRefresh()
+    {
+        var envelopes = new List<string>();
+        using var bridge = new KokoWebBridgeService(envelopes.Add);
+        using var runtime = new KokoWebRuntimeBridgeService(bridge, () => new
+        {
+            takenAt = new DateTime(2026, 6, 23, 12, 0, 0, DateTimeKind.Utc),
+            process = new { pid = 42, workingSetMb = 128.5, responding = true },
+            heartbeat = new
+            {
+                entries = new[]
+                {
+                    new { service = "WATCH", status = "OK", detail = "fresh", ageSeconds = 1.0 }
+                }
+            }
+        });
+
+        bridge.HandleMessageAsync("""{"type":"request","id":"rt-1","method":"runtime.snapshot","payload":null}""")
+            .GetAwaiter().GetResult();
+        bridge.HandleMessageAsync("""{"type":"request","id":"rt-2","method":"runtime.refresh","payload":null}""")
+            .GetAwaiter().GetResult();
+
+        var parsed = envelopes.Select(e => Newtonsoft.Json.Linq.JObject.Parse(e)).ToList();
+        AssertTrue(parsed.Any(x => x["type"]?.ToString() == "response" &&
+                                   x["id"]?.ToString() == "rt-1" &&
+                                   x["result"]?["process"]?["pid"]?.Value<int>() == 42),
+            "runtime.snapshot must return process payload");
+        AssertTrue(parsed.Any(x => x["type"]?.ToString() == "event" &&
+                                   x["channel"]?.ToString() == "runtime.snapshot" &&
+                                   x["payload"]?["heartbeat"]?["entries"]?.Any() == true),
+            "runtime.refresh must publish a live runtime snapshot event");
     }
 
     private static void WebStartupPolicyDefaultsToWebWithExplicitRollback()
