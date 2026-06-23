@@ -139,6 +139,19 @@ export class WorkspacePanelsController {
     this.bump();
   }
 
+  setRuntimeBusy(label: string): void {
+    this.setText("telemetry-system", label);
+    this.setText("telemetry-system-detail", "Host request in progress.");
+    this.bump();
+  }
+
+  setRuntimeError(error: unknown): void {
+    const message = error instanceof Error ? error.message : String(error);
+    this.setText("telemetry-system", "error");
+    this.setText("telemetry-system-detail", message);
+    this.bump();
+  }
+
   renderInitial(agent: unknown, vault: unknown): void {
     this.renderAgent(agent as AgentSnapshot);
     this.renderVault(vault as VaultStatus);

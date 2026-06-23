@@ -29,6 +29,8 @@ const telegram = new TelegramPanelController();
 const motion = new MotionController();
 const workspacePanels = new WorkspacePanelsController();
 const bridgeStatus = required("bridge-status");
+const systemScanButton = required<HTMLButtonElement>("system-scan");
+const telemetryRefreshButton = required<HTMLButtonElement>("telemetry-refresh");
 
 console.info("[Kokonoe Web Shell] TypeScript runtime rendered");
 document.documentElement.dataset.renderedAt = new Date().toISOString();
@@ -54,9 +56,10 @@ async function connectHost(): Promise<void> {
     workspacePanels.renderMemory(memorySnapshot);
     workspacePanels.renderSystem(systemSnapshot);
     workspacePanels.renderRuntime(await window.koko.call("runtime.snapshot"));
+    systemScanButton.disabled = false;
+    telemetryRefreshButton.disabled = false;
     window.setInterval(() => {
-      window.koko.call("runtime.refresh", null, 5000)
-        .then(snapshot => workspacePanels.renderRuntime(snapshot))
+      refreshRuntime()
         .catch(error => workspacePanels.setHost("error", error instanceof Error ? error.message : String(error)));
     }, 15000);
     window.setInterval(() => {
@@ -70,9 +73,29 @@ async function connectHost(): Promise<void> {
     bridgeStatus.className = "pending";
     chat.setAvailable(false);
     settings.setAvailable(false);
+    systemScanButton.disabled = true;
+    telemetryRefreshButton.disabled = true;
     motion.setHostState(window.koko.available ? "error" : "preview");
     workspacePanels.setHost(window.koko.available ? "error" : "preview", error instanceof Error ? error.message : String(error));
     console.warn("[Kokonoe Web Bridge]", error instanceof Error ? error.message : String(error));
+  }
+}
+
+async function refreshRuntime(): Promise<void> {
+  const snapshot = await window.koko.call("runtime.refresh", null, 5000);
+  workspacePanels.renderRuntime(snapshot);
+}
+
+async function scanSystem(): Promise<void> {
+  systemScanButton.disabled = true;
+  workspacePanels.setRuntimeBusy("scanning");
+  try {
+    const snapshot = await window.koko.call("system.scan", null, 30000);
+    workspacePanels.renderSystem(snapshot);
+  } catch (error) {
+    workspacePanels.setRuntimeError(error);
+  } finally {
+    systemScanButton.disabled = !window.koko.available;
   }
 }
 
@@ -103,4 +126,14 @@ function switchPanel(id: string): void {
 
 document.querySelectorAll<HTMLButtonElement>(".rail button[data-panel]").forEach(button => {
   button.addEventListener("click", () => switchPanel(button.dataset.panel ?? "chat"));
+});
+
+systemScanButton.addEventListener("click", () => void scanSystem());
+telemetryRefreshButton.addEventListener("click", () => {
+  telemetryRefreshButton.disabled = true;
+  refreshRuntime()
+    .catch(error => workspacePanels.setRuntimeError(error))
+    .finally(() => {
+      telemetryRefreshButton.disabled = !window.koko.available;
+    });
 });

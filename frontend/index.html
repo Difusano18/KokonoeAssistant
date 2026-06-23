@@ -139,7 +139,7 @@
     .agent-task-detail { margin: 8px 0 0; color: #74818c; font-size: 10px; line-height: 1.45; overflow-wrap: anywhere; }
     .agent-empty { color: #687581; font-size: 11px; line-height: 1.5; }
     .workspace-board { padding: 24px 28px; }
-    .workspace-grid { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 12px; margin: 14px 0 16px; }
+    .workspace-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px,1fr)); gap: 12px; margin: 14px 0 16px; }
     .workspace-card { min-height: 78px; padding: 13px; border: 1px solid #263442; border-radius: 6px; background: #0d141c; }
     .workspace-card label { display: block; margin-bottom: 7px; color: #65727e; font: 10px Consolas, monospace; text-transform: uppercase; }
     .workspace-card output { color: #d7e0e7; font: 16px Consolas, monospace; overflow-wrap: anywhere; }
@@ -149,6 +149,11 @@
     .workspace-feed div { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 12px; padding: 9px 0; border-top: 1px solid #202b36; }
     .workspace-feed span { min-width: 0; color: #aeb9c2; font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .workspace-feed time { color: #64717c; font: 10px Consolas, monospace; }
+    .panel-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 6px 0 12px; }
+    .action-button { height: 30px; padding: 0 12px; border: 1px solid #2a3744; border-radius: 5px; background: #0d141c; color: #a9b5be; font-size: 11px; transition: transform var(--motion-fast) ease, border-color var(--motion-fast) ease, color var(--motion-fast) ease, background var(--motion-fast) ease; }
+    .action-button:not(:disabled):hover { border-color: var(--accent-border); color: var(--accent); background: #101923; }
+    .action-button:not(:disabled):active { transform: translateY(1px); }
+    .action-button:disabled { cursor: default; opacity: .48; }
 
     .panel-heading { display: flex; align-items: center; gap: 8px; margin: 24px 0 12px; }
     .panel-heading h2 { margin: 0; }
@@ -328,11 +333,13 @@
             <div class="workspace-card"><label>Vault</label><output id="telemetry-vault">waiting</output><p id="telemetry-vault-detail">No scan yet.</p></div>
             <div class="workspace-card"><label>System</label><output id="telemetry-system">idle</output><p id="telemetry-system-detail">No system scan yet.</p></div>
             <div class="workspace-card"><label>Events</label><output id="telemetry-events">0</output><p>Live bridge events in this shell session.</p></div>
-          </div>
-          <div class="workspace-grid">
             <div class="workspace-card"><label>Updated</label><output id="telemetry-updated">--</output><p>Local UI clock.</p></div>
           </div>
           <p class="eyebrow">System Overlord</p>
+          <div class="panel-actions">
+            <button id="system-scan" class="action-button" type="button" disabled>Scan system</button>
+            <button id="telemetry-refresh" class="action-button" type="button" disabled>Refresh runtime</button>
+          </div>
           <div id="system-feed" class="workspace-feed"><p class="agent-empty">No system snapshot yet.</p></div>
           <p class="eyebrow">Service heartbeat</p>
           <div id="runtime-feed" class="workspace-feed"><p class="agent-empty">No runtime snapshot yet.</p></div>
