@@ -44,17 +44,24 @@ async function connectHost(): Promise<void> {
     motion.setHostState("ready");
     workspacePanels.setHost("linked", String(result));
     await Promise.allSettled([agents.connect(), vault.connect(), telegram.connect()]);
-    const [agentSnapshot, vaultStatus] = await Promise.all([
+    const [agentSnapshot, vaultStatus, memorySnapshot] = await Promise.all([
       window.koko.call("agent.snapshot"),
-      window.koko.call("vault.status")
+      window.koko.call("vault.status"),
+      window.koko.call("memory.snapshot")
     ]);
     workspacePanels.renderInitial(agentSnapshot, vaultStatus);
+    workspacePanels.renderMemory(memorySnapshot);
     workspacePanels.renderRuntime(await window.koko.call("runtime.snapshot"));
     window.setInterval(() => {
       window.koko.call("runtime.refresh", null, 5000)
         .then(snapshot => workspacePanels.renderRuntime(snapshot))
         .catch(error => workspacePanels.setHost("error", error instanceof Error ? error.message : String(error)));
     }, 15000);
+    window.setInterval(() => {
+      window.koko.call("memory.refresh", null, 5000)
+        .then(snapshot => workspacePanels.renderMemory(snapshot))
+        .catch(error => workspacePanels.setHost("error", error instanceof Error ? error.message : String(error)));
+    }, 30000);
     console.info("[Kokonoe Web Bridge] ping ->", result);
   } catch (error) {
     bridgeStatus.textContent = window.koko.available ? "PING FAILED" : "HOST ONLY";

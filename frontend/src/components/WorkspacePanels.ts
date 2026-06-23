@@ -63,6 +63,38 @@ interface RuntimeSnapshot {
   };
 }
 
+interface MemoryFact {
+  id: string;
+  content: string;
+  category: string;
+  importance: number;
+  confirmCount: number;
+  lastSeen: string;
+  tags: string[];
+}
+
+interface MemoryEpisode {
+  id: string;
+  summary: string;
+  emotionalTone: string;
+  intensity: number;
+  when: string;
+  keywords: string[];
+}
+
+interface MemorySnapshot {
+  takenAt: string;
+  factCount: number;
+  episodeCount: number;
+  sessionFactCount: number;
+  sessionStartedAt: string;
+  currentContext: string;
+  lastUserMessage: string;
+  facts: MemoryFact[];
+  episodes: MemoryEpisode[];
+  sessionFacts: string[];
+}
+
 export class WorkspacePanelsController {
   private chatCompleted = 0;
   private chatErrors = 0;
@@ -84,6 +116,7 @@ export class WorkspacePanelsController {
     window.koko.on("agent.activity", payload => this.renderAgent((payload as { snapshot: AgentSnapshot }).snapshot));
     window.koko.on("agent.completed", payload => this.renderAgent((payload as { snapshot: AgentSnapshot }).snapshot));
     window.koko.on("vault.status", payload => this.renderVault(payload as VaultStatus));
+    window.koko.on("memory.snapshot", payload => this.renderMemory(payload as MemorySnapshot));
     window.koko.on("runtime.snapshot", payload => this.renderRuntime(payload as RuntimeSnapshot));
   }
 
@@ -96,6 +129,33 @@ export class WorkspacePanelsController {
   renderInitial(agent: unknown, vault: unknown): void {
     this.renderAgent(agent as AgentSnapshot);
     this.renderVault(vault as VaultStatus);
+  }
+
+  renderMemory(snapshot: unknown): void {
+    const memory = snapshot as MemorySnapshot;
+    this.setText("memory-state", "online");
+    this.setText("memory-path", `${memory.factCount} facts / ${memory.episodeCount} episodes / ${memory.sessionFactCount} session`);
+    this.setText("memory-notes", String(memory.factCount));
+    this.setText("memory-folders", String(memory.episodeCount));
+    this.setText("memory-meta", `session ${this.time(memory.sessionStartedAt)} / refresh ${this.time(memory.takenAt)}`);
+
+    const recent = document.getElementById("memory-recent");
+    if (!recent) return;
+
+    const rows = [
+      ...memory.facts.slice(0, 6).map(fact => this.memoryRow(
+        fact.content,
+        `${fact.category} · ${(fact.importance * 100).toFixed(0)}% · x${fact.confirmCount}`)),
+      ...memory.episodes.slice(0, 4).map(episode => this.memoryRow(
+        episode.summary,
+        `${episode.emotionalTone} · ${(episode.intensity * 100).toFixed(0)}% · ${this.time(episode.when)}`)),
+      ...memory.sessionFacts.slice(-4).map(fact => this.memoryRow(fact, "session"))
+    ];
+
+    recent.replaceChildren(...rows);
+    if (!rows.length)
+      recent.append(Object.assign(document.createElement("p"), { className: "agent-empty", textContent: "No memory facts yet." }));
+    this.bump();
   }
 
   renderRuntime(snapshot: unknown): void {
@@ -165,6 +225,15 @@ export class WorkspacePanelsController {
     row.append(
       Object.assign(document.createElement("span"), { textContent: note.path, title: note.path }),
       Object.assign(document.createElement("time"), { textContent: this.time(note.modifiedAt) })
+    );
+    return row;
+  }
+
+  private memoryRow(content: string, meta: string): HTMLElement {
+    const row = document.createElement("div");
+    row.append(
+      Object.assign(document.createElement("span"), { textContent: content, title: content }),
+      Object.assign(document.createElement("time"), { textContent: meta })
     );
     return row;
   }

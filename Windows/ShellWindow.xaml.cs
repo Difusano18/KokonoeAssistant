@@ -13,6 +13,7 @@ namespace KokonoeAssistant.Windows
         private KokoWebChatBridgeService? _chatBridge;
         private KokoWebAgentBridgeService? _agentBridge;
         private KokoWebVaultBridgeService? _vaultBridge;
+        private KokoWebMemoryBridgeService? _memoryBridge;
         private KokoWebSettingsBridgeService? _settingsBridge;
         private KokoWebTelegramBridgeService? _telegramBridge;
         private KokoWebRuntimeBridgeService? _runtimeBridge;
@@ -37,6 +38,7 @@ namespace KokonoeAssistant.Windows
                 _telegramBridge?.Dispose();
                 _runtimeBridge?.Dispose();
                 _settingsBridge?.Dispose();
+                _memoryBridge?.Dispose();
                 _vaultBridge?.Dispose();
                 _agentBridge?.Dispose();
                 _chatBridge?.Dispose();
@@ -79,6 +81,7 @@ namespace KokonoeAssistant.Windows
                         : null);
                 _agentBridge = new KokoWebAgentBridgeService(_bridge, ServiceContainer.AgentTasks);
                 _vaultBridge = new KokoWebVaultBridgeService(_bridge, ServiceContainer.ObsidianMcp);
+                _memoryBridge = new KokoWebMemoryBridgeService(_bridge, ServiceContainer.KokoMemory);
                 _settingsBridge = new KokoWebSettingsBridgeService(
                     _bridge,
                     settings => ThemeManager.ApplyTheme(settings.MatrixColor));

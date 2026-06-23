@@ -264,6 +264,7 @@ internal static class Program
             Run("Web bridge reports unknown methods", WebBridgeReportsUnknownMethods);
             Run("Web bridge contract covers frontend and compatibility methods", WebBridgeContractCoversFrontendAndCompatibilityMethods);
             Run("Web runtime bridge returns snapshot and publishes refresh", WebRuntimeBridgeReturnsSnapshotAndPublishesRefresh);
+            Run("Web memory bridge returns facts and publishes refresh", WebMemoryBridgeReturnsFactsAndPublishesRefresh);
             Run("Web startup policy defaults to web with explicit rollback", WebStartupPolicyDefaultsToWebWithExplicitRollback);
             Run("Web shell development URL allows loopback only", WebShellDevelopmentUrlAllowsLoopbackOnly);
             Run("Web chat bridge streams correlated chunks", WebChatBridgeStreamsCorrelatedChunks);
@@ -6167,6 +6168,16 @@ Insight: bridge stability and pulse quality are linked.
                 () => new AppSettings(),
                 _ => null);
             using var vault = new KokoWebVaultBridgeService(bridge, new ObsidianMcpService(Path.Combine(dir, "vault")));
+            using var memory = new KokoWebMemoryBridgeService(bridge, () => new
+            {
+                takenAt = DateTime.UtcNow,
+                factCount = 0,
+                episodeCount = 0,
+                sessionFactCount = 0,
+                facts = Array.Empty<object>(),
+                episodes = Array.Empty<object>(),
+                sessionFacts = Array.Empty<string>()
+            });
             using var telegram = new KokoWebTelegramBridgeService(
                 bridge,
                 new KokoTelegramRuntimeStatusService(),
@@ -6180,7 +6191,7 @@ Insight: bridge stability and pulse quality are linked.
             var required = new[]
             {
                 "ping", "chat.send", "agent.snapshot", "agent.start", "settings.get", "settings.update",
-                "vault.status", "vault.refresh", "telegram.status", "runtime.snapshot", "runtime.refresh",
+                "vault.status", "vault.refresh", "memory.snapshot", "memory.refresh", "telegram.status", "runtime.snapshot", "runtime.refresh",
                 "send_message", "get_agent_tasks", "start_agent_task", "load_settings", "save_settings",
                 "vault_status", "telegram_status"
             };
@@ -6226,6 +6237,44 @@ Insight: bridge stability and pulse quality are linked.
                                    x["channel"]?.ToString() == "runtime.snapshot" &&
                                    x["payload"]?["heartbeat"]?["entries"]?.Any() == true),
             "runtime.refresh must publish a live runtime snapshot event");
+    }
+
+    private static void WebMemoryBridgeReturnsFactsAndPublishesRefresh()
+    {
+        var envelopes = new List<string>();
+        using var bridge = new KokoWebBridgeService(envelopes.Add);
+        using var memory = new KokoWebMemoryBridgeService(bridge, () => new
+        {
+            takenAt = new DateTime(2026, 6, 23, 12, 30, 0, DateTimeKind.Utc),
+            factCount = 1,
+            episodeCount = 1,
+            sessionFactCount = 1,
+            facts = new[]
+            {
+                new { id = "fact1", content = "User wants concrete execution", category = "preference", importance = 0.9, confirmCount = 2 }
+            },
+            episodes = new[]
+            {
+                new { id = "ep1", summary = "WebView bridge work continued", emotionalTone = "focused", intensity = 0.7 }
+            },
+            sessionFacts = new[] { "[project] memory bridge added" }
+        });
+
+        bridge.HandleMessageAsync("""{"type":"request","id":"mem-1","method":"memory.snapshot","payload":null}""")
+            .GetAwaiter().GetResult();
+        bridge.HandleMessageAsync("""{"type":"request","id":"mem-2","method":"memory.refresh","payload":null}""")
+            .GetAwaiter().GetResult();
+
+        var parsed = envelopes.Select(e => Newtonsoft.Json.Linq.JObject.Parse(e)).ToList();
+        AssertTrue(parsed.Any(x => x["type"]?.ToString() == "response" &&
+                                   x["id"]?.ToString() == "mem-1" &&
+                                   x["result"]?["factCount"]?.Value<int>() == 1 &&
+                                   x["result"]?["facts"]?[0]?["content"]?.ToString()?.Contains("concrete execution") == true),
+            "memory.snapshot must return fact payload");
+        AssertTrue(parsed.Any(x => x["type"]?.ToString() == "event" &&
+                                   x["channel"]?.ToString() == "memory.snapshot" &&
+                                   x["payload"]?["episodes"]?.Any() == true),
+            "memory.refresh must publish a live memory snapshot event");
     }
 
     private static void WebStartupPolicyDefaultsToWebWithExplicitRollback()
