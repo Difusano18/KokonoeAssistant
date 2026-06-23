@@ -2122,6 +2122,16 @@ namespace KokonoeAssistant.Services
                         }
 
                         var reply = CleanGarbage(rawContent);
+                        if (round == 0 && useTools && !forceNoTools && LooksLikeUnverifiedActionClaim(reply, userText))
+                        {
+                            lock (_histLock)
+                            {
+                                _history.Add(new HistoryEntry(
+                                    "user",
+                                    "SYSTEM CHECK: Your last answer claimed a file, note, vault, desktop, or local artifact was created/saved, but no tool_result proves it. Do not claim completion in prose. Use the correct tool now, or explicitly say the action has not been executed."));
+                            }
+                            continue;
+                        }
                         if (IsBadFinalReply(reply) && round < 7)
                         {
                             lock (_histLock)
@@ -3241,6 +3251,43 @@ namespace KokonoeAssistant.Services
 
             return false;
         }
+
+        public static bool LooksLikeUnverifiedActionClaim(string? reply, string? userText)
+        {
+            if (string.IsNullOrWhiteSpace(reply))
+                return false;
+
+            var directive = KokoActionDirectiveRouter.Analyze(userText);
+            if (!directive.IsAction)
+                return false;
+
+            var lower = reply.ToLowerInvariant();
+            if (ContainsAnyText(lower,
+                    "не створ", "не созд", "не запис", "не збереж", "не сохран", "не залиш", "не остав",
+                    "has not been", "did not create", "not created", "not saved", "not written",
+                    "could not create", "cannot create", "can't create"))
+                return false;
+
+            var actionClaim = ContainsAnyText(lower,
+                "створ", "созд", "запис", "збереж", "сохран", "залиш", "остав", "поклав", "поклала",
+                "created", "saved", "wrote", "written", "left", "dropped", "placed");
+
+            if (!actionClaim)
+                return false;
+
+            var artifactClaim = ContainsAnyText(lower,
+                "файл", "нотат", "замет", "vault", "obsidian", "desktop", "downloads",
+                "робоч", "стол", "диск", "папк", "file", ".txt", ".md", ".json", ".log", "note", "folder");
+
+            if (!artifactClaim)
+                return false;
+
+            return !ContainsAnyText(lower,
+                "tool_result", "verified", "verification:", "перевірено:", "проверено:");
+        }
+
+        private static bool ContainsAnyText(string text, params string[] needles)
+            => needles.Any(needle => text.Contains(needle, StringComparison.OrdinalIgnoreCase));
 
         public static bool LooksLikeBrokenVisibleText(string? text)
         {

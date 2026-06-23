@@ -255,6 +255,7 @@ internal static class Program
             Run("System overlord cleanup requires permission", SystemOverlordCleanupRequiresPermission);
             Run("Action directive router generalizes local artifacts", ActionDirectiveRouterGeneralizesLocalArtifacts);
             Run("Action directive router sends non artifact tasks to agents", ActionDirectiveRouterSendsNonArtifactTasksToAgents);
+            Run("LLM guard blocks unverified action claims", LlmGuardBlocksUnverifiedActionClaims);
             Run("Action directive router handles inflected targets", ActionDirectiveRouterHandlesInflectedTargets);
             Run("Generated content route stays separate from surprise scan", GeneratedContentRouteStaysSeparateFromSurpriseScan);
             Run("Chat runtime defaults to streaming with bounded token budget", ChatRuntimeDefaultsToStreamingWithBoundedTokenBudget);
@@ -5980,6 +5981,27 @@ Insight: bridge stability and pulse quality are linked.
 
         var chat = KokoActionDirectiveRouter.Analyze("просто поговоримо про дурниці");
         AssertEqual(KokoActionDirectiveRoute.None, chat.Route, "plain conversation should not become fake action");
+    }
+
+    private static void LlmGuardBlocksUnverifiedActionClaims()
+    {
+        AssertTrue(
+            LlmService.LooksLikeUnverifiedActionClaim(
+                "Created file C:\\Users\\User\\Desktop\\Kokonoe_Check.txt. Check it.",
+                "leave a surprise file on desktop"),
+            "LLM must not claim desktop artifact creation without tool evidence");
+
+        AssertTrue(
+            !LlmService.LooksLikeUnverifiedActionClaim(
+                "Did not create the file: no verified tool_result is available.",
+                "leave a surprise file on desktop"),
+            "honest non-execution should pass through");
+
+        AssertTrue(
+            !LlmService.LooksLikeUnverifiedActionClaim(
+                "We can just talk about it.",
+                "just talk"),
+            "conversation must not be treated as a failed action");
     }
 
     private static void GeneratedContentRouteStaysSeparateFromSurpriseScan()
