@@ -3461,7 +3461,6 @@ namespace KokonoeAssistant.Services
         /// Streaming variant — invokes onChunk for each token delta.
         /// Returns null if tool_calls detected mid-stream (caller should fall back to SendAsync).
         /// Returns full reply string on success.
-        /// NOTE: Only works with LM Studio (OpenAI format). Claude API falls back to SendAsync.
         /// </summary>
         public async Task<string?> SendStreamingAsync(
             string userText,
@@ -3471,20 +3470,8 @@ namespace KokonoeAssistant.Services
             string? agentId = null,
             int? maxTokensOverride = null)
         {
-            // Claude API doesn't support streaming in this implementation yet — fall back to SendAsync
             var target = ResolveAgentTarget(agentId);
-            if (target.Provider.Equals("claude", StringComparison.OrdinalIgnoreCase))
-            {
-                var reply = await SendAsync(
-                    userText,
-                    extraContext: extraContext,
-                    ct: ct,
-                    agentId: agentId,
-                    maxTokensOverride: maxTokensOverride);
-                if (!string.IsNullOrEmpty(reply))
-                    onChunk(reply);
-                return reply;
-            }
+            var isClaude = target.Provider.Equals("claude", StringComparison.OrdinalIgnoreCase);
 
             // Checkpoint: зберігаємо стан історії для можливого відкату
             int checkpoint;
@@ -3514,14 +3501,29 @@ namespace KokonoeAssistant.Services
                 userText.Contains("список", StringComparison.OrdinalIgnoreCase));
             var useTools = Obsidian != null && looksLikeVaultOp;
             var streamIsOllamaCloud = target.Provider.Equals("ollama-cloud", StringComparison.OrdinalIgnoreCase);
-            var streamUrl = target.Url;
+            var streamUrl = isClaude ? CLAUDE_API_URL : target.Url;
             var streamModel = target.Model;
             var maxTokens = ResolveMaxTokens(maxTokensOverride, MainMaxTokens);
-            object reqBody = useTools
-                ? (object)new { model = streamModel, messages = BuildMessages(systemContent), tools = TOOLS,
-                                tool_choice = "auto", max_tokens = maxTokens, temperature = target.Temperature, stream = true }
-                : new { model = streamModel, messages = BuildMessages(systemContent),
-                        max_tokens = maxTokens, temperature = target.Temperature, stream = true };
+
+            object reqBody;
+            if (isClaude)
+            {
+                var claudeMessages = BuildClaudeMessages(systemContent);
+                reqBody = useTools
+                    ? new { model = streamModel, max_tokens = maxTokens, temperature = target.Temperature,
+                            system = SanitizeContent(systemContent), messages = claudeMessages,
+                            tools = BuildClaudeTools(), tool_choice = "auto", stream = true }
+                    : new { model = streamModel, max_tokens = maxTokens, temperature = target.Temperature,
+                            system = SanitizeContent(systemContent), messages = claudeMessages, stream = true };
+            }
+            else
+            {
+                reqBody = useTools
+                    ? new { model = streamModel, messages = BuildMessages(systemContent), tools = TOOLS,
+                            tool_choice = "auto", max_tokens = maxTokens, temperature = target.Temperature, stream = true }
+                    : new { model = streamModel, messages = BuildMessages(systemContent),
+                            max_tokens = maxTokens, temperature = target.Temperature, stream = true };
+            }
 
             var json = JsonConvert.SerializeObject(reqBody);
 
@@ -3539,7 +3541,12 @@ namespace KokonoeAssistant.Services
                     {
                         Content = new StringContent(json, Encoding.UTF8, "application/json")
                     };
-                    if (streamIsOllamaCloud)
+                    if (isClaude)
+                    {
+                        req.Headers.Add("x-api-key", _claudeApiKey);
+                        req.Headers.Add("anthropic-version", "2023-06-01");
+                    }
+                    else if (streamIsOllamaCloud)
                     {
                         usedOllamaKey = ResolveOllamaKey(agentId);
                         if (!string.IsNullOrEmpty(usedOllamaKey))
@@ -3565,62 +3572,42 @@ namespace KokonoeAssistant.Services
                     return null;
                 }
 
-                var sb = new StringBuilder();
-                var sbReasoning = new StringBuilder();
-                using var stream = await resp.Content.ReadAsStreamAsync(ct);
-                using var reader = new System.IO.StreamReader(stream);
+                await using var stream = await resp.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
+                string rawText;
+                bool toolCallsDetected;
 
-                while (!reader.EndOfStream)
+                if (isClaude)
                 {
-                    ct.ThrowIfCancellationRequested();
-                    var line = await reader.ReadLineAsync();
-                    if (line == null || !line.StartsWith("data: ")) continue;
-                    var data = line[6..];
-                    if (data == "[DONE]") break;
-                    try
+                    var result = await KokoAnthropicStreamParser.ReadTextAsync(stream, onChunk, ct).ConfigureAwait(false);
+                    rawText = result.Text;
+                    toolCallsDetected = result.ToolCallsDetected;
+                }
+                else
+                {
+                    var result = await KokoOpenAiStreamParser.ReadTextAsync(stream, onChunk, ct).ConfigureAwait(false);
+                    rawText = result.Text;
+                    toolCallsDetected = result.ToolCallsDetected;
+
+                    // Fallback: модель (Gemma) могла запхати всю відповідь у reasoning_content
+                    // замість content. Якщо стрім завершився а content порожній — спробуємо
+                    // витягти фінальну прозу з накопиченого reasoning.
+                    if (string.IsNullOrWhiteSpace(rawText) && !string.IsNullOrWhiteSpace(result.Reasoning))
                     {
-                        var obj   = JObject.Parse(data);
-                        var delta = obj["choices"]?[0]?["delta"];
-                        if (delta?["tool_calls"] != null)
+                        var extracted = ExtractResponseFromReasoning(result.Reasoning);
+                        if (!string.IsNullOrWhiteSpace(extracted))
                         {
-                            // Tool call detected — rollback to checkpoint and signal caller to use SendAsync
-                            lock (_histLock) { while (_history.Count > checkpoint) _history.RemoveAt(_history.Count - 1); }
-                            return null;
-                        }
-                        var chunk = delta?["content"]?.ToString();
-                        if (string.IsNullOrEmpty(chunk) || chunk.Trim().Equals("null", StringComparison.OrdinalIgnoreCase))
-                        {
-                            // У стримі окремі chunks reasoning_content не можна надійно
-                            // класифікувати "налету" — збираємо все у sbReasoning і зробимо
-                            // фінальну екстракцію в кінці потоку.
-                            var reasoningChunk = delta?["reasoning_content"]?.ToString();
-                            if (!string.IsNullOrEmpty(reasoningChunk)) sbReasoning.Append(reasoningChunk);
-                            chunk = null;
-                        }
-                        if (!string.IsNullOrEmpty(chunk))
-                        {
-                            sb.Append(chunk);
-                            onChunk(chunk);
+                            Debug.WriteLine($"[LlmService] Stream content empty, recovered {extracted.Length} chars from reasoning_content");
+                            onChunk(extracted);
+                            rawText = extracted;
                         }
                     }
-                    catch (Exception suppressedEx3488) { KokoSystemLog.Write("LLMSERVICE-CATCH", "SendStreamingAsync failed near source line 3488: " + suppressedEx3488); }
                 }
 
-                var rawText = sb.ToString();
-
-                // Fallback: модель (Gemma) могла запхати всю відповідь у reasoning_content
-                // замість content. Якщо стрім завершився а content порожній — спробуємо
-                // витягти фінальну прозу з накопиченого reasoning.
-                if (string.IsNullOrWhiteSpace(rawText) && sbReasoning.Length > 0)
+                if (toolCallsDetected)
                 {
-                    var extracted = ExtractResponseFromReasoning(sbReasoning.ToString());
-                    if (!string.IsNullOrWhiteSpace(extracted))
-                    {
-                        Debug.WriteLine($"[LlmService] Stream content empty, recovered {extracted.Length} chars from reasoning_content");
-                        sb.Append(extracted);
-                        onChunk(extracted);
-                        rawText = sb.ToString();
-                    }
+                    // Tool call detected — rollback to checkpoint and signal caller to use SendAsync
+                    lock (_histLock) { while (_history.Count > checkpoint) _history.RemoveAt(_history.Count - 1); }
+                    return null;
                 }
 
                 // Якщо модель закодувала tool calls як текст (Gemma-стиль) — fall back до SendAsync
