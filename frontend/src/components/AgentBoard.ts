@@ -40,6 +40,7 @@ export class AgentBoardController {
   private readonly objectiveInput = document.getElementById("agent-task-objective") as HTMLInputElement | null;
   private readonly startButton = document.getElementById("agent-task-start") as HTMLButtonElement | null;
   private readonly taskStatus = document.getElementById("agent-task-status");
+  private pollHandle = 0;
 
   constructor() {
     window.koko.on("agent.activity", payload => this.render((payload as { snapshot: AgentSnapshot }).snapshot));
@@ -52,13 +53,26 @@ export class AgentBoardController {
 
   async connect(): Promise<void> {
     try {
-      this.render(await window.koko.call("agent.snapshot") as AgentSnapshot);
+      await this.refresh();
       this.setTaskControls(true, "Agent bridge ready.");
+      this.startPolling();
     } catch (error) {
       this.activity.querySelector("strong")!.textContent = "Agent bridge unavailable";
       this.activity.querySelector("p")!.textContent = error instanceof Error ? error.message : String(error);
       this.setTaskControls(false, error instanceof Error ? error.message : String(error));
     }
+  }
+
+  private startPolling(): void {
+    if (this.pollHandle)
+      return;
+    this.pollHandle = window.setInterval(() => {
+      this.refresh().catch(error => this.setTaskStatus(error instanceof Error ? error.message : String(error)));
+    }, 8000);
+  }
+
+  private async refresh(): Promise<void> {
+    this.render(await window.koko.call("agent.snapshot") as AgentSnapshot);
   }
 
   private async startTask(): Promise<void> {
