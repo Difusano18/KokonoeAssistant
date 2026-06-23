@@ -103,7 +103,7 @@ export class SettingsPanelController {
       if (input.type === "checkbox") input.checked = Boolean(values[name]);
       else input.value = String(values[name] ?? "");
     }
-    this.color.value = /^#[0-9a-f]{6}$/i.test(String(values.matrixColor ?? "")) ? String(values.matrixColor) : "#6366F1";
+    this.color.value = /^#[0-9a-f]{6}$/i.test(String(values.matrixColor ?? "")) ? String(values.matrixColor) : "#5fc1b3";
     this.colorText.textContent = this.color.value.toUpperCase();
     document.documentElement.style.setProperty("--accent", this.color.value);
     this.renderCredentials(snapshot.credentials ?? {});
