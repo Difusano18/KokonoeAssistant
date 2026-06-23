@@ -31,6 +31,19 @@ const workspacePanels = new WorkspacePanelsController();
 const bridgeStatus = required("bridge-status");
 const systemScanButton = required<HTMLButtonElement>("system-scan");
 const telemetryRefreshButton = required<HTMLButtonElement>("telemetry-refresh");
+const personaStatusText = document.getElementById("persona-status-text");
+
+interface PersonaStatus { mood: string; bond: string; connection: number; }
+
+async function refreshPersona(): Promise<void> {
+  if (!personaStatusText) return;
+  try {
+    const status = await window.koko.call<PersonaStatus>("persona.status", null, 5000);
+    personaStatusText.textContent = `${status.mood} · ${status.bond} · ${status.connection.toFixed(2)}`;
+  } catch (error) {
+    personaStatusText.textContent = error instanceof Error ? error.message : String(error);
+  }
+}
 
 console.info("[Kokonoe Web Shell] TypeScript runtime rendered");
 document.documentElement.dataset.renderedAt = new Date().toISOString();
@@ -58,6 +71,8 @@ async function connectHost(): Promise<void> {
     workspacePanels.renderRuntime(await window.koko.call("runtime.snapshot"));
     systemScanButton.disabled = false;
     telemetryRefreshButton.disabled = false;
+    void refreshPersona();
+    window.setInterval(() => void refreshPersona(), 20000);
     window.setInterval(() => {
       refreshRuntime()
         .catch(error => workspacePanels.setHost("error", error instanceof Error ? error.message : String(error)));
