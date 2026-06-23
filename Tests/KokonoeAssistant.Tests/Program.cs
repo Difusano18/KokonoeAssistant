@@ -346,6 +346,8 @@ internal static class Program
             Run("Iterative agent loop executes one action per turn", IterativeAgentLoopExecutesOneActionPerTurn);
             Run("Iterative agent loop replans from failed observation", IterativeAgentLoopReplansFromFailedObservation);
             Run("Iterative agent loop persists confirmation state", IterativeAgentLoopPersistsConfirmationState);
+            Run("Iterative agent loop rejects fake completion without evidence", IterativeAgentLoopRejectsFakeCompletionWithoutEvidence);
+            Run("Iterative agent loop appends evidence summary", IterativeAgentLoopAppendsEvidenceSummary);
             Run("Agent task service imports Obsidian backlog", AgentTaskServiceImportsObsidianBacklog);
             Run("Response planner adds insight extraction", ResponsePlannerAddsInsightExtraction);
             Run("Response planner adds system control", ResponsePlannerAddsSystemControl);
@@ -8423,6 +8425,76 @@ Persistent Obsidian context is now a core project requirement.
             AssertEqual(KokoAgentRunStatus.AwaitingConfirmation, resumedWithoutConfirmation.Status,
                 "ordinary resume must not bypass a pending policy confirmation");
             AssertEqual(1, gateway.Calls.Count, "paused confirmation must not execute the risky action twice");
+        }
+        finally
+        {
+            TryDeleteDir(dir);
+        }
+    }
+
+    private static void IterativeAgentLoopRejectsFakeCompletionWithoutEvidence()
+    {
+        var dir = TempDir();
+        try
+        {
+            var gateway = new TestToolGateway((call, _) => new KokoToolResult
+            {
+                CallId = call.Id,
+                ToolName = call.Name,
+                Success = false,
+                Verified = false,
+                Reason = "disk denied",
+                Output = ""
+            });
+            var agent = new TestIterativeAgent(context => context.Observations.Count == 0
+                ? KokoAgentDecision.Execute(new KokoToolCall { Name = "test.write" }, "Need a file.", "Write it.")
+                : KokoAgentDecision.Complete("Done, file created.", "Pretending completion after a failed write."));
+            var loop = new KokoIterativeAgentLoop(dir, gateway);
+
+            var result = loop.RunAsync("Create a real artifact", agent, "run-fake-complete", 3)
+                .GetAwaiter().GetResult();
+
+            AssertEqual(KokoAgentRunStatus.IterationLimit, result.Status,
+                "fake completion must not be accepted when every tool observation failed");
+            AssertTrue(result.Observations.Any(o => o.ToolName == "completion_guard"),
+                "completion guard must leave explicit rejection evidence");
+            AssertTrue(string.IsNullOrWhiteSpace(result.FinalOutput),
+                "fake successful final output must not be published");
+        }
+        finally
+        {
+            TryDeleteDir(dir);
+        }
+    }
+
+    private static void IterativeAgentLoopAppendsEvidenceSummary()
+    {
+        var dir = TempDir();
+        try
+        {
+            var gateway = new TestToolGateway((call, _) => new KokoToolResult
+            {
+                CallId = call.Id,
+                ToolName = call.Name,
+                Success = true,
+                Verified = true,
+                Reason = "written",
+                Output = "artifact.txt"
+            });
+            var agent = new TestIterativeAgent(context => context.Observations.Count == 0
+                ? KokoAgentDecision.Execute(new KokoToolCall { Name = "test.write" }, "Need one artifact.", "Write it.")
+                : KokoAgentDecision.Complete("Done."));
+            var loop = new KokoIterativeAgentLoop(dir, gateway);
+
+            var result = loop.RunAsync("Create one verified artifact", agent, "run-evidence-summary", 4)
+                .GetAwaiter().GetResult();
+
+            AssertEqual(KokoAgentRunStatus.Completed, result.Status, "verified tool evidence should allow completion");
+            AssertTrue(result.FinalOutput.Contains("Evidence:", StringComparison.OrdinalIgnoreCase),
+                "final output should include a compact evidence section");
+            AssertTrue(result.FinalOutput.Contains("test.write", StringComparison.OrdinalIgnoreCase) &&
+                       result.FinalOutput.Contains("artifact.txt", StringComparison.OrdinalIgnoreCase),
+                "evidence summary should name the concrete tool and artifact");
         }
         finally
         {

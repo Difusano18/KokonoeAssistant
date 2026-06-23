@@ -85,7 +85,24 @@ namespace KokonoeAssistant.Services
 
                     if (decision.IsComplete)
                     {
-                        state.FinalOutput = decision.FinalOutput?.Trim() ?? "";
+                        var finalOutput = decision.FinalOutput?.Trim() ?? "";
+                        if (!AcceptCompletion(state, finalOutput, out var rejectionReason))
+                        {
+                            state.Observations.Add(new KokoAgentObservation
+                            {
+                                Iteration = state.Iteration,
+                                ToolName = "completion_guard",
+                                CallId = "guard-" + state.Iteration,
+                                Success = false,
+                                Verified = false,
+                                Reason = rejectionReason,
+                                Output = "Completion rejected because the run has no verified tool evidence for the claimed action."
+                            });
+                            SaveAndPublish(state, "guard_reject", rejectionReason);
+                            continue;
+                        }
+
+                        state.FinalOutput = AddEvidenceSummary(finalOutput, state);
                         state.Status = KokoAgentRunStatus.Completed;
                         SaveAndPublish(state, "complete", Trim(state.FinalOutput, 240));
                         return state;
@@ -157,14 +174,81 @@ namespace KokonoeAssistant.Services
             KokoSystemLog.Write("AGENT-LOOP", $"run={state.RunId} agent={state.AgentId} iteration={state.Iteration} phase={kind} status={state.Status}: {summary}");
         }
 
+        private static bool AcceptCompletion(KokoAgentRunState state, string finalOutput, out string reason)
+        {
+            reason = "";
+            var observations = state.Observations
+                .Where(o => !string.Equals(o.ToolName, "completion_guard", StringComparison.OrdinalIgnoreCase))
+                .ToList();
+            if (observations.Count == 0)
+                return true;
+
+            var hasEvidence = observations.Any(o => (o.Success && o.Verified) || o.RequiresConfirmation);
+            if (hasEvidence)
+                return true;
+
+            if (LooksLikeHonestFailureReport(finalOutput))
+                return true;
+
+            reason = "agent attempted tools but tried to complete without verified evidence or an honest failure report";
+            return false;
+        }
+
+        private static string AddEvidenceSummary(string finalOutput, KokoAgentRunState state)
+        {
+            var observations = state.Observations
+                .Where(o => !string.Equals(o.ToolName, "completion_guard", StringComparison.OrdinalIgnoreCase))
+                .Where(o => o.Success || o.Verified || o.RequiresConfirmation || !string.IsNullOrWhiteSpace(o.Reason))
+                .TakeLast(3)
+                .ToList();
+            if (observations.Count == 0)
+                return finalOutput;
+
+            if (finalOutput.Contains("Evidence:", StringComparison.OrdinalIgnoreCase) ||
+                finalOutput.Contains("Доказ:", StringComparison.OrdinalIgnoreCase) ||
+                finalOutput.Contains("tool_result", StringComparison.OrdinalIgnoreCase))
+                return finalOutput;
+
+            var evidence = string.Join("\n", observations.Select(o =>
+            {
+                var stateText = o.RequiresConfirmation ? "pending" : o.Success ? "ok" : "failed";
+                var verified = o.Verified ? "verified" : "unverified";
+                var detail = FirstUsefulLine(o.Output);
+                if (string.IsNullOrWhiteSpace(detail))
+                    detail = o.Reason;
+                return $"- {o.ToolName}: {stateText}/{verified} - {Trim(detail, 140)}";
+            }));
+            return string.IsNullOrWhiteSpace(finalOutput)
+                ? "Evidence:\n" + evidence
+                : finalOutput.TrimEnd() + "\n\nEvidence:\n" + evidence;
+        }
+
+        private static bool LooksLikeHonestFailureReport(string? text)
+        {
+            var lower = (text ?? "").ToLowerInvariant();
+            return ContainsAny(lower,
+                "failed", "failure", "blocked", "could not", "cannot", "can't", "not completed",
+                "не вдалося", "не вийшло", "заблоковано", "помилка", "не виконано", "не створено", "не записано");
+        }
+
         private static double Priority(string kind) => kind switch
         {
             "failed" => 0.95,
             "awaiting_confirmation" => 0.90,
+            "guard_reject" => 0.88,
             "complete" => 0.80,
             "execute" => 0.70,
             _ => 0.55
         };
+
+        private static bool ContainsAny(string text, params string[] needles)
+            => needles.Any(needle => text.Contains(needle, StringComparison.OrdinalIgnoreCase));
+
+        private static string FirstUsefulLine(string? text)
+            => (text ?? "")
+                .Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries)
+                .Select(line => line.Trim())
+                .FirstOrDefault(line => line.Length > 0) ?? "";
 
         private static string Trim(string? value, int max)
         {
