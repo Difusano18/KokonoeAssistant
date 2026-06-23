@@ -22,6 +22,9 @@ namespace KokonoeAssistant.Services
             _bridge.Register("start_agent_task", HandleStartAsync);
             _bridge.Register("agent.cancel", HandleCancelAsync);
             _bridge.Register("cancel_agent_task", HandleCancelAsync);
+            _bridge.Register("agent.runner.status", HandleRunnerStatusAsync);
+            _bridge.Register("agent.runner.start", HandleRunnerStartAsync);
+            _bridge.Register("agent.runner.stop", HandleRunnerStopAsync);
             _tasks.ActivityChanged += OnActivityChanged;
             _tasks.TaskCompleted += OnTaskCompleted;
         }
@@ -95,6 +98,42 @@ namespace KokonoeAssistant.Services
             });
         }
 
+        private Task<object?> HandleRunnerStatusAsync(JToken? payload, CancellationToken ct)
+        {
+            ct.ThrowIfCancellationRequested();
+            return Task.FromResult<object?>(new
+            {
+                active = _tasks.IsRunnerActive,
+                snapshot = BuildSnapshotPayload()
+            });
+        }
+
+        private Task<object?> HandleRunnerStartAsync(JToken? payload, CancellationToken ct)
+        {
+            ct.ThrowIfCancellationRequested();
+            if (_disposed)
+                throw new ObjectDisposedException(nameof(KokoWebAgentBridgeService));
+            _tasks.Start();
+            return Task.FromResult<object?>(new
+            {
+                active = _tasks.IsRunnerActive,
+                snapshot = BuildSnapshotPayload()
+            });
+        }
+
+        private Task<object?> HandleRunnerStopAsync(JToken? payload, CancellationToken ct)
+        {
+            ct.ThrowIfCancellationRequested();
+            if (_disposed)
+                throw new ObjectDisposedException(nameof(KokoWebAgentBridgeService));
+            _tasks.Stop();
+            return Task.FromResult<object?>(new
+            {
+                active = _tasks.IsRunnerActive,
+                snapshot = BuildSnapshotPayload()
+            });
+        }
+
         private void OnActivityChanged(KokoAgentActivitySnapshot activity)
         {
             if (_disposed)
@@ -132,6 +171,7 @@ namespace KokonoeAssistant.Services
                 takenAt = snapshot.TakenAt,
                 maxParallel = snapshot.MaxParallel,
                 runningSteps = snapshot.RunningSteps,
+                runnerActive = _tasks.IsRunnerActive,
                 activity = ProjectActivity(snapshot.Activity),
                 tasks = snapshot.Tasks.Select(ProjectTask).ToArray()
             };

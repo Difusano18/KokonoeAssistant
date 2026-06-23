@@ -280,6 +280,7 @@ internal static class Program
             Run("Web agent bridge exposes task evidence fields", WebAgentBridgeExposesTaskEvidenceFields);
             Run("Web agent bridge creates task from shell", WebAgentBridgeCreatesTaskFromShell);
             Run("Web agent bridge cancels task from shell", WebAgentBridgeCancelsTaskFromShell);
+            Run("Web agent bridge controls runner", WebAgentBridgeControlsRunner);
             Run("Web agent bridge publishes live activity", WebAgentBridgePublishesLiveActivity);
             Run("Web vault bridge caches and refreshes status", WebVaultBridgeCachesAndRefreshesStatus);
             Run("Web settings bridge masks and preserves secrets", WebSettingsBridgeMasksAndPreservesSecrets);
@@ -6219,7 +6220,9 @@ Insight: bridge stability and pulse quality are linked.
 
             var required = new[]
             {
-                "ping", "chat.send", "agent.snapshot", "agent.start", "settings.get", "settings.update",
+                "ping", "chat.send", "agent.snapshot", "agent.start", "agent.cancel",
+                "agent.runner.status", "agent.runner.start", "agent.runner.stop",
+                "settings.get", "settings.update",
                 "vault.status", "vault.refresh", "memory.snapshot", "memory.refresh", "telegram.status", "runtime.snapshot", "runtime.refresh",
                 "system.snapshot", "system.scan",
                 "send_message", "get_agent_tasks", "start_agent_task", "load_settings", "save_settings",
@@ -6642,6 +6645,37 @@ Insight: bridge stability and pulse quality are linked.
                 "agent.cancel response snapshot must show the canceled task");
             AssertTrue(tasks.GetSnapshot().Tasks.Any(x => x.Id == task.Id && x.Status == KokoAgentTaskStatus.Canceled),
                 "agent.cancel must cancel the real service task");
+        }
+        finally
+        {
+            TryDeleteDir(dir);
+        }
+    }
+
+    private static void WebAgentBridgeControlsRunner()
+    {
+        var dir = TempDir();
+        try
+        {
+            var envelopes = new List<string>();
+            var tasks = new KokoAgentTaskService(dir) { AutoStartOnAdd = false };
+            using var bridge = new KokoWebBridgeService(envelopes.Add);
+            using var agent = new KokoWebAgentBridgeService(bridge, tasks);
+
+            bridge.HandleMessageAsync("""{"type":"request","id":"runner-start","method":"agent.runner.start","payload":null}""")
+                .GetAwaiter().GetResult();
+            bridge.HandleMessageAsync("""{"type":"request","id":"runner-stop","method":"agent.runner.stop","payload":null}""")
+                .GetAwaiter().GetResult();
+
+            var parsed = envelopes.Select(Newtonsoft.Json.Linq.JObject.Parse).ToList();
+            var started = parsed.Single(x => x["id"]?.ToString() == "runner-start");
+            var stopped = parsed.Single(x => x["id"]?.ToString() == "runner-stop");
+
+            AssertTrue(started["result"]?["active"]?.Value<bool>() == true, "agent.runner.start must activate the runner");
+            AssertTrue(started["result"]?["snapshot"]?["runnerActive"]?.Value<bool>() == true,
+                "runner start snapshot must expose active state");
+            AssertTrue(stopped["result"]?["active"]?.Value<bool>() == false, "agent.runner.stop must pause the runner");
+            AssertTrue(tasks.IsRunnerActive == false, "runner stop must update the real task service");
         }
         finally
         {

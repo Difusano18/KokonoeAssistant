@@ -313,6 +313,10 @@
             <div class="workspace-card"><label>Running</label><output id="tasks-panel-running">0 / 0</output><p>Active execution slots.</p></div>
             <div class="workspace-card"><label>Current</label><output id="tasks-panel-phase">idle</output><p id="tasks-panel-thought">Waiting for runtime.</p></div>
           </div>
+          <div class="panel-actions">
+            <button id="agent-runner-start" class="action-button" type="button" disabled>Start runner</button>
+            <button id="agent-runner-stop" class="action-button" type="button" disabled>Stop runner</button>
+          </div>
           <form id="agent-task-form" class="task-compose">
             <input id="agent-task-objective" aria-label="Agent task objective" placeholder="Give the agent a concrete task" autocomplete="off" disabled>
             <button id="agent-task-start" class="action-button" type="submit" disabled>Start task</button>

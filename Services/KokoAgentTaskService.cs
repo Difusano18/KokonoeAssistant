@@ -133,6 +133,13 @@ namespace KokonoeAssistant.Services
             get => _maxParallel;
             set => _maxParallel = Math.Clamp(value, 1, 10);
         }
+        public bool IsRunnerActive
+        {
+            get
+            {
+                lock (_lock) { return _runnerCts != null; }
+            }
+        }
         public bool AutoStartOnAdd { get; set; } = true;
         public event Action<KokoAgentActivitySnapshot>? ActivityChanged;
         public event Action<KokoAgentTask, KokoAgentCompletionNotice>? TaskCompleted;

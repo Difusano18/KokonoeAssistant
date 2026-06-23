@@ -23,6 +23,7 @@ interface AgentActivity { phase: string; tool: string; focus: string; thought: s
 interface AgentSnapshot {
   maxParallel: number;
   runningSteps: number;
+  runnerActive?: boolean;
   activity: AgentActivity;
   tasks: AgentTask[];
 }
@@ -40,6 +41,8 @@ export class AgentBoardController {
   private readonly objectiveInput = document.getElementById("agent-task-objective") as HTMLInputElement | null;
   private readonly startButton = document.getElementById("agent-task-start") as HTMLButtonElement | null;
   private readonly taskStatus = document.getElementById("agent-task-status");
+  private readonly runnerStart = document.getElementById("agent-runner-start") as HTMLButtonElement | null;
+  private readonly runnerStop = document.getElementById("agent-runner-stop") as HTMLButtonElement | null;
   private pollHandle = 0;
 
   constructor() {
@@ -51,17 +54,21 @@ export class AgentBoardController {
       event.preventDefault();
       void this.startTask();
     });
+    this.runnerStart?.addEventListener("click", () => void this.setRunner(true));
+    this.runnerStop?.addEventListener("click", () => void this.setRunner(false));
   }
 
   async connect(): Promise<void> {
     try {
       await this.refresh();
       this.setTaskControls(true, "Agent bridge ready.");
+      this.setRunnerControls(true);
       this.startPolling();
     } catch (error) {
       this.activity.querySelector("strong")!.textContent = "Agent bridge unavailable";
       this.activity.querySelector("p")!.textContent = error instanceof Error ? error.message : String(error);
       this.setTaskControls(false, error instanceof Error ? error.message : String(error));
+      this.setRunnerControls(false);
     }
   }
 
@@ -111,6 +118,30 @@ export class AgentBoardController {
   private setTaskStatus(status: string): void {
     if (this.taskStatus)
       this.taskStatus.textContent = status;
+  }
+
+  private setRunnerControls(enabled: boolean, active?: boolean): void {
+    if (this.runnerStart)
+      this.runnerStart.disabled = !enabled || active === true;
+    if (this.runnerStop)
+      this.runnerStop.disabled = !enabled || active === false;
+  }
+
+  private async setRunner(active: boolean): Promise<void> {
+    this.setRunnerControls(false);
+    this.setTaskStatus(active ? "Starting runner..." : "Stopping runner...");
+    try {
+      const result = await window.koko.call<{ active: boolean; snapshot: AgentSnapshot }>(
+        active ? "agent.runner.start" : "agent.runner.stop",
+        null,
+        10000
+      );
+      this.render(result.snapshot);
+      this.setTaskStatus(result.active ? "Runner active." : "Runner stopped.");
+    } catch (error) {
+      this.setTaskStatus(error instanceof Error ? error.message : String(error));
+      this.setRunnerControls(true);
+    }
   }
 
   private handleTaskClick(event: Event): void {
@@ -168,6 +199,7 @@ export class AgentBoardController {
       this.panelPhase.textContent = current.phase || "idle";
     if (this.panelThought)
       this.panelThought.textContent = current.thought || current.focus || "No active task.";
+    this.setRunnerControls(true, snapshot.runnerActive === true);
   }
 
   private renderTask(task: AgentTask): HTMLElement {
