@@ -56,3 +56,27 @@ if (window.location.hash === "#settings")
   void settings.open();
 
 void connectHost();
+
+const panels: Record<string, HTMLElement | null> = {
+  chat: document.getElementById("chat-scroll"),
+  tasks: document.getElementById("panel-tasks"),
+  memory: document.getElementById("panel-memory"),
+  telemetry: document.getElementById("panel-telemetry"),
+};
+const composer = required<HTMLFormElement>("chat-form");
+
+function switchPanel(id: string): void {
+  const target = panels[id] ? id : "chat";
+  Object.entries(panels).forEach(([key, element]) => {
+    if (element)
+      element.style.display = key === target ? "" : "none";
+  });
+  composer.style.display = target === "chat" ? "" : "none";
+  document.querySelectorAll<HTMLButtonElement>(".rail button[data-panel]").forEach(button => {
+    button.classList.toggle("active", button.dataset.panel === target);
+  });
+}
+
+document.querySelectorAll<HTMLButtonElement>(".rail button[data-panel]").forEach(button => {
+  button.addEventListener("click", () => switchPanel(button.dataset.panel ?? "chat"));
+});

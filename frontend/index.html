@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Kokonoe Web Shell</title>
+  <title>Kokonoe</title>
   <style>
     :root {
       --accent: #5cb7aa;
@@ -233,6 +233,8 @@
     @keyframes runtime-pulse { 50% { opacity: .45; transform: scale(.82); } }
     @keyframes message-in { from { opacity: 0; transform: translateY(7px); } to { opacity: 1; transform: translateY(0); } }
     @keyframes live-update { 0% { background-color: color-mix(in srgb, var(--accent) 16%, transparent); } 100% { background-color: transparent; } }
+    @keyframes event-flash { 0% { background-color: color-mix(in srgb, var(--accent) 12%, transparent); } 100% { background-color: transparent; } }
+    .event-flash { animation: event-flash 480ms ease-out; }
 
     @media (prefers-reduced-motion: reduce) {
       *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
@@ -253,18 +255,18 @@
     </header>
 
     <nav class="rail" aria-label="Workspace">
-      <button class="active" title="Chat" aria-label="Chat">●</button>
-      <button title="Tasks" aria-label="Tasks" disabled>□</button>
-      <button title="Memory" aria-label="Memory" disabled>◇</button>
-      <button title="Telemetry" aria-label="Telemetry" disabled>⌁</button>
+      <button class="active" title="Chat" aria-label="Chat" data-panel="chat">●</button>
+      <button title="Tasks" aria-label="Tasks" data-panel="tasks">□</button>
+      <button title="Memory" aria-label="Memory" data-panel="memory">◇</button>
+      <button title="Telemetry" aria-label="Telemetry" data-panel="telemetry">⌁</button>
       <button id="settings-open" class="bottom" title="Settings" aria-label="Settings">⚙</button>
     </nav>
 
     <main>
       <section class="context">
-        <p class="eyebrow">Web client migration</p>
-        <h1>Shell runtime online</h1>
-        <p class="subhead">Streaming chat and live agent execution share one typed C# bridge.</p>
+        <p class="eyebrow" id="context-eyebrow">Kokonoe</p>
+        <h1 id="context-title">Assistant</h1>
+        <p class="subhead" id="context-subhead">Local runtime · cloud models · direct access</p>
       </section>
       <section id="chat-scroll" class="workspace" aria-live="polite">
         <div id="messages" class="messages">
@@ -272,6 +274,24 @@
             <span class="message-meta">Kokonoe / bridge checkpoint</span>
             <p class="message-body">Runtime ready. Replies stream chunk by chunk while agent work stays visible in the activity board.</p>
           </article>
+        </div>
+      </section>
+      <section id="panel-tasks" class="workspace" style="display:none" aria-live="polite">
+        <div id="tasks-board" style="padding:24px 28px">
+          <p class="eyebrow">Agent tasks</p>
+          <div id="tasks-list" class="agent-tasks"><p class="agent-empty">No tasks yet.</p></div>
+        </div>
+      </section>
+      <section id="panel-memory" class="workspace" style="display:none" aria-live="polite">
+        <div style="padding:24px 28px">
+          <p class="eyebrow">Memory cortex</p>
+          <p class="subhead" style="color:#687581">Memory index will appear here.</p>
+        </div>
+      </section>
+      <section id="panel-telemetry" class="workspace" style="display:none" aria-live="polite">
+        <div style="padding:24px 28px">
+          <p class="eyebrow">System telemetry</p>
+          <p class="subhead" style="color:#687581">Runtime metrics will appear here.</p>
         </div>
       </section>
       <form id="chat-form" class="composer">
