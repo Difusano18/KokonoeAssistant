@@ -45,6 +45,8 @@ export class AgentBoardController {
   constructor() {
     window.koko.on("agent.activity", payload => this.render((payload as { snapshot: AgentSnapshot }).snapshot));
     window.koko.on("agent.completed", payload => this.render((payload as { snapshot: AgentSnapshot }).snapshot));
+    this.sideTasks.addEventListener("click", event => this.handleTaskClick(event));
+    this.panelTasks?.addEventListener("click", event => this.handleTaskClick(event));
     this.taskForm?.addEventListener("submit", event => {
       event.preventDefault();
       void this.startTask();
@@ -111,6 +113,34 @@ export class AgentBoardController {
       this.taskStatus.textContent = status;
   }
 
+  private handleTaskClick(event: Event): void {
+    const button = (event.target as HTMLElement).closest<HTMLButtonElement>("button[data-agent-cancel]");
+    if (!button)
+      return;
+    event.preventDefault();
+    const taskId = button.dataset.agentCancel ?? "";
+    if (!taskId)
+      return;
+    button.disabled = true;
+    void this.cancelTask(taskId);
+  }
+
+  private async cancelTask(taskId: string): Promise<void> {
+    this.setTaskStatus(`Canceling ${taskId}...`);
+    try {
+      const result = await window.koko.call<{ taskId: string; snapshot: AgentSnapshot }>(
+        "agent.cancel",
+        { taskId },
+        10000
+      );
+      this.render(result.snapshot);
+      this.setTaskStatus(`Canceled ${result.taskId}.`);
+    } catch (error) {
+      this.setTaskStatus(error instanceof Error ? error.message : String(error));
+      await this.refresh().catch(() => undefined);
+    }
+  }
+
   private render(snapshot: AgentSnapshot): void {
     const current = snapshot.activity;
     this.activity.replaceChildren(
@@ -149,6 +179,16 @@ export class AgentBoardController {
       Object.assign(document.createElement("strong"), { textContent: task.objective }),
       Object.assign(document.createElement("span"), { className: `agent-status ${task.status.toLowerCase()}`, textContent: task.status })
     );
+    if (task.status === "Pending" || task.status === "Running") {
+      const cancel = document.createElement("button");
+      cancel.className = "agent-task-cancel";
+      cancel.type = "button";
+      cancel.textContent = "x";
+      cancel.title = `Cancel ${task.id}`;
+      cancel.ariaLabel = `Cancel task ${task.id}`;
+      cancel.dataset.agentCancel = task.id;
+      head.append(cancel);
+    }
     const steps = document.createElement("div");
     steps.className = "agent-steps";
     for (const step of task.steps)

@@ -279,6 +279,7 @@ internal static class Program
             Run("Web agent bridge returns camel case snapshot", WebAgentBridgeReturnsCamelCaseSnapshot);
             Run("Web agent bridge exposes task evidence fields", WebAgentBridgeExposesTaskEvidenceFields);
             Run("Web agent bridge creates task from shell", WebAgentBridgeCreatesTaskFromShell);
+            Run("Web agent bridge cancels task from shell", WebAgentBridgeCancelsTaskFromShell);
             Run("Web agent bridge publishes live activity", WebAgentBridgePublishesLiveActivity);
             Run("Web vault bridge caches and refreshes status", WebVaultBridgeCachesAndRefreshesStatus);
             Run("Web settings bridge masks and preserves secrets", WebSettingsBridgeMasksAndPreservesSecrets);
@@ -6603,6 +6604,44 @@ Insight: bridge stability and pulse quality are linked.
             AssertTrue(response["result"]?["started"]?.Value<bool>() == false, "start=false must keep runner paused");
             AssertTrue(tasks.GetSnapshot().Tasks.Any(task => task.Objective == "Inspect bridge contract" && task.Priority == 8),
                 "web handler must create a real task in KokoAgentTaskService");
+        }
+        finally
+        {
+            TryDeleteDir(dir);
+        }
+    }
+
+    private static void WebAgentBridgeCancelsTaskFromShell()
+    {
+        var dir = TempDir();
+        try
+        {
+            var envelopes = new List<string>();
+            var tasks = new KokoAgentTaskService(dir) { AutoStartOnAdd = false };
+            var task = tasks.AddTask("Cancel this from WebView", priority: 5);
+            using var bridge = new KokoWebBridgeService(envelopes.Add);
+            using var agent = new KokoWebAgentBridgeService(bridge, tasks);
+
+            var request = new Newtonsoft.Json.Linq.JObject
+            {
+                ["type"] = "request",
+                ["id"] = "agent-cancel",
+                ["method"] = "agent.cancel",
+                ["payload"] = new Newtonsoft.Json.Linq.JObject { ["taskId"] = task.Id }
+            };
+
+            bridge.HandleMessageAsync(request.ToString(Newtonsoft.Json.Formatting.None))
+                .GetAwaiter().GetResult();
+
+            var response = envelopes.Select(Newtonsoft.Json.Linq.JObject.Parse)
+                .Single(x => x["id"]?.ToString() == "agent-cancel");
+            AssertTrue(string.IsNullOrWhiteSpace(response["error"]?.ToString()), "agent.cancel must return a normal response");
+            AssertTrue(response["result"]?["canceled"]?.Value<bool>() == true, "agent.cancel should report cancellation");
+            AssertTrue(response["result"]?["snapshot"]?["tasks"]?
+                    .Any(x => x?["id"]?.ToString() == task.Id && x?["status"]?.ToString() == "Canceled") == true,
+                "agent.cancel response snapshot must show the canceled task");
+            AssertTrue(tasks.GetSnapshot().Tasks.Any(x => x.Id == task.Id && x.Status == KokoAgentTaskStatus.Canceled),
+                "agent.cancel must cancel the real service task");
         }
         finally
         {

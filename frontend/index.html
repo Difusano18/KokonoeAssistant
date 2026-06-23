@@ -127,6 +127,9 @@
     .agent-task-head { display: flex; align-items: center; gap: 8px; margin-bottom: 7px; }
     .agent-task-head strong { min-width: 0; flex: 1; color: #cfd9e1; font-size: 11px; line-height: 1.35; overflow-wrap: anywhere; }
     .agent-status { flex: 0 0 auto; font: 9px Consolas, monospace; color: #87939e; }
+    .agent-task-cancel { flex: 0 0 auto; min-width: 24px; height: 22px; border: 1px solid #3a4651; border-radius: 4px; background: #101821; color: #87939e; font: 11px Consolas, monospace; }
+    .agent-task-cancel:hover { border-color: #773842; color: #d96570; }
+    .agent-task-cancel:disabled { opacity: .4; cursor: default; }
     .agent-status.running { color: var(--accent); }
     .agent-status.completed { color: #79aa78; }
     .agent-status.failed { color: #d96570; }

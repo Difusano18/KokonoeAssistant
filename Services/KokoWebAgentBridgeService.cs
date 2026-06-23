@@ -20,6 +20,8 @@ namespace KokonoeAssistant.Services
             _bridge.Register("get_agent_tasks", HandleSnapshotAsync);
             _bridge.Register("agent.start", HandleStartAsync);
             _bridge.Register("start_agent_task", HandleStartAsync);
+            _bridge.Register("agent.cancel", HandleCancelAsync);
+            _bridge.Register("cancel_agent_task", HandleCancelAsync);
             _tasks.ActivityChanged += OnActivityChanged;
             _tasks.TaskCompleted += OnTaskCompleted;
         }
@@ -51,6 +53,45 @@ namespace KokonoeAssistant.Services
                 taskId = task.Id,
                 started = start,
                 snapshot = BuildSnapshotPayload()
+            });
+        }
+
+        private Task<object?> HandleCancelAsync(JToken? payload, CancellationToken ct)
+        {
+            ct.ThrowIfCancellationRequested();
+            if (_disposed)
+                throw new ObjectDisposedException(nameof(KokoWebAgentBridgeService));
+
+            var taskId = payload?["taskId"]?.ToString()?.Trim();
+            if (string.IsNullOrWhiteSpace(taskId))
+                taskId = payload?["id"]?.ToString()?.Trim();
+            if (string.IsNullOrWhiteSpace(taskId))
+                throw new InvalidOperationException("Agent task id is empty.");
+
+            var canceled = _tasks.CancelTask(taskId);
+            if (!canceled)
+                throw new InvalidOperationException("Agent task was not found: " + taskId);
+
+            var snapshot = BuildSnapshotPayload();
+            _bridge.Publish("agent.activity", new
+            {
+                activity = new
+                {
+                    updatedAt = DateTime.Now,
+                    phase = "observe",
+                    tool = "runner",
+                    focus = taskId,
+                    thought = "Task canceled from WebView.",
+                    taskId,
+                    stepId = ""
+                },
+                snapshot
+            });
+            return Task.FromResult<object?>(new
+            {
+                taskId,
+                canceled,
+                snapshot
             });
         }
 
