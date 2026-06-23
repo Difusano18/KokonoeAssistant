@@ -265,6 +265,7 @@ internal static class Program
             Run("Web bridge reports unknown methods", WebBridgeReportsUnknownMethods);
             Run("Web bridge contract covers frontend and compatibility methods", WebBridgeContractCoversFrontendAndCompatibilityMethods);
             Run("Web runtime bridge returns snapshot and publishes refresh", WebRuntimeBridgeReturnsSnapshotAndPublishesRefresh);
+            Run("Web system bridge scans and publishes snapshot", WebSystemBridgeScansAndPublishesSnapshot);
             Run("Web memory bridge returns facts and publishes refresh", WebMemoryBridgeReturnsFactsAndPublishesRefresh);
             Run("Web startup policy defaults to web with explicit rollback", WebStartupPolicyDefaultsToWebWithExplicitRollback);
             Run("Web shell development URL allows loopback only", WebShellDevelopmentUrlAllowsLoopbackOnly);
@@ -6210,13 +6211,17 @@ Insight: bridge stability and pulse quality are linked.
                 takenAt = DateTime.UtcNow,
                 heartbeat = new { entries = Array.Empty<object>() }
             });
+            using var system = new KokoWebSystemBridgeService(
+                bridge,
+                new KokoSystemOverlordService(Path.Combine(dir, "overlord")));
 
             var required = new[]
             {
                 "ping", "chat.send", "agent.snapshot", "agent.start", "settings.get", "settings.update",
                 "vault.status", "vault.refresh", "memory.snapshot", "memory.refresh", "telegram.status", "runtime.snapshot", "runtime.refresh",
+                "system.snapshot", "system.scan",
                 "send_message", "get_agent_tasks", "start_agent_task", "load_settings", "save_settings",
-                "vault_status", "telegram_status"
+                "vault_status", "telegram_status", "system_overlord_status"
             };
             foreach (var method in required)
                 AssertTrue(bridge.RegisteredMethods.Contains(method, StringComparer.OrdinalIgnoreCase),
@@ -6260,6 +6265,51 @@ Insight: bridge stability and pulse quality are linked.
                                    x["channel"]?.ToString() == "runtime.snapshot" &&
                                    x["payload"]?["heartbeat"]?["entries"]?.Any() == true),
             "runtime.refresh must publish a live runtime snapshot event");
+    }
+
+    private static void WebSystemBridgeScansAndPublishesSnapshot()
+    {
+        var dir = TempDir();
+        try
+        {
+            var scanRoot = Path.Combine(dir, "scan");
+            Directory.CreateDirectory(scanRoot);
+            File.WriteAllText(Path.Combine(scanRoot, "note.txt"), "system bridge evidence");
+            var envelopes = new List<string>();
+            using var bridge = new KokoWebBridgeService(envelopes.Add);
+            using var system = new KokoWebSystemBridgeService(
+                bridge,
+                new KokoSystemOverlordService(Path.Combine(dir, "data")));
+            var payload = new Newtonsoft.Json.Linq.JObject
+            {
+                ["roots"] = new Newtonsoft.Json.Linq.JArray(scanRoot),
+                ["maxFiles"] = 25
+            };
+            var request = new Newtonsoft.Json.Linq.JObject
+            {
+                ["type"] = "request",
+                ["id"] = "sys-1",
+                ["method"] = "system.scan",
+                ["payload"] = payload
+            };
+
+            bridge.HandleMessageAsync(request.ToString(Newtonsoft.Json.Formatting.None))
+                .GetAwaiter().GetResult();
+
+            var parsed = envelopes.Select(e => Newtonsoft.Json.Linq.JObject.Parse(e)).ToList();
+            AssertTrue(parsed.Any(x => x["type"]?.ToString() == "response" &&
+                                       x["id"]?.ToString() == "sys-1" &&
+                                       x["result"]?["scannedFiles"]?.Value<int>() >= 1),
+                "system.scan must return real scan facts");
+            AssertTrue(parsed.Any(x => x["type"]?.ToString() == "event" &&
+                                       x["channel"]?.ToString() == "system.snapshot" &&
+                                       x["payload"]?["files"]?.Any() == true),
+                "system.scan must publish the snapshot for WebView");
+        }
+        finally
+        {
+            TryDeleteDir(dir);
+        }
     }
 
     private static void WebMemoryBridgeReturnsFactsAndPublishesRefresh()

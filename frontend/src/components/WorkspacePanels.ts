@@ -95,6 +95,18 @@ interface MemorySnapshot {
   sessionFacts: string[];
 }
 
+interface SystemSnapshot {
+  takenAt: string;
+  status: string;
+  error: string;
+  scannedFiles: number;
+  totalBytes: number;
+  console: string;
+  files: unknown[];
+  processes: unknown[];
+  proposals: unknown[];
+}
+
 export class WorkspacePanelsController {
   private chatCompleted = 0;
   private chatErrors = 0;
@@ -118,6 +130,7 @@ export class WorkspacePanelsController {
     window.koko.on("vault.status", payload => this.renderVault(payload as VaultStatus));
     window.koko.on("memory.snapshot", payload => this.renderMemory(payload as MemorySnapshot));
     window.koko.on("runtime.snapshot", payload => this.renderRuntime(payload as RuntimeSnapshot));
+    window.koko.on("system.snapshot", payload => this.renderSystem(payload as SystemSnapshot));
   }
 
   setHost(status: "linked" | "preview" | "error", detail: string): void {
@@ -189,6 +202,31 @@ export class WorkspacePanelsController {
     this.bump();
   }
 
+  renderSystem(snapshot: unknown): void {
+    const system = snapshot as SystemSnapshot;
+    const proposalCount = system.proposals?.length ?? 0;
+    const processCount = system.processes?.length ?? 0;
+    const fileCount = system.scannedFiles ?? 0;
+    this.setText("telemetry-system", system.status || "idle");
+    const detail = system.error
+      ? system.error
+      : `${fileCount} files / ${proposalCount} proposals / ${processCount} processes`;
+    this.setText("telemetry-system-detail", detail);
+
+    const feed = document.getElementById("system-feed");
+    if (feed) {
+      const lines = (system.console || "")
+        .split(/\r?\n/)
+        .filter(Boolean)
+        .slice(0, 10)
+        .map(line => this.simpleRow(line, this.time(system.takenAt)));
+      feed.replaceChildren(...lines);
+      if (!lines.length)
+        feed.append(Object.assign(document.createElement("p"), { className: "agent-empty", textContent: "No system snapshot yet." }));
+    }
+    this.bump();
+  }
+
   private renderAgent(snapshot: AgentSnapshot): void {
     const current = snapshot.activity;
     this.setText("telemetry-agent", current.phase || "idle");
@@ -243,6 +281,15 @@ export class WorkspacePanelsController {
     row.append(
       Object.assign(document.createElement("span"), { textContent: `${entry.service}: ${entry.status} — ${entry.detail}`, title: entry.detail }),
       Object.assign(document.createElement("time"), { textContent: `${Math.round(entry.ageSeconds)}s` })
+    );
+    return row;
+  }
+
+  private simpleRow(content: string, meta: string): HTMLElement {
+    const row = document.createElement("div");
+    row.append(
+      Object.assign(document.createElement("span"), { textContent: content, title: content }),
+      Object.assign(document.createElement("time"), { textContent: meta })
     );
     return row;
   }

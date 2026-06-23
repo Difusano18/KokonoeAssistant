@@ -44,13 +44,15 @@ async function connectHost(): Promise<void> {
     motion.setHostState("ready");
     workspacePanels.setHost("linked", String(result));
     await Promise.allSettled([agents.connect(), vault.connect(), telegram.connect()]);
-    const [agentSnapshot, vaultStatus, memorySnapshot] = await Promise.all([
+    const [agentSnapshot, vaultStatus, memorySnapshot, systemSnapshot] = await Promise.all([
       window.koko.call("agent.snapshot"),
       window.koko.call("vault.status"),
-      window.koko.call("memory.snapshot")
+      window.koko.call("memory.snapshot"),
+      window.koko.call("system.snapshot")
     ]);
     workspacePanels.renderInitial(agentSnapshot, vaultStatus);
     workspacePanels.renderMemory(memorySnapshot);
+    workspacePanels.renderSystem(systemSnapshot);
     workspacePanels.renderRuntime(await window.koko.call("runtime.snapshot"));
     window.setInterval(() => {
       window.koko.call("runtime.refresh", null, 5000)

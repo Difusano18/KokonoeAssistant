@@ -326,9 +326,14 @@
           </div>
           <div class="workspace-grid">
             <div class="workspace-card"><label>Vault</label><output id="telemetry-vault">waiting</output><p id="telemetry-vault-detail">No scan yet.</p></div>
+            <div class="workspace-card"><label>System</label><output id="telemetry-system">idle</output><p id="telemetry-system-detail">No system scan yet.</p></div>
             <div class="workspace-card"><label>Events</label><output id="telemetry-events">0</output><p>Live bridge events in this shell session.</p></div>
+          </div>
+          <div class="workspace-grid">
             <div class="workspace-card"><label>Updated</label><output id="telemetry-updated">--</output><p>Local UI clock.</p></div>
           </div>
+          <p class="eyebrow">System Overlord</p>
+          <div id="system-feed" class="workspace-feed"><p class="agent-empty">No system snapshot yet.</p></div>
           <p class="eyebrow">Service heartbeat</p>
           <div id="runtime-feed" class="workspace-feed"><p class="agent-empty">No runtime snapshot yet.</p></div>
         </div>
