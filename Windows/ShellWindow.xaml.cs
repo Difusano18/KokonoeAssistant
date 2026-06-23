@@ -125,8 +125,10 @@ namespace KokonoeAssistant.Windows
             {
                 KokoSystemLog.Write("WEB-SHELL", "initialization failed: " + ex);
                 Debug.WriteLine("[WEB-SHELL] " + ex);
-                if (InitializationFailed != null)
+                var coreReady = WebView.CoreWebView2 != null;
+                if (InitializationFailed != null && ShouldUseLegacyFallback(ex, coreReady))
                 {
+                    KokoSystemLog.Write("WEB-SHELL", "delegating to legacy fallback; coreReady=" + coreReady);
                     InitializationFailed(ex.Message);
                     return;
                 }
@@ -152,6 +154,16 @@ namespace KokonoeAssistant.Windows
                 (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
                 return null;
             return uri;
+        }
+
+        internal static bool ShouldUseLegacyFallback(Exception error, bool coreReady)
+        {
+            if (!coreReady)
+                return true;
+
+            return error is WebView2RuntimeNotFoundException ||
+                   error is DllNotFoundException ||
+                   error is BadImageFormatException;
         }
 
         private static string BuildFailurePage(string message)

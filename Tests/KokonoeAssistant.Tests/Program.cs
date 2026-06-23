@@ -269,6 +269,7 @@ internal static class Program
             Run("Web memory bridge returns facts and publishes refresh", WebMemoryBridgeReturnsFactsAndPublishesRefresh);
             Run("Web startup policy defaults to web with explicit rollback", WebStartupPolicyDefaultsToWebWithExplicitRollback);
             Run("Web shell development URL allows loopback only", WebShellDevelopmentUrlAllowsLoopbackOnly);
+            Run("Web shell keeps diagnostics page after core startup", WebShellKeepsDiagnosticsPageAfterCoreStartup);
             Run("Web chat bridge streams correlated chunks", WebChatBridgeStreamsCorrelatedChunks);
             Run("Web chat bridge resets partial stream before fallback", WebChatBridgeResetsPartialStreamBeforeFallback);
             Run("Web chat bridge streams tool fallback after reset", WebChatBridgeStreamsToolFallbackAfterReset);
@@ -6381,6 +6382,23 @@ Insight: bridge stability and pulse quality are linked.
         AssertTrue(Resolve("https://example.com") == null, "remote development origins must be rejected");
         AssertTrue(Resolve("file:///C:/temp/index.html") == null, "file development origins must be rejected");
         AssertTrue(Resolve("not-a-url") == null, "malformed development URLs must be rejected");
+    }
+
+    private static void WebShellKeepsDiagnosticsPageAfterCoreStartup()
+    {
+        var method = typeof(KokonoeAssistant.Windows.ShellWindow).GetMethod(
+            "ShouldUseLegacyFallback",
+            System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)
+            ?? throw new InvalidOperationException("Shell fallback policy was not found.");
+
+        bool Should(Exception error, bool coreReady) => (bool)(method.Invoke(null, new object[] { error, coreReady }) ?? false);
+
+        AssertTrue(Should(new InvalidOperationException("core missing"), coreReady: false),
+            "missing WebView2 core must still fall back to legacy WPF");
+        AssertTrue(!Should(new FileNotFoundException("frontend missing"), coreReady: true),
+            "asset or bridge failures after WebView2 startup must stay in Web shell diagnostics");
+        AssertTrue(Should(new DllNotFoundException("loader missing"), coreReady: true),
+            "loader/runtime failures must keep the legacy escape hatch");
     }
 
     private static void WebChatBridgeStreamsCorrelatedChunks()
