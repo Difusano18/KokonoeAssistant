@@ -10,8 +10,14 @@ export class MotionController {
     window.koko.on("chat.canceled", () => this.setHostState("ready"));
     window.koko.on("chat.error", () => this.setHostState("error"));
     window.koko.on("agent.activity", () => this.flash(document.getElementById("agent-activity")));
-    window.koko.on("agent.completed", () => this.flash(document.getElementById("agent-tasks")));
-    window.koko.on("vault.status", () => this.flash(document.getElementById("vault-panel")));
+    window.koko.on("agent.completed", () => {
+      this.flash(document.getElementById("agent-tasks"));
+      this.flash(document.getElementById("tasks-list"));
+    });
+    window.koko.on("vault.status", () => {
+      this.flash(document.getElementById("vault-panel"));
+      this.flash(document.getElementById("panel-memory"));
+    });
     window.koko.on("telegram.status", () => this.flash(document.getElementById("telegram-panel")));
 
     const messages = document.getElementById("messages");

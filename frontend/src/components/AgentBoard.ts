@@ -13,7 +13,12 @@ interface AgentSnapshot {
 export class AgentBoardController {
   private readonly activity = document.getElementById("agent-activity")!;
   private readonly summary = document.getElementById("agent-summary")!;
-  private readonly tasks = document.getElementById("agent-tasks")!;
+  private readonly sideTasks = document.getElementById("agent-tasks")!;
+  private readonly panelTasks = document.getElementById("tasks-list");
+  private readonly panelCount = document.getElementById("tasks-panel-count");
+  private readonly panelRunning = document.getElementById("tasks-panel-running");
+  private readonly panelPhase = document.getElementById("tasks-panel-phase");
+  private readonly panelThought = document.getElementById("tasks-panel-thought");
 
   constructor() {
     window.koko.on("agent.activity", payload => this.render((payload as { snapshot: AgentSnapshot }).snapshot));
@@ -39,9 +44,23 @@ export class AgentBoardController {
       Object.assign(document.createElement("span"), { textContent: `${snapshot.tasks.length} tasks` }),
       Object.assign(document.createElement("span"), { textContent: `${snapshot.runningSteps} / ${snapshot.maxParallel} running` })
     );
-    this.tasks.replaceChildren(...snapshot.tasks.slice(0, 8).map(task => this.renderTask(task)));
-    if (!snapshot.tasks.length)
-      this.tasks.append(Object.assign(document.createElement("p"), { className: "agent-empty", textContent: "No active tasks." }));
+    const rendered = snapshot.tasks.slice(0, 8).map(task => this.renderTask(task));
+    this.sideTasks.replaceChildren(...rendered.map(task => task.cloneNode(true) as HTMLElement));
+    this.panelTasks?.replaceChildren(...rendered);
+    if (!snapshot.tasks.length) {
+      const empty = Object.assign(document.createElement("p"), { className: "agent-empty", textContent: "No active tasks." });
+      this.sideTasks.append(empty.cloneNode(true));
+      this.panelTasks?.append(empty);
+    }
+
+    if (this.panelCount)
+      this.panelCount.textContent = String(snapshot.tasks.length);
+    if (this.panelRunning)
+      this.panelRunning.textContent = `${snapshot.runningSteps} / ${snapshot.maxParallel}`;
+    if (this.panelPhase)
+      this.panelPhase.textContent = current.phase || "idle";
+    if (this.panelThought)
+      this.panelThought.textContent = current.thought || current.focus || "No active task.";
   }
 
   private renderTask(task: AgentTask): HTMLElement {

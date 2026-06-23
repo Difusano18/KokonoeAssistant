@@ -133,6 +133,17 @@
     .agent-step.completed { background: #678d69; }
     .agent-step.failed { background: #b44f59; }
     .agent-empty { color: #687581; font-size: 11px; line-height: 1.5; }
+    .workspace-board { padding: 24px 28px; }
+    .workspace-grid { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 12px; margin: 14px 0 16px; }
+    .workspace-card { min-height: 78px; padding: 13px; border: 1px solid #263442; border-radius: 6px; background: #0d141c; }
+    .workspace-card label { display: block; margin-bottom: 7px; color: #65727e; font: 10px Consolas, monospace; text-transform: uppercase; }
+    .workspace-card output { color: #d7e0e7; font: 16px Consolas, monospace; overflow-wrap: anywhere; }
+    .workspace-card p { margin: 6px 0 0; color: #74818c; font-size: 11px; line-height: 1.45; overflow-wrap: anywhere; }
+    .workspace-list { display: grid; gap: 9px; margin-top: 12px; }
+    .workspace-feed { display: grid; gap: 8px; margin-top: 12px; }
+    .workspace-feed div { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 12px; padding: 9px 0; border-top: 1px solid #202b36; }
+    .workspace-feed span { min-width: 0; color: #aeb9c2; font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .workspace-feed time { color: #64717c; font: 10px Consolas, monospace; }
 
     .panel-heading { display: flex; align-items: center; gap: 8px; margin: 24px 0 12px; }
     .panel-heading h2 { margin: 0; }
@@ -243,6 +254,7 @@
     @media (max-width: 760px) {
       .shell { grid-template-columns: 60px minmax(0, 1fr); }
       aside { display: none; }
+      .workspace-grid { grid-template-columns: 1fr; }
     }
   </style>
 </head>
@@ -277,21 +289,41 @@
         </div>
       </section>
       <section id="panel-tasks" class="workspace" style="display:none" aria-live="polite">
-        <div id="tasks-board" style="padding:24px 28px">
+        <div id="tasks-board" class="workspace-board">
           <p class="eyebrow">Agent tasks</p>
-          <div id="tasks-list" class="agent-tasks"><p class="agent-empty">No tasks yet.</p></div>
+          <div class="workspace-grid">
+            <div class="workspace-card"><label>Tasks</label><output id="tasks-panel-count">0</output><p>Total queued and completed work.</p></div>
+            <div class="workspace-card"><label>Running</label><output id="tasks-panel-running">0 / 0</output><p>Active execution slots.</p></div>
+            <div class="workspace-card"><label>Current</label><output id="tasks-panel-phase">idle</output><p id="tasks-panel-thought">Waiting for runtime.</p></div>
+          </div>
+          <div id="tasks-list" class="agent-tasks workspace-list"><p class="agent-empty">No tasks yet.</p></div>
         </div>
       </section>
       <section id="panel-memory" class="workspace" style="display:none" aria-live="polite">
-        <div style="padding:24px 28px">
+        <div class="workspace-board">
           <p class="eyebrow">Memory cortex</p>
-          <p class="subhead" style="color:#687581">Memory index will appear here.</p>
+          <div class="workspace-grid">
+            <div class="workspace-card"><label>Vault</label><output id="memory-state">waiting</output><p id="memory-path">Vault path unavailable.</p></div>
+            <div class="workspace-card"><label>Notes</label><output id="memory-notes">--</output><p>Indexed markdown notes.</p></div>
+            <div class="workspace-card"><label>Folders</label><output id="memory-folders">--</output><p id="memory-meta">scan --</p></div>
+          </div>
+          <p class="eyebrow">Recent memory writes</p>
+          <div id="memory-recent" class="workspace-feed"><p class="agent-empty">No recent notes.</p></div>
         </div>
       </section>
       <section id="panel-telemetry" class="workspace" style="display:none" aria-live="polite">
-        <div style="padding:24px 28px">
+        <div class="workspace-board">
           <p class="eyebrow">System telemetry</p>
-          <p class="subhead" style="color:#687581">Runtime metrics will appear here.</p>
+          <div class="workspace-grid">
+            <div class="workspace-card"><label>Host</label><output id="telemetry-host">connecting</output><p id="telemetry-host-detail">Bridge not checked yet.</p></div>
+            <div class="workspace-card"><label>Chat</label><output id="telemetry-chat">idle</output><p id="telemetry-chat-detail">0 completed / 0 errors.</p></div>
+            <div class="workspace-card"><label>Agent</label><output id="telemetry-agent">idle</output><p id="telemetry-agent-detail">No activity yet.</p></div>
+          </div>
+          <div class="workspace-grid">
+            <div class="workspace-card"><label>Vault</label><output id="telemetry-vault">waiting</output><p id="telemetry-vault-detail">No scan yet.</p></div>
+            <div class="workspace-card"><label>Events</label><output id="telemetry-events">0</output><p>Live bridge events in this shell session.</p></div>
+            <div class="workspace-card"><label>Updated</label><output id="telemetry-updated">--</output><p>Local UI clock.</p></div>
+          </div>
         </div>
       </section>
       <form id="chat-form" class="composer">
