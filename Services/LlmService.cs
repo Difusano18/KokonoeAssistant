@@ -811,8 +811,8 @@ namespace KokonoeAssistant.Services
             return string.Join("\n", lines);
         }
 
-        public string ExecuteRegisteredTool(string name, JObject args)
-            => Task.Run(() => ExecuteToolAsync(name, args, CancellationToken.None)).GetAwaiter().GetResult();
+        public Task<string> ExecuteRegisteredToolAsync(string name, JObject args, CancellationToken ct = default)
+            => ExecuteToolAsync(name, args, ct);
 
         // ------------------------------------------------------------
 
@@ -2666,33 +2666,17 @@ namespace KokonoeAssistant.Services
 
         private string ExecuteTool(string name, JObject args)
         {
-            if (name == "execute_python")
-                return new KokoSandboxExecutor(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "kokonoe-data", "agent-runtime-sandbox"))
-                    .ExecutePythonAsync(Req(args, "code")).GetAwaiter().GetResult();
-
-            if (name == "codeact_python")
-                return ExecuteCodeActToolAsync(args, CancellationToken.None).GetAwaiter().GetResult();
-
+            // execute_python / codeact_python / fs_* are intercepted earlier in
+            // ExecuteToolAsync's async fast path and never reach this synchronous
+            // dispatcher; create_agent_task and friends stay sync since they're cheap.
             if (name is "create_agent_task" or "get_agent_board" or "sync_agent_backlog")
                 return ExecuteAgentTaskTool(name, args);
-
-            if (name is "fs_read_text" or "fs_write_text" or "fs_create_directory" or "fs_move" or "fs_delete")
-                return ExecuteFileTool(name, args);
             if (Obsidian == null) return "Obsidian не підключений.";
 
             try
             {
                 return name switch
                 {
-                    "execute_python" => new KokoSandboxExecutor(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "kokonoe-data", "agent-runtime-sandbox"))
-                        .ExecutePythonAsync(Req(args, "code")).GetAwaiter().GetResult(),
-
-                    "fs_read_text" => ExecuteFileTool(name, args),
-                    "fs_write_text" => ExecuteFileTool(name, args),
-                    "fs_create_directory" => ExecuteFileTool(name, args),
-                    "fs_move" => ExecuteFileTool(name, args),
-                    "fs_delete" => ExecuteFileTool(name, args),
-
                     "list_notes" => FormatList(
                         Obsidian.ListNotes(args["subfolder"]?.ToString())),
 
@@ -2780,9 +2764,6 @@ namespace KokonoeAssistant.Services
 
         private static string Req(JObject args, string key) =>
             args[key]?.ToString() ?? throw new ArgumentException($"Відсутній параметр: {key}");
-
-        private static string ExecuteFileTool(string name, JObject args)
-            => ExecuteFileToolAsync(name, args, CancellationToken.None).GetAwaiter().GetResult();
 
         private static async Task<string> ExecuteCodeActToolAsync(JObject args, CancellationToken ct)
         {
