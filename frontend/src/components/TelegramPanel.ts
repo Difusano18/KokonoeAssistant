@@ -6,6 +6,9 @@ interface TelegramChannelStatus {
   lastActivity: string;
   lastActivityAt?: string;
   lastError: string;
+  lastMessageFrom?: string;
+  lastMessagePreview?: string;
+  lastMessageAt?: string;
 }
 interface TelegramStatus { updatedAt: string; bot: TelegramChannelStatus; user: TelegramChannelStatus; }
 
@@ -48,5 +51,18 @@ export class TelegramPanelController {
     if (channel.lastError) parts.push(channel.lastError);
     detail.textContent = parts.join(" / ");
     detail.classList.toggle("telegram-error", Boolean(channel.lastError));
+
+    const message = root.querySelector<HTMLElement>(".telegram-message");
+    if (message) {
+      if (channel.lastMessagePreview) {
+        const when = channel.lastMessageAt
+          ? new Date(channel.lastMessageAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+          : "";
+        message.textContent = `${channel.lastMessageFrom ?? "?"}: ${channel.lastMessagePreview}${when ? ` · ${when}` : ""}`;
+        message.style.display = "";
+      } else {
+        message.style.display = "none";
+      }
+    }
   }
 }

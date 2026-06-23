@@ -12,6 +12,9 @@ namespace KokonoeAssistant.Services
         public DateTime? LastActivityAt { get; set; }
         public string LastError { get; set; } = "";
         public DateTime? LastErrorAt { get; set; }
+        public string LastMessageFrom { get; set; } = "";
+        public string LastMessagePreview { get; set; } = "";
+        public DateTime? LastMessageAt { get; set; }
     }
 
     public sealed class KokoTelegramRuntimeSnapshot
@@ -58,6 +61,12 @@ namespace KokonoeAssistant.Services
 
         public void RecordUserError(string error)
             => Mutate(snapshot => ApplyError(snapshot.User, error));
+
+        public void RecordBotMessage(string from, string text)
+            => Mutate(snapshot => ApplyMessage(snapshot.Bot, from, text));
+
+        public void RecordUserMessage(string from, string text)
+            => Mutate(snapshot => ApplyMessage(snapshot.User, from, text));
 
         public KokoTelegramRuntimeSnapshot GetSnapshot()
         {
@@ -115,6 +124,13 @@ namespace KokonoeAssistant.Services
             channel.LastErrorAt = DateTime.UtcNow;
         }
 
+        private static void ApplyMessage(KokoTelegramChannelStatus channel, string from, string text)
+        {
+            channel.LastMessageFrom = Clean(from, 80, "unknown");
+            channel.LastMessagePreview = Clean(text, 200, "");
+            channel.LastMessageAt = DateTime.UtcNow;
+        }
+
         private static string Clean(string value, int max, string fallback)
         {
             var clean = (value ?? "").Replace('\r', ' ').Replace('\n', ' ').Trim();
@@ -138,7 +154,10 @@ namespace KokonoeAssistant.Services
             LastActivity = source.LastActivity,
             LastActivityAt = source.LastActivityAt,
             LastError = source.LastError,
-            LastErrorAt = source.LastErrorAt
+            LastErrorAt = source.LastErrorAt,
+            LastMessageFrom = source.LastMessageFrom,
+            LastMessagePreview = source.LastMessagePreview,
+            LastMessageAt = source.LastMessageAt
         };
     }
 }

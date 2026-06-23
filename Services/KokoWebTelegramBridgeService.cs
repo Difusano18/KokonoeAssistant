@@ -56,7 +56,10 @@ namespace KokonoeAssistant.Services
             lastActivity = channel.LastActivity,
             lastActivityAt = channel.LastActivityAt,
             lastError = channel.LastError,
-            lastErrorAt = channel.LastErrorAt
+            lastErrorAt = channel.LastErrorAt,
+            lastMessageFrom = channel.LastMessageFrom,
+            lastMessagePreview = channel.LastMessagePreview,
+            lastMessageAt = channel.LastMessageAt
         };
 
         public void Dispose()

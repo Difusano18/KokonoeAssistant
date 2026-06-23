@@ -179,6 +179,7 @@ namespace KokonoeAssistant
 
             // Показуємо в UI
             var displayLine = $"[{msg.ChatName}] {msg.Sender}: {msg.Text}";
+            ServiceContainer.TelegramStatus.RecordUserMessage(msg.Sender, msg.Text);
             await Dispatcher.InvokeAsync(() =>
             {
                 _tgMessages.Add(displayLine);

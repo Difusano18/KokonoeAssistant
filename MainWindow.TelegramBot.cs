@@ -173,6 +173,7 @@ namespace KokonoeAssistant
                 if (msg.Photo != null && msg.Photo.Length > 0)
                 {
                     var caption = msg.Caption ?? "";
+                    ServiceContainer.TelegramStatus.RecordBotMessage(from, string.IsNullOrWhiteSpace(caption) ? "[фото]" : $"[фото] {caption}");
                     await Dispatcher.InvokeAsync(() =>
                     {
                         _tgMessages.Add($"[{from}]: [фото] {caption}");
@@ -213,6 +214,7 @@ namespace KokonoeAssistant
 
                 if (msg.Text is not string text) return;
 
+                ServiceContainer.TelegramStatus.RecordBotMessage(from, text);
                 await Dispatcher.InvokeAsync(() => { _tgMessages.Add($"[{from}]: {text}"); TgScroll.ScrollToBottom(); });
                 try
                 {
