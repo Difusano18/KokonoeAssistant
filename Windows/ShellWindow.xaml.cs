@@ -86,7 +86,11 @@ namespace KokonoeAssistant.Windows
                 _memoryBridge = new KokoWebMemoryBridgeService(_bridge, ServiceContainer.KokoMemory);
                 _settingsBridge = new KokoWebSettingsBridgeService(
                     _bridge,
-                    settings => ThemeManager.ApplyTheme(settings.MatrixColor));
+                    settings =>
+                    {
+                        ThemeManager.ApplyTheme(settings.MatrixColor);
+                        ServiceContainer.LlmService.ReloadSettings();
+                    });
                 _telegramBridge = new KokoWebTelegramBridgeService(_bridge, ServiceContainer.TelegramStatus);
                 _runtimeBridge = new KokoWebRuntimeBridgeService(_bridge);
                 _systemBridge = new KokoWebSystemBridgeService(_bridge, ServiceContainer.SystemOverlord);

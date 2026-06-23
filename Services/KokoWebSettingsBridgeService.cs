@@ -11,6 +11,10 @@ namespace KokonoeAssistant.Services
     public sealed class KokoWebSettingsBridgeService : IDisposable
     {
         private static readonly Regex HexColor = new("^#[0-9a-fA-F]{6}$", RegexOptions.Compiled);
+        private static readonly HashSet<string> LlmProviders = new(StringComparer.OrdinalIgnoreCase)
+        {
+            "lmstudio", "ollama", "ollama-cloud", "claude"
+        };
         private readonly KokoWebBridgeService _bridge;
         private readonly Func<AppSettings> _load;
         private readonly Func<AppSettings, string?> _save;
@@ -89,6 +93,33 @@ namespace KokonoeAssistant.Services
             ApplyBool(values, "systemOverlordEnabled", settings.SystemOverlordEnabled,
                 value => settings.SystemOverlordEnabled = value, changed);
 
+            if (values.TryGetValue("llmProvider", StringComparison.OrdinalIgnoreCase, out var providerToken))
+            {
+                var provider = providerToken?.ToString()?.Trim() ?? "";
+                if (!LlmProviders.Contains(provider))
+                    throw new InvalidOperationException("llmProvider must be one of: " + string.Join(", ", LlmProviders));
+                if (!string.Equals(settings.LlmProvider, provider, StringComparison.OrdinalIgnoreCase))
+                {
+                    settings.LlmProvider = provider;
+                    changed.Add("llmProvider");
+                }
+            }
+            ApplyString(values, "ollamaUrl", 2048, settings.OllamaUrl,
+                value => settings.OllamaUrl = value, changed);
+            ApplyString(values, "ollamaModel", 256, settings.OllamaModel,
+                value => settings.OllamaModel = value, changed);
+            if (values.TryGetValue("ollamaApiKey", StringComparison.OrdinalIgnoreCase, out var ollamaKeyToken))
+            {
+                var key = ollamaKeyToken?.ToString()?.Trim() ?? "";
+                if (key.Length > 2048)
+                    throw new InvalidOperationException("ollamaApiKey exceeds 2048 characters.");
+                if (!string.IsNullOrEmpty(key) && !string.Equals(settings.OllamaApiKey, key, StringComparison.Ordinal))
+                {
+                    settings.OllamaApiKey = key;
+                    changed.Add("ollamaApiKey");
+                }
+            }
+
             var wearBridgeBefore = settings.WearBridgeEnabled;
             ApplyBool(values, "wearBridgeEnabled", settings.WearBridgeEnabled,
                 value => settings.WearBridgeEnabled = value, changed);
@@ -144,7 +175,10 @@ namespace KokonoeAssistant.Services
                 systemOverlordEnabled = settings.SystemOverlordEnabled,
                 wearBridgeEnabled = settings.WearBridgeEnabled,
                 wearBridgeIncludePromptContext = settings.WearBridgeIncludePromptContext,
-                matrixColor = settings.MatrixColor
+                matrixColor = settings.MatrixColor,
+                llmProvider = settings.LlmProvider,
+                ollamaUrl = settings.OllamaUrl,
+                ollamaModel = settings.OllamaModel
             },
             credentials = new
             {
@@ -188,6 +222,25 @@ namespace KokonoeAssistant.Services
             if (token == null || !int.TryParse(token.ToString(), out var value) || value < min || value > max)
                 throw new InvalidOperationException($"{name} must be between {min} and {max}.");
             if (value == current)
+                return;
+            assign(value);
+            changed.Add(name);
+        }
+
+        private static void ApplyString(
+            JObject source,
+            string name,
+            int maxLength,
+            string current,
+            Action<string> assign,
+            ICollection<string> changed)
+        {
+            if (!source.TryGetValue(name, StringComparison.OrdinalIgnoreCase, out var token))
+                return;
+            var value = token?.ToString()?.Trim() ?? "";
+            if (value.Length > maxLength)
+                throw new InvalidOperationException($"{name} exceeds {maxLength} characters.");
+            if (string.Equals(value, current, StringComparison.Ordinal))
                 return;
             assign(value);
             changed.Add(name);

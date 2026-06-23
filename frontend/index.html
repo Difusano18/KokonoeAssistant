@@ -352,6 +352,14 @@
     .color-control { display: flex; align-items: center; gap: 10px; }
     .color-control input[type="color"] { width: 32px; height: 32px; padding: 2px; border: 1px solid var(--line-2); border-radius: 7px; background: var(--input); cursor: pointer; }
     .color-control code { color: var(--text-2); font: 11px/1 "IBM Plex Mono", monospace; }
+    .setting-row-stack { grid-template-columns: 1fr; align-items: stretch; gap: 6px; margin-top: 12px; }
+    .setting-row-stack label { margin-bottom: 0; }
+    .setting-row-stack input[type="text"], .setting-row-stack input[type="password"] {
+      width: 100%; height: 34px; padding: 0 11px; border: 1px solid var(--line-2); border-radius: 7px;
+      outline: none; background: var(--input); color: var(--text); font: 12px/1 "IBM Plex Mono", monospace;
+    }
+    .setting-row-stack input[type="text"]::placeholder, .setting-row-stack input[type="password"]::placeholder { color: var(--text-4); }
+    .setting-row-stack input[type="text"]:focus, .setting-row-stack input[type="password"]:focus { border-color: var(--accent-border); }
     .credential-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 18px; }
     .credential { display: flex; align-items: center; justify-content: space-between; min-height: 32px; border-bottom: 1px solid var(--line); color: var(--text-2); font-size: 11.5px; }
     .credential output { color: var(--text-3); font: 9px/1 "IBM Plex Mono", monospace; letter-spacing: .5px; text-transform: uppercase; }
@@ -627,6 +635,24 @@
           <div class="setting-row"><label for="wear-context">Wear context in prompts</label><input id="wear-context" type="checkbox"></div>
           <div class="setting-row"><label for="tray-enabled">Minimize to tray</label><input id="tray-enabled" type="checkbox"></div>
           <div class="setting-row"><label>Accent</label><div class="color-control"><input id="matrix-color" type="color" value="#5fc1b3"><code id="matrix-color-text">#5FC1B3</code></div></div>
+        </section>
+        <section class="settings-group">
+          <h3>LLM Provider</h3>
+          <div id="llm-provider-segment" class="segment" role="group" aria-label="LLM provider">
+            <button type="button" data-value="lmstudio">LM Studio</button><button type="button" data-value="ollama">Ollama</button><button type="button" data-value="ollama-cloud">Cloud</button><button type="button" data-value="claude">Claude</button>
+          </div>
+          <div class="setting-row setting-row-stack" id="row-ollama-url">
+            <label for="ollama-url">Endpoint URL</label>
+            <input id="ollama-url" type="text" placeholder="https://api.groq.com/openai/v1/chat/completions" autocomplete="off">
+          </div>
+          <div class="setting-row setting-row-stack" id="row-ollama-key">
+            <label for="ollama-key">API Key</label>
+            <input id="ollama-key" type="password" placeholder="sk-..." autocomplete="off">
+          </div>
+          <div class="setting-row setting-row-stack" id="row-ollama-model">
+            <label for="ollama-model">Model</label>
+            <input id="ollama-model" type="text" placeholder="llama-3.3-70b-versatile" autocomplete="off">
+          </div>
         </section>
         <section class="settings-group">
           <h3>Protected credentials</h3>

@@ -9,11 +9,19 @@ export class SettingsPanelController {
   private readonly save = document.getElementById("settings-save") as HTMLButtonElement;
   private readonly status = document.getElementById("settings-status")!;
   private readonly segment = document.getElementById("autonomy-segment")!;
+  private readonly providerSegment = document.getElementById("llm-provider-segment")!;
+  private readonly ollamaUrlRow = document.getElementById("row-ollama-url")!;
+  private readonly ollamaKeyRow = document.getElementById("row-ollama-key")!;
+  private readonly ollamaModelRow = document.getElementById("row-ollama-model")!;
+  private readonly ollamaUrl = document.getElementById("ollama-url") as HTMLInputElement;
+  private readonly ollamaKey = document.getElementById("ollama-key") as HTMLInputElement;
+  private readonly ollamaModel = document.getElementById("ollama-model") as HTMLInputElement;
   private readonly color = document.getElementById("matrix-color") as HTMLInputElement;
   private readonly colorText = document.getElementById("matrix-color-text")!;
   private readonly credentials = document.getElementById("credential-grid")!;
   private available = false;
   private autonomy = 2;
+  private llmProvider = "ollama-cloud";
   private readonly fields: Record<string, string> = {
     spontaneousEnabled: "spontaneous-enabled", spontaneousIntervalMins: "spontaneous-mins",
     neuralGovernorEnabled: "neural-governor", screenAwarenessEnabled: "screen-enabled",
@@ -30,6 +38,10 @@ export class SettingsPanelController {
     this.segment.addEventListener("click", event => {
       const button = (event.target as HTMLElement).closest<HTMLButtonElement>("button[data-value]");
       if (button) this.setAutonomy(Number(button.dataset.value));
+    });
+    this.providerSegment.addEventListener("click", event => {
+      const button = (event.target as HTMLElement).closest<HTMLButtonElement>("button[data-value]");
+      if (button) this.setProvider(button.dataset.value ?? "ollama-cloud");
     });
     this.color.addEventListener("input", () => {
       this.colorText.textContent = this.color.value.toUpperCase();
@@ -95,6 +107,16 @@ export class SettingsPanelController {
       button.classList.toggle("selected", Number(button.dataset.value) === value);
   }
 
+  private setProvider(value: string): void {
+    this.llmProvider = value;
+    for (const button of this.providerSegment.querySelectorAll<HTMLButtonElement>("button"))
+      button.classList.toggle("selected", button.dataset.value === value);
+    const showCloudFields = value === "ollama-cloud";
+    this.ollamaUrlRow.style.display = showCloudFields ? "" : "none";
+    this.ollamaKeyRow.style.display = showCloudFields ? "" : "none";
+    this.ollamaModelRow.style.display = showCloudFields ? "" : "none";
+  }
+
   private fill(snapshot: SettingsSnapshot): void {
     const values = snapshot.values ?? {};
     this.setAutonomy(Number(values.proactiveAutonomyLevel ?? 2));
@@ -103,6 +125,11 @@ export class SettingsPanelController {
       if (input.type === "checkbox") input.checked = Boolean(values[name]);
       else input.value = String(values[name] ?? "");
     }
+    this.setProvider(String(values.llmProvider ?? "ollama-cloud"));
+    this.ollamaUrl.value = String(values.ollamaUrl ?? "");
+    this.ollamaModel.value = String(values.ollamaModel ?? "");
+    this.ollamaKey.value = "";
+    this.ollamaKey.placeholder = snapshot.credentials?.ollama ? "•••• configured (leave blank to keep)" : "sk-...";
     this.color.value = /^#[0-9a-f]{6}$/i.test(String(values.matrixColor ?? "")) ? String(values.matrixColor) : "#5fc1b3";
     this.colorText.textContent = this.color.value.toUpperCase();
     document.documentElement.style.setProperty("--accent", this.color.value);
@@ -110,7 +137,14 @@ export class SettingsPanelController {
   }
 
   private read(): SettingsValues {
-    const values: SettingsValues = { proactiveAutonomyLevel: this.autonomy, matrixColor: this.color.value.toUpperCase() };
+    const values: SettingsValues = {
+      proactiveAutonomyLevel: this.autonomy,
+      matrixColor: this.color.value.toUpperCase(),
+      llmProvider: this.llmProvider,
+      ollamaUrl: this.ollamaUrl.value.trim(),
+      ollamaModel: this.ollamaModel.value.trim(),
+      ollamaApiKey: this.ollamaKey.value.trim()
+    };
     for (const [name, id] of Object.entries(this.fields)) {
       const input = document.getElementById(id) as HTMLInputElement;
       values[name] = input.type === "checkbox" ? input.checked : Number(input.value);

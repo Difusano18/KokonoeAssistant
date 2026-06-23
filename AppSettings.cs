@@ -38,7 +38,9 @@ namespace KokonoeAssistant
         public const string FallbackVisionModel = "";
 
         // LLM Provider: "lmstudio" | "ollama" | "claude" | "ollama-cloud"
-        public string LlmProvider { get; set; } = "lmstudio";
+        // Default to ollama-cloud: lmstudio needs a local server running, which is the
+        // exact "cursor with no reply" failure this default was causing.
+        public string LlmProvider { get; set; } = "ollama-cloud";
 
         // LM Studio
         public string LmUrl   { get; set; } = "http://localhost:1234/v1/chat/completions";
