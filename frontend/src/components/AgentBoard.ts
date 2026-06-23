@@ -36,19 +36,65 @@ export class AgentBoardController {
   private readonly panelRunning = document.getElementById("tasks-panel-running");
   private readonly panelPhase = document.getElementById("tasks-panel-phase");
   private readonly panelThought = document.getElementById("tasks-panel-thought");
+  private readonly taskForm = document.getElementById("agent-task-form") as HTMLFormElement | null;
+  private readonly objectiveInput = document.getElementById("agent-task-objective") as HTMLInputElement | null;
+  private readonly startButton = document.getElementById("agent-task-start") as HTMLButtonElement | null;
+  private readonly taskStatus = document.getElementById("agent-task-status");
 
   constructor() {
     window.koko.on("agent.activity", payload => this.render((payload as { snapshot: AgentSnapshot }).snapshot));
     window.koko.on("agent.completed", payload => this.render((payload as { snapshot: AgentSnapshot }).snapshot));
+    this.taskForm?.addEventListener("submit", event => {
+      event.preventDefault();
+      void this.startTask();
+    });
   }
 
   async connect(): Promise<void> {
     try {
       this.render(await window.koko.call("agent.snapshot") as AgentSnapshot);
+      this.setTaskControls(true, "Agent bridge ready.");
     } catch (error) {
       this.activity.querySelector("strong")!.textContent = "Agent bridge unavailable";
       this.activity.querySelector("p")!.textContent = error instanceof Error ? error.message : String(error);
+      this.setTaskControls(false, error instanceof Error ? error.message : String(error));
     }
+  }
+
+  private async startTask(): Promise<void> {
+    const objective = this.objectiveInput?.value.trim() ?? "";
+    if (!objective) {
+      this.setTaskStatus("Write a real objective first.");
+      this.objectiveInput?.focus();
+      return;
+    }
+
+    this.setTaskControls(false, "Creating task...");
+    try {
+      const result = await window.koko.call<{ taskId: string; snapshot: AgentSnapshot }>(
+        "agent.start",
+        { objective, priority: 6, start: true },
+        10000
+      );
+      this.objectiveInput!.value = "";
+      this.render(result.snapshot);
+      this.setTaskControls(true, `Started ${result.taskId}.`);
+    } catch (error) {
+      this.setTaskControls(true, error instanceof Error ? error.message : String(error));
+    }
+  }
+
+  private setTaskControls(enabled: boolean, status: string): void {
+    if (this.objectiveInput)
+      this.objectiveInput.disabled = !enabled;
+    if (this.startButton)
+      this.startButton.disabled = !enabled;
+    this.setTaskStatus(status);
+  }
+
+  private setTaskStatus(status: string): void {
+    if (this.taskStatus)
+      this.taskStatus.textContent = status;
   }
 
   private render(snapshot: AgentSnapshot): void {

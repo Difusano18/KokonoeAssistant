@@ -154,6 +154,10 @@
     .action-button:not(:disabled):hover { border-color: var(--accent-border); color: var(--accent); background: #101923; }
     .action-button:not(:disabled):active { transform: translateY(1px); }
     .action-button:disabled { cursor: default; opacity: .48; }
+    .task-compose { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 10px; margin: 10px 0 16px; }
+    .task-compose input { min-width: 0; height: 34px; padding: 0 11px; border: 1px solid #2a3744; border-radius: 5px; outline: none; background: #0d141c; color: #d8e1e8; font-size: 12px; }
+    .task-compose input:focus { border-color: var(--accent-border); }
+    .task-compose output { grid-column: 1 / -1; min-height: 14px; color: #65727e; font: 10px Consolas, monospace; overflow-wrap: anywhere; }
 
     .panel-heading { display: flex; align-items: center; gap: 8px; margin: 24px 0 12px; }
     .panel-heading h2 { margin: 0; }
@@ -306,6 +310,11 @@
             <div class="workspace-card"><label>Running</label><output id="tasks-panel-running">0 / 0</output><p>Active execution slots.</p></div>
             <div class="workspace-card"><label>Current</label><output id="tasks-panel-phase">idle</output><p id="tasks-panel-thought">Waiting for runtime.</p></div>
           </div>
+          <form id="agent-task-form" class="task-compose">
+            <input id="agent-task-objective" aria-label="Agent task objective" placeholder="Give the agent a concrete task" autocomplete="off" disabled>
+            <button id="agent-task-start" class="action-button" type="submit" disabled>Start task</button>
+            <output id="agent-task-status">Agent bridge not checked yet.</output>
+          </form>
           <div id="tasks-list" class="agent-tasks workspace-list"><p class="agent-empty">No tasks yet.</p></div>
         </div>
       </section>
