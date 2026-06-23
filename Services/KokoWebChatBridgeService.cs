@@ -55,6 +55,8 @@ namespace KokonoeAssistant.Services
 
         private async Task<object?> HandleSendAsync(JToken? payload, CancellationToken ct)
         {
+            await Task.Yield();
+
             if (_disposed)
                 throw new ObjectDisposedException(nameof(KokoWebChatBridgeService));
 
@@ -65,7 +67,12 @@ namespace KokonoeAssistant.Services
             if (text.Length > 32_000)
                 throw new InvalidOperationException("Chat message exceeds 32000 characters.");
 
-            var context = _contextBuilder(text);
+            // Task.Yield() alone doesn't move this off the UI thread: the WebView2 message
+            // handler captures the Dispatcher SynchronizationContext, so a bare await would
+            // just re-post the continuation back onto the same UI thread's queue. The context
+            // builder does vault scans / embedding lookups that take real seconds, so it needs
+            // an actual ThreadPool hop (same pattern as MainWindow's BuildContext callers).
+            var context = await Task.Run(() => _contextBuilder(text), ct).ConfigureAwait(false);
             var sequence = 0;
             var emittedChunks = 0;
             _bridge.Publish("chat.started", new { streamId });

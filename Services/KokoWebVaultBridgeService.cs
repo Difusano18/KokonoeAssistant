@@ -30,6 +30,8 @@ namespace KokonoeAssistant.Services
 
         private async Task<object?> GetStatusAsync(bool force, bool publish, CancellationToken ct)
         {
+            await Task.Yield();
+
             if (_disposed)
                 throw new ObjectDisposedException(nameof(KokoWebVaultBridgeService));
 

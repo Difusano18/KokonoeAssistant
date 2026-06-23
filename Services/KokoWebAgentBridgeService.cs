@@ -29,14 +29,16 @@ namespace KokonoeAssistant.Services
             _tasks.TaskCompleted += OnTaskCompleted;
         }
 
-        private Task<object?> HandleSnapshotAsync(JToken? payload, CancellationToken ct)
+        private async Task<object?> HandleSnapshotAsync(JToken? payload, CancellationToken ct)
         {
+            await Task.Yield();
             ct.ThrowIfCancellationRequested();
-            return Task.FromResult<object?>(BuildSnapshotPayload());
+            return BuildSnapshotPayload();
         }
 
-        private Task<object?> HandleStartAsync(JToken? payload, CancellationToken ct)
+        private async Task<object?> HandleStartAsync(JToken? payload, CancellationToken ct)
         {
+            await Task.Yield();
             ct.ThrowIfCancellationRequested();
             if (_disposed)
                 throw new ObjectDisposedException(nameof(KokoWebAgentBridgeService));
@@ -51,12 +53,12 @@ namespace KokonoeAssistant.Services
             var task = _tasks.AddTask(objective, priority);
             if (start)
                 _tasks.Start();
-            return Task.FromResult<object?>(new
+            return new
             {
                 taskId = task.Id,
                 started = start,
                 snapshot = BuildSnapshotPayload()
-            });
+            };
         }
 
         private Task<object?> HandleCancelAsync(JToken? payload, CancellationToken ct)

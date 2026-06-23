@@ -25,12 +25,13 @@ namespace KokonoeAssistant.Services
             _status.Changed += OnChanged;
         }
 
-        private Task<object?> HandleStatusAsync(JToken? payload, CancellationToken ct)
+        private async Task<object?> HandleStatusAsync(JToken? payload, CancellationToken ct)
         {
+            await Task.Yield();
             ct.ThrowIfCancellationRequested();
             if (_disposed) throw new ObjectDisposedException(nameof(KokoWebTelegramBridgeService));
             _status.RefreshConfiguration(_settings());
-            return Task.FromResult<object?>(Project(_status.GetSnapshot()));
+            return Project(_status.GetSnapshot());
         }
 
         private void OnChanged(KokoTelegramRuntimeSnapshot snapshot)

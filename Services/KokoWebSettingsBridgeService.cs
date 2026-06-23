@@ -44,15 +44,17 @@ namespace KokonoeAssistant.Services
             _bridge.Register("save_settings", HandleUpdateAsync);
         }
 
-        private Task<object?> HandleGetAsync(JToken? payload, CancellationToken ct)
+        private async Task<object?> HandleGetAsync(JToken? payload, CancellationToken ct)
         {
+            await Task.Yield();
             ct.ThrowIfCancellationRequested();
             ThrowIfDisposed();
-            return Task.FromResult<object?>(BuildSnapshot(_load()));
+            return BuildSnapshot(_load());
         }
 
-        private Task<object?> HandleUpdateAsync(JToken? payload, CancellationToken ct)
+        private async Task<object?> HandleUpdateAsync(JToken? payload, CancellationToken ct)
         {
+            await Task.Yield();
             ct.ThrowIfCancellationRequested();
             ThrowIfDisposed();
             if (payload is not JObject values)
@@ -116,12 +118,12 @@ namespace KokonoeAssistant.Services
                 KokoSystemLog.Write("WEB-SETTINGS", "updated: " + string.Join(",", changed));
             }
 
-            return Task.FromResult<object?>(new
+            return new
             {
                 settings = BuildSnapshot(settings),
                 changed,
                 restartRequired
-            });
+            };
         }
 
         private static object BuildSnapshot(AppSettings settings) => new
