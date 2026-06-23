@@ -115,6 +115,8 @@ namespace KokonoeAssistant.Services
             priority = task.Priority,
             createdAt = task.CreatedAt,
             updatedAt = task.UpdatedAt,
+            completionNotice = task.CompletionNotice,
+            nextQuestion = task.NextQuestion,
             steps = task.Steps.OrderBy(step => step.Order).Select(step => new
             {
                 id = step.Id,
@@ -122,6 +124,8 @@ namespace KokonoeAssistant.Services
                 title = step.Title,
                 kind = step.Kind.ToString(),
                 status = step.Status.ToString(),
+                startedAt = step.StartedAt,
+                finishedAt = step.FinishedAt,
                 result = step.Result,
                 error = step.Error
             }).ToArray()

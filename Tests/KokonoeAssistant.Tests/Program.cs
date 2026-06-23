@@ -274,6 +274,7 @@ internal static class Program
             Run("LLM streaming policy limits tool final streaming", LlmStreamingPolicyLimitsToolFinalStreaming);
             Run("Web chat bridge publishes proactive brain messages", WebChatBridgePublishesProactiveBrainMessages);
             Run("Web agent bridge returns camel case snapshot", WebAgentBridgeReturnsCamelCaseSnapshot);
+            Run("Web agent bridge exposes task evidence fields", WebAgentBridgeExposesTaskEvidenceFields);
             Run("Web agent bridge creates task from shell", WebAgentBridgeCreatesTaskFromShell);
             Run("Web agent bridge publishes live activity", WebAgentBridgePublishesLiveActivity);
             Run("Web vault bridge caches and refreshes status", WebVaultBridgeCachesAndRefreshesStatus);
@@ -6459,6 +6460,37 @@ Insight: bridge stability and pulse quality are linked.
         AssertEqual("1", response["result"]?["tasks"]?.Count().ToString(), "snapshot must include current tasks");
         AssertEqual("Inspect the current workspace", response["result"]?["tasks"]?[0]?["objective"]?.ToString(),
             "task objective must cross the bridge");
+    }
+
+    private static void WebAgentBridgeExposesTaskEvidenceFields()
+    {
+        var dir = TempDir();
+        try
+        {
+            var envelopes = new List<string>();
+            var tasks = new KokoAgentTaskService(dir) { AutoStartOnAdd = false };
+            tasks.AddTask("Inspect evidence plumbing", priority: 6);
+            using var bridge = new KokoWebBridgeService(envelopes.Add);
+            using var agent = new KokoWebAgentBridgeService(bridge, tasks);
+
+            bridge.HandleMessageAsync("""{"type":"request","id":"agent-evidence","method":"agent.snapshot","payload":null}""")
+                .GetAwaiter().GetResult();
+
+            var response = envelopes.Select(Newtonsoft.Json.Linq.JObject.Parse)
+                .Single(x => x["id"]?.ToString() == "agent-evidence");
+            var task = response["result"]?["tasks"]?[0] as Newtonsoft.Json.Linq.JObject;
+            var step = task?["steps"]?[0] as Newtonsoft.Json.Linq.JObject;
+            AssertTrue(task?.Property("completionNotice") != null, "task payload must expose completion notice for WebView details");
+            AssertTrue(task?.Property("nextQuestion") != null, "task payload must expose next question for WebView details");
+            AssertTrue(step?.Property("result") != null, "step payload must expose execution result evidence");
+            AssertTrue(step?.Property("error") != null, "step payload must expose execution error evidence");
+            AssertTrue(step?.Property("startedAt") != null, "step payload must expose start timestamp");
+            AssertTrue(step?.Property("finishedAt") != null, "step payload must expose finish timestamp");
+        }
+        finally
+        {
+            TryDeleteDir(dir);
+        }
     }
 
     private static void WebAgentBridgeCreatesTaskFromShell()

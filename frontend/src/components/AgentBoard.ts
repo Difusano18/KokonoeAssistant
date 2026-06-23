@@ -1,7 +1,24 @@
 type AgentStatus = "Pending" | "Running" | "Completed" | "Failed" | "Canceled";
 
-interface AgentStep { status: AgentStatus; title?: string; kind?: string; }
-interface AgentTask { id: string; objective: string; status: AgentStatus; steps: AgentStep[]; }
+interface AgentStep {
+  status: AgentStatus;
+  title?: string;
+  kind?: string;
+  result?: string;
+  error?: string;
+  startedAt?: string;
+  finishedAt?: string;
+}
+interface AgentTask {
+  id: string;
+  objective: string;
+  status: AgentStatus;
+  priority?: number;
+  updatedAt?: string;
+  completionNotice?: string;
+  nextQuestion?: string;
+  steps: AgentStep[];
+}
 interface AgentActivity { phase: string; tool: string; focus: string; thought: string; }
 interface AgentSnapshot {
   maxParallel: number;
@@ -65,7 +82,7 @@ export class AgentBoardController {
 
   private renderTask(task: AgentTask): HTMLElement {
     const root = document.createElement("article");
-    root.className = "agent-task";
+    root.className = `agent-task ${task.status.toLowerCase()}`;
     const head = document.createElement("div");
     head.className = "agent-task-head";
     head.append(
@@ -75,8 +92,48 @@ export class AgentBoardController {
     const steps = document.createElement("div");
     steps.className = "agent-steps";
     for (const step of task.steps)
-      steps.append(Object.assign(document.createElement("i"), { className: `agent-step ${step.status.toLowerCase()}` }));
-    root.append(head, steps);
+      steps.append(Object.assign(document.createElement("i"), {
+        className: `agent-step ${step.status.toLowerCase()}`,
+        title: this.describeStep(step)
+      }));
+    const detail = Object.assign(document.createElement("p"), {
+      className: "agent-task-detail",
+      textContent: this.summarizeTask(task)
+    });
+    root.title = `${task.id} / p${task.priority ?? 5}`;
+    root.append(head, steps, detail);
     return root;
+  }
+
+  private summarizeTask(task: AgentTask): string {
+    const failed = task.steps.find(step => step.status === "Failed");
+    if (failed)
+      return this.trim(`failed ${failed.kind ?? "step"}: ${failed.error || failed.result || failed.title || "no diagnostic"}`, 220);
+
+    const running = task.steps.find(step => step.status === "Running");
+    if (running)
+      return this.trim(`running ${running.kind ?? "step"}: ${running.title || running.result || "working"}`, 220);
+
+    if (task.status === "Completed" && task.completionNotice)
+      return this.trim(task.completionNotice, 220);
+
+    if (task.nextQuestion)
+      return this.trim(`needs input: ${task.nextQuestion}`, 220);
+
+    const completed = [...task.steps].reverse().find(step => step.status === "Completed" && (step.result || step.title));
+    if (completed)
+      return this.trim(`${completed.kind ?? "step"}: ${completed.result || completed.title}`, 220);
+
+    return `p${task.priority ?? 5} / ${task.id}`;
+  }
+
+  private describeStep(step: AgentStep): string {
+    const body = step.error || step.result || step.title || step.kind || step.status;
+    return this.trim(body, 160);
+  }
+
+  private trim(value: string, max: number): string {
+    const normalized = value.replace(/\s+/g, " ").trim();
+    return normalized.length > max ? `${normalized.slice(0, max - 3)}...` : normalized;
   }
 }
