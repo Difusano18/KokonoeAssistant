@@ -61,8 +61,9 @@ namespace KokonoeAssistant.Services
             };
         }
 
-        private Task<object?> HandleCancelAsync(JToken? payload, CancellationToken ct)
+        private async Task<object?> HandleCancelAsync(JToken? payload, CancellationToken ct)
         {
+            await Task.Yield();
             ct.ThrowIfCancellationRequested();
             if (_disposed)
                 throw new ObjectDisposedException(nameof(KokoWebAgentBridgeService));
@@ -92,48 +93,51 @@ namespace KokonoeAssistant.Services
                 },
                 snapshot
             });
-            return Task.FromResult<object?>(new
+            return new
             {
                 taskId,
                 canceled,
                 snapshot
-            });
+            };
         }
 
-        private Task<object?> HandleRunnerStatusAsync(JToken? payload, CancellationToken ct)
+        private async Task<object?> HandleRunnerStatusAsync(JToken? payload, CancellationToken ct)
         {
+            await Task.Yield();
             ct.ThrowIfCancellationRequested();
-            return Task.FromResult<object?>(new
+            return new
             {
                 active = _tasks.IsRunnerActive,
                 snapshot = BuildSnapshotPayload()
-            });
+            };
         }
 
-        private Task<object?> HandleRunnerStartAsync(JToken? payload, CancellationToken ct)
+        private async Task<object?> HandleRunnerStartAsync(JToken? payload, CancellationToken ct)
         {
+            await Task.Yield();
             ct.ThrowIfCancellationRequested();
             if (_disposed)
                 throw new ObjectDisposedException(nameof(KokoWebAgentBridgeService));
             _tasks.Start();
-            return Task.FromResult<object?>(new
+            return new
             {
                 active = _tasks.IsRunnerActive,
                 snapshot = BuildSnapshotPayload()
-            });
+            };
         }
 
-        private Task<object?> HandleRunnerStopAsync(JToken? payload, CancellationToken ct)
+        private async Task<object?> HandleRunnerStopAsync(JToken? payload, CancellationToken ct)
         {
+            await Task.Yield();
             ct.ThrowIfCancellationRequested();
             if (_disposed)
                 throw new ObjectDisposedException(nameof(KokoWebAgentBridgeService));
             _tasks.Stop();
-            return Task.FromResult<object?>(new
+            return new
             {
                 active = _tasks.IsRunnerActive,
                 snapshot = BuildSnapshotPayload()
-            });
+            };
         }
 
         private void OnActivityChanged(KokoAgentActivitySnapshot activity)
