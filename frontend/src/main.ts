@@ -35,6 +35,33 @@ const personaStatusText = document.getElementById("persona-status-text");
 
 interface PersonaStatus { mood: string; bond: string; connection: number; }
 
+interface SettingsSnapshot {
+  values: { llmProvider: string };
+  credentials: { ollama: boolean; claude: boolean };
+}
+
+async function checkOnboarding(): Promise<void> {
+  const banner = document.getElementById("onboarding-banner");
+  if (!banner) return;
+  try {
+    const snapshot = await window.koko.call<SettingsSnapshot>("settings.get", null, 5000);
+    const provider = snapshot.values.llmProvider;
+    const needsKey = provider === "ollama-cloud" ? !snapshot.credentials.ollama
+      : provider === "claude" ? !snapshot.credentials.claude
+      : false;
+    banner.style.display = needsKey ? "flex" : "none";
+  } catch {
+    banner.style.display = "none";
+  }
+}
+
+document.getElementById("onboarding-settings-btn")?.addEventListener("click", () => {
+  document.getElementById("settings-open")?.click();
+});
+document.getElementById("onboarding-dismiss")?.addEventListener("click", () => {
+  document.getElementById("onboarding-banner")!.style.display = "none";
+});
+
 async function refreshPersona(): Promise<void> {
   if (!personaStatusText) return;
   try {
@@ -72,6 +99,7 @@ async function connectHost(): Promise<void> {
     systemScanButton.disabled = false;
     telemetryRefreshButton.disabled = false;
     void refreshPersona();
+    void checkOnboarding();
     window.setInterval(() => void refreshPersona(), 20000);
     window.setInterval(() => {
       refreshRuntime()
