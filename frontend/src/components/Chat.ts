@@ -38,6 +38,7 @@ type ChatEvent = {
   chunk?: string;
   reply?: string;
   error?: string;
+  errorType?: string;
   role?: string;
   content?: string;
 };
@@ -97,7 +98,8 @@ export class ChatController {
         this.renderMarkdown(this.activeBody, this.activeRawText);
       }
     } catch (error) {
-      this.fail(error instanceof Error ? error.message : String(error));
+      if (!this.activeBody?.closest(".message")?.classList.contains("error"))
+        this.fail(error instanceof Error ? error.message : String(error));
     } finally {
       this.setBusy(false);
       this.input.focus();
@@ -129,7 +131,7 @@ export class ChatController {
 
   private onError(event: ChatEvent): void {
     if (event.streamId === this.activeStreamId)
-      this.fail(event.error ?? "Chat failed.");
+      this.fail(event.error ?? "Chat failed.", event.errorType === "timeout");
   }
 
   private onExternal(event: ChatEvent): void {
@@ -177,10 +179,20 @@ export class ChatController {
     pre.append(button);
   }
 
-  private fail(message: string): void {
+  private fail(message: string, actionable = false): void {
     if (!this.activeBody) return;
     this.activeBody.classList.remove("markdown");
     this.activeBody.textContent = message;
+    if (actionable) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "error-action";
+      button.textContent = "Відкрити Settings";
+      button.addEventListener("click", () => {
+        document.getElementById("settings-open")?.click();
+      });
+      this.activeBody.append(document.createElement("br"), button);
+    }
     const messageElement = this.activeBody.closest(".message");
     messageElement?.classList.remove("streaming");
     messageElement?.classList.add("error");

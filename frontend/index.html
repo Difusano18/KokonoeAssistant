@@ -389,6 +389,13 @@
     .message.streaming .message-body { border-color: var(--gold-border); }
     .message.streaming .message-body::after { content: ""; display: inline-block; width: 7px; height: 14px; margin-left: 4px; vertical-align: -2px; border-radius: 1px; background: var(--gold); animation: blink .9s steps(1) infinite; }
     .message.error .message-body { border-color: color-mix(in srgb, var(--error) 55%, var(--line-2)); color: #e89097; background: color-mix(in srgb, var(--error) 8%, var(--card)); }
+    .message.error .error-action {
+      margin-top: 8px; height: 28px; padding: 0 12px;
+      border: 1px solid color-mix(in srgb, var(--error) 50%, var(--line-2));
+      border-radius: 6px; background: transparent; color: #e89097; font-size: 11.5px;
+      transition: border-color 120ms ease, background 120ms ease, color 120ms ease;
+    }
+    .message.error .error-action:hover { border-color: var(--accent-border); color: var(--accent); background: var(--accent-soft); }
 
     /* ---------- markdown / code rendering ---------- */
     .message-body.markdown { white-space: normal; }

@@ -67,24 +67,29 @@ namespace KokonoeAssistant.Services
             if (text.Length > 32_000)
                 throw new InvalidOperationException("Chat message exceeds 32000 characters.");
 
-            // Task.Yield() alone doesn't move this off the UI thread: the WebView2 message
-            // handler captures the Dispatcher SynchronizationContext, so a bare await would
-            // just re-post the continuation back onto the same UI thread's queue. The context
-            // builder does vault scans / embedding lookups that take real seconds, so it needs
-            // an actual ThreadPool hop (same pattern as MainWindow's BuildContext callers).
-            var context = await Task.Run(() => _contextBuilder(text), ct).ConfigureAwait(false);
+            using var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(90));
+            using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(ct, timeoutCts.Token);
+            var effectiveCt = linkedCts.Token;
+
             var sequence = 0;
             var emittedChunks = 0;
-            _bridge.Publish("chat.started", new { streamId });
             try
             {
+                // Task.Yield() alone doesn't move this off the UI thread: the WebView2 message
+                // handler captures the Dispatcher SynchronizationContext, so a bare await would
+                // just re-post the continuation back onto the same UI thread's queue. The context
+                // builder does vault scans / embedding lookups that take real seconds, so it needs
+                // an actual ThreadPool hop (same pattern as MainWindow's BuildContext callers).
+                var context = await Task.Run(() => _contextBuilder(text), effectiveCt).ConfigureAwait(false);
+                _bridge.Publish("chat.started", new { streamId });
+
                 var streamed = await _stream(text, context, chunk =>
                 {
                     if (string.IsNullOrEmpty(chunk))
                         return;
                     emittedChunks++;
                     _bridge.Publish("chat.chunk", new { streamId, sequence = sequence++, chunk });
-                }, ct).ConfigureAwait(false);
+                }, effectiveCt).ConfigureAwait(false);
 
                 var usedStreaming = streamed != null;
                 var reply = streamed;
@@ -99,13 +104,23 @@ namespace KokonoeAssistant.Services
                             return;
                         fallbackChunks++;
                         _bridge.Publish("chat.chunk", new { streamId, sequence = sequence++, chunk });
-                    }, ct).ConfigureAwait(false);
+                    }, effectiveCt).ConfigureAwait(false);
                     usedStreaming = fallbackChunks > 0;
                 }
 
                 reply ??= "";
                 _bridge.Publish("chat.completed", new { streamId, reply, streamed = usedStreaming });
                 return new { streamId, reply, streamed = usedStreaming };
+            }
+            catch (OperationCanceledException) when (timeoutCts.IsCancellationRequested)
+            {
+                _bridge.Publish("chat.error", new
+                {
+                    streamId,
+                    error = "Немає відповіді від провайдера за 90 секунд. Перевір API key і URL у Settings.",
+                    errorType = "timeout"
+                });
+                throw;
             }
             catch (OperationCanceledException)
             {
