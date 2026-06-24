@@ -154,8 +154,31 @@ async function resetChat(): Promise<void> {
 }
 
 document.getElementById("new-chat-btn")?.addEventListener("click", () => void resetChat());
+
+const panelShortcutIds = ["chat", "tasks", "memory", "telemetry"];
+
 document.addEventListener("keydown", e => {
-  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "n") {
+  const mod = e.ctrlKey || e.metaKey;
+
+  if (e.key === "Escape") {
+    settings.close();
+    return;
+  }
+
+  if (mod && e.key === "/") {
+    e.preventDefault();
+    (document.getElementById("chat-input") as HTMLInputElement)?.focus();
+    return;
+  }
+
+  if (mod && ["1", "2", "3", "4"].includes(e.key)) {
+    e.preventDefault();
+    const panelId = panelShortcutIds[Number(e.key) - 1];
+    if (panelId) switchPanel(panelId);
+    return;
+  }
+
+  if (mod && e.key.toLowerCase() === "n") {
     e.preventDefault();
     void resetChat();
   }
