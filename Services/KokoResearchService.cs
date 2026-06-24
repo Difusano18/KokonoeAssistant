@@ -183,8 +183,11 @@ namespace KokonoeAssistant.Services
                 });
             findings.AddRange(local);
 
-            foreach (var web in await SearchDuckDuckGoAsync(topic, ct).ConfigureAwait(false))
-                findings.Add(web);
+            var tavilyKey = AppSettings.Load().TavilyApiKey;
+            var web = !string.IsNullOrWhiteSpace(tavilyKey)
+                ? await SearchTavilyAsync(topic, tavilyKey, ct).ConfigureAwait(false)
+                : await SearchDuckDuckGoAsync(topic, ct).ConfigureAwait(false);
+            findings.AddRange(web);
 
             return findings
                 .GroupBy(f => $"{f.Source}|{f.Title}|{f.Url}", StringComparer.OrdinalIgnoreCase)
@@ -224,6 +227,53 @@ namespace KokonoeAssistant.Services
             catch (Exception ex)
             {
                 KokoSystemLog.Write("RESEARCH", $"web search failed for '{topic}': {ex.Message}");
+            }
+
+            return results;
+        }
+
+        private static async Task<List<ResearchFinding>> SearchTavilyAsync(string topic, string apiKey, CancellationToken ct)
+        {
+            var results = new List<ResearchFinding>();
+            try
+            {
+                var payload = JsonConvert.SerializeObject(new
+                {
+                    api_key = apiKey,
+                    query = topic + " news updates",
+                    max_results = 5,
+                    search_depth = "basic"
+                });
+                using var req = new HttpRequestMessage(HttpMethod.Post, "https://api.tavily.com/search")
+                {
+                    Content = new StringContent(payload, Encoding.UTF8, "application/json")
+                };
+                var response = await Http.SendAsync(req, ct).ConfigureAwait(false);
+                var body = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+                if (!response.IsSuccessStatusCode || string.IsNullOrWhiteSpace(body))
+                {
+                    KokoSystemLog.Write("RESEARCH", $"Tavily search failed for '{topic}': {response.StatusCode}");
+                    return results;
+                }
+
+                var parsed = JsonConvert.DeserializeObject<TavilyResponse>(body);
+                foreach (var item in parsed?.Results ?? new List<TavilyResult>())
+                {
+                    if (string.IsNullOrWhiteSpace(item.Title) || string.IsNullOrWhiteSpace(item.Url))
+                        continue;
+                    results.Add(new ResearchFinding
+                    {
+                        Topic = topic,
+                        Title = item.Title,
+                        Url = item.Url,
+                        Snippet = Trim(item.Content, 200),
+                        Source = "tavily"
+                    });
+                }
+            }
+            catch (Exception ex)
+            {
+                KokoSystemLog.Write("RESEARCH", $"Tavily search failed for '{topic}': {ex.Message}");
             }
 
             return results;
@@ -376,5 +426,17 @@ namespace KokonoeAssistant.Services
         public string Url { get; set; } = "";
         public string Snippet { get; set; } = "";
         public string Source { get; set; } = "";
+    }
+
+    internal sealed class TavilyResponse
+    {
+        public List<TavilyResult> Results { get; set; } = new();
+    }
+
+    internal sealed class TavilyResult
+    {
+        public string Title { get; set; } = "";
+        public string Url { get; set; } = "";
+        public string Content { get; set; } = "";
     }
 }

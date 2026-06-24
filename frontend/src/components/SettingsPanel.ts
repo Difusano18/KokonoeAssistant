@@ -2,24 +2,38 @@ type SettingsValues = Record<string, boolean | number | string>;
 interface SettingsSnapshot { values: SettingsValues; credentials: Record<string, boolean>; }
 interface SettingsUpdateResult { settings: SettingsSnapshot; changed: string[]; restartRequired: boolean; }
 
+const PROVIDER_ROWS: Record<string, string[]> = {
+  lmstudio: ["row-lm-url", "row-lm-model"],
+  ollama: ["row-ollama-url", "row-ollama-key", "row-ollama-model"],
+  "ollama-cloud": ["row-ollama-url", "row-ollama-key", "row-ollama-model"],
+  claude: ["row-claude-key", "row-claude-model"]
+};
+
 export class SettingsPanelController {
-  private readonly drawer = document.getElementById("settings-drawer")!;
-  private readonly backdrop = document.getElementById("settings-backdrop")!;
   private readonly form = document.getElementById("settings-form") as HTMLFormElement;
   private readonly save = document.getElementById("settings-save") as HTMLButtonElement;
   private readonly status = document.getElementById("settings-status")!;
   private readonly segment = document.getElementById("autonomy-segment")!;
   private readonly providerSegment = document.getElementById("llm-provider-segment")!;
-  private readonly ollamaUrlRow = document.getElementById("row-ollama-url")!;
-  private readonly ollamaKeyRow = document.getElementById("row-ollama-key")!;
-  private readonly ollamaModelRow = document.getElementById("row-ollama-model")!;
+  private readonly providerRows = Object.fromEntries(
+    Object.values(PROVIDER_ROWS).flat()
+      .filter((id, index, all) => all.indexOf(id) === index)
+      .map(id => [id, document.getElementById(id)!])
+  );
+  private readonly lmUrl = document.getElementById("lm-url") as HTMLInputElement;
+  private readonly lmModel = document.getElementById("lm-model") as HTMLInputElement;
   private readonly ollamaUrl = document.getElementById("ollama-url") as HTMLInputElement;
   private readonly ollamaKey = document.getElementById("ollama-key") as HTMLInputElement;
   private readonly ollamaModel = document.getElementById("ollama-model") as HTMLInputElement;
+  private readonly claudeKey = document.getElementById("claude-key") as HTMLInputElement;
+  private readonly claudeModel = document.getElementById("claude-model") as HTMLInputElement;
+  private readonly tavilyKey = document.getElementById("tavily-key") as HTMLInputElement;
   private readonly color = document.getElementById("matrix-color") as HTMLInputElement;
   private readonly colorText = document.getElementById("matrix-color-text")!;
+  private readonly plexusToggle = document.getElementById("plexus-enabled") as HTMLInputElement;
   private readonly credentials = document.getElementById("credential-grid")!;
   private available = false;
+  private loaded = false;
   private autonomy = 2;
   private llmProvider = "ollama-cloud";
   private readonly fields: Record<string, string> = {
@@ -28,13 +42,11 @@ export class SettingsPanelController {
     screenAwarenessSendComments: "screen-comments", screenAwarenessIntervalMins: "screen-interval",
     screenAwarenessCommentCooldownMins: "screen-cooldown", systemOverlordEnabled: "overlord-enabled",
     voiceInputEnabled: "voice-enabled", ttsEnabled: "tts-enabled", wearBridgeEnabled: "wear-enabled",
-    wearBridgeIncludePromptContext: "wear-context", minimizeToTray: "tray-enabled"
+    wearBridgeIncludePromptContext: "wear-context", minimizeToTray: "tray-enabled",
+    maxTokens: "max-tokens"
   };
 
   constructor() {
-    document.getElementById("settings-open")!.addEventListener("click", () => void this.open());
-    document.getElementById("settings-close")!.addEventListener("click", () => this.close());
-    this.backdrop.addEventListener("click", () => this.close());
     this.segment.addEventListener("click", event => {
       const button = (event.target as HTMLElement).closest<HTMLButtonElement>("button[data-value]");
       if (button) this.setAutonomy(Number(button.dataset.value));
@@ -47,40 +59,28 @@ export class SettingsPanelController {
       this.colorText.textContent = this.color.value.toUpperCase();
       document.documentElement.style.setProperty("--accent", this.color.value);
     });
+    this.plexusToggle.addEventListener("change", () => {
+      (window as unknown as { plexusEnabled?: boolean }).plexusEnabled = this.plexusToggle.checked;
+    });
     this.form.addEventListener("submit", event => { event.preventDefault(); void this.persist(); });
   }
 
   setAvailable(value: boolean): void {
     this.available = value;
     this.save.disabled = !value;
-    if (value && this.drawer.getAttribute("aria-hidden") === "true")
+    if (value && !this.loaded)
       void this.load();
   }
 
-  async open(): Promise<void> {
-    this.drawer.classList.add("open");
-    this.backdrop.classList.add("open");
-    this.drawer.setAttribute("aria-hidden", "false");
-    if (!this.available) {
-      this.status.textContent = "Host connection required.";
-      return;
-    }
-    await this.load();
-  }
-
-  close(): void {
-    this.drawer.classList.remove("open");
-    this.backdrop.classList.remove("open");
-    this.drawer.setAttribute("aria-hidden", "true");
-  }
-
   private async load(): Promise<void> {
+    this.loaded = true;
     this.save.disabled = true;
     this.status.textContent = "Loading...";
     try {
       this.fill(await window.koko.call("settings.get") as SettingsSnapshot);
       this.status.textContent = "Settings synchronized.";
     } catch (error) {
+      this.loaded = false;
       this.status.textContent = error instanceof Error ? error.message : String(error);
     } finally {
       this.save.disabled = !this.available;
@@ -111,10 +111,9 @@ export class SettingsPanelController {
     this.llmProvider = value;
     for (const button of this.providerSegment.querySelectorAll<HTMLButtonElement>("button"))
       button.classList.toggle("selected", button.dataset.value === value);
-    const showCloudFields = value === "ollama-cloud";
-    this.ollamaUrlRow.style.display = showCloudFields ? "" : "none";
-    this.ollamaKeyRow.style.display = showCloudFields ? "" : "none";
-    this.ollamaModelRow.style.display = showCloudFields ? "" : "none";
+    const visible = new Set(PROVIDER_ROWS[value] ?? []);
+    for (const [id, row] of Object.entries(this.providerRows))
+      row.style.display = visible.has(id) ? "" : "none";
   }
 
   private fill(snapshot: SettingsSnapshot): void {
@@ -126,10 +125,17 @@ export class SettingsPanelController {
       else input.value = String(values[name] ?? "");
     }
     this.setProvider(String(values.llmProvider ?? "ollama-cloud"));
+    this.lmUrl.value = String(values.lmUrl ?? "");
+    this.lmModel.value = String(values.lmModel ?? "");
     this.ollamaUrl.value = String(values.ollamaUrl ?? "");
     this.ollamaModel.value = String(values.ollamaModel ?? "");
+    this.claudeModel.value = String(values.claudeModel ?? "");
     this.ollamaKey.value = "";
     this.ollamaKey.placeholder = snapshot.credentials?.ollama ? "•••• configured (leave blank to keep)" : "sk-...";
+    this.claudeKey.value = "";
+    this.claudeKey.placeholder = snapshot.credentials?.claude ? "•••• configured (leave blank to keep)" : "sk-ant-...";
+    this.tavilyKey.value = "";
+    this.tavilyKey.placeholder = snapshot.credentials?.tavily ? "•••• configured (leave blank to keep)" : "tvly-...";
     this.color.value = /^#[0-9a-f]{6}$/i.test(String(values.matrixColor ?? "")) ? String(values.matrixColor) : "#5fc1b3";
     this.colorText.textContent = this.color.value.toUpperCase();
     document.documentElement.style.setProperty("--accent", this.color.value);
@@ -141,9 +147,14 @@ export class SettingsPanelController {
       proactiveAutonomyLevel: this.autonomy,
       matrixColor: this.color.value.toUpperCase(),
       llmProvider: this.llmProvider,
+      lmUrl: this.lmUrl.value.trim(),
+      lmModel: this.lmModel.value.trim(),
       ollamaUrl: this.ollamaUrl.value.trim(),
       ollamaModel: this.ollamaModel.value.trim(),
-      ollamaApiKey: this.ollamaKey.value.trim()
+      ollamaApiKey: this.ollamaKey.value.trim(),
+      claudeModel: this.claudeModel.value.trim(),
+      claudeApiKey: this.claudeKey.value.trim(),
+      tavilyApiKey: this.tavilyKey.value.trim()
     };
     for (const [name, id] of Object.entries(this.fields)) {
       const input = document.getElementById(id) as HTMLInputElement;
@@ -153,7 +164,10 @@ export class SettingsPanelController {
   }
 
   private renderCredentials(values: Record<string, boolean>): void {
-    const labels: Record<string, string> = { telegramBot: "Telegram bot", telegramUser: "Telegram user", openAi: "OpenAI", claude: "Claude", ollama: "Ollama" };
+    const labels: Record<string, string> = {
+      telegramBot: "Telegram bot", telegramUser: "Telegram user", openAi: "OpenAI",
+      claude: "Claude", ollama: "Ollama", tavily: "Tavily"
+    };
     this.credentials.replaceChildren(...Object.entries(labels).map(([key, label]) => {
       const row = document.createElement("div");
       row.className = "credential";

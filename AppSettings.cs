@@ -42,6 +42,9 @@ namespace KokonoeAssistant
         // exact "cursor with no reply" failure this default was causing.
         public string LlmProvider { get; set; } = "ollama-cloud";
 
+        // Caps reply length across providers — see LlmService.MainMaxTokens
+        public int MaxTokens { get; set; } = 4096;
+
         // LM Studio
         public string LmUrl   { get; set; } = "http://localhost:1234/v1/chat/completions";
         public string Model   { get; set; } = "google/gemma-4-26b-a4b";
@@ -75,6 +78,10 @@ namespace KokonoeAssistant
 
         // OpenAI (for Whisper STT)
         public string OpenAiApiKey { get; set; } = "";
+
+        // Tavily web search — KokoResearchService uses this instead of the DuckDuckGo
+        // HTML scrape when set
+        public string TavilyApiKey { get; set; } = "";
 
         // Vault
         public string VaultPath { get; set; } = @"O:\App\Obsidian\MyBrain\Yasus";

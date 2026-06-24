@@ -119,6 +119,36 @@ namespace KokonoeAssistant.Services
                     changed.Add("ollamaApiKey");
                 }
             }
+            ApplyString(values, "lmUrl", 2048, settings.LmUrl,
+                value => settings.LmUrl = value, changed);
+            ApplyString(values, "lmModel", 256, settings.Model,
+                value => settings.Model = value, changed);
+            ApplyString(values, "claudeModel", 256, settings.ClaudeModel,
+                value => settings.ClaudeModel = value, changed);
+            if (values.TryGetValue("claudeApiKey", StringComparison.OrdinalIgnoreCase, out var claudeKeyToken))
+            {
+                var key = claudeKeyToken?.ToString()?.Trim() ?? "";
+                if (key.Length > 2048)
+                    throw new InvalidOperationException("claudeApiKey exceeds 2048 characters.");
+                if (!string.IsNullOrEmpty(key) && !string.Equals(settings.ClaudeApiKey, key, StringComparison.Ordinal))
+                {
+                    settings.ClaudeApiKey = key;
+                    changed.Add("claudeApiKey");
+                }
+            }
+            if (values.TryGetValue("tavilyApiKey", StringComparison.OrdinalIgnoreCase, out var tavilyKeyToken))
+            {
+                var key = tavilyKeyToken?.ToString()?.Trim() ?? "";
+                if (key.Length > 2048)
+                    throw new InvalidOperationException("tavilyApiKey exceeds 2048 characters.");
+                if (!string.IsNullOrEmpty(key) && !string.Equals(settings.TavilyApiKey, key, StringComparison.Ordinal))
+                {
+                    settings.TavilyApiKey = key;
+                    changed.Add("tavilyApiKey");
+                }
+            }
+            ApplyInt(values, "maxTokens", 256, 16384, settings.MaxTokens,
+                value => settings.MaxTokens = value, changed);
 
             var wearBridgeBefore = settings.WearBridgeEnabled;
             ApplyBool(values, "wearBridgeEnabled", settings.WearBridgeEnabled,
@@ -178,7 +208,11 @@ namespace KokonoeAssistant.Services
                 matrixColor = settings.MatrixColor,
                 llmProvider = settings.LlmProvider,
                 ollamaUrl = settings.OllamaUrl,
-                ollamaModel = settings.OllamaModel
+                ollamaModel = settings.OllamaModel,
+                lmUrl = settings.LmUrl,
+                lmModel = settings.Model,
+                claudeModel = settings.ClaudeModel,
+                maxTokens = settings.MaxTokens
             },
             credentials = new
             {
@@ -186,7 +220,8 @@ namespace KokonoeAssistant.Services
                 telegramUser = settings.TgApiId > 0 && !string.IsNullOrWhiteSpace(settings.TgApiHash),
                 openAi = !string.IsNullOrWhiteSpace(settings.OpenAiApiKey),
                 claude = !string.IsNullOrWhiteSpace(settings.ClaudeApiKey),
-                ollama = !string.IsNullOrWhiteSpace(settings.OllamaApiKey) || (settings.OllamaKeys?.Count ?? 0) > 0
+                ollama = !string.IsNullOrWhiteSpace(settings.OllamaApiKey) || (settings.OllamaKeys?.Count ?? 0) > 0,
+                tavily = !string.IsNullOrWhiteSpace(settings.TavilyApiKey)
             }
         };
 

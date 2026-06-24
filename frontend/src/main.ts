@@ -142,9 +142,6 @@ async function scanSystem(): Promise<void> {
   }
 }
 
-if (window.location.hash === "#settings")
-  void settings.open();
-
 void connectHost();
 
 const panels: Record<string, HTMLElement | null> = {
@@ -152,6 +149,7 @@ const panels: Record<string, HTMLElement | null> = {
   tasks: document.getElementById("panel-tasks"),
   memory: document.getElementById("panel-memory"),
   telemetry: document.getElementById("panel-telemetry"),
+  settings: document.getElementById("panel-settings"),
 };
 const composer = required<HTMLFormElement>("chat-form");
 
@@ -171,6 +169,9 @@ document.querySelectorAll<HTMLButtonElement>(".rail button[data-panel]").forEach
   button.addEventListener("click", () => switchPanel(button.dataset.panel ?? "chat"));
 });
 
+if (window.location.hash === "#settings")
+  switchPanel("settings");
+
 async function resetChat(): Promise<void> {
   try {
     await window.koko.call("chat.clear_history");
@@ -189,7 +190,7 @@ document.addEventListener("keydown", e => {
   const mod = e.ctrlKey || e.metaKey;
 
   if (e.key === "Escape") {
-    settings.close();
+    switchPanel("chat");
     return;
   }
 

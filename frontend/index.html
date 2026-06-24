@@ -328,16 +328,11 @@
     .telegram-error { color: #c5727a; }
     .telegram-message { display: none; margin: 6px 0 0 16px; padding: 6px 8px; border-left: 2px solid var(--line-2); color: var(--text-2); font-size: 10.5px; line-height: 1.45; overflow-wrap: anywhere; }
 
-    /* ---------- settings drawer ---------- */
-    .settings-backdrop { position: fixed; inset: 54px 0 34px 72px; z-index: 8; background: rgba(4,7,11,.6); backdrop-filter: blur(2px); opacity: 0; pointer-events: none; transition: opacity var(--motion-base) ease; }
-    .settings-backdrop.open { opacity: 1; pointer-events: auto; }
-    .settings-drawer { position: fixed; top: 54px; right: 0; bottom: 34px; z-index: 9; display: grid; grid-template-rows: auto minmax(0,1fr); width: min(520px, calc(100% - 72px)); border-left: 1px solid var(--line-3); background: var(--surface-2); box-shadow: -22px 0 60px rgba(0,0,0,.4); transform: translateX(100%); transition: transform var(--motion-base) var(--ease); will-change: transform; }
-    .settings-drawer.open { transform: translateX(0); }
-    .settings-header { display: flex; align-items: center; gap: 12px; min-height: 58px; padding: 0 20px; border-bottom: 1px solid var(--line-2); }
-    .settings-header h2 { margin: 0; font-size: 15px; font-weight: 600; }
-    .settings-header span { color: var(--text-3); font: 10px/1 "IBM Plex Mono", monospace; letter-spacing: .5px; }
-    .settings-header .icon-button { margin-left: auto; }
-    .settings-form { min-height: 0; overflow-y: auto; padding: 4px 22px 24px; }
+    /* ---------- settings tab ---------- */
+    .settings-page { display: grid; grid-template-columns: 1fr 1fr; gap: 0; max-width: 980px; }
+    .settings-column { display: flex; flex-direction: column; min-width: 0; }
+    .settings-column:first-child { padding-right: 32px; border-right: 1px solid var(--line); }
+    .settings-column:last-child { padding-left: 32px; }
     .settings-group { padding: 20px 0; border-bottom: 1px solid var(--line); }
     .settings-group:last-of-type { border-bottom: 0; }
     .settings-group h3 { margin: 0 0 16px; color: var(--text-3); font: 10px/1 "IBM Plex Mono", monospace; letter-spacing: 1.1px; text-transform: uppercase; }
@@ -478,6 +473,9 @@
       .persona { display: none; }
       .workspace-grid { grid-template-columns: 1fr; }
       footer { grid-column: 2 / -1; }
+      .settings-page { grid-template-columns: 1fr; }
+      .settings-column:first-child { padding-right: 0; border-right: 0; border-bottom: 1px solid var(--line); padding-bottom: 12px; }
+      .settings-column:last-child { padding-left: 0; }
     }
   </style>
 </head>
@@ -527,7 +525,7 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l2.5-6 5 14L17 12h4"/></svg>
       </button>
       <span class="rail-div bottom" aria-hidden="true"></span>
-      <button id="settings-open" title="Settings" aria-label="Settings">
+      <button id="settings-open" title="Settings" aria-label="Settings" data-panel="settings">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/></svg>
       </button>
     </nav>
@@ -607,6 +605,94 @@
           <div id="runtime-feed" class="workspace-feed"><p class="agent-empty">No runtime snapshot yet.</p></div>
         </div>
       </section>
+      <section id="panel-settings" class="workspace" style="display:none" aria-live="polite">
+        <form id="settings-form" class="settings-page">
+          <div class="settings-column">
+            <section class="settings-group">
+              <h3>LLM Provider</h3>
+              <div id="llm-provider-segment" class="segment" role="group" aria-label="LLM provider">
+                <button type="button" data-value="lmstudio">LM Studio</button><button type="button" data-value="ollama">Ollama</button><button type="button" data-value="ollama-cloud">Cloud</button><button type="button" data-value="claude">Claude</button>
+              </div>
+              <div class="setting-row setting-row-stack" id="row-lm-url">
+                <label for="lm-url">Endpoint URL</label>
+                <input id="lm-url" type="text" placeholder="http://localhost:1234/v1/chat/completions" autocomplete="off">
+              </div>
+              <div class="setting-row setting-row-stack" id="row-lm-model">
+                <label for="lm-model">Model</label>
+                <input id="lm-model" type="text" placeholder="google/gemma-4-26b-a4b" autocomplete="off">
+              </div>
+              <div class="setting-row setting-row-stack" id="row-ollama-url">
+                <label for="ollama-url">Endpoint URL</label>
+                <input id="ollama-url" type="text" placeholder="https://api.groq.com/openai/v1/chat/completions" autocomplete="off">
+              </div>
+              <div class="setting-row setting-row-stack" id="row-ollama-key">
+                <label for="ollama-key">API Key</label>
+                <input id="ollama-key" type="password" placeholder="sk-..." autocomplete="off">
+              </div>
+              <div class="setting-row setting-row-stack" id="row-ollama-model">
+                <label for="ollama-model">Model</label>
+                <input id="ollama-model" type="text" placeholder="llama-3.3-70b-versatile" autocomplete="off">
+              </div>
+              <div class="setting-row setting-row-stack" id="row-claude-key">
+                <label for="claude-key">API Key</label>
+                <input id="claude-key" type="password" placeholder="sk-ant-..." autocomplete="off">
+              </div>
+              <div class="setting-row setting-row-stack" id="row-claude-model">
+                <label for="claude-model">Model</label>
+                <input id="claude-model" type="text" placeholder="claude-sonnet-4-20250514" autocomplete="off">
+              </div>
+              <div class="setting-row">
+                <label for="max-tokens">Max tokens</label>
+                <input id="max-tokens" type="number" min="256" max="16384" step="256">
+              </div>
+            </section>
+            <section class="settings-group">
+              <h3>Web search</h3>
+              <div class="setting-row setting-row-stack" id="row-tavily-key">
+                <label for="tavily-key">Tavily API key</label>
+                <input id="tavily-key" type="password" placeholder="tvly-..." autocomplete="off">
+              </div>
+            </section>
+            <section class="settings-group">
+              <h3>Protected credentials</h3>
+              <div id="credential-grid" class="credential-grid"></div>
+            </section>
+          </div>
+          <div class="settings-column">
+            <section class="settings-group">
+              <h3>Autonomy</h3>
+              <div id="autonomy-segment" class="segment" role="group" aria-label="Proactive autonomy">
+                <button type="button" data-value="0">Quiet</button><button type="button" data-value="1">Guarded</button><button type="button" data-value="2">Active</button><button type="button" data-value="3">Alive</button>
+              </div>
+              <div class="setting-row"><label for="spontaneous-enabled">Spontaneous messages</label><input id="spontaneous-enabled" type="checkbox"></div>
+              <div class="setting-row"><label for="spontaneous-mins">Message interval</label><input id="spontaneous-mins" type="number" min="10" max="240" step="5"></div>
+              <div class="setting-row"><label for="neural-governor">Neural governor</label><input id="neural-governor" type="checkbox"></div>
+            </section>
+            <section class="settings-group">
+              <h3>Awareness</h3>
+              <div class="setting-row"><label for="screen-enabled">Screen awareness</label><input id="screen-enabled" type="checkbox"></div>
+              <div class="setting-row"><label for="screen-comments">Screen comments</label><input id="screen-comments" type="checkbox"></div>
+              <div class="setting-row"><label for="screen-interval">Scan interval</label><input id="screen-interval" type="number" min="10" max="240" step="5"></div>
+              <div class="setting-row"><label for="screen-cooldown">Comment cooldown</label><input id="screen-cooldown" type="number" min="5" max="240" step="5"></div>
+              <div class="setting-row"><label for="overlord-enabled">System observer</label><input id="overlord-enabled" type="checkbox"></div>
+            </section>
+            <section class="settings-group">
+              <h3>Devices and interface</h3>
+              <div class="setting-row"><label for="voice-enabled">Microphone input</label><input id="voice-enabled" type="checkbox"></div>
+              <div class="setting-row"><label for="tts-enabled">Voice output</label><input id="tts-enabled" type="checkbox"></div>
+              <div class="setting-row"><label for="wear-enabled">Wear bridge</label><input id="wear-enabled" type="checkbox"></div>
+              <div class="setting-row"><label for="wear-context">Wear context in prompts</label><input id="wear-context" type="checkbox"></div>
+              <div class="setting-row"><label for="tray-enabled">Minimize to tray</label><input id="tray-enabled" type="checkbox"></div>
+            </section>
+            <section class="settings-group">
+              <h3>Appearance</h3>
+              <div class="setting-row"><label>Accent</label><div class="color-control"><input id="matrix-color" type="color" value="#5fc1b3"><code id="matrix-color-text">#5FC1B3</code></div></div>
+              <div class="setting-row"><label for="plexus-enabled">Plexus background</label><input id="plexus-enabled" type="checkbox" checked></div>
+            </section>
+            <div class="settings-actions"><output id="settings-status">Host connection required.</output><button id="settings-save" class="save-button" type="submit" disabled>Save</button></div>
+          </div>
+        </form>
+      </section>
       <form id="chat-form" class="composer">
         <div class="composer-field">
           <input id="chat-input" aria-label="Message" placeholder="Message Kokonoe" autocomplete="off" disabled>
@@ -669,66 +755,6 @@
       <span>protected settings merge</span>
     </footer>
 
-    <div id="settings-backdrop" class="settings-backdrop"></div>
-    <section id="settings-drawer" class="settings-drawer" aria-hidden="true">
-      <header class="settings-header">
-        <h2>Settings</h2><span>runtime behavior</span>
-        <button id="settings-close" class="icon-button" type="button" title="Close settings" aria-label="Close settings">
-          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M6 6 18 18M18 6 6 18"/></svg>
-        </button>
-      </header>
-      <form id="settings-form" class="settings-form">
-        <section class="settings-group">
-          <h3>Autonomy</h3>
-          <div id="autonomy-segment" class="segment" role="group" aria-label="Proactive autonomy">
-            <button type="button" data-value="0">Quiet</button><button type="button" data-value="1">Guarded</button><button type="button" data-value="2">Active</button><button type="button" data-value="3">Alive</button>
-          </div>
-          <div class="setting-row"><label for="spontaneous-enabled">Spontaneous messages</label><input id="spontaneous-enabled" type="checkbox"></div>
-          <div class="setting-row"><label for="spontaneous-mins">Message interval</label><input id="spontaneous-mins" type="number" min="10" max="240" step="5"></div>
-          <div class="setting-row"><label for="neural-governor">Neural governor</label><input id="neural-governor" type="checkbox"></div>
-        </section>
-        <section class="settings-group">
-          <h3>Awareness</h3>
-          <div class="setting-row"><label for="screen-enabled">Screen awareness</label><input id="screen-enabled" type="checkbox"></div>
-          <div class="setting-row"><label for="screen-comments">Screen comments</label><input id="screen-comments" type="checkbox"></div>
-          <div class="setting-row"><label for="screen-interval">Scan interval</label><input id="screen-interval" type="number" min="10" max="240" step="5"></div>
-          <div class="setting-row"><label for="screen-cooldown">Comment cooldown</label><input id="screen-cooldown" type="number" min="5" max="240" step="5"></div>
-          <div class="setting-row"><label for="overlord-enabled">System observer</label><input id="overlord-enabled" type="checkbox"></div>
-        </section>
-        <section class="settings-group">
-          <h3>Devices and interface</h3>
-          <div class="setting-row"><label for="voice-enabled">Microphone input</label><input id="voice-enabled" type="checkbox"></div>
-          <div class="setting-row"><label for="tts-enabled">Voice output</label><input id="tts-enabled" type="checkbox"></div>
-          <div class="setting-row"><label for="wear-enabled">Wear bridge</label><input id="wear-enabled" type="checkbox"></div>
-          <div class="setting-row"><label for="wear-context">Wear context in prompts</label><input id="wear-context" type="checkbox"></div>
-          <div class="setting-row"><label for="tray-enabled">Minimize to tray</label><input id="tray-enabled" type="checkbox"></div>
-          <div class="setting-row"><label>Accent</label><div class="color-control"><input id="matrix-color" type="color" value="#5fc1b3"><code id="matrix-color-text">#5FC1B3</code></div></div>
-        </section>
-        <section class="settings-group">
-          <h3>LLM Provider</h3>
-          <div id="llm-provider-segment" class="segment" role="group" aria-label="LLM provider">
-            <button type="button" data-value="lmstudio">LM Studio</button><button type="button" data-value="ollama">Ollama</button><button type="button" data-value="ollama-cloud">Cloud</button><button type="button" data-value="claude">Claude</button>
-          </div>
-          <div class="setting-row setting-row-stack" id="row-ollama-url">
-            <label for="ollama-url">Endpoint URL</label>
-            <input id="ollama-url" type="text" placeholder="https://api.groq.com/openai/v1/chat/completions" autocomplete="off">
-          </div>
-          <div class="setting-row setting-row-stack" id="row-ollama-key">
-            <label for="ollama-key">API Key</label>
-            <input id="ollama-key" type="password" placeholder="sk-..." autocomplete="off">
-          </div>
-          <div class="setting-row setting-row-stack" id="row-ollama-model">
-            <label for="ollama-model">Model</label>
-            <input id="ollama-model" type="text" placeholder="llama-3.3-70b-versatile" autocomplete="off">
-          </div>
-        </section>
-        <section class="settings-group">
-          <h3>Protected credentials</h3>
-          <div id="credential-grid" class="credential-grid"></div>
-        </section>
-        <div class="settings-actions"><output id="settings-status">Host connection required.</output><button id="settings-save" class="save-button" type="submit" disabled>Save</button></div>
-      </form>
-    </section>
   </div>
   <script type="module" src="/src/main.ts"></script>
 </body>

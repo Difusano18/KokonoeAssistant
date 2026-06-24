@@ -39,9 +39,10 @@ namespace KokonoeAssistant.Services
         // Constants for history management
         private const int MAX_HISTORY_ENTRIES = 30;
         private const int HISTORY_TRUNCATE_STEP = 10; // скільки видаляти коли перевищено ліміт
-        private const int MainMaxTokens = 4096;
         private const int SystemMaxTokens = 1024;
         private const int MaxTokenOverrideLimit = 16384;
+
+        private static int MainMaxTokens => Math.Clamp(AppSettings.Load().MaxTokens, 256, MaxTokenOverrideLimit);
 
         private readonly object _diagLock = new();
         private DateTime _diagLastRequestAt = DateTime.MinValue;
