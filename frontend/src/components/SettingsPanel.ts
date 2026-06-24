@@ -1,6 +1,13 @@
 type SettingsValues = Record<string, boolean | number | string>;
 interface SettingsSnapshot { values: SettingsValues; credentials: Record<string, boolean>; }
 interface SettingsUpdateResult { settings: SettingsSnapshot; changed: string[]; restartRequired: boolean; }
+interface WearStatus {
+  connected: boolean;
+  deviceId: string;
+  bpm: number;
+  battery: number | null;
+  charging: boolean | null;
+}
 
 const PROVIDER_ROWS: Record<string, string[]> = {
   lmstudio: ["row-lm-url", "row-lm-model"],
@@ -31,6 +38,7 @@ export class SettingsPanelController {
   private readonly color = document.getElementById("matrix-color") as HTMLInputElement;
   private readonly colorText = document.getElementById("matrix-color-text")!;
   private readonly plexusToggle = document.getElementById("plexus-enabled") as HTMLInputElement;
+  private readonly wearStatus = document.getElementById("wear-status")!;
   private readonly credentials = document.getElementById("credential-grid")!;
   private available = false;
   private loaded = false;
@@ -84,6 +92,18 @@ export class SettingsPanelController {
       this.status.textContent = error instanceof Error ? error.message : String(error);
     } finally {
       this.save.disabled = !this.available;
+    }
+    void this.loadWearStatus();
+  }
+
+  private async loadWearStatus(): Promise<void> {
+    try {
+      const wear = await window.koko.call<WearStatus>("wear.status", null, 5000);
+      this.wearStatus.textContent = wear.connected
+        ? `Connected · ${wear.deviceId} · ${wear.bpm.toFixed(0)} bpm` + (wear.battery != null ? ` · battery ${wear.battery.toFixed(0)}%` : "")
+        : "Disconnected";
+    } catch {
+      this.wearStatus.textContent = "Disconnected";
     }
   }
 
