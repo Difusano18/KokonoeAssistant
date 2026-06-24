@@ -419,6 +419,12 @@ namespace KokonoeAssistant.Services
         private async Task<StepExecutionOutcome> ExecuteStepCoreAsync(KokoAgentTask task, KokoAgentStep step, CancellationToken ct)
         {
             var result = await ExecuteStepResultAsync(task, step, ct).ConfigureAwait(false);
+            var isEmpty = string.IsNullOrWhiteSpace(result) || result.Trim().Equals("(empty result)", StringComparison.OrdinalIgnoreCase);
+            if (isEmpty && step.Kind == KokoAgentStepKind.Analyze)
+            {
+                KokoSystemLog.Write("APEO", $"Analyze returned empty for: {Trim(task.Objective, 80)}. Using pass-through.");
+                result = $"[auto-analyze] Objective: {task.Objective}. Proceed with direct execution.";
+            }
             return ClassifyStepOutcome(step.Kind, result);
         }
 
@@ -502,11 +508,24 @@ namespace KokonoeAssistant.Services
             {vaultHint}
             {toolCatalog}
             """;
-            var result = await _llm.SendSystemQueryAsync(
-                prompt,
-                useTools: step.Kind == KokoAgentStepKind.Vault,
-                ct,
-                agentId: AgentIdFor(step.Kind)).ConfigureAwait(false);
+            string? result;
+            using (var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(30)))
+            using (var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(ct, timeoutCts.Token))
+            {
+                try
+                {
+                    result = await _llm.SendSystemQueryAsync(
+                        prompt,
+                        useTools: step.Kind == KokoAgentStepKind.Vault,
+                        linkedCts.Token,
+                        agentId: AgentIdFor(step.Kind)).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException) when (timeoutCts.IsCancellationRequested)
+                {
+                    KokoSystemLog.Write("APEO", $"{step.Kind} executor timed out after 30s for: {Trim(task.Objective, 80)}.");
+                    result = "";
+                }
+            }
             return string.IsNullOrWhiteSpace(result) ? "(empty result)" : result.Trim();
         }
 
