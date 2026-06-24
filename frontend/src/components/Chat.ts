@@ -51,11 +51,18 @@ type ChatSendResult = {
   streamed: boolean;
 };
 
+function formatClock(date: Date): string {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+}
+
 export class ChatController {
   private activeStreamId = "";
   private activeBody: HTMLElement | null = null;
   private activeRawText = "";
   private busy = false;
+  private responseTimerHandle = 0;
+  private responseStartedAt = 0;
 
   constructor(
     form: HTMLFormElement,
@@ -69,6 +76,7 @@ export class ChatController {
       event.preventDefault();
       void this.submit();
     });
+    window.koko.on("chat.started", payload => this.onStarted(payload as ChatEvent));
     window.koko.on("chat.chunk", payload => this.onChunk(payload as ChatEvent));
     window.koko.on("chat.reset", payload => this.onReset(payload as ChatEvent));
     window.koko.on("chat.completed", payload => this.onCompleted(payload as ChatEvent));
@@ -87,6 +95,7 @@ export class ChatController {
     const text = this.input.value.trim();
     if (!text || this.busy) return;
     this.busy = true;
+    this.stopResponseTimer();
     this.activeStreamId = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}`;
     this.appendMessage("user", text);
     this.activeRawText = "";
@@ -108,8 +117,34 @@ export class ChatController {
     }
   }
 
+  private onStarted(event: ChatEvent): void {
+    if (event.streamId !== this.activeStreamId || !this.activeBody) return;
+    this.stopResponseTimer();
+    this.responseStartedAt = performance.now();
+    const timer = document.createElement("span");
+    timer.id = "response-timer";
+    timer.textContent = "thinking · 0.0s";
+    this.activeBody.appendChild(timer);
+    this.responseTimerHandle = window.setInterval(() => this.tickResponseTimer(), 100);
+  }
+
+  private tickResponseTimer(): void {
+    const timer = document.getElementById("response-timer");
+    if (!timer) return;
+    const elapsed = (performance.now() - this.responseStartedAt) / 1000;
+    timer.textContent = `thinking · ${elapsed.toFixed(1)}s`;
+  }
+
+  private stopResponseTimer(): void {
+    if (this.responseTimerHandle) {
+      window.clearInterval(this.responseTimerHandle);
+      this.responseTimerHandle = 0;
+    }
+  }
+
   private onChunk(event: ChatEvent): void {
     if (event.streamId !== this.activeStreamId || !this.activeBody) return;
+    this.stopResponseTimer();
     this.activeRawText += event.chunk ?? "";
     this.renderMarkdown(this.activeBody, this.activeRawText);
     this.scrollToEnd();
@@ -125,9 +160,16 @@ export class ChatController {
 
   private onCompleted(event: ChatEvent): void {
     if (event.streamId !== this.activeStreamId || !this.activeBody) return;
+    this.stopResponseTimer();
     this.activeRawText = event.reply ?? this.activeRawText;
     this.renderMarkdown(this.activeBody, this.activeRawText);
     this.activeBody.closest(".message")?.classList.remove("streaming");
+    if (this.responseStartedAt) {
+      const duration = document.createElement("span");
+      duration.className = "response-duration";
+      duration.textContent = `↩ ${((performance.now() - this.responseStartedAt) / 1000).toFixed(1)}s`;
+      this.activeBody.append(duration);
+    }
     this.scrollToEnd();
   }
 
@@ -159,6 +201,12 @@ export class ChatController {
       body.innerHTML = `<div class="typing-dots"><span></span><span></span><span></span></div>`;
     }
     article.append(meta, body);
+    if (role === "user") {
+      const time = document.createElement("span");
+      time.className = "msg-time";
+      time.textContent = formatClock(new Date());
+      article.append(time);
+    }
     this.messages.append(article);
     this.scrollToEnd();
     return body;
@@ -202,6 +250,7 @@ export class ChatController {
 
   private fail(message: string, actionable = false): void {
     if (!this.activeBody) return;
+    this.stopResponseTimer();
     this.activeBody.classList.remove("markdown");
     this.activeBody.textContent = message;
     if (actionable) {

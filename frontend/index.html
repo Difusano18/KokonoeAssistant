@@ -450,6 +450,15 @@
     .code-copy:hover { color: var(--accent); border-color: var(--accent-border); }
     .stream-caret { display: inline-block; width: 7px; height: 14px; margin-left: 3px; vertical-align: -2px; border-radius: 1px; background: var(--gold); animation: blink .9s steps(1) infinite; }
     @keyframes blink { 50% { opacity: 0; } }
+    .msg-time, .response-duration {
+      font: 10px "IBM Plex Mono", Consolas, monospace;
+      color: #3d4f5c; margin-top: 4px; display: block;
+    }
+    #response-timer {
+      font: 10px "IBM Plex Mono", Consolas, monospace;
+      color: var(--accent); opacity: 0.6;
+      display: block; margin-top: 2px;
+    }
 
     /* ---------- statusbar ---------- */
     footer { grid-column: 2 / -1; display: flex; align-items: center; gap: 16px; padding: 0 18px; border-top: 1px solid var(--line-2); background: var(--surface); color: var(--text-3); font: 10px/1 "IBM Plex Mono", monospace; letter-spacing: .4px; }
