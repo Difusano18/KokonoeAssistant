@@ -32,6 +32,8 @@ hljs.registerLanguage("yaml", yaml);
 
 marked.setOptions({ gfm: true, breaks: true });
 
+const MSG_COPY_ICON = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>`;
+
 type ChatEvent = {
   streamId: string;
   sequence?: number;
@@ -148,12 +150,14 @@ export class ChatController {
     meta.textContent = role === "user" ? "You" : "Kokonoe";
     const body = document.createElement("div");
     body.className = "message-body";
-    if (role === "user")
+    if (role === "user") {
       body.textContent = text;
-    else if (text)
+      this.addMessageCopyButton(body);
+    } else if (text) {
       this.renderMarkdown(body, text);
-    else if (streaming)
+    } else if (streaming) {
       body.innerHTML = `<div class="typing-dots"><span></span><span></span><span></span></div>`;
+    }
     article.append(meta, body);
     this.messages.append(article);
     this.scrollToEnd();
@@ -165,6 +169,21 @@ export class ChatController {
     body.innerHTML = DOMPurify.sanitize(marked.parse(raw, { async: false }));
     body.querySelectorAll<HTMLElement>("pre code").forEach(block => hljs.highlightElement(block));
     body.querySelectorAll<HTMLElement>("pre").forEach(pre => this.attachCopyButton(pre));
+    this.addMessageCopyButton(body);
+  }
+
+  private addMessageCopyButton(body: HTMLElement): void {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "msg-copy-btn";
+    button.title = "Копіювати";
+    button.innerHTML = MSG_COPY_ICON;
+    button.addEventListener("click", () => {
+      void navigator.clipboard.writeText(body.textContent ?? "");
+      button.innerHTML = "✓";
+      window.setTimeout(() => { button.innerHTML = MSG_COPY_ICON; }, 1500);
+    });
+    body.append(button);
   }
 
   private attachCopyButton(pre: HTMLElement): void {
@@ -195,6 +214,7 @@ export class ChatController {
       });
       this.activeBody.append(document.createElement("br"), button);
     }
+    this.addMessageCopyButton(this.activeBody);
     const messageElement = this.activeBody.closest(".message");
     messageElement?.classList.remove("streaming");
     messageElement?.classList.add("error");

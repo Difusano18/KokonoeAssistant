@@ -390,7 +390,18 @@
     .message-meta::before { content: ""; width: 5px; height: 5px; border-radius: 50%; background: var(--accent); }
     .message.user .message-meta { flex-direction: row-reverse; }
     .message.user .message-meta::before { background: var(--gold); }
-    .message-body { margin: 0; padding: 14px 16px; border: 1px solid var(--line-2); border-radius: 12px; background: var(--card); color: var(--text); font-size: 14px; line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; box-shadow: inset 0 1px 0 rgba(255,255,255,.015); }
+    .message-body { position: relative; margin: 0; padding: 14px 16px; border: 1px solid var(--line-2); border-radius: 12px; background: var(--card); color: var(--text); font-size: 14px; line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; box-shadow: inset 0 1px 0 rgba(255,255,255,.015); }
+    .msg-copy-btn {
+      position: absolute; top: 7px; right: 8px;
+      width: 26px; height: 26px; padding: 0;
+      border: 1px solid transparent; border-radius: 4px;
+      background: transparent; color: var(--text-3);
+      display: flex; align-items: center; justify-content: center;
+      opacity: 0; cursor: pointer;
+      transition: opacity 120ms ease, color 120ms ease, border-color 120ms ease, background 120ms ease;
+    }
+    .message:hover .msg-copy-btn { opacity: 1; }
+    .msg-copy-btn:hover { color: var(--accent); border-color: var(--accent-border); background: var(--accent-soft); }
     .message.assistant .message-body { border-top-left-radius: 4px; }
     .message.user .message-body { border-top-right-radius: 4px; border-color: color-mix(in srgb, var(--accent) 34%, var(--line-2)); background: #122029; }
     .message.system .message-body { background: var(--card-2); color: var(--text-2); font-size: 13px; }
