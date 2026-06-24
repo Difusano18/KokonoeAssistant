@@ -82,16 +82,22 @@ namespace KokonoeAssistant.Services
                 Log($"TG send suppressed ({category}): {suppressionReason}");
                 return false;
             }
-            if (ShouldSuppressRecentThought(message, category, out var duplicateReason))
+            lock (_lock)
             {
-                Log($"TG send suppressed duplicate ({category}): {duplicateReason}");
-                return false;
+                if (ShouldSuppressRecentThought(message, category, out var duplicateReason))
+                {
+                    Log($"TG send suppressed duplicate ({category}): {duplicateReason}");
+                    return false;
+                }
+                // Recorded before the send (not after) so a concurrent call from another
+                // timer/path sees this thought as already-claimed instead of racing past
+                // the same suppression check while this one is still awaiting the network call.
+                RecordRecentThought(message, category, DateTime.Now);
             }
 
             try
             {
                 await _tgBot!.SendMessage(_tgChatId, message);
-                RecordRecentThought(message, category, DateTime.Now);
                 // Log to vault archive
                 try { ServiceContainer.ChatLogger.LogOutgoing("tg", message, category); } catch (Exception ex) { KokoSystemLog.Write("BRAIN-CATCH", "SendTgAndLog failed near source line 1493: " + ex); }
                 return true;
