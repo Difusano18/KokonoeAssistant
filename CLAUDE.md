@@ -24,6 +24,8 @@ dotnet clean
 
 The project uses WPF with Windows Forms interop (`UseWPF` + `UseWindowsForms`). Dependencies are managed via NuGet.
 
+`dotnet build` runs the frontend build (`npm run build` in `frontend/`) as a pre-build step and embeds `frontend/dist/` into the WebView2 shell. Run `cd frontend && npm run build` (or just `dotnet build`) after every change to `frontend/`; check both for `0 Error(s)` before moving on.
+
 ## Architecture Overview
 
 ### Mandatory Tool Gateway
@@ -115,6 +117,20 @@ For long operations (file I/O, LLM calls), use `Task.Run()` to avoid freezing th
 ```csharp
 var context = await Task.Run(() => BuildContext(userInput));
 ```
+
+### WebView Frontend (TypeScript + Vite)
+
+The chat/agent/settings UI is `frontend/` (vanilla TypeScript + Vite), rendered inside a WebView2 control hosted in the same process as the WPF app — not a separate server. `Services/KokoWebBridgeService` is the JSON-over-`postMessage` transport; each `KokoWeb*BridgeService` (Chat, Agent, Settings, Vault, Telegram, Memory, Runtime, System, Persona) registers request handlers and publishes events on it. `frontend/src/bridge.ts` is the client side (`window.koko.call(...)` / `window.koko.on(...)`).
+
+`OnWebMessageReceived` (in `KokoWebBridgeService`) fires on the UI thread, which has a captured `DispatcherSynchronizationContext`. That means **`await Task.Yield()` inside a bridge handler does not move work to the ThreadPool** — it just re-posts the continuation onto the same dispatcher queue, letting one pending Windows message run first. It's still required as the first line of every new handler (matches the existing convention across all `KokoWeb*BridgeService` files), but if a handler does real work (vault scans, embedding lookups, HTTP calls), that needs an actual `Task.Run(...).ConfigureAwait(false)` hop, same pattern as `KokoWebChatBridgeService.HandleSendAsync`'s context builder.
+
+Critical DOM IDs (don't rename without updating the TS that looks them up):
+`#chat-form` `#chat-input` `#chat-send` `#chat-scroll` `#messages` `#chat-status` `#bridge-status`
+`#new-chat-btn` `#onboarding-banner` `#settings-backdrop` `#settings-drawer` `#settings-open` `#settings-close`
+`#panel-tasks` `#panel-memory` `#panel-telemetry` `#agent-tasks` `#agent-activity`
+`.runtime-dot` `.message.user` `.message.assistant` `.message-body` `.agent-status` `.agent-step`
+
+Default LLM provider is `ollama-cloud` (see `AppSettings.LlmProvider`); `lmstudio` needs a local server running and was the cause of past "no reply" failures, so don't change the default without a reason. The `OllamaApiKey`/`OllamaKeys` pool and `OllamaUrl` belong to the `ollama-cloud` provider specifically — there's no `OllamaCloudApiKey`/`OllamaCloudBaseUrl` property, despite the naming you'd expect.
 
 ## Key File Locations
 
