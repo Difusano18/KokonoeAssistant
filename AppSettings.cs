@@ -137,7 +137,7 @@ namespace KokonoeAssistant
         // System
         public bool MinimizeToTray      { get; set; } = true;
         public int  MemoryUpdateEveryN  { get; set; } = 6;
-        public string MatrixColor       { get; set; } = "#6366F1";
+        public string MatrixColor       { get; set; } = "#5FC1B3";
         public string UiShell           { get; set; } = "web";
 
         // Voice
