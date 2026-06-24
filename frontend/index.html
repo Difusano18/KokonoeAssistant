@@ -349,6 +349,7 @@
     .segment button { height: 30px; border: 1px solid transparent; border-radius: 6px; background: transparent; color: var(--text-3); font-size: 11px; transition: border-color var(--motion-fast) ease, background var(--motion-fast) ease, color var(--motion-fast) ease; }
     .segment button:hover { color: var(--text-2); }
     .segment button.selected { border-color: var(--accent-border); background: var(--accent-soft); color: var(--accent); }
+    #task-filter-segment { margin-bottom: 0; grid-template-columns: repeat(4, minmax(64px, 1fr)); }
     .color-control { display: flex; align-items: center; gap: 10px; }
     .color-control input[type="color"] { width: 32px; height: 32px; padding: 2px; border: 1px solid var(--line-2); border-radius: 7px; background: var(--input); cursor: pointer; }
     .color-control code { color: var(--text-2); font: 11px/1 "IBM Plex Mono", monospace; }
@@ -566,6 +567,15 @@
             <button id="agent-task-start" class="action-button" type="submit" disabled>Start task</button>
             <output id="agent-task-status">Agent bridge not checked yet.</output>
           </form>
+          <div class="panel-actions">
+            <div id="task-filter-segment" class="segment" role="group" aria-label="Filter tasks">
+              <button type="button" data-filter="all" class="selected">All</button>
+              <button type="button" data-filter="running">Running</button>
+              <button type="button" data-filter="failed">Failed</button>
+              <button type="button" data-filter="completed">Done</button>
+            </div>
+            <button id="clear-old-tasks" class="action-button" type="button" disabled>Clear old</button>
+          </div>
           <div id="tasks-list" class="agent-tasks workspace-list"><p class="agent-empty">No tasks yet.</p></div>
         </div>
       </section>

@@ -25,8 +25,11 @@ interface AgentSnapshot {
   runningSteps: number;
   runnerActive?: boolean;
   activity: AgentActivity;
+  taskCount?: number;
   tasks: AgentTask[];
 }
+
+type TaskFilter = "all" | "running" | "failed" | "completed";
 
 export class AgentBoardController {
   private readonly panelTasks = document.getElementById("tasks-list");
@@ -40,7 +43,11 @@ export class AgentBoardController {
   private readonly taskStatus = document.getElementById("agent-task-status");
   private readonly runnerStart = document.getElementById("agent-runner-start") as HTMLButtonElement | null;
   private readonly runnerStop = document.getElementById("agent-runner-stop") as HTMLButtonElement | null;
+  private readonly filterSegment = document.getElementById("task-filter-segment");
+  private readonly clearOldButton = document.getElementById("clear-old-tasks") as HTMLButtonElement | null;
   private pollHandle = 0;
+  private filter: TaskFilter = "all";
+  private lastTasks: AgentTask[] = [];
 
   constructor() {
     window.koko.on("agent.activity", payload => this.render((payload as { snapshot: AgentSnapshot }).snapshot));
@@ -52,6 +59,11 @@ export class AgentBoardController {
     });
     this.runnerStart?.addEventListener("click", () => void this.setRunner(true));
     this.runnerStop?.addEventListener("click", () => void this.setRunner(false));
+    this.filterSegment?.addEventListener("click", event => {
+      const button = (event.target as HTMLElement).closest<HTMLButtonElement>("button[data-filter]");
+      if (button) this.setFilter(button.dataset.filter as TaskFilter);
+    });
+    this.clearOldButton?.addEventListener("click", () => void this.clearOldTasks());
   }
 
   async connect(): Promise<void> {
@@ -168,15 +180,11 @@ export class AgentBoardController {
 
   private render(snapshot: AgentSnapshot): void {
     const current = snapshot.activity;
-    const rendered = snapshot.tasks.map(task => this.renderTask(task));
-    this.panelTasks?.replaceChildren(...rendered);
-    if (!snapshot.tasks.length) {
-      const empty = Object.assign(document.createElement("p"), { className: "agent-empty", textContent: "No active tasks." });
-      this.panelTasks?.append(empty);
-    }
+    this.lastTasks = snapshot.tasks;
+    this.renderTaskList();
 
     if (this.panelCount)
-      this.panelCount.textContent = String(snapshot.tasks.length);
+      this.panelCount.textContent = String(snapshot.taskCount ?? snapshot.tasks.length);
     if (this.panelRunning)
       this.panelRunning.textContent = `${snapshot.runningSteps} / ${snapshot.maxParallel}`;
     if (this.panelPhase)
@@ -184,6 +192,49 @@ export class AgentBoardController {
     if (this.panelThought)
       this.panelThought.textContent = current.thought || current.focus || "No active task.";
     this.setRunnerControls(true, snapshot.runnerActive === true);
+    if (this.clearOldButton)
+      this.clearOldButton.disabled = false;
+  }
+
+  private renderTaskList(): void {
+    const filtered = this.lastTasks.filter(task => {
+      switch (this.filter) {
+        case "running": return task.status === "Running" || task.status === "Pending";
+        case "failed": return task.status === "Failed";
+        case "completed": return task.status === "Completed";
+        default: return true;
+      }
+    });
+    this.panelTasks?.replaceChildren(...filtered.map(task => this.renderTask(task)));
+    if (!filtered.length) {
+      const empty = Object.assign(document.createElement("p"), {
+        className: "agent-empty",
+        textContent: this.filter === "all" ? "No active tasks." : "No tasks match this filter."
+      });
+      this.panelTasks?.append(empty);
+    }
+  }
+
+  private setFilter(filter: TaskFilter): void {
+    this.filter = filter;
+    for (const button of this.filterSegment?.querySelectorAll<HTMLButtonElement>("button") ?? [])
+      button.classList.toggle("selected", button.dataset.filter === filter);
+    this.renderTaskList();
+  }
+
+  private async clearOldTasks(): Promise<void> {
+    if (this.clearOldButton)
+      this.clearOldButton.disabled = true;
+    try {
+      const result = await window.koko.call<{ removed: number; snapshot: AgentSnapshot }>("agent.clear_completed", null, 10000);
+      this.render(result.snapshot);
+      this.setTaskStatus(`Cleared ${result.removed} old task(s).`);
+    } catch (error) {
+      this.setTaskStatus(error instanceof Error ? error.message : String(error));
+    } finally {
+      if (this.clearOldButton)
+        this.clearOldButton.disabled = !window.koko.available;
+    }
   }
 
   private renderTask(task: AgentTask): HTMLElement {

@@ -25,6 +25,7 @@ namespace KokonoeAssistant.Services
             _bridge.Register("agent.runner.status", HandleRunnerStatusAsync);
             _bridge.Register("agent.runner.start", HandleRunnerStartAsync);
             _bridge.Register("agent.runner.stop", HandleRunnerStopAsync);
+            _bridge.Register("agent.clear_completed", HandleClearCompletedAsync);
             _tasks.ActivityChanged += OnActivityChanged;
             _tasks.TaskCompleted += OnTaskCompleted;
         }
@@ -99,6 +100,20 @@ namespace KokonoeAssistant.Services
                 canceled,
                 snapshot
             };
+        }
+
+        private async Task<object?> HandleClearCompletedAsync(JToken? payload, CancellationToken ct)
+        {
+            await Task.Yield();
+            ct.ThrowIfCancellationRequested();
+            if (_disposed)
+                throw new ObjectDisposedException(nameof(KokoWebAgentBridgeService));
+            var removed = _tasks.ClearCompletedTasks(TimeSpan.FromHours(1));
+            KokoSystemLog.Write("AGENT", $"Cleared {removed} old tasks");
+            var snapshot = BuildSnapshotPayload();
+            if (removed > 0)
+                _bridge.Publish("agent.activity", new { activity = ProjectActivity(_tasks.GetSnapshot().Activity), snapshot });
+            return new { removed, snapshot };
         }
 
         private async Task<object?> HandleRunnerStatusAsync(JToken? payload, CancellationToken ct)
@@ -179,7 +194,8 @@ namespace KokonoeAssistant.Services
                 runningSteps = snapshot.RunningSteps,
                 runnerActive = _tasks.IsRunnerActive,
                 activity = ProjectActivity(snapshot.Activity),
-                tasks = snapshot.Tasks.Select(ProjectTask).ToArray()
+                taskCount = snapshot.Tasks.Count,
+                tasks = snapshot.Tasks.OrderByDescending(t => t.UpdatedAt).Take(50).Select(ProjectTask).ToArray()
             };
         }
 

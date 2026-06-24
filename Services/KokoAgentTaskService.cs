@@ -256,6 +256,20 @@ namespace KokonoeAssistant.Services
             }
         }
 
+        public int ClearCompletedTasks(TimeSpan olderThan)
+        {
+            lock (_lock)
+            {
+                var cutoff = DateTime.Now - olderThan;
+                var removed = _tasks.RemoveAll(t =>
+                    t.Status is KokoAgentTaskStatus.Completed or KokoAgentTaskStatus.Failed
+                    && t.UpdatedAt < cutoff);
+                if (removed > 0)
+                    SaveLocked();
+                return removed;
+            }
+        }
+
         public static IReadOnlyList<KokoAgentStep> BuildPlan(string objective)
         {
             var planned = KokoResponsePlannerEngine.BuildAgentStepsForObjective(objective);
