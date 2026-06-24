@@ -143,6 +143,24 @@ document.querySelectorAll<HTMLButtonElement>(".rail button[data-panel]").forEach
   button.addEventListener("click", () => switchPanel(button.dataset.panel ?? "chat"));
 });
 
+async function resetChat(): Promise<void> {
+  try {
+    await window.koko.call("chat.clear_history");
+  } catch (error) {
+    console.warn("[Kokonoe Web Bridge] chat.clear_history failed", error instanceof Error ? error.message : String(error));
+  }
+  document.getElementById("messages")!.innerHTML = "";
+  (document.getElementById("chat-input") as HTMLInputElement)?.focus();
+}
+
+document.getElementById("new-chat-btn")?.addEventListener("click", () => void resetChat());
+document.addEventListener("keydown", e => {
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "n") {
+    e.preventDefault();
+    void resetChat();
+  }
+});
+
 systemScanButton.addEventListener("click", () => void scanSystem());
 telemetryRefreshButton.addEventListener("click", () => {
   telemetryRefreshButton.disabled = true;

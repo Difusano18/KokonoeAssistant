@@ -127,6 +127,14 @@
     .persona .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 7px var(--accent-glow); flex: 0 0 auto; }
 
     .topbar-actions { display: flex; align-items: center; gap: 6px; margin-left: auto; }
+    .topbar-btn {
+      display: flex; align-items: center; gap: 5px;
+      padding: 0 10px; height: 28px;
+      border: 1px solid var(--line-2); border-radius: 6px;
+      background: transparent; color: var(--text-3); font-size: 11px;
+      transition: color var(--motion-fast) ease, border-color var(--motion-fast) ease, background var(--motion-fast) ease;
+    }
+    .topbar-btn:hover { color: var(--accent); border-color: var(--accent-border); background: var(--accent-soft); }
     .ghost-icon {
       display: grid; place-items: center; width: 32px; height: 32px;
       border: 1px solid transparent; border-radius: 7px; background: transparent; color: var(--text-3);
@@ -468,6 +476,10 @@
       </div>
 
       <div class="topbar-actions">
+        <button id="new-chat-btn" class="topbar-btn" type="button" title="Нова розмова (Ctrl+N)">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Новий чат
+        </button>
         <button class="ghost-icon" type="button" title="Search" aria-label="Search">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.2-3.2"/></svg>
         </button>

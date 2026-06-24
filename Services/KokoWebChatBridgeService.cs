@@ -11,6 +11,7 @@ namespace KokonoeAssistant.Services
         private readonly Func<string, string?, Action<string>, CancellationToken, Task<string?>> _stream;
         private readonly Func<string, string?, Action<string>, CancellationToken, Task<string>> _fallback;
         private readonly Func<string, string?> _contextBuilder;
+        private readonly Action _resetHistory;
         private bool _disposed;
 
         public KokoWebChatBridgeService(
@@ -21,7 +22,8 @@ namespace KokonoeAssistant.Services
                 bridge,
                 (text, context, onChunk, ct) => llm.SendStreamingAsync(text, context, onChunk, ct),
                 (text, context, onChunk, ct) => llm.SendAsync(text, extraContext: context, ct: ct, onChunk: onChunk),
-                contextBuilder)
+                contextBuilder,
+                llm.ClearHistory)
         {
         }
 
@@ -29,12 +31,14 @@ namespace KokonoeAssistant.Services
             KokoWebBridgeService bridge,
             Func<string, string?, Action<string>, CancellationToken, Task<string?>> stream,
             Func<string, string?, CancellationToken, Task<string>> fallback,
-            Func<string, string?>? contextBuilder = null)
+            Func<string, string?>? contextBuilder = null,
+            Action? resetHistory = null)
             : this(
                 bridge,
                 stream,
                 (text, context, _, ct) => fallback(text, context, ct),
-                contextBuilder)
+                contextBuilder,
+                resetHistory)
         {
             if (fallback == null) throw new ArgumentNullException(nameof(fallback));
         }
@@ -43,14 +47,17 @@ namespace KokonoeAssistant.Services
             KokoWebBridgeService bridge,
             Func<string, string?, Action<string>, CancellationToken, Task<string?>> stream,
             Func<string, string?, Action<string>, CancellationToken, Task<string>> fallback,
-            Func<string, string?>? contextBuilder = null)
+            Func<string, string?>? contextBuilder = null,
+            Action? resetHistory = null)
         {
             _bridge = bridge ?? throw new ArgumentNullException(nameof(bridge));
             _stream = stream ?? throw new ArgumentNullException(nameof(stream));
             _fallback = fallback ?? throw new ArgumentNullException(nameof(fallback));
             _contextBuilder = contextBuilder ?? (_ => null);
+            _resetHistory = resetHistory ?? (() => { });
             _bridge.Register("chat.send", HandleSendAsync);
             _bridge.Register("send_message", HandleSendAsync);
+            _bridge.Register("chat.clear_history", HandleClearHistoryAsync);
         }
 
         private async Task<object?> HandleSendAsync(JToken? payload, CancellationToken ct)
@@ -132,6 +139,15 @@ namespace KokonoeAssistant.Services
                 _bridge.Publish("chat.error", new { streamId, error = ex.Message });
                 throw;
             }
+        }
+
+        private async Task<object?> HandleClearHistoryAsync(JToken? payload, CancellationToken ct)
+        {
+            await Task.Yield();
+            ct.ThrowIfCancellationRequested();
+            _resetHistory();
+            KokoSystemLog.Write("LLM", "conversation history reset by user");
+            return new { ok = true, clearedAt = DateTimeOffset.UtcNow };
         }
 
         public void PublishExternalMessage(string role, string content)
