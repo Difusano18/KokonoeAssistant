@@ -152,6 +152,8 @@ export class ChatController {
       body.textContent = text;
     else if (text)
       this.renderMarkdown(body, text);
+    else if (streaming)
+      body.innerHTML = `<div class="typing-dots"><span></span><span></span><span></span></div>`;
     article.append(meta, body);
     this.messages.append(article);
     this.scrollToEnd();
