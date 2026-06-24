@@ -1,3 +1,37 @@
+import DOMPurify from "dompurify";
+import hljs from "highlight.js/lib/core";
+import bash from "highlight.js/lib/languages/bash";
+import csharp from "highlight.js/lib/languages/csharp";
+import css from "highlight.js/lib/languages/css";
+import ini from "highlight.js/lib/languages/ini";
+import javascript from "highlight.js/lib/languages/javascript";
+import json from "highlight.js/lib/languages/json";
+import markdownLang from "highlight.js/lib/languages/markdown";
+import powershell from "highlight.js/lib/languages/powershell";
+import python from "highlight.js/lib/languages/python";
+import sql from "highlight.js/lib/languages/sql";
+import typescript from "highlight.js/lib/languages/typescript";
+import xml from "highlight.js/lib/languages/xml";
+import yaml from "highlight.js/lib/languages/yaml";
+import { marked } from "marked";
+import "highlight.js/styles/github-dark-dimmed.css";
+
+hljs.registerLanguage("bash", bash);
+hljs.registerLanguage("csharp", csharp);
+hljs.registerLanguage("css", css);
+hljs.registerLanguage("ini", ini);
+hljs.registerLanguage("javascript", javascript);
+hljs.registerLanguage("json", json);
+hljs.registerLanguage("markdown", markdownLang);
+hljs.registerLanguage("powershell", powershell);
+hljs.registerLanguage("python", python);
+hljs.registerLanguage("sql", sql);
+hljs.registerLanguage("typescript", typescript);
+hljs.registerLanguage("xml", xml);
+hljs.registerLanguage("yaml", yaml);
+
+marked.setOptions({ gfm: true, breaks: true });
+
 type ChatEvent = {
   streamId: string;
   sequence?: number;
@@ -17,6 +51,7 @@ type ChatSendResult = {
 export class ChatController {
   private activeStreamId = "";
   private activeBody: HTMLElement | null = null;
+  private activeRawText = "";
   private busy = false;
 
   constructor(
@@ -51,13 +86,16 @@ export class ChatController {
     this.busy = true;
     this.activeStreamId = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}`;
     this.appendMessage("user", text);
+    this.activeRawText = "";
     this.activeBody = this.appendMessage("assistant", "", true);
     this.input.value = "";
     this.setBusy(true);
     try {
       const result = await window.koko.call<ChatSendResult>("chat.send", { text, streamId: this.activeStreamId }, 180000);
-      if (this.activeBody && !this.activeBody.textContent)
-        this.activeBody.textContent = result.reply;
+      if (this.activeBody && !this.activeRawText) {
+        this.activeRawText = result.reply;
+        this.renderMarkdown(this.activeBody, this.activeRawText);
+      }
     } catch (error) {
       this.fail(error instanceof Error ? error.message : String(error));
     } finally {
@@ -68,18 +106,23 @@ export class ChatController {
 
   private onChunk(event: ChatEvent): void {
     if (event.streamId !== this.activeStreamId || !this.activeBody) return;
-    this.activeBody.append(document.createTextNode(event.chunk ?? ""));
+    this.activeRawText += event.chunk ?? "";
+    this.renderMarkdown(this.activeBody, this.activeRawText);
     this.scrollToEnd();
   }
 
   private onReset(event: ChatEvent): void {
-    if (event.streamId === this.activeStreamId && this.activeBody)
+    if (event.streamId === this.activeStreamId && this.activeBody) {
+      this.activeRawText = "";
+      this.activeBody.classList.remove("markdown");
       this.activeBody.textContent = "";
+    }
   }
 
   private onCompleted(event: ChatEvent): void {
     if (event.streamId !== this.activeStreamId || !this.activeBody) return;
-    this.activeBody.textContent = event.reply ?? this.activeBody.textContent ?? "";
+    this.activeRawText = event.reply ?? this.activeRawText;
+    this.renderMarkdown(this.activeBody, this.activeRawText);
     this.activeBody.closest(".message")?.classList.remove("streaming");
     this.scrollToEnd();
   }
@@ -101,17 +144,42 @@ export class ChatController {
     const meta = document.createElement("span");
     meta.className = "message-meta";
     meta.textContent = role === "user" ? "You" : "Kokonoe";
-    const body = document.createElement("p");
+    const body = document.createElement("div");
     body.className = "message-body";
-    body.textContent = text;
+    if (role === "user")
+      body.textContent = text;
+    else if (text)
+      this.renderMarkdown(body, text);
     article.append(meta, body);
     this.messages.append(article);
     this.scrollToEnd();
     return body;
   }
 
+  private renderMarkdown(body: HTMLElement, raw: string): void {
+    body.classList.add("markdown");
+    body.innerHTML = DOMPurify.sanitize(marked.parse(raw, { async: false }));
+    body.querySelectorAll<HTMLElement>("pre code").forEach(block => hljs.highlightElement(block));
+    body.querySelectorAll<HTMLElement>("pre").forEach(pre => this.attachCopyButton(pre));
+  }
+
+  private attachCopyButton(pre: HTMLElement): void {
+    if (pre.querySelector(".code-copy")) return;
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "code-copy";
+    button.textContent = "copy";
+    button.addEventListener("click", () => {
+      void navigator.clipboard.writeText(pre.querySelector("code")?.textContent ?? "");
+      button.textContent = "✓";
+      window.setTimeout(() => { button.textContent = "copy"; }, 1500);
+    });
+    pre.append(button);
+  }
+
   private fail(message: string): void {
     if (!this.activeBody) return;
+    this.activeBody.classList.remove("markdown");
     this.activeBody.textContent = message;
     const messageElement = this.activeBody.closest(".message");
     messageElement?.classList.remove("streaming");
