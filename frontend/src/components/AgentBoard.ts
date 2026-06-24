@@ -29,9 +29,6 @@ interface AgentSnapshot {
 }
 
 export class AgentBoardController {
-  private readonly activity = document.getElementById("agent-activity")!;
-  private readonly summary = document.getElementById("agent-summary")!;
-  private readonly sideTasks = document.getElementById("agent-tasks")!;
   private readonly panelTasks = document.getElementById("tasks-list");
   private readonly panelCount = document.getElementById("tasks-panel-count");
   private readonly panelRunning = document.getElementById("tasks-panel-running");
@@ -48,7 +45,6 @@ export class AgentBoardController {
   constructor() {
     window.koko.on("agent.activity", payload => this.render((payload as { snapshot: AgentSnapshot }).snapshot));
     window.koko.on("agent.completed", payload => this.render((payload as { snapshot: AgentSnapshot }).snapshot));
-    this.sideTasks.addEventListener("click", event => this.handleTaskClick(event));
     this.panelTasks?.addEventListener("click", event => this.handleTaskClick(event));
     this.taskForm?.addEventListener("submit", event => {
       event.preventDefault();
@@ -65,8 +61,6 @@ export class AgentBoardController {
       this.setRunnerControls(true);
       this.startPolling();
     } catch (error) {
-      this.activity.querySelector("strong")!.textContent = "Agent bridge unavailable";
-      this.activity.querySelector("p")!.textContent = error instanceof Error ? error.message : String(error);
       this.setTaskControls(false, error instanceof Error ? error.message : String(error));
       this.setRunnerControls(false);
     }
@@ -174,20 +168,10 @@ export class AgentBoardController {
 
   private render(snapshot: AgentSnapshot): void {
     const current = snapshot.activity;
-    this.activity.replaceChildren(
-      Object.assign(document.createElement("strong"), { textContent: `${current.phase} / ${current.tool}` }),
-      Object.assign(document.createElement("p"), { textContent: current.thought || current.focus })
-    );
-    this.summary.replaceChildren(
-      Object.assign(document.createElement("span"), { textContent: `${snapshot.tasks.length} tasks` }),
-      Object.assign(document.createElement("span"), { textContent: `${snapshot.runningSteps} / ${snapshot.maxParallel} running` })
-    );
-    const rendered = snapshot.tasks.slice(0, 8).map(task => this.renderTask(task));
-    this.sideTasks.replaceChildren(...rendered.map(task => task.cloneNode(true) as HTMLElement));
+    const rendered = snapshot.tasks.map(task => this.renderTask(task));
     this.panelTasks?.replaceChildren(...rendered);
     if (!snapshot.tasks.length) {
       const empty = Object.assign(document.createElement("p"), { className: "agent-empty", textContent: "No active tasks." });
-      this.sideTasks.append(empty.cloneNode(true));
       this.panelTasks?.append(empty);
     }
 

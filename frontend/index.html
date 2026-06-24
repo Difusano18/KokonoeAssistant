@@ -234,10 +234,6 @@
     .pending { color: var(--gold) !important; }
 
     /* ---------- agent ---------- */
-    .agent-activity { margin-bottom: 14px; padding: 13px; border: 1px solid var(--line-2); border-radius: var(--radius); background: var(--card); box-shadow: inset 0 1px 0 rgba(255,255,255,.015); }
-    .agent-activity strong { display: block; margin-bottom: 6px; color: var(--text); font-size: 12px; font-weight: 600; }
-    .agent-activity p { margin: 0; color: var(--text-2); font-size: 11px; line-height: 1.5; overflow-wrap: anywhere; }
-    .agent-summary { display: flex; justify-content: space-between; margin-bottom: 12px; color: var(--text-3); font: 10px/1 "IBM Plex Mono", monospace; letter-spacing: .4px; }
     .agent-tasks { display: grid; gap: 9px; }
     .agent-task { padding: 12px; border: 1px solid var(--line-2); border-radius: var(--radius); background: var(--card); }
     .agent-task.running { border-color: var(--accent-border); box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 12%, transparent); }
@@ -625,13 +621,6 @@
     </main>
 
     <aside>
-      <h2>Agent activity</h2>
-      <section id="agent-activity" class="agent-activity" aria-live="polite">
-        <strong>Waiting for runtime</strong>
-        <p>Task activity will appear here without blocking chat.</p>
-      </section>
-      <div id="agent-summary" class="agent-summary"><span>0 tasks</span><span>0 / 0 running</span></div>
-      <div id="agent-tasks" class="agent-tasks"><p class="agent-empty">No active tasks.</p></div>
       <div class="panel-heading">
         <h2>Vault</h2>
         <button id="vault-refresh" class="icon-button" type="button" title="Refresh vault status" aria-label="Refresh vault status" disabled>
