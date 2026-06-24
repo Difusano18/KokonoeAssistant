@@ -457,6 +457,7 @@
     footer .ready { color: var(--accent); }
     footer .spacer { margin-left: auto; }
     .live-update { animation: live-update 420ms ease-out; }
+    #plexus-canvas { position: fixed; inset: 0; z-index: 5; pointer-events: none; opacity: .07; }
 
     @keyframes runtime-pulse { 50% { opacity: .42; transform: scale(.8); } }
     @keyframes message-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
@@ -766,6 +767,7 @@
     </footer>
 
   </div>
+  <canvas id="plexus-canvas" aria-hidden="true"></canvas>
   <script type="module" src="/src/main.ts"></script>
 </body>
 </html>
