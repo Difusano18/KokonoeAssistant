@@ -110,6 +110,14 @@ namespace KokonoeAssistant.Services
             "codeact_python" => Descriptor(name, "Execute restricted Python and preserve code/result artifacts.", "code", KokoToolRisk.Write, false, new[] { "code", "runId", "timeoutMs" }, "code", "tests", "sandbox"),
             "delegate_to_agent" => Descriptor(name, "Execute a sub-task using a specialist agent from the pool. Returns the agent's full response as a string.", "agents", KokoToolRisk.Write, false, new[] { "agentId", "systemPrompt", "userMessage" }, "agents", "delegation"),
             "web_search" => Descriptor(name, "Search the web via Tavily. Returns title, url, and snippet for each result.", "research", KokoToolRisk.ReadOnly, false, new[] { "query", "maxResults" }, "research", "web-search"),
+            "browser.navigate" => Descriptor(name, "Open a URL in the real Chromium browser. The window is visible to the user.", "browser", KokoToolRisk.Write, false, new[] { "url" }, "browser"),
+            "browser.click" => Descriptor(name, "Click an element by CSS selector or Playwright text=... selector.", "browser", KokoToolRisk.Write, false, new[] { "selector" }, "browser"),
+            "browser.type" => Descriptor(name, "Type text into an input field by CSS selector.", "browser", KokoToolRisk.Write, false, new[] { "selector", "text" }, "browser"),
+            "browser.extract" => Descriptor(name, "Extract visible text from the page, or from a specific selector. Omit selector for the whole page.", "browser", KokoToolRisk.ReadOnly, false, new[] { "selector" }, "browser"),
+            "browser.screenshot" => Descriptor(name, "Capture a screenshot of the current page and return its file path.", "browser", KokoToolRisk.ReadOnly, false, Array.Empty<string>(), "browser"),
+            "browser.scroll" => Descriptor(name, "Scroll the page up or down by a pixel amount.", "browser", KokoToolRisk.Write, false, new[] { "direction", "pixels" }, "browser"),
+            "browser.wait_for" => Descriptor(name, "Wait for an element to appear, e.g. after a click triggers loading.", "browser", KokoToolRisk.ReadOnly, false, new[] { "selector", "timeoutMs" }, "browser"),
+            "browser.close" => Descriptor(name, "Close the browser session.", "browser", KokoToolRisk.Write, false, Array.Empty<string>(), "browser"),
             _ => Descriptor(name, "Registered runtime tool.", "general", KokoToolRisk.ReadOnly, false, Array.Empty<string>())
         };
 

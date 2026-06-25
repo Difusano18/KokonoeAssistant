@@ -365,6 +365,19 @@ namespace KokonoeAssistant
                         Path.Combine(_vault ?? AppDomain.CurrentDomain.BaseDirectory, "kokonoe-data")));
                     gateway.Register(new KokoAgentDelegationToolHandler(AgentPool));
                     gateway.Register(new KokoWebSearchToolHandler());
+                    if (AppSettings.Load().BrowserEnabled)
+                    {
+                        var browser = BrowserOperator;
+                        gateway.Register(new KokoBrowserNavigateToolHandler(browser));
+                        gateway.Register(new KokoBrowserClickToolHandler(browser));
+                        gateway.Register(new KokoBrowserTypeToolHandler(browser));
+                        gateway.Register(new KokoBrowserExtractToolHandler(browser));
+                        gateway.Register(new KokoBrowserScreenshotToolHandler(browser));
+                        gateway.Register(new KokoBrowserScrollToolHandler(browser));
+                        gateway.Register(new KokoBrowserWaitForToolHandler(browser));
+                        gateway.Register(new KokoBrowserCloseToolHandler(browser));
+                        KokoSystemLog.Write("GATEWAY", "Browser tools registered (8 handlers)");
+                    }
                     _toolGateway = gateway;
                     return _toolGateway;
                 }
