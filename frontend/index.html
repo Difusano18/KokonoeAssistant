@@ -751,7 +751,7 @@
             <section class="settings-group">
               <h3>LLM Provider</h3>
               <div id="llm-provider-segment" class="segment" role="group" aria-label="LLM provider">
-                <button type="button" data-value="lmstudio">LM Studio</button><button type="button" data-value="ollama">Ollama</button><button type="button" data-value="ollama-cloud">Cloud</button><button type="button" data-value="claude">Claude</button><button type="button" data-value="ollama-cloud-proxy">Ollama Cloud</button>
+                <button type="button" data-value="lmstudio">LM Studio</button><button type="button" data-value="ollama">Ollama</button><button type="button" data-value="ollama-cloud" title="Насправді Groq, не Ollama API — див. підказку нижче">Cloud (Groq)</button><button type="button" data-value="claude">Claude</button><button type="button" data-value="ollama-cloud-proxy">Ollama Cloud</button>
               </div>
               <div class="setting-row setting-row-stack" id="row-lm-url">
                 <label for="lm-url">Endpoint URL</label>
@@ -764,6 +764,7 @@
               <div class="setting-row setting-row-stack" id="row-ollama-url">
                 <label for="ollama-url">Endpoint URL</label>
                 <input id="ollama-url" type="text" placeholder="https://api.groq.com/openai/v1/chat/completions" autocomplete="off">
+                <p class="setting-hint">За замовчуванням це Groq, не Ollama: окремого хмарного Ollama API без локального <code>ollama signin</code> не існує. Для справжнього Ollama Cloud використовуй вкладку "Ollama Cloud" нижче.</p>
               </div>
               <div class="setting-row setting-row-stack" id="row-ollama-key">
                 <label for="ollama-key">API Key</label>

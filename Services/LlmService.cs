@@ -368,6 +368,21 @@ namespace KokonoeAssistant.Services
             return (provider, url, model, temperature);
         }
 
+        // The real Ollama Cloud path (ollama-cloud-proxy, a local Ollama install reached via
+        // `ollama signin`) understands a top-level "options" object that maps onto its native
+        // generation params even through its OpenAI-compatible endpoint — max_tokens alone has
+        // had spotty enforcement there (Ollama's default num_predict is -1 = unbounded unless
+        // something sets it explicitly). Hosted OpenAI-compatible APIs (Groq/Claude/LM Studio)
+        // don't understand "options", so this only ever applies to the local proxy.
+        private static object AttachOllamaOptions(object reqBody, bool isOllamaProxy, int maxTokens, int numCtx = 16384)
+        {
+            if (!isOllamaProxy)
+                return reqBody;
+            var body = JObject.FromObject(reqBody);
+            body["options"] = new JObject { ["num_predict"] = maxTokens, ["num_ctx"] = numCtx };
+            return body;
+        }
+
         private static string BuildCriticalThinkingPrompt() => @"
 
 === CRITICAL THINKING / AGENCY LAYER ===
@@ -1310,10 +1325,11 @@ namespace KokonoeAssistant.Services
 
                     var sysProvider = target.Provider;
                     var sysIsOllamaCloud = sysProvider.Equals("ollama-cloud", StringComparison.OrdinalIgnoreCase);
+                    var sysIsOllamaCloudProxy = sysProvider.Equals("ollama-cloud-proxy", StringComparison.OrdinalIgnoreCase);
                     var sysIsClaude = sysProvider.Equals("claude", StringComparison.OrdinalIgnoreCase);
                     var sysModel = target.Model;
                     var sysUrl = target.Url;
-                    
+
                     object reqBody;
                     if (sysIsClaude)
                     {
@@ -1329,9 +1345,13 @@ namespace KokonoeAssistant.Services
                         };
                     }
                     else if (useTools && Obsidian != null && round < 4)
-                        reqBody = new { model = sysModel, messages, tools = TOOLS, tool_choice = "auto", max_tokens = maxTokens, temperature = target.Temperature, stream = false };
+                        reqBody = AttachOllamaOptions(
+                            new { model = sysModel, messages, tools = TOOLS, tool_choice = "auto", max_tokens = maxTokens, temperature = target.Temperature, stream = false },
+                            sysIsOllamaCloudProxy, maxTokens);
                     else
-                        reqBody = new { model = sysModel, messages, max_tokens = maxTokens, temperature = target.Temperature, stream = false };
+                        reqBody = AttachOllamaOptions(
+                            new { model = sysModel, messages, max_tokens = maxTokens, temperature = target.Temperature, stream = false },
+                            sysIsOllamaCloudProxy, maxTokens);
 
                     var json = JsonConvert.SerializeObject(reqBody);
                     HttpResponseMessage? resp = null;
@@ -1453,6 +1473,7 @@ namespace KokonoeAssistant.Services
 
                 var visionIsClaude = target.Provider.Equals("claude", StringComparison.OrdinalIgnoreCase);
                 var visionIsOllamaCloud = target.Provider.Equals("ollama-cloud", StringComparison.OrdinalIgnoreCase);
+                var visionIsOllamaCloudProxy = target.Provider.Equals("ollama-cloud-proxy", StringComparison.OrdinalIgnoreCase);
 
                 object imageBlock = visionIsClaude
                     ? new { type = "image", source = new { type = "base64", media_type = sendImageMime, data = b64 } }
@@ -1497,18 +1518,20 @@ namespace KokonoeAssistant.Services
                     }
                     else
                     {
-                        reqBody = new
-                        {
-                            model = modelAttempt,
-                            messages = new object[]
+                        reqBody = AttachOllamaOptions(
+                            new
                             {
-                                new { role = "system", content = SanitizeContent(systemContent) },
-                                new { role = "user", content = userContent }
+                                model = modelAttempt,
+                                messages = new object[]
+                                {
+                                    new { role = "system", content = SanitizeContent(systemContent) },
+                                    new { role = "user", content = userContent }
+                                },
+                                max_tokens = visionMaxTokens,
+                                temperature = target.Temperature,
+                                stream = false
                             },
-                            max_tokens = visionMaxTokens,
-                            temperature = target.Temperature,
-                            stream = false
-                        };
+                            visionIsOllamaCloudProxy, visionMaxTokens);
                     }
 
                     var json = JsonConvert.SerializeObject(reqBody);
@@ -1811,10 +1834,14 @@ namespace KokonoeAssistant.Services
                                 ? (object)new { type = "function", function = new { name = DetectBestTool(userText!) } }
                                 : "auto";
                             // intentional: structured tool-decision round must be parsed atomically
-                            reqBody = new { model = targetModel, messages, tools = TOOLS, tool_choice = toolChoice, max_tokens = maxTokens, temperature = agentTarget.Temperature, stream = false };
+                            reqBody = AttachOllamaOptions(
+                                new { model = targetModel, messages, tools = TOOLS, tool_choice = toolChoice, max_tokens = maxTokens, temperature = agentTarget.Temperature, stream = false },
+                                isOllamaCloudProxy, maxTokens);
                         }
                         else
-                            reqBody = new { model = targetModel, messages, max_tokens = maxTokens, temperature = agentTarget.Temperature, stream = streamFinalAfterTools };
+                            reqBody = AttachOllamaOptions(
+                                new { model = targetModel, messages, max_tokens = maxTokens, temperature = agentTarget.Temperature, stream = streamFinalAfterTools },
+                                isOllamaCloudProxy, maxTokens);
                     }
 
                     var json = JsonConvert.SerializeObject(reqBody);
@@ -3575,10 +3602,14 @@ namespace KokonoeAssistant.Services
             else
             {
                 reqBody = useTools
-                    ? new { model = streamModel, messages = BuildMessages(systemContent), tools = TOOLS,
-                            tool_choice = "auto", max_tokens = maxTokens, temperature = target.Temperature, stream = true }
-                    : new { model = streamModel, messages = BuildMessages(systemContent),
-                            max_tokens = maxTokens, temperature = target.Temperature, stream = true };
+                    ? AttachOllamaOptions(
+                        new { model = streamModel, messages = BuildMessages(systemContent), tools = TOOLS,
+                              tool_choice = "auto", max_tokens = maxTokens, temperature = target.Temperature, stream = true },
+                        streamIsOllamaCloudProxy, maxTokens)
+                    : AttachOllamaOptions(
+                        new { model = streamModel, messages = BuildMessages(systemContent),
+                              max_tokens = maxTokens, temperature = target.Temperature, stream = true },
+                        streamIsOllamaCloudProxy, maxTokens);
             }
 
             var json = JsonConvert.SerializeObject(reqBody);
@@ -3861,6 +3892,7 @@ namespace KokonoeAssistant.Services
             var target = ResolveAgentTarget(agentId);
             var isClaude = target.Provider.Equals("claude", StringComparison.OrdinalIgnoreCase);
             var isOllamaCloud = target.Provider.Equals("ollama-cloud", StringComparison.OrdinalIgnoreCase);
+            var isOllamaCloudProxy = target.Provider.Equals("ollama-cloud-proxy", StringComparison.OrdinalIgnoreCase);
             var targetUrl = target.Url;
             var targetModel = target.Model;
             var diagProvider = string.IsNullOrWhiteSpace(agentId) ? ActiveProviderLabel() : $"{target.Provider}:{agentId}";
@@ -3881,14 +3913,16 @@ namespace KokonoeAssistant.Services
             }
             else
             {
-                reqBody = new
-                {
-                    model = targetModel,
-                    max_tokens = MainMaxTokens,
-                    temperature = 0.5,
-                    messages = messages,
-                    stream = false
-                };
+                reqBody = AttachOllamaOptions(
+                    new
+                    {
+                        model = targetModel,
+                        max_tokens = MainMaxTokens,
+                        temperature = 0.5,
+                        messages = messages,
+                        stream = false
+                    },
+                    isOllamaCloudProxy, MainMaxTokens);
             }
 
             try
