@@ -33,7 +33,7 @@ namespace KokonoeAssistant.Services
                 url = _browser.Session.CurrentUrl,
                 title = _browser.Session.PageTitle,
                 status = _browser.Session.Status.ToString().ToLowerInvariant(),
-                lastScreenshot = _browser.Session.LastScreenshotPath,
+                hasScreenshot = !string.IsNullOrEmpty(_browser.Session.LastScreenshotPath),
                 historyCount = _browser.Session.History.Count
             };
         }
