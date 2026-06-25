@@ -179,7 +179,7 @@ export class ChatController {
 
   private onError(event: ChatEvent): void {
     if (event.streamId === this.activeStreamId)
-      this.fail(event.error ?? "Chat failed.", event.errorType === "timeout");
+      this.fail(event.error ?? "Chat failed.", event.errorType === "timeout" || event.errorType === "provider");
   }
 
   private onExternal(event: ChatEvent): void {

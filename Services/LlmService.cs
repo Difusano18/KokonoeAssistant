@@ -2194,12 +2194,32 @@ namespace KokonoeAssistant.Services
                 RecordLlmFailure(diagProvider, diagModel, diagChannel, null, "tool loop exhausted", diagWatch, "tool_loop");
                 return "[Kokonoe]: щось пішло не так з інструментами.";
             }
-            catch (OperationCanceledException)
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
             {
-                // Rollback to checkpoint
+                // The caller's own token fired (timeout from KokoWebChatBridgeService, or an
+                // explicit cancel) — a genuine cancellation. Let it propagate instead of
+                // swallowing it into fabricated reply text; callers that pass a real token
+                // already handle this (KokoWebChatBridgeService has dedicated catch blocks
+                // for it; other callers either pass CancellationToken.None, which can never
+                // land here, or wrap this call in their own try/catch).
                 lock (_histLock) { while (_history.Count > checkpoint) _history.RemoveAt(_history.Count - 1); }
                 RecordLlmFailure(diagProvider, diagModel, diagChannel, null, "cancelled", diagWatch, "cancelled");
-                return "[скасовано]";
+                throw;
+            }
+            catch (OperationCanceledException)
+            {
+                // ct itself is still live — this OperationCanceledException came from
+                // somewhere else, not a real cancellation. In practice: a connection-level
+                // failure against an unreachable/wrong URL (.NET's HttpClient/SocketsHttpHandler
+                // surfaces some connection resets as TaskCanceledException rather than
+                // HttpRequestException). This used to return the bare literal "[скасовано]"
+                // here, which is how that string ended up as the visible chat reply with zero
+                // explanation. "[Provider]" prefix is matched by
+                // KokoWebChatBridgeService.IsProviderError to route this to the chat.error UI
+                // instead of a normal reply bubble.
+                lock (_histLock) { while (_history.Count > checkpoint) _history.RemoveAt(_history.Count - 1); }
+                RecordLlmFailure(diagProvider, diagModel, diagChannel, null, "connection failed", diagWatch, "connection_error");
+                return "[Provider] З'єднання з провайдером перервано або URL недосяжний. Перевір Settings → Cloud Provider (URL і модель).";
             }
             catch (Exception ex)
             {

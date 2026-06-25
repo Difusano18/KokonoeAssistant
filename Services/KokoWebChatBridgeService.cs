@@ -127,6 +127,12 @@ namespace KokonoeAssistant.Services
                 }
 
                 reply ??= "";
+                if (IsProviderError(reply))
+                {
+                    _bridge.Publish("chat.error", new { streamId, error = reply, errorType = "provider" });
+                    return new { streamId, reply, streamed = false };
+                }
+
                 _bridge.Publish("chat.completed", new { streamId, reply, streamed = usedStreaming });
                 return new { streamId, reply, streamed = usedStreaming };
             }
@@ -181,6 +187,19 @@ namespace KokonoeAssistant.Services
         {
             _disposed = true;
         }
+
+        // LlmService.SendAsync can't change its return type to a richer result without
+        // breaking every other caller, so on provider/connection failure it returns the
+        // failure as plain reply text instead of throwing. These are the prefixes/markers
+        // it uses for that (see LlmService.BuildFriendlyLlmError and SendAsync's catch
+        // blocks) — kept in sync by hand since there's no shared type between the two files.
+        private static bool IsProviderError(string reply) =>
+            reply.StartsWith("[Provider]", StringComparison.Ordinal) ||
+            reply.StartsWith("[Pool]", StringComparison.Ordinal) ||
+            reply.Contains("LLM-запит відхилено", StringComparison.Ordinal) ||
+            reply.Contains("відхилив LLM-запит", StringComparison.Ordinal) ||
+            reply.Contains("Сервер моделі впав", StringComparison.Ordinal) ||
+            reply.Contains("Ліміт запитів з'їдений", StringComparison.Ordinal);
 
         private static string Trim(string text, int max)
         {
