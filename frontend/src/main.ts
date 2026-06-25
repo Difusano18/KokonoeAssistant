@@ -42,12 +42,15 @@ const personaStatusText = document.getElementById("persona-status-text");
 interface PersonaStatus { mood: string; bond: string; connection: number; }
 
 interface SettingsSnapshot {
-  values: { llmProvider: string };
+  values: { llmProvider: string; ollamaUrl: string };
   credentials: { ollama: boolean; claude: boolean };
 }
 
+const ONBOARDING_DEFAULT_MESSAGE = "⚡ Додай API key у Settings → LLM Provider щоб почати";
+
 async function checkOnboarding(): Promise<void> {
   const banner = document.getElementById("onboarding-banner");
+  const messageSpan = banner?.querySelector("span");
   if (!banner) return;
   try {
     const snapshot = await window.koko.call<SettingsSnapshot>("settings.get", null, 5000);
@@ -55,7 +58,17 @@ async function checkOnboarding(): Promise<void> {
     const needsKey = provider === "ollama-cloud" ? !snapshot.credentials.ollama
       : provider === "claude" ? !snapshot.credentials.claude
       : false;
-    banner.style.display = needsKey ? "flex" : "none";
+    // ollama.com/v1/chat/... was never a working API endpoint (it's Ollama's website) —
+    // AppSettings.NormalizeDefaults migrates this away on load, so this mostly only
+    // matters if a user manually re-enters it in Settings after that migration ran.
+    const hasBadUrl = provider === "ollama-cloud" &&
+      (snapshot.values.ollamaUrl ?? "").includes("ollama.com/v1/chat");
+
+    if (messageSpan)
+      messageSpan.textContent = hasBadUrl
+        ? "⚠ URL провайдера виглядає неправильно (ollama.com — це сайт, не API). Перевір Settings → LLM Provider."
+        : ONBOARDING_DEFAULT_MESSAGE;
+    banner.style.display = needsKey || hasBadUrl ? "flex" : "none";
   } catch {
     banner.style.display = "none";
   }
