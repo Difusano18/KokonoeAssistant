@@ -85,21 +85,44 @@ namespace KokonoeAssistant.Services
 
     public sealed class KokoAgentTaskService
     {
+        // Distinguishes WHY a step produced no usable result, instead of collapsing every
+        // empty/failed executor call into one generic "failed" — a timeout (worth retrying),
+        // an empty-but-harmless result (often just means the task was too simple to need a
+        // plan), and a named operational breakage (vision/system-control/etc. actually
+        // misconfigured) all need different handling and different user-facing text.
+        private enum StepOutcomeKind { Success, EmptyButValid, RetryableFailure, FatalFailure }
+
         private sealed class StepExecutionOutcome
         {
-            public bool Success { get; init; }
+            public StepOutcomeKind Kind { get; init; }
             public string Result { get; init; } = "";
             public string? Error { get; init; }
+            // EmptyButValid is not a failure: the step is done, it just had nothing to say.
+            public bool Success => Kind is StepOutcomeKind.Success or StepOutcomeKind.EmptyButValid;
 
             public static StepExecutionOutcome Succeeded(string result) => new()
             {
-                Success = true,
+                Kind = StepOutcomeKind.Success,
                 Result = result
             };
 
-            public static StepExecutionOutcome Failed(string result, string error) => new()
+            public static StepExecutionOutcome EmptyButValidResult(string reason) => new()
             {
-                Success = false,
+                Kind = StepOutcomeKind.EmptyButValid,
+                Result = "",
+                Error = reason
+            };
+
+            public static StepExecutionOutcome RetryableFailure(string result, string error) => new()
+            {
+                Kind = StepOutcomeKind.RetryableFailure,
+                Result = result,
+                Error = error
+            };
+
+            public static StepExecutionOutcome FatalFailure(string result, string error) => new()
+            {
+                Kind = StepOutcomeKind.FatalFailure,
                 Result = result,
                 Error = error
             };
@@ -433,13 +456,15 @@ namespace KokonoeAssistant.Services
         private async Task<StepExecutionOutcome> ExecuteStepCoreAsync(KokoAgentTask task, KokoAgentStep step, CancellationToken ct)
         {
             var result = await ExecuteStepResultAsync(task, step, ct).ConfigureAwait(false);
-            var isEmpty = string.IsNullOrWhiteSpace(result) || result.Trim().Equals("(empty result)", StringComparison.OrdinalIgnoreCase);
+            var trimmed = result?.Trim() ?? "";
+            var wasTimeout = trimmed.Equals("(timeout)", StringComparison.OrdinalIgnoreCase);
+            var isEmpty = !wasTimeout && (trimmed.Length == 0 || trimmed.Equals("(empty result)", StringComparison.OrdinalIgnoreCase));
             if (isEmpty && step.Kind == KokoAgentStepKind.Analyze)
             {
                 KokoSystemLog.Write("APEO", $"Analyze returned empty for: {Trim(task.Objective, 80)}. Using pass-through.");
                 result = $"[auto-analyze] Objective: {task.Objective}. Proceed with direct execution.";
             }
-            return ClassifyStepOutcome(step.Kind, result);
+            return ClassifyStepOutcome(step.Kind, result, wasTimeout);
         }
 
         private async Task<string> ExecuteStepResultAsync(KokoAgentTask task, KokoAgentStep step, CancellationToken ct)
@@ -537,17 +562,30 @@ namespace KokonoeAssistant.Services
                 catch (OperationCanceledException) when (timeoutCts.IsCancellationRequested)
                 {
                     KokoSystemLog.Write("APEO", $"{step.Kind} executor timed out after 30s for: {Trim(task.Objective, 80)}.");
-                    result = "";
+                    result = "(timeout)";
                 }
             }
             return string.IsNullOrWhiteSpace(result) ? "(empty result)" : result.Trim();
         }
 
-        private static StepExecutionOutcome ClassifyStepOutcome(KokoAgentStepKind kind, string? result)
+        private static StepExecutionOutcome ClassifyStepOutcome(KokoAgentStepKind kind, string? result, bool wasTimeout)
         {
             var text = result?.Trim() ?? "";
+            KokoSystemLog.Write("APEO", $"{kind} outcome (agent={AgentIdFor(kind)}); raw[0:200]: {Trim(text, 200)}");
+
+            if (wasTimeout)
+            {
+                var error = $"{kind} timed out — провайдер повільний або недоступний.";
+                KokoSystemLog.Write("APEO", $"{kind} classified RetryableFailure: {error}");
+                return StepExecutionOutcome.RetryableFailure(text, error);
+            }
+
             if (string.IsNullOrWhiteSpace(text) || text.Equals("(empty result)", StringComparison.OrdinalIgnoreCase))
-                return StepExecutionOutcome.Failed(text, $"{kind} executor returned an empty result.");
+            {
+                var reason = $"{kind}: модель не згенерувала результат (можливо задача надто проста).";
+                KokoSystemLog.Write("APEO", $"{kind} classified EmptyButValid: {reason}");
+                return StepExecutionOutcome.EmptyButValidResult(reason);
+            }
 
             var operationalFailure = kind switch
             {
@@ -564,9 +602,14 @@ namespace KokonoeAssistant.Services
                 _ => false
             };
 
-            return operationalFailure
-                ? StepExecutionOutcome.Failed(text, Trim(FirstUsefulLine(text), 320))
-                : StepExecutionOutcome.Succeeded(text);
+            if (operationalFailure)
+            {
+                var error = Trim(FirstUsefulLine(text), 320);
+                KokoSystemLog.Write("APEO", $"{kind} classified FatalFailure: {error}");
+                return StepExecutionOutcome.FatalFailure(text, error);
+            }
+
+            return StepExecutionOutcome.Succeeded(text);
         }
 
         private static bool StartsWithAny(string text, params string[] prefixes)
