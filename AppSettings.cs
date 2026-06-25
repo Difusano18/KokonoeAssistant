@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using KokonoeAssistant.Models;
 using KokonoeAssistant.Services;
 using Newtonsoft.Json;
 
@@ -75,6 +76,12 @@ namespace KokonoeAssistant
         // Optional per-agent overrides. Keys are logical agent ids:
         // obsidian, system, research, coder, vision, chat.
         public Dictionary<string, KokoAgentLlmProfile> AgentLlmProfiles { get; set; } = new();
+
+        // User-managed pool of named specialist agents Kokonoe can delegate
+        // sub-tasks to via the delegate_to_agent tool. Distinct from
+        // AgentLlmProfiles above (fixed internal role overrides) — this is a
+        // dynamic, user-facing list with full CRUD via the Agents tab.
+        public List<AgentDefinition> AgentPool { get; set; } = new();
 
         // OpenAI (for Whisper STT)
         public string OpenAiApiKey { get; set; } = "";
