@@ -831,6 +831,14 @@
               <div id="autonomy-segment" class="segment" role="group" aria-label="Proactive autonomy">
                 <button type="button" data-value="0">Quiet</button><button type="button" data-value="1">Guarded</button><button type="button" data-value="2">Active</button><button type="button" data-value="3">Alive</button>
               </div>
+              <div class="setting-row">
+                <label for="response-style">Стиль відповідей</label>
+                <select id="response-style" class="settings-select">
+                  <option value="concise">Концептуальний — стисло, без води</option>
+                  <option value="balanced">Збалансований</option>
+                  <option value="deep">Детальний — повні пояснення</option>
+                </select>
+              </div>
               <div class="setting-row"><label for="spontaneous-enabled">Spontaneous messages</label><input id="spontaneous-enabled" type="checkbox"></div>
               <div class="setting-row"><label for="spontaneous-mins">Message interval</label><input id="spontaneous-mins" type="number" min="10" max="240" step="5"></div>
               <div class="setting-row"><label for="neural-governor">Neural governor</label><input id="neural-governor" type="checkbox"></div>

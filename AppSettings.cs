@@ -175,6 +175,8 @@ namespace KokonoeAssistant
         public int  MemoryUpdateEveryN  { get; set; } = 6;
         public string MatrixColor       { get; set; } = "#5FC1B3";
         public string UiShell           { get; set; } = "web";
+        // "concise" | "balanced" | "deep" — injected into the system prompt as a length hint
+        public string ResponseStyle     { get; set; } = "balanced";
 
         // Voice
         public bool VoiceInputEnabled { get; set; } = true;

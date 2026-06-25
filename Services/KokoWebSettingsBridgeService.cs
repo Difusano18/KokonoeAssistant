@@ -16,6 +16,10 @@ namespace KokonoeAssistant.Services
         {
             "lmstudio", "ollama", "ollama-cloud", "claude", "ollama-cloud-proxy"
         };
+        private static readonly HashSet<string> ResponseStyles = new(StringComparer.OrdinalIgnoreCase)
+        {
+            "concise", "balanced", "deep"
+        };
         private readonly KokoWebBridgeService _bridge;
         private readonly Func<AppSettings> _load;
         private readonly Func<AppSettings, string?> _save;
@@ -190,6 +194,17 @@ namespace KokonoeAssistant.Services
                     changed.Add("matrixColor");
                 }
             }
+            if (values.TryGetValue("responseStyle", StringComparison.OrdinalIgnoreCase, out var styleToken))
+            {
+                var style = styleToken?.ToString()?.Trim() ?? "";
+                if (!ResponseStyles.Contains(style))
+                    throw new InvalidOperationException("responseStyle must be one of: " + string.Join(", ", ResponseStyles));
+                if (!string.Equals(settings.ResponseStyle, style, StringComparison.OrdinalIgnoreCase))
+                {
+                    settings.ResponseStyle = style;
+                    changed.Add("responseStyle");
+                }
+            }
 
             if (changed.Count > 0)
             {
@@ -233,6 +248,7 @@ namespace KokonoeAssistant.Services
                 wearBridgeEnabled = settings.WearBridgeEnabled,
                 wearBridgeIncludePromptContext = settings.WearBridgeIncludePromptContext,
                 matrixColor = settings.MatrixColor,
+                responseStyle = settings.ResponseStyle,
                 llmProvider = settings.LlmProvider,
                 ollamaUrl = settings.OllamaUrl,
                 ollamaModel = settings.OllamaModel,

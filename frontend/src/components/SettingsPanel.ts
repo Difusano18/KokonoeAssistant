@@ -45,6 +45,7 @@ export class SettingsPanelController {
   private readonly claudeModel = document.getElementById("claude-model") as HTMLInputElement;
   private readonly tavilyKey = document.getElementById("tavily-key") as HTMLInputElement;
   private readonly tavilyKeyClear = document.getElementById("tavily-key-clear") as HTMLButtonElement;
+  private readonly responseStyle = document.getElementById("response-style") as HTMLSelectElement;
   private readonly color = document.getElementById("matrix-color") as HTMLInputElement;
   private readonly colorText = document.getElementById("matrix-color-text")!;
   private readonly plexusToggle = document.getElementById("plexus-enabled") as HTMLInputElement;
@@ -200,6 +201,9 @@ export class SettingsPanelController {
     this.tavilyKey.value = "";
     delete this.tavilyKey.dataset.cleared;
     this.tavilyKey.placeholder = snapshot.credentials?.tavily ? "•••• configured (leave blank to keep)" : "tvly-...";
+    this.responseStyle.value = ["concise", "balanced", "deep"].includes(String(values.responseStyle))
+      ? String(values.responseStyle)
+      : "balanced";
     this.color.value = /^#[0-9a-f]{6}$/i.test(String(values.matrixColor ?? "")) ? String(values.matrixColor) : "#5fc1b3";
     this.colorText.textContent = this.color.value.toUpperCase();
     document.documentElement.style.setProperty("--accent", this.color.value);
@@ -209,6 +213,7 @@ export class SettingsPanelController {
   private read(): SettingsValues {
     const values: SettingsValues = {
       proactiveAutonomyLevel: this.autonomy,
+      responseStyle: this.responseStyle.value,
       matrixColor: this.color.value.toUpperCase(),
       llmProvider: this.llmProvider,
       lmUrl: this.lmUrl.value.trim(),

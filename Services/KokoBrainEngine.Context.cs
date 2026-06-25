@@ -888,6 +888,15 @@ namespace KokonoeAssistant.Services
             }
             catch (Exception ex) { KokoSystemLog.Write("BRAIN-CATCH", "BuildPersonalityInjection failed near source line 2479: " + ex); }
 
+            var styleHint = AppSettings.Load().ResponseStyle switch
+            {
+                "concise" => "\nВідповідай стисло: 3-5 речень максимум. Без преамбул і повторів.",
+                "deep"    => "\nДавай повні детальні відповіді з прикладами.",
+                _         => ""
+            };
+            if (!string.IsNullOrEmpty(styleHint))
+                sb.AppendLine(styleHint);
+
             return sb.ToString();
         }
 
