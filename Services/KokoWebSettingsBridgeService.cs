@@ -13,7 +13,7 @@ namespace KokonoeAssistant.Services
         private static readonly Regex HexColor = new("^#[0-9a-fA-F]{6}$", RegexOptions.Compiled);
         private static readonly HashSet<string> LlmProviders = new(StringComparer.OrdinalIgnoreCase)
         {
-            "lmstudio", "ollama", "ollama-cloud", "claude"
+            "lmstudio", "ollama", "ollama-cloud", "claude", "ollama-cloud-proxy"
         };
         private readonly KokoWebBridgeService _bridge;
         private readonly Func<AppSettings> _load;
@@ -118,6 +118,8 @@ namespace KokonoeAssistant.Services
                 value => settings.OllamaUrl = value, changed);
             ApplyString(values, "ollamaModel", 256, settings.OllamaModel,
                 value => settings.OllamaModel = value, changed);
+            ApplyString(values, "ollamaCloudProxyModel", 256, settings.OllamaCloudProxyModel,
+                value => settings.OllamaCloudProxyModel = value, changed);
             if (values.TryGetValue("ollamaApiKey", StringComparison.OrdinalIgnoreCase, out var ollamaKeyToken))
             {
                 var key = ollamaKeyToken?.ToString()?.Trim() ?? "";
@@ -234,6 +236,7 @@ namespace KokonoeAssistant.Services
                 llmProvider = settings.LlmProvider,
                 ollamaUrl = settings.OllamaUrl,
                 ollamaModel = settings.OllamaModel,
+                ollamaCloudProxyModel = settings.OllamaCloudProxyModel,
                 lmUrl = settings.LmUrl,
                 lmModel = settings.Model,
                 claudeModel = settings.ClaudeModel,

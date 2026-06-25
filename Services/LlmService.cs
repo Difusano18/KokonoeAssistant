@@ -32,9 +32,11 @@ namespace KokonoeAssistant.Services
         private string _ollamaModel;
         private string _visionModel;
         private string _visionUrl = "";
+        private string _ollamaCloudProxyModel = "gpt-oss:120b-cloud";
         private Dictionary<string, KokoAgentLlmProfile> _agentProfiles = new(StringComparer.OrdinalIgnoreCase);
 
         private const string CLAUDE_API_URL = "https://api.anthropic.com/v1/messages";
+        private const string OLLAMA_CLOUD_PROXY_URL = "http://localhost:11434/v1/chat/completions";
 
         // Constants for history management
         private const int MAX_HISTORY_ENTRIES = 30;
@@ -345,13 +347,20 @@ namespace KokonoeAssistant.Services
             var profile = ResolveAgentProfile(agentId);
             var provider = string.IsNullOrWhiteSpace(profile?.LlmProvider) ? _provider : profile!.LlmProvider.Trim();
             var isOllamaCloud = provider.Equals("ollama-cloud", StringComparison.OrdinalIgnoreCase);
+            var isOllamaCloudProxy = provider.Equals("ollama-cloud-proxy", StringComparison.OrdinalIgnoreCase);
             var isClaude = provider.Equals("claude", StringComparison.OrdinalIgnoreCase);
             var url = !string.IsNullOrWhiteSpace(profile?.Url)
                 ? profile!.Url.Trim()
-                : isClaude ? CLAUDE_API_URL : isOllamaCloud ? _ollamaUrl : _lmUrl;
+                : isClaude ? CLAUDE_API_URL
+                : isOllamaCloud ? _ollamaUrl
+                : isOllamaCloudProxy ? OLLAMA_CLOUD_PROXY_URL
+                : _lmUrl;
             var model = !string.IsNullOrWhiteSpace(profile?.Model)
                 ? profile!.Model.Trim()
-                : isClaude ? _claudeModel : isOllamaCloud ? _ollamaModel : _model;
+                : isClaude ? _claudeModel
+                : isOllamaCloud ? _ollamaModel
+                : isOllamaCloudProxy ? _ollamaCloudProxyModel
+                : _model;
             var temperature = profile?.Temperature.HasValue == true
                 ? Math.Clamp(profile.Temperature.Value, 0.0, 2.0)
                 : DynamicTemperature;
@@ -870,6 +879,7 @@ namespace KokonoeAssistant.Services
         {
             if (IsClaude) return "Claude";
             if (IsOllamaCloud) return "Ollama Cloud";
+            if (IsOllamaCloudProxy) return "Ollama Cloud (local proxy)";
             if (IsOllamaLocal) return "Ollama Local";
             if (_provider.Equals("lmstudio", StringComparison.OrdinalIgnoreCase)) return "LM Studio";
             return string.IsNullOrWhiteSpace(_provider) ? "OpenAI-compatible" : _provider;
@@ -880,6 +890,7 @@ namespace KokonoeAssistant.Services
             if (imageRequest && !string.IsNullOrWhiteSpace(_visionModel)) return _visionModel;
             if (IsClaude) return _claudeModel;
             if (IsOllamaCloud) return _ollamaModel;
+            if (IsOllamaCloudProxy) return _ollamaCloudProxyModel;
             return _model;
         }
 
@@ -950,6 +961,7 @@ namespace KokonoeAssistant.Services
             _ollamaApiKey = s.OllamaApiKey;
             _ollamaUrl = s.OllamaUrl;
             _ollamaModel = s.OllamaModel;
+            _ollamaCloudProxyModel = s.OllamaCloudProxyModel;
             _visionModel = NormalizeVisionModel(s);
             _visionUrl = s.VisionUrl;
             _agentProfiles = new Dictionary<string, KokoAgentLlmProfile>(
@@ -970,6 +982,7 @@ namespace KokonoeAssistant.Services
             _ollamaApiKey = s.OllamaApiKey;
             _ollamaUrl = s.OllamaUrl;
             _ollamaModel = s.OllamaModel;
+            _ollamaCloudProxyModel = s.OllamaCloudProxyModel;
             _visionModel = NormalizeVisionModel(s);
             _visionUrl = s.VisionUrl;
             _agentProfiles = new Dictionary<string, KokoAgentLlmProfile>(
@@ -984,6 +997,7 @@ namespace KokonoeAssistant.Services
         }
 
         private bool IsOllamaCloud => _provider.Equals("ollama-cloud", StringComparison.OrdinalIgnoreCase);
+        private bool IsOllamaCloudProxy => _provider.Equals("ollama-cloud-proxy", StringComparison.OrdinalIgnoreCase);
         private bool IsOllamaLocal => _provider.Equals("ollama", StringComparison.OrdinalIgnoreCase);
         private bool IsClaude => _provider.Equals("claude", StringComparison.OrdinalIgnoreCase);
 

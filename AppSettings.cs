@@ -66,6 +66,14 @@ namespace KokonoeAssistant
         public string ClaudeApiKey { get; set; } = "";
         public string ClaudeModel  { get; set; } = "claude-sonnet-4-6";
 
+        // Ollama Cloud via local proxy — not a standalone hosted API (confirmed: no
+        // working "https://ollama.com/v1/..." endpoint exists, see DefaultOllamaCloudUrl
+        // above). Cloud-hosted models are reached through a local Ollama install signed
+        // in via `ollama signin`, which proxies -cloud-suffixed model requests through
+        // its own OpenAI-compatible endpoint at localhost:11434. URL is hardcoded, not a
+        // setting — it's always that local address, never something a user should edit.
+        public string OllamaCloudProxyModel { get; set; } = "gpt-oss:120b-cloud";
+
         // Ollama Cloud (OpenAI-compatible endpoint, Bearer auth)
         // OllamaApiKey — legacy (single-key); тепер пул у OllamaKeys (нижче)
         public string OllamaApiKey { get; set; } = "";
