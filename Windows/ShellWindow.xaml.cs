@@ -20,6 +20,7 @@ namespace KokonoeAssistant.Windows
         private KokoWebRuntimeBridgeService? _runtimeBridge;
         private KokoWebSystemBridgeService? _systemBridge;
         private KokoWebWearBridgeService? _wearBridge;
+        private KokoWebAgentPoolBridgeService? _agentPoolBridge;
         private Action<string, string>? _brainMessageHandler;
         private bool _preserveServicesOnClose;
 
@@ -99,6 +100,7 @@ namespace KokonoeAssistant.Windows
                 _personaBridge = new KokoWebPersonaBridgeService(_bridge, ServiceContainer.EmotionEngine);
                 _runtimeBridge = new KokoWebRuntimeBridgeService(_bridge);
                 _wearBridge = new KokoWebWearBridgeService(_bridge, ServiceContainer.WearableTelemetry, ServiceContainer.WearableBridge);
+                _agentPoolBridge = new KokoWebAgentPoolBridgeService(_bridge, ServiceContainer.AgentPool);
                 _systemBridge = new KokoWebSystemBridgeService(_bridge, ServiceContainer.SystemOverlord);
                 _brainMessageHandler = (role, content) => _chatBridge?.PublishExternalMessage(role, content);
                 ServiceContainer.BrainEngine.OnNewMessage = _brainMessageHandler;
