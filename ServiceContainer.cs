@@ -398,6 +398,7 @@ namespace KokonoeAssistant
                         gateway.Register(new KokoBrowserCloseToolHandler(browser));
                         KokoSystemLog.Write("GATEWAY", "Browser tools registered (8 handlers)");
                     }
+                    gateway.Register(new KokoArtifactSaveToolHandler(Artifacts));
                     _toolGateway = gateway;
                     return _toolGateway;
                 }

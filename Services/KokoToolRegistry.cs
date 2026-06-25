@@ -118,6 +118,7 @@ namespace KokonoeAssistant.Services
             "browser.scroll" => Descriptor(name, "Scroll the page up or down by a pixel amount.", "browser", KokoToolRisk.Write, false, new[] { "direction", "pixels" }, "browser"),
             "browser.wait_for" => Descriptor(name, "Wait for an element to appear, e.g. after a click triggers loading.", "browser", KokoToolRisk.ReadOnly, false, new[] { "selector", "timeoutMs" }, "browser"),
             "browser.close" => Descriptor(name, "Close the browser session.", "browser", KokoToolRisk.Write, false, Array.Empty<string>(), "browser"),
+            "artifact.save" => Descriptor(name, "Save a research result, extracted data, code, or note as a named artifact file the user can open. kind: markdown/html/csv/json/patch/note (default plain text).", "artifacts", KokoToolRisk.Write, false, new[] { "title", "content", "kind", "sourceUrl" }, "artifacts"),
             _ => Descriptor(name, "Registered runtime tool.", "general", KokoToolRisk.ReadOnly, false, Array.Empty<string>())
         };
 

@@ -466,6 +466,7 @@ namespace KokonoeAssistant.Services
                 AppendStaticVaultNote(sb, "Kokonoe/Рефлексія.md", "REFLECTION", 500);
                 sb.Append(BuildAgentPoolSection());
                 sb.Append(BuildBrowserSection());
+                sb.Append(BuildArtifactSection());
 
                 var built = sb.ToString();
                 lock (_lock)
@@ -525,6 +526,18 @@ namespace KokonoeAssistant.Services
             - Browser sessions persist during conversation — you can continue where you left off
             """;
         }
+
+        private string BuildArtifactSection() => """
+
+            ## Saving Results as Artifacts
+            Use `artifact.save(title, content, kind, sourceUrl?)` when you produce something worth keeping as a file:
+            - A research summary -> kind="markdown"
+            - Extracted data table -> kind="csv"
+            - Code snippet or patch -> kind="patch"
+            - A note for Obsidian -> kind="note"
+
+            After saving, tell the user: "Saved as artifact: [title]"
+            """;
 
         private void AppendStaticVaultNote(StringBuilder sb, string path, string heading, int maxChars)
         {
