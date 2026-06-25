@@ -358,6 +358,7 @@ namespace KokonoeAssistant
                     gateway.Register(new KokoCodeActToolHandler(
                         Path.Combine(_vault ?? AppDomain.CurrentDomain.BaseDirectory, "kokonoe-data")));
                     gateway.Register(new KokoAgentDelegationToolHandler(AgentPool));
+                    gateway.Register(new KokoWebSearchToolHandler());
                     _toolGateway = gateway;
                     return _toolGateway;
                 }
