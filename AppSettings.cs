@@ -90,6 +90,10 @@ namespace KokonoeAssistant
         // HTML scrape when set
         public string TavilyApiKey { get; set; } = "";
 
+        // Browser operator (Playwright)
+        public bool BrowserEnabled { get; set; } = true;
+        public bool BrowserHeadless { get; set; } = false; // false = visible window
+
         // Vault
         public string VaultPath { get; set; } = @"O:\App\Obsidian\MyBrain\Yasus";
 

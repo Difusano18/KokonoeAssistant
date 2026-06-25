@@ -44,6 +44,7 @@ namespace KokonoeAssistant
         private static KokoAgentTaskService?   _agentTasks;
         private static KokoAgentPoolService?   _agentPool;
         private static KokoAgentRuntimeService? _agentRuntime;
+        private static KokoBrowserOperatorService? _browserOperator;
         private static KokoIterativeAgentLoop? _agentLoop;
         private static KokoFileSystemToolService? _fileTools;
         private static IKokoToolGateway? _toolGateway;
@@ -269,6 +270,11 @@ namespace KokonoeAssistant
         public static KokoAgentPoolService AgentPool
         {
             get { lock (_lock) { return _agentPool ??= new KokoAgentPoolService(); } }
+        }
+
+        public static KokoBrowserOperatorService BrowserOperator
+        {
+            get { lock (_lock) { return _browserOperator ??= new KokoBrowserOperatorService(); } }
         }
 
         public static KokoAgentRuntimeService AgentRuntime
