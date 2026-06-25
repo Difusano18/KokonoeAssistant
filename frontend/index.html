@@ -262,6 +262,33 @@
     .agent-task-detail { margin: 9px 0 0; color: var(--text-3); font-size: 10.5px; line-height: 1.5; overflow-wrap: anywhere; }
     .agent-empty { color: var(--text-3); font-size: 11px; line-height: 1.5; }
 
+    /* ---------- agents page ---------- */
+    .agents-page { padding: 28px 32px; display: flex; flex-direction: column; gap: 24px; height: 100%; overflow-y: auto; position: relative; }
+    .agents-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+    .agents-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px; }
+    .agent-card { border: 1px solid var(--line-2); border-radius: 8px; padding: 16px; background: var(--card); display: flex; flex-direction: column; gap: 10px; transition: border-color 200ms ease; }
+    .agent-card:hover { border-color: var(--accent-border); }
+    .agent-card-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+    .agent-name { font-size: 14px; font-weight: 600; color: var(--text); }
+    .agent-model { font: 10px "IBM Plex Mono", Consolas, monospace; color: var(--accent); opacity: .8; }
+    .agent-desc { font-size: 11px; color: var(--text-3); line-height: 1.5; }
+    .agent-meta { display: flex; gap: 12px; font: 10px "IBM Plex Mono", Consolas, monospace; color: var(--text-4); }
+    .agent-status-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); flex-shrink: 0; }
+    .agent-status-dot.disabled { background: var(--text-4); }
+    .agent-form-overlay { position: absolute; inset: 0; background: rgba(8,11,16,.85); backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center; z-index: 10; }
+    .agent-form { width: 480px; max-height: 90vh; background: var(--surface-2); border: 1px solid var(--line-2); border-radius: 10px; padding: 24px; display: flex; flex-direction: column; gap: 16px; overflow-y: auto; }
+    .agent-form-header { display: flex; align-items: center; justify-content: space-between; }
+    .agent-form-header h3 { margin: 0; font-size: 16px; }
+    .form-field { display: flex; flex-direction: column; gap: 6px; }
+    .form-field label { font-size: 11px; color: var(--text-3); }
+    .form-field input[type="text"], .form-field input[type="password"], .form-field input[type="number"] {
+      padding: 8px 12px; border: 1px solid var(--line-2); border-radius: 6px;
+      background: var(--input); color: var(--text); font: 12px "IBM Plex Mono", Consolas, monospace;
+      transition: border-color var(--motion-fast) ease;
+    }
+    .form-field input:focus { outline: none; border-color: var(--accent-border); }
+    .agent-form-actions { display: flex; align-items: center; gap: 10px; padding-top: 8px; border-top: 1px solid var(--line); }
+
     /* ---------- workspace boards (tasks / memory / telemetry) ---------- */
     .workspace-board { padding: 26px 30px; max-width: 980px; }
     .workspace-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px,1fr)); gap: 12px; margin: 14px 0 18px; }
@@ -529,6 +556,14 @@
       <button title="Tasks" aria-label="Tasks" data-panel="tasks">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="m8 12 2.2 2.2L15 9.5M8 9.5h.01"/></svg>
       </button>
+      <button title="Agent Pool (Ctrl+5)" aria-label="Agent Pool" data-panel="agents">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+          <circle cx="12" cy="8" r="4"/>
+          <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/>
+          <circle cx="20" cy="6" r="2.5" fill="currentColor" stroke="none" opacity=".6"/>
+          <circle cx="4" cy="6" r="2.5" fill="currentColor" stroke="none" opacity=".6"/>
+        </svg>
+      </button>
       <button title="Memory" aria-label="Memory" data-panel="memory">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 3 8l9 5 9-5z"/><path d="m3 12 9 5 9-5M3 16l9 5 9-5"/></svg>
       </button>
@@ -712,6 +747,68 @@
             <div class="settings-actions"><output id="settings-status">Host connection required.</output><button id="settings-save" class="save-button" type="submit" disabled>Save</button></div>
           </div>
         </form>
+      </section>
+      <section id="panel-agents" class="workspace" style="display:none" aria-live="polite">
+        <div class="agents-page">
+          <div class="agents-header">
+            <div>
+              <p class="eyebrow">AGENT POOL</p>
+              <h2 style="margin:0;font-size:20px">Спеціалізовані агенти</h2>
+              <p class="subhead">Kokonoe сама вирішує кого залучити для кожної задачі</p>
+            </div>
+            <button id="agent-add-btn" class="save-button" type="button">+ Додати агента</button>
+          </div>
+
+          <div id="agents-grid" class="agents-grid"></div>
+
+          <div id="agent-form-overlay" class="agent-form-overlay" style="display:none">
+            <div class="agent-form">
+              <div class="agent-form-header">
+                <h3 id="agent-form-title">Новий агент</h3>
+                <button id="agent-form-close" class="icon-button" type="button">
+                  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M6 6 18 18M18 6 6 18"/></svg>
+                </button>
+              </div>
+
+              <input type="hidden" id="af-id">
+
+              <div class="form-field">
+                <label for="af-name">Ім'я агента</label>
+                <input type="text" id="af-name" placeholder="напр. Аналітик, Кодер, Швидкий">
+              </div>
+              <div class="form-field">
+                <label for="af-desc">Опис (Kokonoe бачить це при виборі)</label>
+                <input type="text" id="af-desc" placeholder="напр. Швидкі відповіді, короткий контекст">
+              </div>
+              <div class="form-field">
+                <label for="af-url">Base URL (OpenAI-compatible)</label>
+                <input type="text" id="af-url" placeholder="https://api.groq.com/openai/v1">
+              </div>
+              <div class="form-field">
+                <label for="af-key">API Key</label>
+                <input type="password" id="af-key" placeholder="sk-... (залиш порожнім щоб не змінювати)">
+              </div>
+              <div class="form-field">
+                <label for="af-model">Модель</label>
+                <input type="text" id="af-model" placeholder="llama-3.1-8b-instant">
+              </div>
+              <div class="form-field">
+                <label for="af-tokens">Max tokens</label>
+                <input type="number" id="af-tokens" value="4096" min="512" max="32000" step="512">
+              </div>
+              <div class="form-field" style="flex-direction:row;align-items:center;gap:10px">
+                <label for="af-enabled">Активний</label>
+                <input type="checkbox" id="af-enabled" checked>
+              </div>
+
+              <div class="agent-form-actions">
+                <button id="af-test-btn" class="action-button" type="button">⚡ Тест</button>
+                <span id="af-test-result" style="font-size:11px;color:var(--text-3)"></span>
+                <button id="af-save-btn" class="save-button" type="button" style="margin-left:auto">Зберегти</button>
+              </div>
+            </div>
+          </div>
+        </div>
       </section>
       <form id="chat-form" class="composer">
         <div class="composer-field">

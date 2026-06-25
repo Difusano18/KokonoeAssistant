@@ -1,5 +1,6 @@
 import "./bridge";
 import { AgentBoardController } from "./components/AgentBoard";
+import { AgentsPage } from "./components/AgentsPage";
 import { ChatController } from "./components/Chat";
 import { MotionController } from "./components/MotionController";
 import { initPlexus } from "./components/Plexus";
@@ -24,6 +25,7 @@ const chat = new ChatController(
   required("chat-status")
 );
 const agents = new AgentBoardController();
+const agentsPage = new AgentsPage();
 const vault = new VaultPanelController();
 const settings = new SettingsPanelController();
 const telegram = new TelegramPanelController();
@@ -102,6 +104,7 @@ async function connectHost(): Promise<void> {
     telemetryRefreshButton.disabled = false;
     void refreshPersona();
     void checkOnboarding();
+    void agentsPage.init();
     window.setInterval(() => void refreshPersona(), 20000);
     window.setInterval(() => {
       refreshRuntime()
@@ -149,6 +152,7 @@ void connectHost();
 const panels: Record<string, HTMLElement | null> = {
   chat: document.getElementById("chat-scroll"),
   tasks: document.getElementById("panel-tasks"),
+  agents: document.getElementById("panel-agents"),
   memory: document.getElementById("panel-memory"),
   telemetry: document.getElementById("panel-telemetry"),
   settings: document.getElementById("panel-settings"),
@@ -186,7 +190,7 @@ async function resetChat(): Promise<void> {
 
 document.getElementById("new-chat-btn")?.addEventListener("click", () => void resetChat());
 
-const panelShortcutIds = ["chat", "tasks", "memory", "telemetry"];
+const panelShortcutIds = ["chat", "tasks", "memory", "telemetry", "agents"];
 
 document.addEventListener("keydown", e => {
   const mod = e.ctrlKey || e.metaKey;
@@ -202,7 +206,7 @@ document.addEventListener("keydown", e => {
     return;
   }
 
-  if (mod && ["1", "2", "3", "4"].includes(e.key)) {
+  if (mod && ["1", "2", "3", "4", "5"].includes(e.key)) {
     e.preventDefault();
     const panelId = panelShortcutIds[Number(e.key) - 1];
     if (panelId) switchPanel(panelId);
