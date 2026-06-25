@@ -102,6 +102,17 @@ namespace KokonoeAssistant.Services
                 var reply = streamed;
                 if (reply == null)
                 {
+                    // This is the only point KokoWebChatBridgeService can observe that the
+                    // model needed tool execution the streaming path couldn't handle —
+                    // it has no visibility into individual tool calls mid-stream (that
+                    // lives inside LlmService). Used as the proxy for "a real task is
+                    // starting" rather than a precise multi-step-task detector.
+                    _bridge.Publish("mission.started", new
+                    {
+                        streamId,
+                        goal = Trim(text, 100),
+                        startedAt = DateTimeOffset.UtcNow
+                    });
                     if (emittedChunks > 0)
                         _bridge.Publish("chat.reset", new { streamId, reason = "tool_fallback" });
                     var fallbackChunks = 0;
@@ -169,6 +180,13 @@ namespace KokonoeAssistant.Services
         public void Dispose()
         {
             _disposed = true;
+        }
+
+        private static string Trim(string text, int max)
+        {
+            if (string.IsNullOrWhiteSpace(text)) return "";
+            text = text.Replace("\r", " ").Replace("\n", " ").Trim();
+            return text.Length <= max ? text : text[..max] + "...";
         }
     }
 }

@@ -44,6 +44,7 @@ type ChatEvent = {
   errorType?: string;
   role?: string;
   content?: string;
+  goal?: string;
 };
 
 type ChatSendResult = {
@@ -84,6 +85,7 @@ export class ChatController {
     window.koko.on("chat.error", payload => this.onError(payload as ChatEvent));
     window.koko.on("chat.external", payload => this.onExternal(payload as ChatEvent));
     window.koko.on("artifact.new", payload => this.onArtifact(payload as ArtifactSummary));
+    window.koko.on("mission.started", payload => this.onMissionStarted(payload as ChatEvent));
   }
 
   setAvailable(available: boolean): void {
@@ -188,6 +190,29 @@ export class ChatController {
 
   private onArtifact(artifact: ArtifactSummary): void {
     this.messages.append(buildArtifactCard(artifact));
+    this.scrollToEnd();
+  }
+
+  private onMissionStarted(event: ChatEvent): void {
+    if (event.streamId !== this.activeStreamId || !this.activeBody) return;
+    const banner = document.createElement("div");
+    banner.className = "mission-banner";
+    const dot = document.createElement("div");
+    dot.className = "mission-dot";
+    const text = document.createElement("div");
+    const title = document.createElement("strong");
+    title.textContent = "Місія запущена";
+    const goal = document.createElement("span");
+    goal.textContent = event.goal ?? "";
+    text.append(title, goal);
+    banner.append(dot, text);
+    // The assistant's (empty/typing) bubble already exists by the time this
+    // fires — it was created synchronously when the message was sent, while
+    // this event only arrives once the server-side stream attempt has
+    // already failed over to tool fallback. Insert before that bubble's
+    // message row instead of appending, so the banner still reads as
+    // preceding the reply rather than trailing whatever's already there.
+    this.activeBody.closest(".message")?.before(banner);
     this.scrollToEnd();
   }
 

@@ -263,6 +263,22 @@
     .agent-task-detail { margin: 9px 0 0; color: var(--text-3); font-size: 10.5px; line-height: 1.5; overflow-wrap: anywhere; }
     .agent-empty { color: var(--text-3); font-size: 11px; line-height: 1.5; }
 
+    /* ---------- mission banner ---------- */
+    .mission-banner {
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 14px; margin: 8px 0;
+      border-left: 2px solid var(--accent);
+      background: color-mix(in srgb, var(--accent) 6%, transparent);
+      border-radius: 0 6px 6px 0;
+    }
+    .mission-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: var(--accent); flex-shrink: 0;
+      animation: runtime-pulse 1.5s ease-in-out infinite;
+    }
+    .mission-banner strong { display: block; font-size: 11px; color: var(--accent); margin-bottom: 2px; }
+    .mission-banner span { font-size: 11px; color: var(--text-3); }
+
     /* ---------- artifact cards ---------- */
     .artifact-card {
       border: 1px solid var(--accent-border); border-radius: 8px;
