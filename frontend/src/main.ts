@@ -253,6 +253,19 @@ window.koko.on("browser.screenshot", payload => {
 
 document.getElementById("browser-close-btn")?.addEventListener("click", () => void window.koko.call("browser.close"));
 
+document.getElementById("browser-task-form")?.addEventListener("submit", event => {
+  event.preventDefault();
+  const input = document.getElementById("browser-task-input") as HTMLInputElement | null;
+  const task = input?.value.trim() ?? "";
+  if (!task || !input) return;
+
+  const chatInput = document.getElementById("chat-input") as HTMLInputElement | null;
+  if (chatInput) chatInput.value = `[browser task] ${task}`;
+  switchPanel("chat");
+  (document.getElementById("chat-form") as HTMLFormElement | null)?.requestSubmit();
+  input.value = "";
+});
+
 const panelShortcutIds = ["chat", "tasks", "memory", "telemetry", "agents"];
 
 document.addEventListener("keydown", e => {
