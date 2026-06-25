@@ -14,6 +14,7 @@ import typescript from "highlight.js/lib/languages/typescript";
 import xml from "highlight.js/lib/languages/xml";
 import yaml from "highlight.js/lib/languages/yaml";
 import { marked } from "marked";
+import { buildArtifactCard, type ArtifactSummary } from "./ArtifactCard";
 import "highlight.js/styles/github-dark-dimmed.css";
 
 hljs.registerLanguage("bash", bash);
@@ -82,6 +83,7 @@ export class ChatController {
     window.koko.on("chat.completed", payload => this.onCompleted(payload as ChatEvent));
     window.koko.on("chat.error", payload => this.onError(payload as ChatEvent));
     window.koko.on("chat.external", payload => this.onExternal(payload as ChatEvent));
+    window.koko.on("artifact.new", payload => this.onArtifact(payload as ArtifactSummary));
   }
 
   setAvailable(available: boolean): void {
@@ -182,6 +184,11 @@ export class ChatController {
     const text = event.content?.trim() ?? "";
     if (!text) return;
     this.appendMessage(event.role === "system" ? "system" : "assistant", text);
+  }
+
+  private onArtifact(artifact: ArtifactSummary): void {
+    this.messages.append(buildArtifactCard(artifact));
+    this.scrollToEnd();
   }
 
   private appendMessage(role: "user" | "assistant" | "system", text: string, streaming = false): HTMLElement {

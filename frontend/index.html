@@ -263,6 +263,36 @@
     .agent-task-detail { margin: 9px 0 0; color: var(--text-3); font-size: 10.5px; line-height: 1.5; overflow-wrap: anywhere; }
     .agent-empty { color: var(--text-3); font-size: 11px; line-height: 1.5; }
 
+    /* ---------- artifact cards ---------- */
+    .artifact-card {
+      border: 1px solid var(--accent-border); border-radius: 8px;
+      margin: 8px 0; background: color-mix(in srgb, var(--accent) 5%, var(--card));
+      overflow: hidden; max-width: 600px;
+    }
+    .artifact-card-header { display: flex; align-items: center; gap: 10px; padding: 12px 14px; }
+    .artifact-icon { font-size: 18px; flex-shrink: 0; }
+    .artifact-info { flex: 1; min-width: 0; }
+    .artifact-title { display: block; font-size: 13px; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .artifact-meta { font: 10px "IBM Plex Mono", Consolas, monospace; color: var(--text-3); }
+    .artifact-open-btn {
+      width: 28px; height: 28px; flex-shrink: 0;
+      border: 1px solid var(--accent-border); border-radius: 5px;
+      background: transparent; color: var(--accent);
+      font-size: 14px; display: flex; align-items: center; justify-content: center;
+      transition: background var(--motion-fast) ease;
+    }
+    .artifact-open-btn:hover { background: var(--accent-soft); }
+    .artifact-preview {
+      padding: 8px 14px 10px; font: 11px "IBM Plex Mono", Consolas, monospace;
+      color: var(--text-3); border-top: 1px solid var(--line-2);
+      white-space: pre-wrap; word-break: break-word; max-height: 100px; overflow: hidden;
+    }
+    .artifact-source {
+      display: block; padding: 4px 14px 8px; font: 10px "IBM Plex Mono", Consolas, monospace;
+      color: var(--accent); opacity: .7; text-decoration: none;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+
     /* ---------- agents page ---------- */
     .agents-page { padding: 28px 32px; display: flex; flex-direction: column; gap: 24px; height: 100%; overflow-y: auto; position: relative; }
     .agents-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
@@ -565,6 +595,14 @@
           <circle cx="4" cy="6" r="2.5" fill="currentColor" stroke="none" opacity=".6"/>
         </svg>
       </button>
+      <button title="Artifacts" aria-label="Artifacts" data-panel="artifacts">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+          <polyline points="14 2 14 8 20 8"/>
+          <line x1="9" y1="13" x2="15" y2="13"/>
+          <line x1="9" y1="17" x2="13" y2="17"/>
+        </svg>
+      </button>
       <button title="Memory" aria-label="Memory" data-panel="memory">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 3 8l9 5 9-5z"/><path d="m3 12 9 5 9-5M3 16l9 5 9-5"/></svg>
       </button>
@@ -813,6 +851,15 @@
                 <button id="af-save-btn" class="save-button" type="button" style="margin-left:auto">Зберегти</button>
               </div>
             </div>
+          </div>
+        </div>
+      </section>
+      <section id="panel-artifacts" class="workspace" style="display:none" aria-live="polite">
+        <div class="workspace-board">
+          <p class="eyebrow">Artifacts</p>
+          <h1 style="margin:0 0 4px">Результати роботи агента</h1>
+          <div id="artifacts-list" style="margin-top:18px;display:flex;flex-direction:column;gap:10px">
+            <p class="agent-empty">Немає артефактів. Коли Kokonoe збереже результат роботи — він з'явиться тут.</p>
           </div>
         </div>
       </section>

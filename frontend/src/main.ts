@@ -1,6 +1,7 @@
 import "./bridge";
 import { AgentBoardController } from "./components/AgentBoard";
 import { AgentsPage } from "./components/AgentsPage";
+import { ArtifactsPanelController } from "./components/ArtifactsPanel";
 import { ChatController } from "./components/Chat";
 import { MotionController } from "./components/MotionController";
 import { initPlexus } from "./components/Plexus";
@@ -26,6 +27,7 @@ const chat = new ChatController(
 );
 const agents = new AgentBoardController();
 const agentsPage = new AgentsPage();
+const artifactsPanel = new ArtifactsPanelController();
 const vault = new VaultPanelController();
 const settings = new SettingsPanelController();
 const telegram = new TelegramPanelController();
@@ -105,6 +107,7 @@ async function connectHost(): Promise<void> {
     void refreshPersona();
     void checkOnboarding();
     void agentsPage.init();
+    void artifactsPanel.init();
     window.setInterval(() => void refreshPersona(), 20000);
     window.setInterval(() => {
       refreshRuntime()
@@ -153,6 +156,7 @@ const panels: Record<string, HTMLElement | null> = {
   chat: document.getElementById("chat-scroll"),
   tasks: document.getElementById("panel-tasks"),
   agents: document.getElementById("panel-agents"),
+  artifacts: document.getElementById("panel-artifacts"),
   memory: document.getElementById("panel-memory"),
   telemetry: document.getElementById("panel-telemetry"),
   settings: document.getElementById("panel-settings"),
