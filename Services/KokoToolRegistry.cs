@@ -108,6 +108,7 @@ namespace KokonoeAssistant.Services
             "pc_confirm" => Descriptor(name, "Confirm and execute a pending PC action.", "pc", KokoToolRisk.Privileged, true, new[] { "actionId", "confirmationText" }, "processes", "maintenance", "permission-protocol"),
             "pc_cancel" => Descriptor(name, "Cancel a pending PC action.", "pc", KokoToolRisk.Write, false, new[] { "actionId", "reason" }, "processes", "maintenance", "permission-protocol"),
             "codeact_python" => Descriptor(name, "Execute restricted Python and preserve code/result artifacts.", "code", KokoToolRisk.Write, false, new[] { "code", "runId", "timeoutMs" }, "code", "tests", "sandbox"),
+            "delegate_to_agent" => Descriptor(name, "Execute a sub-task using a specialist agent from the pool. Returns the agent's full response as a string.", "agents", KokoToolRisk.Write, false, new[] { "agentId", "systemPrompt", "userMessage" }, "agents", "delegation"),
             _ => Descriptor(name, "Registered runtime tool.", "general", KokoToolRisk.ReadOnly, false, Array.Empty<string>())
         };
 

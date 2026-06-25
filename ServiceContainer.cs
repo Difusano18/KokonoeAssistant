@@ -357,6 +357,7 @@ namespace KokonoeAssistant
                         new PcActionExecutor(pc: PcControl));
                     gateway.Register(new KokoCodeActToolHandler(
                         Path.Combine(_vault ?? AppDomain.CurrentDomain.BaseDirectory, "kokonoe-data")));
+                    gateway.Register(new KokoAgentDelegationToolHandler(AgentPool));
                     _toolGateway = gateway;
                     return _toolGateway;
                 }

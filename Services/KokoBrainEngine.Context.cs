@@ -464,6 +464,7 @@ namespace KokonoeAssistant.Services
                 AppendStaticVaultNote(sb, "Creator/Profile.md", "CREATOR PROFILE", 900);
                 AppendStaticVaultNote(sb, "Kokonoe/Досьє.md", "DOSSIER", 700);
                 AppendStaticVaultNote(sb, "Kokonoe/Рефлексія.md", "REFLECTION", 500);
+                sb.Append(BuildAgentPoolSection());
 
                 var built = sb.ToString();
                 lock (_lock)
@@ -479,6 +480,21 @@ namespace KokonoeAssistant.Services
             {
                 _staticContextCacheGate.Release();
             }
+        }
+
+        private string BuildAgentPoolSection()
+        {
+            var agents = ServiceContainer.AgentPool.GetEnabled();
+            if (agents.Count == 0)
+                return "";
+
+            var sb = new StringBuilder();
+            sb.AppendLine("\n## Available Specialist Agents");
+            sb.AppendLine("You can delegate sub-tasks using the `delegate_to_agent` tool:");
+            foreach (var a in agents)
+                sb.AppendLine($"- **{a.Name}** (id: `{a.Id}`) — {a.Description} [model: {a.Model}, max: {a.MaxTokens}]");
+            sb.AppendLine("\nUse agents for parallel work or specialized capabilities. Combine their results and present a unified answer.");
+            return sb.ToString();
         }
 
         private void AppendStaticVaultNote(StringBuilder sb, string path, string heading, int maxChars)
