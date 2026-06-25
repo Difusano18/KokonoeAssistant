@@ -856,13 +856,17 @@
                 <label>Популярні endpoints</label>
                 <div class="provider-chips">
                   <button type="button" class="chip" data-url="https://api.groq.com/openai/v1"
-                          data-model="llama-3.3-70b-versatile">Groq Fast</button>
+                          data-model="llama-3.3-70b-versatile" data-models="llama-3.3-70b-versatile,llama-3.1-8b-instant,openai/gpt-oss-120b,groq/compound">Groq Fast</button>
                   <button type="button" class="chip" data-url="https://api.groq.com/openai/v1"
-                          data-model="llama-3.1-8b-instant">Groq Tiny</button>
+                          data-model="llama-3.1-8b-instant" data-models="llama-3.1-8b-instant,llama-3.3-70b-versatile,openai/gpt-oss-120b,groq/compound">Groq Tiny</button>
                   <button type="button" class="chip" data-url="https://openrouter.ai/api/v1"
-                          data-model="google/gemini-flash-1.5">OpenRouter</button>
+                          data-model="google/gemini-flash-1.5" data-models="google/gemini-flash-1.5,anthropic/claude-3.5-sonnet,meta-llama/llama-3.1-8b-instruct">OpenRouter</button>
                   <button type="button" class="chip" data-url="https://api.anthropic.com"
-                          data-model="claude-3-5-haiku-20241022">Claude Haiku</button>
+                          data-model="claude-haiku-4-5" data-models="claude-haiku-4-5,claude-sonnet-4-6,claude-opus-4-8"
+                          title="Claude API: x-api-key + /v1/messages, не Bearer/chat-completions — KokoAgentPoolService розпізнає це по anthropic.com у Base URL">Claude Haiku</button>
+                  <button type="button" class="chip" data-url="http://localhost:11434/v1"
+                          data-model="gpt-oss:120b-cloud" data-models="gpt-oss:120b-cloud,qwen3-coder:480b-cloud,deepseek-v3.1:671b-cloud"
+                          title="Потребує локально встановленого Ollama, увійти через 'ollama signin' — це не окремий хмарний API за самим лише ключем">Ollama Cloud</button>
                 </div>
               </div>
               <div class="form-field">
@@ -871,7 +875,8 @@
               </div>
               <div class="form-field">
                 <label for="af-model">Модель</label>
-                <input type="text" id="af-model" placeholder="llama-3.1-8b-instant">
+                <input type="text" id="af-model" list="af-model-options" placeholder="llama-3.1-8b-instant">
+                <datalist id="af-model-options"></datalist>
               </div>
               <div class="form-field">
                 <label for="af-tokens">Max tokens</label>

@@ -64,7 +64,7 @@ namespace KokonoeAssistant
 
         // Claude API
         public string ClaudeApiKey { get; set; } = "";
-        public string ClaudeModel  { get; set; } = "claude-sonnet-4-20250514";
+        public string ClaudeModel  { get; set; } = "claude-sonnet-4-6";
 
         // Ollama Cloud (OpenAI-compatible endpoint, Bearer auth)
         // OllamaApiKey — legacy (single-key); тепер пул у OllamaKeys (нижче)
@@ -392,6 +392,15 @@ namespace KokonoeAssistant
                 settings.VisionModel.Equals("qwen3-vl:235b-instruct", StringComparison.OrdinalIgnoreCase))
             {
                 settings.VisionModel = DefaultVisionModel;
+                changed = true;
+            }
+
+            // "claude-sonnet-4-20250514" is a dated snapshot id from an earlier Claude
+            // generation — verified current via Anthropic's docs.
+            if (string.IsNullOrWhiteSpace(settings.ClaudeModel) ||
+                settings.ClaudeModel.Equals("claude-sonnet-4-20250514", StringComparison.OrdinalIgnoreCase))
+            {
+                settings.ClaudeModel = "claude-sonnet-4-6";
                 changed = true;
             }
 

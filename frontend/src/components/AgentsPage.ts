@@ -28,6 +28,16 @@ export class AgentsPage {
       chip.addEventListener("click", () => {
         (document.getElementById("af-url") as HTMLInputElement).value = chip.dataset.url ?? "";
         (document.getElementById("af-model") as HTMLInputElement).value = chip.dataset.model ?? "";
+
+        const options = document.getElementById("af-model-options");
+        if (options) {
+          const models = (chip.dataset.models ?? chip.dataset.model ?? "").split(",").filter(Boolean);
+          options.replaceChildren(...models.map(m => {
+            const option = document.createElement("option");
+            option.value = m;
+            return option;
+          }));
+        }
       });
     });
     await this.loadAgents();
@@ -144,6 +154,7 @@ export class AgentsPage {
       document.getElementById("agent-form-title")!.textContent = "Новий агент";
     }
     document.getElementById("af-test-result")!.textContent = "";
+    document.getElementById("af-model-options")?.replaceChildren();
     overlay.style.display = "flex";
   }
 
