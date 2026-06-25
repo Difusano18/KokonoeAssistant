@@ -3,12 +3,20 @@ export class MotionController {
   private readonly runtime = document.getElementById("runtime")!;
   private readonly dot = document.getElementById("runtime-dot")!;
   private readonly footer = document.getElementById("footer-state")!;
+  private hostErrorResetHandle = 0;
 
   constructor() {
-    window.koko.on("chat.started", () => this.setHostState("busy"));
-    window.koko.on("chat.completed", () => this.setHostState("ready"));
-    window.koko.on("chat.canceled", () => this.setHostState("ready"));
-    window.koko.on("chat.error", () => this.setHostState("error"));
+    window.koko.on("chat.started", () => { window.clearTimeout(this.hostErrorResetHandle); this.setHostState("busy"); });
+    window.koko.on("chat.completed", () => { window.clearTimeout(this.hostErrorResetHandle); this.setHostState("ready"); });
+    window.koko.on("chat.canceled", () => { window.clearTimeout(this.hostErrorResetHandle); this.setHostState("ready"); });
+    window.koko.on("chat.error", () => {
+      this.setHostState("error");
+      // A fast retry within this window already clears the timeout via the
+      // chat.started handler above — guards against this stale reset firing
+      // "ready" over a state that's moved on to busy/error again by then.
+      window.clearTimeout(this.hostErrorResetHandle);
+      this.hostErrorResetHandle = window.setTimeout(() => this.setHostState("ready"), 5000);
+    });
     window.koko.on("agent.activity", () => this.flash(document.getElementById("agent-activity")));
     window.koko.on("agent.completed", () => {
       this.flash(document.getElementById("agent-tasks"));
