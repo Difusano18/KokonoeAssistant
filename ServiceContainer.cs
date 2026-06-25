@@ -42,6 +42,7 @@ namespace KokonoeAssistant
         private static KokoWearableBridgeService? _wearableBridge;
         private static OllamaKeyPoolService?   _ollamaPool;
         private static KokoAgentTaskService?   _agentTasks;
+        private static KokoAgentPoolService?   _agentPool;
         private static KokoAgentRuntimeService? _agentRuntime;
         private static KokoIterativeAgentLoop? _agentLoop;
         private static KokoFileSystemToolService? _fileTools;
@@ -263,6 +264,11 @@ namespace KokonoeAssistant
                     return _agentTasks;
                 }
             }
+        }
+
+        public static KokoAgentPoolService AgentPool
+        {
+            get { lock (_lock) { return _agentPool ??= new KokoAgentPoolService(); } }
         }
 
         public static KokoAgentRuntimeService AgentRuntime
