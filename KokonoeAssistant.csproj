@@ -43,6 +43,7 @@
     <Compile Update="Services\KokoSandboxExecutor.cs" />
   </ItemGroup>
   <ItemGroup>
+    <PackageReference Include="Microsoft.Playwright" Version="1.61.0" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
     <PackageReference Include="SkiaSharp.Views.WPF" Version="3.119.2" />
     <PackageReference Include="Telegram.Bot" Version="22.0.0" />
@@ -66,19 +67,14 @@
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="8.0.1" />
   </ItemGroup>
 
-  <Target Name="BuildWebFrontend" BeforeTargets="Build"
-          Condition="'$(DesignTimeBuild)' != 'true' and '$(SkipFrontendBuild)' != 'true'">
-    <Exec WorkingDirectory="$(MSBuildProjectDirectory)\frontend"
-          Command="npm ci --no-audit --no-fund"
-          Condition="!Exists('$(MSBuildProjectDirectory)\frontend\node_modules\.bin\vite.cmd')" />
+  <Target Name="BuildWebFrontend" BeforeTargets="Build" Condition="'$(DesignTimeBuild)' != 'true' and '$(SkipFrontendBuild)' != 'true'">
+    <Exec WorkingDirectory="$(MSBuildProjectDirectory)\frontend" Command="npm ci --no-audit --no-fund" Condition="!Exists('$(MSBuildProjectDirectory)\frontend\node_modules\.bin\vite.cmd')" />
     <Exec WorkingDirectory="$(MSBuildProjectDirectory)\frontend" Command="npm run build" />
     <ItemGroup>
       <_FrontendDist Include="$(MSBuildProjectDirectory)\frontend\dist\**\*" />
     </ItemGroup>
     <MakeDir Directories="$(OutDir)frontend" />
-    <Copy SourceFiles="@(_FrontendDist)"
-          DestinationFiles="@(_FrontendDist->'$(OutDir)frontend\%(RecursiveDir)%(Filename)%(Extension)')"
-          SkipUnchangedFiles="true" />
+    <Copy SourceFiles="@(_FrontendDist)" DestinationFiles="@(_FrontendDist->'$(OutDir)frontend\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
   </Target>
 
   <!--
