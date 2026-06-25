@@ -203,9 +203,16 @@ export class AgentsPage {
     resultEl.textContent = "тестую...";
     resultEl.style.color = "";
     try {
-      const r = await window.koko.call<{ ok: boolean; response: string }>("agents.test", { id }, 30000);
-      resultEl.textContent = r.ok ? "✓ OK — " + r.response : "✗ " + r.response;
-      resultEl.style.color = r.ok ? "var(--accent)" : "var(--error)";
+      const r = await window.koko.call<{ ok: boolean; steps: { name: string; ok: boolean; detail: string }[] }>(
+        "agents.test", { id }, 30000);
+      const parts = r.steps.map(s => {
+        const span = document.createElement("span");
+        span.style.color = s.ok ? "var(--accent)" : "var(--error)";
+        span.title = s.detail;
+        span.textContent = `${s.ok ? "✓" : "✗"} ${s.name}`;
+        return span;
+      });
+      resultEl.replaceChildren(...parts.flatMap((el, i) => i === 0 ? [el] : [document.createTextNode(" → "), el]));
     } catch (error) {
       resultEl.textContent = "✗ " + (error instanceof Error ? error.message : String(error));
       resultEl.style.color = "var(--error)";

@@ -85,13 +85,16 @@ namespace KokonoeAssistant.Services
             var id = payload?["id"]?.ToString() ?? "";
             try
             {
-                var result = await _pool.InvokeAsync(id, "You are a helpful assistant.", "Reply with exactly: OK", ct)
-                    .ConfigureAwait(false);
-                return new { ok = result.Contains("OK"), response = result.Trim() };
+                var result = await _pool.TestAsync(id, ct).ConfigureAwait(false);
+                return new
+                {
+                    ok = result.Ok,
+                    steps = result.Steps.Select(s => new { name = s.Name, ok = s.Ok, detail = s.Detail })
+                };
             }
             catch (Exception ex)
             {
-                return new { ok = false, response = ex.Message };
+                return new { ok = false, steps = new[] { new { name = "Endpoint", ok = false, detail = ex.Message } } };
             }
         }
 
