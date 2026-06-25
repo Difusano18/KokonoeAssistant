@@ -45,6 +45,7 @@ namespace KokonoeAssistant
         private static KokoAgentPoolService?   _agentPool;
         private static KokoAgentRuntimeService? _agentRuntime;
         private static KokoBrowserOperatorService? _browserOperator;
+        private static KokoArtifactService? _artifacts;
         private static KokoIterativeAgentLoop? _agentLoop;
         private static KokoFileSystemToolService? _fileTools;
         private static IKokoToolGateway? _toolGateway;
@@ -274,7 +275,26 @@ namespace KokonoeAssistant
 
         public static KokoBrowserOperatorService BrowserOperator
         {
-            get { lock (_lock) { return _browserOperator ??= new KokoBrowserOperatorService(); } }
+            get
+            {
+                lock (_lock)
+                {
+                    return _browserOperator ??= new KokoBrowserOperatorService(
+                        Path.Combine(_vault ?? AppDomain.CurrentDomain.BaseDirectory, "kokonoe-data"));
+                }
+            }
+        }
+
+        public static KokoArtifactService Artifacts
+        {
+            get
+            {
+                lock (_lock)
+                {
+                    return _artifacts ??= new KokoArtifactService(
+                        Path.Combine(_vault ?? AppDomain.CurrentDomain.BaseDirectory, "kokonoe-data"));
+                }
+            }
         }
 
         public static KokoAgentRuntimeService AgentRuntime

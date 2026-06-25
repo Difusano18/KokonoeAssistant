@@ -27,11 +27,9 @@ namespace KokonoeAssistant.Services
         public BrowserSession Session { get; } = new();
         public bool IsReady => _page != null && !_page.IsClosed;
 
-        public KokoBrowserOperatorService()
+        public KokoBrowserOperatorService(string dataDir)
         {
-            _screenshotsDir = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "Kokonoe", "BrowserScreenshots");
+            _screenshotsDir = Path.Combine(dataDir, "browser-screenshots");
             Directory.CreateDirectory(_screenshotsDir);
         }
 
