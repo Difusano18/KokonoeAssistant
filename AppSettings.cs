@@ -73,6 +73,11 @@ namespace KokonoeAssistant
         // its own OpenAI-compatible endpoint at localhost:11434. URL is hardcoded, not a
         // setting — it's always that local address, never something a user should edit.
         public string OllamaCloudProxyModel { get; set; } = "gpt-oss:120b-cloud";
+        // Optional: local Ollama's OpenAI-compatible endpoint requires *a* key header
+        // but ignores its value per Ollama's own docs — `ollama signin` is what actually
+        // authorizes cloud-model access. Left here for setups that authorize via
+        // OLLAMA_API_KEY instead of an interactive signin; harmless to leave blank.
+        public string OllamaCloudProxyApiKey { get; set; } = "";
 
         // Ollama Cloud (OpenAI-compatible endpoint, Bearer auth)
         // OllamaApiKey — legacy (single-key); тепер пул у OllamaKeys (нижче)

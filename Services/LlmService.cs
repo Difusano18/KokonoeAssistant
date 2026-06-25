@@ -33,6 +33,7 @@ namespace KokonoeAssistant.Services
         private string _visionModel;
         private string _visionUrl = "";
         private string _ollamaCloudProxyModel = "gpt-oss:120b-cloud";
+        private string _ollamaCloudProxyApiKey = "";
         private Dictionary<string, KokoAgentLlmProfile> _agentProfiles = new(StringComparer.OrdinalIgnoreCase);
 
         private const string CLAUDE_API_URL = "https://api.anthropic.com/v1/messages";
@@ -962,6 +963,7 @@ namespace KokonoeAssistant.Services
             _ollamaUrl = s.OllamaUrl;
             _ollamaModel = s.OllamaModel;
             _ollamaCloudProxyModel = s.OllamaCloudProxyModel;
+            _ollamaCloudProxyApiKey = s.OllamaCloudProxyApiKey;
             _visionModel = NormalizeVisionModel(s);
             _visionUrl = s.VisionUrl;
             _agentProfiles = new Dictionary<string, KokoAgentLlmProfile>(
@@ -983,6 +985,7 @@ namespace KokonoeAssistant.Services
             _ollamaUrl = s.OllamaUrl;
             _ollamaModel = s.OllamaModel;
             _ollamaCloudProxyModel = s.OllamaCloudProxyModel;
+            _ollamaCloudProxyApiKey = s.OllamaCloudProxyApiKey;
             _visionModel = NormalizeVisionModel(s);
             _visionUrl = s.VisionUrl;
             _agentProfiles = new Dictionary<string, KokoAgentLlmProfile>(
@@ -1725,6 +1728,7 @@ namespace KokonoeAssistant.Services
                     // Визначаємо цільовий URL і модель
                     var isClaude = agentTarget.Provider.Equals("claude", StringComparison.OrdinalIgnoreCase);
                     var isOllamaCloud = agentTarget.Provider.Equals("ollama-cloud", StringComparison.OrdinalIgnoreCase);
+                    var isOllamaCloudProxy = agentTarget.Provider.Equals("ollama-cloud-proxy", StringComparison.OrdinalIgnoreCase);
                     var isImageRequest = imageBytes != null && imageBytes.Length > 0;
 
                     // Image requests ніколи не потребують tools — і деякі cloud API падають на 500 від tools+image комбо
@@ -1836,6 +1840,10 @@ namespace KokonoeAssistant.Services
                             usedOllamaKey = ResolveOllamaKey(agentId);
                             if (!string.IsNullOrEmpty(usedOllamaKey))
                                 llmReq.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", usedOllamaKey);
+                        }
+                        else if (isOllamaCloudProxy && !string.IsNullOrWhiteSpace(_ollamaCloudProxyApiKey))
+                        {
+                            llmReq.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _ollamaCloudProxyApiKey);
                         }
 
                         resp = streamFinalAfterTools
@@ -3548,6 +3556,7 @@ namespace KokonoeAssistant.Services
                 userText.Contains("список", StringComparison.OrdinalIgnoreCase));
             var useTools = Obsidian != null && looksLikeVaultOp;
             var streamIsOllamaCloud = target.Provider.Equals("ollama-cloud", StringComparison.OrdinalIgnoreCase);
+            var streamIsOllamaCloudProxy = target.Provider.Equals("ollama-cloud-proxy", StringComparison.OrdinalIgnoreCase);
             var streamUrl = isClaude ? CLAUDE_API_URL : target.Url;
             var streamModel = target.Model;
             var maxTokens = ResolveMaxTokens(maxTokensOverride, MainMaxTokens);
@@ -3598,6 +3607,13 @@ namespace KokonoeAssistant.Services
                         usedOllamaKey = ResolveOllamaKey(agentId);
                         if (!string.IsNullOrEmpty(usedOllamaKey))
                             req.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", usedOllamaKey);
+                    }
+                    else if (streamIsOllamaCloudProxy && !string.IsNullOrWhiteSpace(_ollamaCloudProxyApiKey))
+                    {
+                        // Optional — local Ollama's OpenAI-compatible endpoint normally
+                        // authorizes via `ollama signin`, not this header, but attaching
+                        // it when set is harmless and covers an OLLAMA_API_KEY-based setup.
+                        req.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _ollamaCloudProxyApiKey);
                     }
 
                     resp = await _http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, ct);

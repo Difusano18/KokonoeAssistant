@@ -144,6 +144,17 @@ namespace KokonoeAssistant.Services
                     changed.Add("ollamaApiKey");
                 }
             }
+            if (values.TryGetValue("ollamaCloudProxyApiKey", StringComparison.OrdinalIgnoreCase, out var ollamaCloudProxyKeyToken))
+            {
+                var key = ollamaCloudProxyKeyToken?.ToString()?.Trim() ?? "";
+                if (key.Length > 2048)
+                    throw new InvalidOperationException("ollamaCloudProxyApiKey exceeds 2048 characters.");
+                if (!string.IsNullOrEmpty(key) && !string.Equals(settings.OllamaCloudProxyApiKey, key, StringComparison.Ordinal))
+                {
+                    settings.OllamaCloudProxyApiKey = key;
+                    changed.Add("ollamaCloudProxyApiKey");
+                }
+            }
             ApplyString(values, "lmUrl", 2048, settings.LmUrl,
                 value => settings.LmUrl = value, changed);
             ApplyString(values, "lmModel", 256, settings.Model,
@@ -249,6 +260,7 @@ namespace KokonoeAssistant.Services
                 openAi = !string.IsNullOrWhiteSpace(settings.OpenAiApiKey),
                 claude = !string.IsNullOrWhiteSpace(settings.ClaudeApiKey),
                 ollama = !string.IsNullOrWhiteSpace(settings.OllamaApiKey) || (settings.OllamaKeys?.Count ?? 0) > 0,
+                ollamaCloudProxy = !string.IsNullOrWhiteSpace(settings.OllamaCloudProxyApiKey),
                 tavily = !string.IsNullOrWhiteSpace(settings.TavilyApiKey)
             }
         };

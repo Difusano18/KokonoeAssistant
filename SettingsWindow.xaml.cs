@@ -131,11 +131,15 @@ namespace KokonoeAssistant
             var claudeApiKeyText = ClaudeApiKeyBox.Text.Trim();
             if (!string.IsNullOrWhiteSpace(claudeApiKeyText))
                 _settings.ClaudeApiKey = claudeApiKeyText;
-            _settings.ClaudeModel        = ClaudeModelBox.Text?.Trim() ?? "claude-sonnet-4-20250514";
+            _settings.ClaudeModel        = string.IsNullOrWhiteSpace(ClaudeModelBox.Text?.Trim()) ? "claude-sonnet-4-6" : ClaudeModelBox.Text.Trim();
             var ollamaApiKeyText = OllamaApiKeyBox.Text.Trim();
             if (!string.IsNullOrWhiteSpace(ollamaApiKeyText))
                 _settings.OllamaApiKey = ollamaApiKeyText;
-            _settings.OllamaUrl          = string.IsNullOrWhiteSpace(OllamaUrlBox.Text) ? "https://ollama.com/v1/chat/completions" : OllamaUrlBox.Text.Trim();
+            // "https://ollama.com/v1/chat/completions" was never a working API endpoint
+            // (it's Ollama's marketing site) — this legacy window had the same broken
+            // fallback the WebView2 Settings panel's default had before being migrated
+            // to Groq.
+            _settings.OllamaUrl          = string.IsNullOrWhiteSpace(OllamaUrlBox.Text) ? AppSettings.DefaultOllamaCloudUrl : OllamaUrlBox.Text.Trim();
             _settings.OllamaModel        = string.IsNullOrWhiteSpace(OllamaModelBox.Text)
                                          ? AppSettings.DefaultOllamaCloudModel
                                          : OllamaModelBox.Text.Trim();

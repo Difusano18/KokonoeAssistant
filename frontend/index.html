@@ -783,6 +783,11 @@
                 <label for="ollama-cloud-proxy-model">Модель</label>
                 <select id="ollama-cloud-proxy-model" class="settings-select"></select>
               </div>
+              <div class="setting-row setting-row-stack" id="row-ollama-cloud-proxy-key">
+                <label for="ollama-cloud-proxy-key">API Key (опціонально)</label>
+                <input id="ollama-cloud-proxy-key" type="password" placeholder="залиш порожнім — auth через ollama signin" autocomplete="off">
+                <p class="setting-hint">Локальний Ollama зазвичай ігнорує цей заголовок (авторизація через <code>ollama signin</code>). Заповни лише якщо твій setup використовує <code>OLLAMA_API_KEY</code>.</p>
+              </div>
               <div class="setting-row">
                 <label for="max-tokens">Max tokens</label>
                 <input id="max-tokens" type="number" min="256" max="16384" step="256">
