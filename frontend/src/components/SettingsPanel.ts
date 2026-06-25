@@ -1,6 +1,7 @@
 import { populateOllamaCloudModelSelect } from "../ollamaCloudModels";
 
-type SettingsValues = Record<string, boolean | number | string>;
+type SecretOp = { op: string; value?: string };
+type SettingsValues = Record<string, boolean | number | string | SecretOp>;
 interface SettingsSnapshot { values: SettingsValues; credentials: Record<string, boolean>; }
 interface SettingsUpdateResult { settings: SettingsSnapshot; changed: string[]; restartRequired: boolean; }
 interface WearStatus {
@@ -34,12 +35,16 @@ export class SettingsPanelController {
   private readonly lmModel = document.getElementById("lm-model") as HTMLInputElement;
   private readonly ollamaUrl = document.getElementById("ollama-url") as HTMLInputElement;
   private readonly ollamaKey = document.getElementById("ollama-key") as HTMLInputElement;
+  private readonly ollamaKeyClear = document.getElementById("ollama-key-clear") as HTMLButtonElement;
   private readonly ollamaModel = document.getElementById("ollama-model") as HTMLInputElement;
   private readonly ollamaCloudProxyModel = document.getElementById("ollama-cloud-proxy-model") as HTMLSelectElement;
   private readonly ollamaCloudProxyKey = document.getElementById("ollama-cloud-proxy-key") as HTMLInputElement;
+  private readonly ollamaCloudProxyKeyClear = document.getElementById("ollama-cloud-proxy-key-clear") as HTMLButtonElement;
   private readonly claudeKey = document.getElementById("claude-key") as HTMLInputElement;
+  private readonly claudeKeyClear = document.getElementById("claude-key-clear") as HTMLButtonElement;
   private readonly claudeModel = document.getElementById("claude-model") as HTMLInputElement;
   private readonly tavilyKey = document.getElementById("tavily-key") as HTMLInputElement;
+  private readonly tavilyKeyClear = document.getElementById("tavily-key-clear") as HTMLButtonElement;
   private readonly color = document.getElementById("matrix-color") as HTMLInputElement;
   private readonly colorText = document.getElementById("matrix-color-text")!;
   private readonly plexusToggle = document.getElementById("plexus-enabled") as HTMLInputElement;
@@ -77,6 +82,30 @@ export class SettingsPanelController {
       (window as unknown as { plexusEnabled?: boolean }).plexusEnabled = this.plexusToggle.checked;
     });
     this.form.addEventListener("submit", event => { event.preventDefault(); void this.persist(); });
+    this.wireSecretClear(this.ollamaKey, this.ollamaKeyClear, "sk-...");
+    this.wireSecretClear(this.ollamaCloudProxyKey, this.ollamaCloudProxyKeyClear, "залиш порожнім — auth через ollama signin");
+    this.wireSecretClear(this.claudeKey, this.claudeKeyClear, "sk-ant-...");
+    this.wireSecretClear(this.tavilyKey, this.tavilyKeyClear, "tvly-...");
+  }
+
+  // Pending-clear is tracked via data-cleared rather than sent immediately so the user can
+  // still cancel by typing a replacement key before hitting Save.
+  private wireSecretClear(input: HTMLInputElement, button: HTMLButtonElement, emptyPlaceholder: string): void {
+    button.addEventListener("click", () => {
+      input.value = "";
+      input.dataset.cleared = "true";
+      input.placeholder = "буде очищено при збереженні";
+    });
+    input.addEventListener("input", () => {
+      delete input.dataset.cleared;
+      if (input.value === "") input.placeholder = emptyPlaceholder;
+    });
+  }
+
+  private secretState(input: HTMLInputElement): { op: string; value?: string } {
+    const value = input.value.trim();
+    if (value === "") return { op: input.dataset.cleared === "true" ? "clear" : "unchanged" };
+    return { op: "replace", value };
   }
 
   setAvailable(value: boolean): void {
@@ -158,14 +187,18 @@ export class SettingsPanelController {
     populateOllamaCloudModelSelect(this.ollamaCloudProxyModel, String(values.ollamaCloudProxyModel ?? ""));
     this.claudeModel.value = String(values.claudeModel ?? "");
     this.ollamaKey.value = "";
+    delete this.ollamaKey.dataset.cleared;
     this.ollamaKey.placeholder = snapshot.credentials?.ollama ? "•••• configured (leave blank to keep)" : "sk-...";
     this.ollamaCloudProxyKey.value = "";
+    delete this.ollamaCloudProxyKey.dataset.cleared;
     this.ollamaCloudProxyKey.placeholder = snapshot.credentials?.ollamaCloudProxy
       ? "•••• configured (leave blank to keep)"
       : "залиш порожнім — auth через ollama signin";
     this.claudeKey.value = "";
+    delete this.claudeKey.dataset.cleared;
     this.claudeKey.placeholder = snapshot.credentials?.claude ? "•••• configured (leave blank to keep)" : "sk-ant-...";
     this.tavilyKey.value = "";
+    delete this.tavilyKey.dataset.cleared;
     this.tavilyKey.placeholder = snapshot.credentials?.tavily ? "•••• configured (leave blank to keep)" : "tvly-...";
     this.color.value = /^#[0-9a-f]{6}$/i.test(String(values.matrixColor ?? "")) ? String(values.matrixColor) : "#5fc1b3";
     this.colorText.textContent = this.color.value.toUpperCase();
@@ -183,11 +216,11 @@ export class SettingsPanelController {
       ollamaUrl: this.ollamaUrl.value.trim(),
       ollamaModel: this.ollamaModel.value.trim(),
       ollamaCloudProxyModel: this.ollamaCloudProxyModel.value,
-      ollamaCloudProxyApiKey: this.ollamaCloudProxyKey.value.trim(),
-      ollamaApiKey: this.ollamaKey.value.trim(),
+      ollamaCloudProxyApiKey: this.secretState(this.ollamaCloudProxyKey),
+      ollamaApiKey: this.secretState(this.ollamaKey),
       claudeModel: this.claudeModel.value.trim(),
-      claudeApiKey: this.claudeKey.value.trim(),
-      tavilyApiKey: this.tavilyKey.value.trim()
+      claudeApiKey: this.secretState(this.claudeKey),
+      tavilyApiKey: this.secretState(this.tavilyKey)
     };
     for (const [name, id] of Object.entries(this.fields)) {
       const input = document.getElementById(id) as HTMLInputElement;

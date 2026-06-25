@@ -443,6 +443,13 @@
     }
     .setting-row-stack input[type="text"]::placeholder, .setting-row-stack input[type="password"]::placeholder { color: var(--text-4); }
     .setting-row-stack input[type="text"]:focus, .setting-row-stack input[type="password"]:focus { border-color: var(--accent-border); }
+    .key-input-row { display: flex; gap: 6px; align-items: center; }
+    .key-input-row input { flex: 1; }
+    .key-clear-btn {
+      flex: none; width: 34px; height: 34px; border: 1px solid var(--line-2); border-radius: 7px;
+      background: var(--card-2); color: var(--text-3); cursor: pointer; font: 13px/1 "IBM Plex Mono", monospace;
+    }
+    .key-clear-btn:hover { color: var(--text); border-color: var(--accent-border); }
     .settings-locked-url {
       display: block; width: 100%; height: 34px; padding: 0 11px; box-sizing: border-box;
       font: 12px/34px "IBM Plex Mono", monospace; color: var(--text-3);
@@ -760,7 +767,10 @@
               </div>
               <div class="setting-row setting-row-stack" id="row-ollama-key">
                 <label for="ollama-key">API Key</label>
-                <input id="ollama-key" type="password" placeholder="sk-..." autocomplete="off">
+                <div class="key-input-row">
+                  <input id="ollama-key" type="password" placeholder="sk-..." autocomplete="off">
+                  <button type="button" id="ollama-key-clear" class="key-clear-btn" title="Очистити ключ">✕</button>
+                </div>
               </div>
               <div class="setting-row setting-row-stack" id="row-ollama-model">
                 <label for="ollama-model">Model</label>
@@ -768,7 +778,10 @@
               </div>
               <div class="setting-row setting-row-stack" id="row-claude-key">
                 <label for="claude-key">API Key</label>
-                <input id="claude-key" type="password" placeholder="sk-ant-..." autocomplete="off">
+                <div class="key-input-row">
+                  <input id="claude-key" type="password" placeholder="sk-ant-..." autocomplete="off">
+                  <button type="button" id="claude-key-clear" class="key-clear-btn" title="Очистити ключ">✕</button>
+                </div>
               </div>
               <div class="setting-row setting-row-stack" id="row-claude-model">
                 <label for="claude-model">Model</label>
@@ -785,7 +798,10 @@
               </div>
               <div class="setting-row setting-row-stack" id="row-ollama-cloud-proxy-key">
                 <label for="ollama-cloud-proxy-key">API Key (опціонально)</label>
-                <input id="ollama-cloud-proxy-key" type="password" placeholder="залиш порожнім — auth через ollama signin" autocomplete="off">
+                <div class="key-input-row">
+                  <input id="ollama-cloud-proxy-key" type="password" placeholder="залиш порожнім — auth через ollama signin" autocomplete="off">
+                  <button type="button" id="ollama-cloud-proxy-key-clear" class="key-clear-btn" title="Очистити ключ">✕</button>
+                </div>
                 <p class="setting-hint">Локальний Ollama зазвичай ігнорує цей заголовок (авторизація через <code>ollama signin</code>). Заповни лише якщо твій setup використовує <code>OLLAMA_API_KEY</code>.</p>
               </div>
               <div class="setting-row">
@@ -797,7 +813,10 @@
               <h3>Web search</h3>
               <div class="setting-row setting-row-stack" id="row-tavily-key">
                 <label for="tavily-key">Tavily API key</label>
-                <input id="tavily-key" type="password" placeholder="tvly-..." autocomplete="off">
+                <div class="key-input-row">
+                  <input id="tavily-key" type="password" placeholder="tvly-..." autocomplete="off">
+                  <button type="button" id="tavily-key-clear" class="key-clear-btn" title="Очистити ключ">✕</button>
+                </div>
               </div>
             </section>
             <section class="settings-group">

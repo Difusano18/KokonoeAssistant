@@ -120,69 +120,47 @@ namespace KokonoeAssistant.Services
                 value => settings.OllamaModel = value, changed);
             ApplyString(values, "ollamaCloudProxyModel", 256, settings.OllamaCloudProxyModel,
                 value => settings.OllamaCloudProxyModel = value, changed);
-            if (values.TryGetValue("ollamaApiKey", StringComparison.OrdinalIgnoreCase, out var ollamaKeyToken))
-            {
-                var key = ollamaKeyToken?.ToString()?.Trim() ?? "";
-                if (key.Length > 2048)
-                    throw new InvalidOperationException("ollamaApiKey exceeds 2048 characters.");
-                if (!string.IsNullOrEmpty(key) && !string.Equals(settings.OllamaApiKey, key, StringComparison.Ordinal))
+            // LlmService.ResolveOllamaKey checks the OllamaKeys pool before OllamaApiKey,
+            // and the pool only ever seeds itself from OllamaApiKey once, the first time
+            // it's empty — after that it never looks at this field again. Replacing always
+            // resets the pool to just this key so the field stays the actual source of
+            // truth; clearing empties the pool too so a cleared key can't keep authorizing
+            // requests via a stale pool entry.
+            ApplySecret(values, "ollamaApiKey",
+                value =>
                 {
-                    settings.OllamaApiKey = key;
-                    // LlmService.ResolveOllamaKey checks the OllamaKeys pool before this
-                    // field, and OllamaKeyPoolService only ever seeds that pool from
-                    // OllamaApiKey once, the first time the pool is empty — after that it
-                    // never looks at this field again. There is no UI anywhere (web shell or
-                    // legacy WPF) to view or edit that pool directly, so once it has any
-                    // entries, pasting a new key here was being silently ignored for actual
-                    // requests. Resetting the pool to just this key makes this field the
-                    // actual source of truth again, matching what the UI implies.
+                    settings.OllamaApiKey = value;
                     settings.OllamaKeys = new List<OllamaKeyEntry>
                     {
-                        new OllamaKeyEntry { Name = "Account 1", Key = key, Enabled = true }
+                        new OllamaKeyEntry { Name = "Account 1", Key = value, Enabled = true }
                     };
                     settings.OllamaActiveKeyIndex = 0;
-                    changed.Add("ollamaApiKey");
-                }
-            }
-            if (values.TryGetValue("ollamaCloudProxyApiKey", StringComparison.OrdinalIgnoreCase, out var ollamaCloudProxyKeyToken))
-            {
-                var key = ollamaCloudProxyKeyToken?.ToString()?.Trim() ?? "";
-                if (key.Length > 2048)
-                    throw new InvalidOperationException("ollamaCloudProxyApiKey exceeds 2048 characters.");
-                if (!string.IsNullOrEmpty(key) && !string.Equals(settings.OllamaCloudProxyApiKey, key, StringComparison.Ordinal))
+                },
+                () =>
                 {
-                    settings.OllamaCloudProxyApiKey = key;
-                    changed.Add("ollamaCloudProxyApiKey");
-                }
-            }
+                    settings.OllamaApiKey = "";
+                    settings.OllamaKeys = new List<OllamaKeyEntry>();
+                    settings.OllamaActiveKeyIndex = 0;
+                },
+                changed);
+            ApplySecret(values, "ollamaCloudProxyApiKey",
+                value => settings.OllamaCloudProxyApiKey = value,
+                () => settings.OllamaCloudProxyApiKey = "",
+                changed);
             ApplyString(values, "lmUrl", 2048, settings.LmUrl,
                 value => settings.LmUrl = value, changed);
             ApplyString(values, "lmModel", 256, settings.Model,
                 value => settings.Model = value, changed);
             ApplyString(values, "claudeModel", 256, settings.ClaudeModel,
                 value => settings.ClaudeModel = value, changed);
-            if (values.TryGetValue("claudeApiKey", StringComparison.OrdinalIgnoreCase, out var claudeKeyToken))
-            {
-                var key = claudeKeyToken?.ToString()?.Trim() ?? "";
-                if (key.Length > 2048)
-                    throw new InvalidOperationException("claudeApiKey exceeds 2048 characters.");
-                if (!string.IsNullOrEmpty(key) && !string.Equals(settings.ClaudeApiKey, key, StringComparison.Ordinal))
-                {
-                    settings.ClaudeApiKey = key;
-                    changed.Add("claudeApiKey");
-                }
-            }
-            if (values.TryGetValue("tavilyApiKey", StringComparison.OrdinalIgnoreCase, out var tavilyKeyToken))
-            {
-                var key = tavilyKeyToken?.ToString()?.Trim() ?? "";
-                if (key.Length > 2048)
-                    throw new InvalidOperationException("tavilyApiKey exceeds 2048 characters.");
-                if (!string.IsNullOrEmpty(key) && !string.Equals(settings.TavilyApiKey, key, StringComparison.Ordinal))
-                {
-                    settings.TavilyApiKey = key;
-                    changed.Add("tavilyApiKey");
-                }
-            }
+            ApplySecret(values, "claudeApiKey",
+                value => settings.ClaudeApiKey = value,
+                () => settings.ClaudeApiKey = "",
+                changed);
+            ApplySecret(values, "tavilyApiKey",
+                value => settings.TavilyApiKey = value,
+                () => settings.TavilyApiKey = "",
+                changed);
             ApplyInt(values, "maxTokens", 256, 16384, settings.MaxTokens,
                 value => settings.MaxTokens = value, changed);
 
@@ -300,6 +278,53 @@ namespace KokonoeAssistant.Services
                 return;
             assign(value);
             changed.Add(name);
+        }
+
+        // Secrets are tri-state: { op: "unchanged" } (default — leave as-is), { op: "replace",
+        // value } (set to a new key), or { op: "clear" } (wipe it). A bare string is accepted
+        // too for back-compat with non-frontend callers: empty means unchanged, non-empty means
+        // replace — matching the old behavior, which had no way to express "clear".
+        private static void ApplySecret(
+            JObject source,
+            string name,
+            Action<string> replace,
+            Action clear,
+            ICollection<string> changed)
+        {
+            if (!source.TryGetValue(name, StringComparison.OrdinalIgnoreCase, out var token) || token == null)
+                return;
+
+            string op;
+            string value;
+            if (token is JObject opToken)
+            {
+                op = opToken["op"]?.ToString() ?? "unchanged";
+                value = opToken["value"]?.ToString()?.Trim() ?? "";
+            }
+            else
+            {
+                value = token.ToString()?.Trim() ?? "";
+                op = value.Length == 0 ? "unchanged" : "replace";
+            }
+
+            switch (op)
+            {
+                case "clear":
+                    clear();
+                    changed.Add(name);
+                    KokoSystemLog.Write("SECRET", $"{name} cleared by user");
+                    break;
+                case "replace":
+                    if (value.Length > 2048)
+                        throw new InvalidOperationException($"{name} exceeds 2048 characters.");
+                    if (value.Length > 0)
+                    {
+                        replace(value);
+                        changed.Add(name);
+                        KokoSystemLog.Write("SECRET", $"{name} replaced");
+                    }
+                    break;
+            }
         }
 
         private static void ApplyString(
