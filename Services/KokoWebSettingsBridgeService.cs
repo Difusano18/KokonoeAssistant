@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
@@ -67,6 +68,12 @@ namespace KokonoeAssistant.Services
             var settings = _load();
             var changed = new List<string>();
             var restartRequired = false;
+
+            KokoSystemLog.Write("SETTINGS-SAVE",
+                $"Received {values.Count} fields. Secrets: " +
+                string.Join(", ", new[] { "ollamaApiKey", "ollamaCloudProxyApiKey", "claudeApiKey", "tavilyApiKey" }
+                    .Where(values.ContainsKey)
+                    .Select(k => $"{k}={DescribeSecretToken(values[k])}")));
 
             ApplyInt(values, "proactiveAutonomyLevel", 0, 3, settings.ProactiveAutonomyLevel,
                 value => settings.ProactiveAutonomyLevel = value, changed);
@@ -190,7 +197,11 @@ namespace KokonoeAssistant.Services
                 if (!string.IsNullOrWhiteSpace(saveError))
                     throw new IOException("Settings save failed: " + saveError);
                 _applied?.Invoke(settings);
-                KokoSystemLog.Write("WEB-SETTINGS", "updated: " + string.Join(",", changed));
+                KokoSystemLog.Write("SETTINGS-SAVE", "Applied changes: " + string.Join(", ", changed));
+            }
+            else
+            {
+                KokoSystemLog.Write("SETTINGS-SAVE", "Applied changes: (none)");
             }
 
             return new
@@ -279,6 +290,15 @@ namespace KokonoeAssistant.Services
             assign(value);
             changed.Add(name);
         }
+
+        // Describes a secret field's incoming op for the audit log without ever logging the
+        // actual key value.
+        private static string DescribeSecretToken(JToken? token) => token switch
+        {
+            JObject opToken => opToken["op"]?.ToString() ?? "unchanged",
+            null => "unchanged",
+            _ => string.IsNullOrWhiteSpace(token.ToString()) ? "unchanged" : "replace(raw)"
+        };
 
         // Secrets are tri-state: { op: "unchanged" } (default — leave as-is), { op: "replace",
         // value } (set to a new key), or { op: "clear" } (wipe it). A bare string is accepted
