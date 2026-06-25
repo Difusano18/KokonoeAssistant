@@ -494,7 +494,12 @@ namespace KokonoeAssistant.Services
             sb.AppendLine("\n## Available Specialist Agents");
             sb.AppendLine("You can delegate sub-tasks using the `delegate_to_agent` tool:");
             foreach (var a in agents)
-                sb.AppendLine($"- **{a.Name}** (id: `{a.Id}`) — {a.Description} [model: {a.Model}, max: {a.MaxTokens}]");
+            {
+                var endpointLabel = "no endpoint set";
+                if (!string.IsNullOrWhiteSpace(a.BaseUrl) && Uri.TryCreate(a.BaseUrl, UriKind.Absolute, out var endpointUri))
+                    endpointLabel = endpointUri.Host;
+                sb.AppendLine($"- **{a.Name}** (id: `{a.Id}`) — {a.Description} [{endpointLabel}, model: {a.Model}, max: {a.MaxTokens}]");
+            }
             sb.AppendLine("\nUse agents for parallel work or specialized capabilities. Combine their results and present a unified answer.");
             return sb.ToString();
         }

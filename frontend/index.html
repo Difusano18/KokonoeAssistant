@@ -335,6 +335,14 @@
     }
     .form-field input:focus { outline: none; border-color: var(--accent-border); }
     .agent-form-actions { display: flex; align-items: center; gap: 10px; padding-top: 8px; border-top: 1px solid var(--line); }
+    .provider-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+    .chip {
+      padding: 3px 10px; border: 1px solid var(--line-2);
+      border-radius: 20px; background: transparent;
+      color: var(--text-3); font-size: 10px; cursor: pointer;
+      transition: color var(--motion-fast) ease, border-color var(--motion-fast) ease;
+    }
+    .chip:hover { color: var(--accent); border-color: var(--accent-border); }
 
     /* ---------- workspace boards (tasks / memory / telemetry) ---------- */
     .workspace-board { padding: 26px 30px; max-width: 980px; }
@@ -843,6 +851,19 @@
               <div class="form-field">
                 <label for="af-url">Base URL (OpenAI-compatible)</label>
                 <input type="text" id="af-url" placeholder="https://api.groq.com/openai/v1">
+              </div>
+              <div class="form-field">
+                <label>Популярні endpoints</label>
+                <div class="provider-chips">
+                  <button type="button" class="chip" data-url="https://api.groq.com/openai/v1"
+                          data-model="llama-3.3-70b-versatile">Groq Fast</button>
+                  <button type="button" class="chip" data-url="https://api.groq.com/openai/v1"
+                          data-model="llama-3.1-8b-instant">Groq Tiny</button>
+                  <button type="button" class="chip" data-url="https://openrouter.ai/api/v1"
+                          data-model="google/gemini-flash-1.5">OpenRouter</button>
+                  <button type="button" class="chip" data-url="https://api.anthropic.com"
+                          data-model="claude-3-5-haiku-20241022">Claude Haiku</button>
+                </div>
               </div>
               <div class="form-field">
                 <label for="af-key">API Key</label>

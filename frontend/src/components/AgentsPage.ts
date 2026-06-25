@@ -24,6 +24,12 @@ export class AgentsPage {
     document.getElementById("agent-form-close")?.addEventListener("click", () => this.closeForm());
     document.getElementById("af-save-btn")?.addEventListener("click", () => void this.saveAgent());
     document.getElementById("af-test-btn")?.addEventListener("click", () => void this.testAgent());
+    document.querySelectorAll<HTMLButtonElement>(".chip[data-url]").forEach(chip => {
+      chip.addEventListener("click", () => {
+        (document.getElementById("af-url") as HTMLInputElement).value = chip.dataset.url ?? "";
+        (document.getElementById("af-model") as HTMLInputElement).value = chip.dataset.model ?? "";
+      });
+    });
     await this.loadAgents();
   }
 
