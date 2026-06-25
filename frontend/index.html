@@ -443,6 +443,21 @@
     }
     .setting-row-stack input[type="text"]::placeholder, .setting-row-stack input[type="password"]::placeholder { color: var(--text-4); }
     .setting-row-stack input[type="text"]:focus, .setting-row-stack input[type="password"]:focus { border-color: var(--accent-border); }
+    .settings-locked-url {
+      display: block; width: 100%; height: 34px; padding: 0 11px; box-sizing: border-box;
+      font: 12px/34px "IBM Plex Mono", monospace; color: var(--text-3);
+      border: 1px dashed var(--line-2); border-radius: 7px; background: var(--card-2);
+    }
+    .setting-hint { margin: 4px 0 0; font-size: 11px; color: var(--text-3); }
+    .setting-hint code { font: 11px "IBM Plex Mono", monospace; color: var(--text-2); }
+    .settings-select {
+      width: 100%; height: 34px; padding: 0 28px 0 11px; border: 1px solid var(--line-2); border-radius: 7px;
+      background: var(--input); color: var(--text); font: 12px "IBM Plex Mono", monospace;
+      cursor: pointer; appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%235a6a78' stroke-width='1.5' fill='none'/%3E%3C/svg%3E");
+      background-repeat: no-repeat; background-position: right 10px center;
+    }
+    .settings-select:focus { outline: none; border-color: var(--accent-border); }
     .credential-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 18px; }
     .credential { display: flex; align-items: center; justify-content: space-between; min-height: 32px; border-bottom: 1px solid var(--line); color: var(--text-2); font-size: 11.5px; }
     .credential output { color: var(--text-3); font: 9px/1 "IBM Plex Mono", monospace; letter-spacing: .5px; text-transform: uppercase; }
@@ -729,7 +744,7 @@
             <section class="settings-group">
               <h3>LLM Provider</h3>
               <div id="llm-provider-segment" class="segment" role="group" aria-label="LLM provider">
-                <button type="button" data-value="lmstudio">LM Studio</button><button type="button" data-value="ollama">Ollama</button><button type="button" data-value="ollama-cloud">Cloud</button><button type="button" data-value="claude">Claude</button>
+                <button type="button" data-value="lmstudio">LM Studio</button><button type="button" data-value="ollama">Ollama</button><button type="button" data-value="ollama-cloud">Cloud</button><button type="button" data-value="claude">Claude</button><button type="button" data-value="ollama-cloud-proxy">Ollama Cloud</button>
               </div>
               <div class="setting-row setting-row-stack" id="row-lm-url">
                 <label for="lm-url">Endpoint URL</label>
@@ -758,6 +773,15 @@
               <div class="setting-row setting-row-stack" id="row-claude-model">
                 <label for="claude-model">Model</label>
                 <input id="claude-model" type="text" placeholder="claude-sonnet-4-20250514" autocomplete="off">
+              </div>
+              <div class="setting-row setting-row-stack" id="row-ollama-cloud-proxy-url">
+                <label>Endpoint</label>
+                <span class="settings-locked-url">http://localhost:11434/v1/chat/completions</span>
+                <p class="setting-hint">Через локально встановлений Ollama, увійти через <code>ollama signin</code> — не окремий хмарний API за самим лише ключем.</p>
+              </div>
+              <div class="setting-row setting-row-stack" id="row-ollama-cloud-proxy-model">
+                <label for="ollama-cloud-proxy-model">Модель</label>
+                <select id="ollama-cloud-proxy-model" class="settings-select"></select>
               </div>
               <div class="setting-row">
                 <label for="max-tokens">Max tokens</label>

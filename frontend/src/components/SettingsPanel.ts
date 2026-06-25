@@ -1,3 +1,5 @@
+import { populateOllamaCloudModelSelect } from "../ollamaCloudModels";
+
 type SettingsValues = Record<string, boolean | number | string>;
 interface SettingsSnapshot { values: SettingsValues; credentials: Record<string, boolean>; }
 interface SettingsUpdateResult { settings: SettingsSnapshot; changed: string[]; restartRequired: boolean; }
@@ -13,7 +15,8 @@ const PROVIDER_ROWS: Record<string, string[]> = {
   lmstudio: ["row-lm-url", "row-lm-model"],
   ollama: ["row-ollama-url", "row-ollama-key", "row-ollama-model"],
   "ollama-cloud": ["row-ollama-url", "row-ollama-key", "row-ollama-model"],
-  claude: ["row-claude-key", "row-claude-model"]
+  claude: ["row-claude-key", "row-claude-model"],
+  "ollama-cloud-proxy": ["row-ollama-cloud-proxy-url", "row-ollama-cloud-proxy-model"]
 };
 
 export class SettingsPanelController {
@@ -32,6 +35,7 @@ export class SettingsPanelController {
   private readonly ollamaUrl = document.getElementById("ollama-url") as HTMLInputElement;
   private readonly ollamaKey = document.getElementById("ollama-key") as HTMLInputElement;
   private readonly ollamaModel = document.getElementById("ollama-model") as HTMLInputElement;
+  private readonly ollamaCloudProxyModel = document.getElementById("ollama-cloud-proxy-model") as HTMLSelectElement;
   private readonly claudeKey = document.getElementById("claude-key") as HTMLInputElement;
   private readonly claudeModel = document.getElementById("claude-model") as HTMLInputElement;
   private readonly tavilyKey = document.getElementById("tavily-key") as HTMLInputElement;
@@ -150,6 +154,7 @@ export class SettingsPanelController {
     this.lmModel.value = String(values.lmModel ?? "");
     this.ollamaUrl.value = String(values.ollamaUrl ?? "");
     this.ollamaModel.value = String(values.ollamaModel ?? "");
+    populateOllamaCloudModelSelect(this.ollamaCloudProxyModel, String(values.ollamaCloudProxyModel ?? ""));
     this.claudeModel.value = String(values.claudeModel ?? "");
     this.ollamaKey.value = "";
     this.ollamaKey.placeholder = snapshot.credentials?.ollama ? "•••• configured (leave blank to keep)" : "sk-...";
@@ -172,6 +177,7 @@ export class SettingsPanelController {
       lmModel: this.lmModel.value.trim(),
       ollamaUrl: this.ollamaUrl.value.trim(),
       ollamaModel: this.ollamaModel.value.trim(),
+      ollamaCloudProxyModel: this.ollamaCloudProxyModel.value,
       ollamaApiKey: this.ollamaKey.value.trim(),
       claudeModel: this.claudeModel.value.trim(),
       claudeApiKey: this.claudeKey.value.trim(),
