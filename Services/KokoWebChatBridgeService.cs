@@ -74,7 +74,7 @@ namespace KokonoeAssistant.Services
             if (text.Length > 32_000)
                 throw new InvalidOperationException("Chat message exceeds 32000 characters.");
 
-            using var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(90));
+            using var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(120));
             using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(ct, timeoutCts.Token);
             var effectiveCt = linkedCts.Token;
 
@@ -124,7 +124,7 @@ namespace KokonoeAssistant.Services
                 _bridge.Publish("chat.error", new
                 {
                     streamId,
-                    error = "Немає відповіді від провайдера за 90 секунд. Перевір API key і URL у Settings.",
+                    error = "Немає відповіді від провайдера за 120 секунд. Перевір API key і URL у Settings.",
                     errorType = "timeout"
                 });
                 throw;
