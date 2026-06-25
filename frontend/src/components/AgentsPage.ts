@@ -1,3 +1,5 @@
+import { OLLAMA_CLOUD_MODELS } from "../ollamaCloudModels";
+
 interface AgentSummary {
   id: string;
   name: string;
@@ -31,7 +33,9 @@ export class AgentsPage {
 
         const options = document.getElementById("af-model-options");
         if (options) {
-          const models = (chip.dataset.models ?? chip.dataset.model ?? "").split(",").filter(Boolean);
+          const models = chip.dataset.provider === "ollama-cloud-proxy"
+            ? OLLAMA_CLOUD_MODELS.map(m => m.id)
+            : (chip.dataset.models ?? chip.dataset.model ?? "").split(",").filter(Boolean);
           options.replaceChildren(...models.map(m => {
             const option = document.createElement("option");
             option.value = m;
