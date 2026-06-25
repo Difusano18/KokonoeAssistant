@@ -190,6 +190,65 @@ async function resetChat(): Promise<void> {
 
 document.getElementById("new-chat-btn")?.addEventListener("click", () => void resetChat());
 
+interface BrowserStatusPayload {
+  status: string;
+  url?: string;
+  title?: string;
+  detail?: string | null;
+}
+interface BrowserScreenshotPayload {
+  path: string;
+  url: string;
+  dataUrl?: string | null;
+}
+
+function setBrowserDotState(status: string): string {
+  if (status === "closed") return "idle";
+  if (status === "error") return "error";
+  if (status === "ready" || status === "idle" || status === "navigated") return "ready";
+  return "busy";
+}
+
+window.koko.on("browser.status", payload => {
+  const p = payload as BrowserStatusPayload;
+  const heading = document.getElementById("browser-section");
+  const panel = document.getElementById("browser-panel");
+  if (heading) heading.style.display = "flex";
+  if (panel) panel.style.display = "block";
+
+  const dot = document.getElementById("browser-dot");
+  if (dot) {
+    dot.classList.remove("ready", "busy", "error", "idle");
+    dot.classList.add(setBrowserDotState(p.status));
+  }
+  const statusText = document.getElementById("browser-status-text");
+  if (statusText) statusText.textContent = p.status;
+  const urlEl = document.getElementById("browser-url");
+  if (urlEl) urlEl.textContent = p.url ?? "";
+  const titleEl = document.getElementById("browser-title");
+  if (titleEl) titleEl.textContent = p.title ?? "";
+
+  const closeBtn = document.getElementById("browser-close-btn");
+  if (closeBtn) closeBtn.style.display = p.status === "closed" ? "none" : "flex";
+});
+
+window.koko.on("browser.screenshot", payload => {
+  const p = payload as BrowserScreenshotPayload;
+  if (!p.dataUrl) return;
+  const wrap = document.getElementById("browser-screenshot-wrap");
+  const img = document.getElementById("browser-screenshot-img") as HTMLImageElement | null;
+  const label = document.getElementById("browser-screenshot-label");
+  if (!wrap || !img) return;
+  img.src = p.dataUrl;
+  if (label) {
+    try { label.textContent = new URL(p.url).hostname; }
+    catch { label.textContent = p.url; }
+  }
+  wrap.style.display = "block";
+});
+
+document.getElementById("browser-close-btn")?.addEventListener("click", () => void window.koko.call("browser.close"));
+
 const panelShortcutIds = ["chat", "tasks", "memory", "telemetry", "agents"];
 
 document.addEventListener("keydown", e => {

@@ -78,7 +78,21 @@ namespace KokonoeAssistant.Services
         private void OnScreenshotTaken(string path, string url)
         {
             if (_disposed) return;
-            _bridge.Publish("browser.screenshot", new { path, url });
+            // WebView2 has no virtual-host mapping for the screenshots folder
+            // (only the frontend dist directory is mapped, in ShellWindow), so
+            // ship the image inline as a data URL instead of a file path the
+            // page can't actually load.
+            string? dataUrl = null;
+            try
+            {
+                var bytes = System.IO.File.ReadAllBytes(path);
+                dataUrl = "data:image/png;base64," + Convert.ToBase64String(bytes);
+            }
+            catch (Exception ex)
+            {
+                KokoSystemLog.Write("BROWSER-CATCH", "Failed to read screenshot for preview: " + ex.Message);
+            }
+            _bridge.Publish("browser.screenshot", new { path, url, dataUrl });
         }
 
         private static string? Truncate(string? text, int max)

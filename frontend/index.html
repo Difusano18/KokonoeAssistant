@@ -153,6 +153,7 @@
     .runtime-dot.ready { background: var(--accent); box-shadow: 0 0 10px var(--accent-glow); }
     .runtime-dot.busy { background: var(--gold); box-shadow: 0 0 9px rgba(199,166,107,.5); animation: runtime-pulse 1.25s ease-in-out infinite; }
     .runtime-dot.error { background: var(--error); box-shadow: 0 0 9px rgba(217,101,112,.45); }
+    .runtime-dot.idle { background: var(--text-4); }
 
     /* ---------- rail ---------- */
     .rail {
@@ -857,6 +858,21 @@
           <p class="telegram-detail">Host connection required.</p>
           <p class="telegram-message"></p>
         </article>
+      </section>
+      <div class="panel-heading" id="browser-section" style="display:none">
+        <h2>Browser</h2>
+        <button id="browser-close-btn" class="icon-button" type="button" title="Close browser" aria-label="Close browser" style="display:none">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M6 6 18 18M18 6 6 18"/></svg>
+        </button>
+      </div>
+      <section id="browser-panel" style="display:none" aria-live="polite">
+        <div class="vault-state"><i id="browser-dot" class="runtime-dot idle"></i><span id="browser-status-text">Not started</span></div>
+        <p id="browser-url" class="vault-path"></p>
+        <p id="browser-title" class="agent-empty" style="margin-top:2px"></p>
+        <div id="browser-screenshot-wrap" style="margin-top:8px;display:none">
+          <img id="browser-screenshot-img" style="width:100%;border-radius:4px;border:1px solid var(--line-2);cursor:pointer" alt="Last screenshot">
+          <p id="browser-screenshot-label" class="vault-meta"></p>
+        </div>
       </section>
       <h2 style="margin-top:24px">Runtime diagnostics</h2>
       <div class="metric"><label>WEBVIEW2</label><output class="ok">INITIALIZED</output></div>
