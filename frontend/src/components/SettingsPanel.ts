@@ -49,6 +49,7 @@ export class SettingsPanelController {
     neuralGovernorEnabled: "neural-governor", screenAwarenessEnabled: "screen-enabled",
     screenAwarenessSendComments: "screen-comments", screenAwarenessIntervalMins: "screen-interval",
     screenAwarenessCommentCooldownMins: "screen-cooldown", systemOverlordEnabled: "overlord-enabled",
+    browserEnabled: "browser-enabled", browserHeadless: "browser-headless",
     voiceInputEnabled: "voice-enabled", ttsEnabled: "tts-enabled", wearBridgeEnabled: "wear-enabled",
     wearBridgeIncludePromptContext: "wear-context", minimizeToTray: "tray-enabled",
     maxTokens: "max-tokens"

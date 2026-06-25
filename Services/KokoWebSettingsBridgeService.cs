@@ -92,6 +92,16 @@ namespace KokonoeAssistant.Services
                 value => settings.NeuralGovernorEnabled = value, changed);
             ApplyBool(values, "systemOverlordEnabled", settings.SystemOverlordEnabled,
                 value => settings.SystemOverlordEnabled = value, changed);
+            var browserEnabledBefore = settings.BrowserEnabled;
+            ApplyBool(values, "browserEnabled", settings.BrowserEnabled,
+                value => settings.BrowserEnabled = value, changed);
+            if (settings.BrowserEnabled != browserEnabledBefore)
+                restartRequired = true;
+            // BrowserHeadless does not need a restart: it's only read the next
+            // time the browser session launches (EnsureInitializedAsync), and
+            // the session can be closed/reopened without restarting the app.
+            ApplyBool(values, "browserHeadless", settings.BrowserHeadless,
+                value => settings.BrowserHeadless = value, changed);
 
             if (values.TryGetValue("llmProvider", StringComparison.OrdinalIgnoreCase, out var providerToken))
             {
@@ -203,6 +213,8 @@ namespace KokonoeAssistant.Services
                 minimizeToTray = settings.MinimizeToTray,
                 neuralGovernorEnabled = settings.NeuralGovernorEnabled,
                 systemOverlordEnabled = settings.SystemOverlordEnabled,
+                browserEnabled = settings.BrowserEnabled,
+                browserHeadless = settings.BrowserHeadless,
                 wearBridgeEnabled = settings.WearBridgeEnabled,
                 wearBridgeIncludePromptContext = settings.WearBridgeIncludePromptContext,
                 matrixColor = settings.MatrixColor,
