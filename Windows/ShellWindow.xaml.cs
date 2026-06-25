@@ -21,6 +21,7 @@ namespace KokonoeAssistant.Windows
         private KokoWebSystemBridgeService? _systemBridge;
         private KokoWebWearBridgeService? _wearBridge;
         private KokoWebAgentPoolBridgeService? _agentPoolBridge;
+        private KokoWebBrowserBridgeService? _browserBridge;
         private Action<string, string>? _brainMessageHandler;
         private bool _preserveServicesOnClose;
 
@@ -44,6 +45,7 @@ namespace KokonoeAssistant.Windows
                 _runtimeBridge?.Dispose();
                 _systemBridge?.Dispose();
                 _wearBridge?.Dispose();
+                _browserBridge?.Dispose();
                 _settingsBridge?.Dispose();
                 _memoryBridge?.Dispose();
                 _vaultBridge?.Dispose();
@@ -101,6 +103,7 @@ namespace KokonoeAssistant.Windows
                 _runtimeBridge = new KokoWebRuntimeBridgeService(_bridge);
                 _wearBridge = new KokoWebWearBridgeService(_bridge, ServiceContainer.WearableTelemetry, ServiceContainer.WearableBridge);
                 _agentPoolBridge = new KokoWebAgentPoolBridgeService(_bridge, ServiceContainer.AgentPool);
+                _browserBridge = new KokoWebBrowserBridgeService(_bridge, ServiceContainer.BrowserOperator);
                 _systemBridge = new KokoWebSystemBridgeService(_bridge, ServiceContainer.SystemOverlord);
                 _brainMessageHandler = (role, content) => _chatBridge?.PublishExternalMessage(role, content);
                 ServiceContainer.BrainEngine.OnNewMessage = _brainMessageHandler;
