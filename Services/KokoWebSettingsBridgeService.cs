@@ -126,6 +126,19 @@ namespace KokonoeAssistant.Services
                 if (!string.IsNullOrEmpty(key) && !string.Equals(settings.OllamaApiKey, key, StringComparison.Ordinal))
                 {
                     settings.OllamaApiKey = key;
+                    // LlmService.ResolveOllamaKey checks the OllamaKeys pool before this
+                    // field, and OllamaKeyPoolService only ever seeds that pool from
+                    // OllamaApiKey once, the first time the pool is empty — after that it
+                    // never looks at this field again. There is no UI anywhere (web shell or
+                    // legacy WPF) to view or edit that pool directly, so once it has any
+                    // entries, pasting a new key here was being silently ignored for actual
+                    // requests. Resetting the pool to just this key makes this field the
+                    // actual source of truth again, matching what the UI implies.
+                    settings.OllamaKeys = new List<OllamaKeyEntry>
+                    {
+                        new OllamaKeyEntry { Name = "Account 1", Key = key, Enabled = true }
+                    };
+                    settings.OllamaActiveKeyIndex = 0;
                     changed.Add("ollamaApiKey");
                 }
             }
