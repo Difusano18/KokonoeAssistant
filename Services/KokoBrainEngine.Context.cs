@@ -465,6 +465,7 @@ namespace KokonoeAssistant.Services
                 AppendStaticVaultNote(sb, "Kokonoe/Досьє.md", "DOSSIER", 700);
                 AppendStaticVaultNote(sb, "Kokonoe/Рефлексія.md", "REFLECTION", 500);
                 sb.Append(BuildAgentPoolSection());
+                sb.Append(BuildBrowserSection());
 
                 var built = sb.ToString();
                 lock (_lock)
@@ -495,6 +496,34 @@ namespace KokonoeAssistant.Services
                 sb.AppendLine($"- **{a.Name}** (id: `{a.Id}`) — {a.Description} [model: {a.Model}, max: {a.MaxTokens}]");
             sb.AppendLine("\nUse agents for parallel work or specialized capabilities. Combine their results and present a unified answer.");
             return sb.ToString();
+        }
+
+        private string BuildBrowserSection()
+        {
+            if (!AppSettings.Load().BrowserEnabled)
+                return "";
+
+            return """
+
+            ## Browser Operator
+            You have access to a real Chromium browser. Use these tools for web tasks:
+
+            - `browser.navigate(url)` — open any website
+            - `browser.click(selector)` — click buttons, links (CSS selector or `text=...`)
+            - `browser.type(selector, text)` — fill input fields
+            - `browser.extract(selector?)` — read page content or specific elements
+            - `browser.screenshot()` — capture current page (for verification)
+            - `browser.scroll(direction, pixels?)` — scroll page
+            - `browser.wait_for(selector)` — wait for dynamic content to load
+
+            Browser usage guidelines:
+            - Always navigate first, then interact
+            - Use browser.extract() to read results before reporting to user
+            - Take browser.screenshot() after key actions to verify state
+            - For searches: navigate then type in search box then click search then extract results
+            - The browser window is VISIBLE to the user — they see what you do
+            - Browser sessions persist during conversation — you can continue where you left off
+            """;
         }
 
         private void AppendStaticVaultNote(StringBuilder sb, string path, string heading, int maxChars)
