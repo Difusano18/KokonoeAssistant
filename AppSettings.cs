@@ -34,7 +34,19 @@ namespace KokonoeAssistant
     public class AppSettings
     {
         private static readonly object SettingsIoLock = new();
-        public const string DefaultOllamaCloudModel = "gemma4:31b-cloud";
+        // "https://ollama.com/v1/chat/completions" was never a working API endpoint — it's
+        // Ollama's marketing site, not their cloud API. Hitting it returns a fast non-2xx
+        // (or a connection-level reset), which LlmService.SendAsync's catch-all then turns
+        // into the literal hardcoded string "[скасовано]" as the chat reply. Groq is an
+        // OpenAI-compatible endpoint with a real free tier — known-working default instead.
+        public const string DefaultOllamaCloudUrl = "https://api.groq.com/openai/v1/chat/completions";
+        public const string DefaultOllamaCloudModel = "llama-3.3-70b-versatile";
+        // Vision still points at the old (broken) model/provider — VisionUrl is empty by
+        // default, so image requests fall through to OllamaUrl, which is now Groq. Groq has
+        // no model named "gemma4:31b-cloud", so vision will start failing clean (and L2 will
+        // surface that failure as readable text) instead of silently. Left unfixed here: no
+        // verified-current Groq vision model name to put in its place without repeating the
+        // same "guessed model id" mistake this fix exists to correct.
         public const string DefaultVisionModel = "gemma4:31b-cloud";
         public const string FallbackVisionModel = "";
 
@@ -57,7 +69,7 @@ namespace KokonoeAssistant
         // Ollama Cloud (OpenAI-compatible endpoint, Bearer auth)
         // OllamaApiKey — legacy (single-key); тепер пул у OllamaKeys (нижче)
         public string OllamaApiKey { get; set; } = "";
-        public string OllamaUrl    { get; set; } = "https://ollama.com/v1/chat/completions";
+        public string OllamaUrl    { get; set; } = DefaultOllamaCloudUrl;
         public string OllamaModel  { get; set; } = DefaultOllamaCloudModel;
 
         // Vision model — використовується замість основної коли є вкладене зображення
@@ -358,10 +370,22 @@ namespace KokonoeAssistant
             }
 
             if (string.IsNullOrWhiteSpace(settings.OllamaModel) ||
-                settings.OllamaModel.Equals("gpt-oss:120b-cloud", StringComparison.OrdinalIgnoreCase))
+                settings.OllamaModel.Equals("gpt-oss:120b-cloud", StringComparison.OrdinalIgnoreCase) ||
+                settings.OllamaModel.Equals("gemma4:31b-cloud", StringComparison.OrdinalIgnoreCase))
             {
                 settings.OllamaModel = DefaultOllamaCloudModel;
                 changed = true;
+            }
+
+            // "https://ollama.com/v1/chat/completions" is Ollama's website, not a working
+            // API endpoint — see DefaultOllamaCloudUrl comment above for the failure chain.
+            if (settings.OllamaUrl.Equals("https://ollama.com/v1/chat/completions", StringComparison.OrdinalIgnoreCase) ||
+                settings.OllamaUrl.Equals("https://ollama.com/v1/", StringComparison.OrdinalIgnoreCase) ||
+                settings.OllamaUrl.Equals("https://ollama.com/v1", StringComparison.OrdinalIgnoreCase))
+            {
+                settings.OllamaUrl = DefaultOllamaCloudUrl;
+                changed = true;
+                KokoSystemLog.Write("SETTINGS", "Migrated invalid Ollama URL to Groq default.");
             }
 
             if (string.IsNullOrWhiteSpace(settings.VisionModel) ||
