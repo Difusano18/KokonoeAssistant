@@ -3494,6 +3494,18 @@ namespace KokonoeAssistant.Services
             var target = ResolveAgentTarget(agentId);
             var isClaude = target.Provider.Equals("claude", StringComparison.OrdinalIgnoreCase);
 
+            // Unlike every other LLM-calling method in this class (SendAsync,
+            // SendSystemQueryAsync, ...), this one never called RecordLlmRequest/
+            // Success/Failure — meaning a streaming HTTP failure left zero trace in
+            // GetDiagnosticsSnapshot(). The "tool_call_fallback" tag here is also what
+            // KokoWebChatBridgeService checks to tell a genuine tool-call fallback
+            // apart from an HTTP-error fallback before deciding to show a mission banner.
+            var diagWatch = Stopwatch.StartNew();
+            var diagProvider = string.IsNullOrWhiteSpace(agentId) ? ActiveProviderLabel() : $"{target.Provider}:{agentId}";
+            var diagModel = target.Model;
+            const string diagChannel = "chat_stream";
+            RecordLlmRequest(diagProvider, diagModel, diagChannel);
+
             // Checkpoint: зберігаємо стан історії для можливого відкату
             int checkpoint;
             lock (_histLock) { checkpoint = _history.Count; }
@@ -3588,6 +3600,7 @@ namespace KokonoeAssistant.Services
 
                 if (resp == null || !resp.IsSuccessStatusCode)
                 {
+                    RecordLlmFailure(diagProvider, diagModel, diagChannel, (int?)resp?.StatusCode, "API Error", diagWatch, "chat_stream_http_error");
                     // Rollback to checkpoint
                     lock (_histLock) { while (_history.Count > checkpoint) _history.RemoveAt(_history.Count - 1); }
                     return null;
@@ -3626,6 +3639,7 @@ namespace KokonoeAssistant.Services
 
                 if (toolCallsDetected)
                 {
+                    RecordLlmSuccess(diagProvider, diagModel, diagChannel, diagWatch, "tool_call_fallback");
                     // Tool call detected — rollback to checkpoint and signal caller to use SendAsync
                     lock (_histLock) { while (_history.Count > checkpoint) _history.RemoveAt(_history.Count - 1); }
                     return null;
@@ -3638,6 +3652,7 @@ namespace KokonoeAssistant.Services
                     var textCalls = TryParseTextToolCalls(rawText);
                     if (textCalls != null && textCalls.Count > 0)
                     {
+                        RecordLlmSuccess(diagProvider, diagModel, diagChannel, diagWatch, "tool_call_fallback");
                         // Rollback to checkpoint
                         lock (_histLock) { while (_history.Count > checkpoint) _history.RemoveAt(_history.Count - 1); }
                         return null; // caller falls back to SendAsync
@@ -3647,6 +3662,7 @@ namespace KokonoeAssistant.Services
                 var reply = CleanGarbage(rawText);
                 if (string.IsNullOrWhiteSpace(reply))
                 {
+                    RecordLlmFailure(diagProvider, diagModel, diagChannel, 200, "empty reply after cleanup", diagWatch, "chat_stream_empty_reply");
                     // Rollback to checkpoint
                     lock (_histLock) { while (_history.Count > checkpoint) _history.RemoveAt(_history.Count - 1); }
                     return null;
@@ -3659,16 +3675,19 @@ namespace KokonoeAssistant.Services
                 }
                 if (streamIsOllamaCloud && !string.IsNullOrEmpty(usedOllamaKey))
                     RecordOllamaKeyRequest(agentId, usedOllamaKey);
+                RecordLlmSuccess(diagProvider, diagModel, diagChannel, diagWatch);
                 return reply;
             }
             catch (OperationCanceledException)
             {
+                RecordLlmFailure(diagProvider, diagModel, diagChannel, null, "cancelled", diagWatch, "chat_stream_cancelled");
                 // Rollback to checkpoint
                 lock (_histLock) { while (_history.Count > checkpoint) _history.RemoveAt(_history.Count - 1); }
                 return null;
             }
-            catch
+            catch (Exception ex)
             {
+                RecordLlmFailure(diagProvider, diagModel, diagChannel, null, ex.Message, diagWatch, "chat_stream_exception");
                 // Rollback to checkpoint
                 lock (_histLock) { while (_history.Count > checkpoint) _history.RemoveAt(_history.Count - 1); }
                 return null;

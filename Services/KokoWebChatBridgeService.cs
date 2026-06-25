@@ -12,6 +12,7 @@ namespace KokonoeAssistant.Services
         private readonly Func<string, string?, Action<string>, CancellationToken, Task<string>> _fallback;
         private readonly Func<string, string?> _contextBuilder;
         private readonly Action _resetHistory;
+        private readonly Func<bool> _wasToolCallFallback;
         private bool _disposed;
 
         public KokoWebChatBridgeService(
@@ -23,7 +24,8 @@ namespace KokonoeAssistant.Services
                 (text, context, onChunk, ct) => llm.SendStreamingAsync(text, context, onChunk, ct),
                 (text, context, onChunk, ct) => llm.SendAsync(text, extraContext: context, ct: ct, onChunk: onChunk),
                 contextBuilder,
-                llm.ClearHistory)
+                llm.ClearHistory,
+                () => llm.GetDiagnosticsSnapshot().LastFallback == "tool_call_fallback")
         {
         }
 
@@ -48,13 +50,18 @@ namespace KokonoeAssistant.Services
             Func<string, string?, Action<string>, CancellationToken, Task<string?>> stream,
             Func<string, string?, Action<string>, CancellationToken, Task<string>> fallback,
             Func<string, string?>? contextBuilder = null,
-            Action? resetHistory = null)
+            Action? resetHistory = null,
+            Func<bool>? wasToolCallFallback = null)
         {
             _bridge = bridge ?? throw new ArgumentNullException(nameof(bridge));
             _stream = stream ?? throw new ArgumentNullException(nameof(stream));
             _fallback = fallback ?? throw new ArgumentNullException(nameof(fallback));
             _contextBuilder = contextBuilder ?? (_ => null);
             _resetHistory = resetHistory ?? (() => { });
+            // Default true: delegate-injected (test) construction has no diagnostics signal
+            // to distinguish a real tool-call fallback from an HTTP-error fallback, so it
+            // falls back to the pre-L3 behavior of always treating a null stream as a mission.
+            _wasToolCallFallback = wasToolCallFallback ?? (() => true);
             _bridge.Register("chat.send", HandleSendAsync);
             _bridge.Register("send_message", HandleSendAsync);
             _bridge.Register("chat.clear_history", HandleClearHistoryAsync);
@@ -102,17 +109,20 @@ namespace KokonoeAssistant.Services
                 var reply = streamed;
                 if (reply == null)
                 {
-                    // This is the only point KokoWebChatBridgeService can observe that the
-                    // model needed tool execution the streaming path couldn't handle —
-                    // it has no visibility into individual tool calls mid-stream (that
-                    // lives inside LlmService). Used as the proxy for "a real task is
-                    // starting" rather than a precise multi-step-task detector.
-                    _bridge.Publish("mission.started", new
+                    // A null stream result means either a genuine tool-call (a real mission)
+                    // or a streaming HTTP/connection failure (not one) — both used to be
+                    // treated as a mission here. _wasToolCallFallback checks the diagnostics
+                    // tag LlmService.SendStreamingAsync now records at each return-null point
+                    // to tell them apart.
+                    if (_wasToolCallFallback())
                     {
-                        streamId,
-                        goal = Trim(text, 100),
-                        startedAt = DateTimeOffset.UtcNow
-                    });
+                        _bridge.Publish("mission.started", new
+                        {
+                            streamId,
+                            goal = Trim(text, 100),
+                            startedAt = DateTimeOffset.UtcNow
+                        });
+                    }
                     if (emittedChunks > 0)
                         _bridge.Publish("chat.reset", new { streamId, reason = "tool_fallback" });
                     var fallbackChunks = 0;
