@@ -6042,7 +6042,7 @@ Insight: bridge stability and pulse quality are linked.
         var request = new KokoAgentChatRequest();
         AssertTrue(request.PreferStreaming, "chat runtime must prefer streaming by default");
 
-        AssertEqual(4096, new AppSettings().MaxTokens,
+        AssertEqual(2048, new AppSettings().MaxTokens,
             "ordinary chat must not reserve a 16k completion by default");
     }
 

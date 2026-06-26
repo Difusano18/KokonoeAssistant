@@ -55,8 +55,11 @@ namespace KokonoeAssistant
         // exact "cursor with no reply" failure this default was causing.
         public string LlmProvider { get; set; } = "ollama-cloud";
 
-        // Caps reply length across providers — see LlmService.MainMaxTokens
-        public int MaxTokens { get; set; } = 4096;
+        // Caps reply length across providers — see LlmService.MainMaxTokens. Lowered from
+        // 4096 for faster default replies; only affects fresh installs, since this is a
+        // property initializer and existing settings.json files already have their own
+        // persisted value regardless of this default.
+        public int MaxTokens { get; set; } = 2048;
 
         // LM Studio
         public string LmUrl   { get; set; } = "http://localhost:1234/v1/chat/completions";
