@@ -6403,8 +6403,10 @@ Insight: bridge stability and pulse quality are linked.
 
     private static void WebChatBridgeStreamsCorrelatedChunks()
     {
-        var envelopes = new List<string>();
-        using var bridge = new KokoWebBridgeService(envelopes.Add);
+        // chat.send now runs its pipeline on a detached background task, so the
+        // publish callback can fire concurrently with this thread's reads below.
+        var envelopes = new System.Collections.Concurrent.ConcurrentQueue<string>();
+        using var bridge = new KokoWebBridgeService(envelopes.Enqueue);
         using var chat = new KokoWebChatBridgeService(
             bridge,
             (text, context, chunk, ct) =>
@@ -6417,6 +6419,11 @@ Insight: bridge stability and pulse quality are linked.
 
         bridge.HandleMessageAsync("""{"type":"request","id":"chat-1","method":"chat.send","payload":{"streamId":"stream-1","text":"hello"}}""")
             .GetAwaiter().GetResult();
+        // chat.send acknowledges immediately and runs the actual turn on a detached
+        // background task now - wait for it to actually publish before asserting.
+        AssertTrue(System.Threading.SpinWait.SpinUntil(
+            () => envelopes.Any(e => e.Contains("\"chat.completed\"")), TimeSpan.FromSeconds(5)),
+            "chat pipeline must publish chat.completed");
 
         var parsed = envelopes.Select(Newtonsoft.Json.Linq.JObject.Parse).ToList();
         var chunks = parsed.Where(x => x["type"]?.ToString() == "event" && x["channel"]?.ToString() == "chat.chunk").ToList();
@@ -6429,8 +6436,8 @@ Insight: bridge stability and pulse quality are linked.
 
     private static void WebChatBridgeResetsPartialStreamBeforeFallback()
     {
-        var envelopes = new List<string>();
-        using var bridge = new KokoWebBridgeService(envelopes.Add);
+        var envelopes = new System.Collections.Concurrent.ConcurrentQueue<string>();
+        using var bridge = new KokoWebBridgeService(envelopes.Enqueue);
         using var chat = new KokoWebChatBridgeService(
             bridge,
             (text, context, chunk, ct) =>
@@ -6442,6 +6449,9 @@ Insight: bridge stability and pulse quality are linked.
 
         bridge.HandleMessageAsync("""{"type":"request","id":"chat-2","method":"chat.send","payload":{"streamId":"stream-2","text":"use a tool"}}""")
             .GetAwaiter().GetResult();
+        AssertTrue(System.Threading.SpinWait.SpinUntil(
+            () => envelopes.Any(e => e.Contains("\"chat.completed\"")), TimeSpan.FromSeconds(5)),
+            "chat pipeline must publish chat.completed");
 
         var parsed = envelopes.Select(Newtonsoft.Json.Linq.JObject.Parse).ToList();
         var resetIndex = parsed.FindIndex(x => x["channel"]?.ToString() == "chat.reset");
@@ -6452,8 +6462,8 @@ Insight: bridge stability and pulse quality are linked.
 
     private static void WebChatBridgeStreamsToolFallbackAfterReset()
     {
-        var envelopes = new List<string>();
-        using var bridge = new KokoWebBridgeService(envelopes.Add);
+        var envelopes = new System.Collections.Concurrent.ConcurrentQueue<string>();
+        using var bridge = new KokoWebBridgeService(envelopes.Enqueue);
         using var chat = new KokoWebChatBridgeService(
             bridge,
             (text, context, chunk, ct) =>
@@ -6470,6 +6480,9 @@ Insight: bridge stability and pulse quality are linked.
 
         bridge.HandleMessageAsync("""{"type":"request","id":"chat-3","method":"chat.send","payload":{"streamId":"stream-3","text":"use a tool"}}""")
             .GetAwaiter().GetResult();
+        AssertTrue(System.Threading.SpinWait.SpinUntil(
+            () => envelopes.Any(e => e.Contains("\"chat.completed\"")), TimeSpan.FromSeconds(5)),
+            "chat pipeline must publish chat.completed");
 
         var parsed = envelopes.Select(JObject.Parse).ToList();
         var resetIndex = parsed.FindIndex(x => x["channel"]?.ToString() == "chat.reset");

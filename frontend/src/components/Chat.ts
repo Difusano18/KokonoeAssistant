@@ -47,10 +47,9 @@ type ChatEvent = {
   goal?: string;
 };
 
-type ChatSendResult = {
+type ChatSendAck = {
+  accepted: boolean;
   streamId: string;
-  reply: string;
-  streamed: boolean;
 };
 
 function formatClock(date: Date): string {
@@ -83,6 +82,7 @@ export class ChatController {
     window.koko.on("chat.reset", payload => this.onReset(payload as ChatEvent));
     window.koko.on("chat.completed", payload => this.onCompleted(payload as ChatEvent));
     window.koko.on("chat.error", payload => this.onError(payload as ChatEvent));
+    window.koko.on("chat.canceled", payload => this.onCanceled(payload as ChatEvent));
     window.koko.on("chat.external", payload => this.onExternal(payload as ChatEvent));
     window.koko.on("artifact.new", payload => this.onArtifact(payload as ArtifactSummary));
     window.koko.on("mission.started", payload => this.onMissionStarted(payload as ChatEvent));
@@ -107,17 +107,17 @@ export class ChatController {
     this.input.value = "";
     this.setBusy(true);
     try {
-      const result = await window.koko.call<ChatSendResult>("chat.send", { text, streamId: this.activeStreamId }, 180000);
-      if (this.activeBody && !this.activeRawText) {
-        this.activeRawText = result.reply;
-        this.renderMarkdown(this.activeBody, this.activeRawText);
-      }
+      // chat.send only acknowledges receipt now - the actual reply arrives via
+      // chat.started/chat.chunk/chat.completed/chat.error/chat.canceled events.
+      // A short timeout here only guards against the RPC itself not getting
+      // through; it no longer has to cover however long the model takes to reply,
+      // which is what made a slow-but-working response look like a dead bridge.
+      await window.koko.call<ChatSendAck>("chat.send", { text, streamId: this.activeStreamId }, 10000);
     } catch (error) {
-      if (!this.activeBody?.closest(".message")?.classList.contains("error"))
-        this.fail(error instanceof Error ? error.message : String(error));
-    } finally {
-      this.setBusy(false);
-      this.input.focus();
+      // fail() resets busy/focus itself; only call it if chat.error hasn't already
+      // (which also resets busy/focus) to avoid stepping on a more specific message.
+      if (this.activeBody?.closest(".message")?.classList.contains("error")) return;
+      this.fail(error instanceof Error ? error.message : String(error));
     }
   }
 
@@ -175,6 +175,20 @@ export class ChatController {
       this.activeBody.append(duration);
     }
     this.scrollToEnd();
+    this.setBusy(false);
+    this.input.focus();
+  }
+
+  private onCanceled(event: ChatEvent): void {
+    if (event.streamId !== this.activeStreamId || !this.activeBody) return;
+    this.stopResponseTimer();
+    if (!this.activeRawText) {
+      this.activeBody.classList.remove("markdown");
+      this.activeBody.textContent = "Скасовано.";
+    }
+    this.activeBody.closest(".message")?.classList.remove("streaming");
+    this.setBusy(false);
+    this.input.focus();
   }
 
   private onError(event: ChatEvent): void {
@@ -299,6 +313,8 @@ export class ChatController {
     const messageElement = this.activeBody.closest(".message");
     messageElement?.classList.remove("streaming");
     messageElement?.classList.add("error");
+    this.setBusy(false);
+    this.input.focus();
   }
 
   private setBusy(value: boolean): void {

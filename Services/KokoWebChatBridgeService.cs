@@ -81,6 +81,30 @@ namespace KokonoeAssistant.Services
             if (text.Length > 32_000)
                 throw new InvalidOperationException("Chat message exceeds 32000 characters.");
 
+            // chat.send used to block the whole RPC until the reply (and a possible fallback
+            // call) finished — a slow first token or a multi-round tool loop just past the
+            // bridge's client-side timeout looked identical to a dead bridge, even though
+            // chat.chunk events were arriving fine the whole time. Acknowledge immediately
+            // and run the actual turn detached; chat.started/chunk/completed/error/canceled
+            // already carry everything the UI needs.
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await RunChatPipelineAsync(text, streamId, CancellationToken.None).ConfigureAwait(false);
+                }
+                catch (Exception ex)
+                {
+                    KokoSystemLog.Write("WEB-CHAT", $"chat pipeline failed for stream {streamId}: {ex}");
+                    _bridge.Publish("chat.error", new { streamId, error = ex.Message, errorType = "pipeline" });
+                }
+            });
+
+            return new { accepted = true, streamId };
+        }
+
+        private async Task RunChatPipelineAsync(string text, string streamId, CancellationToken ct)
+        {
             using var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(120));
             using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(ct, timeoutCts.Token);
             var effectiveCt = linkedCts.Token;
@@ -140,11 +164,10 @@ namespace KokonoeAssistant.Services
                 if (IsProviderError(reply))
                 {
                     _bridge.Publish("chat.error", new { streamId, error = reply, errorType = "provider" });
-                    return new { streamId, reply, streamed = false };
+                    return;
                 }
 
                 _bridge.Publish("chat.completed", new { streamId, reply, streamed = usedStreaming });
-                return new { streamId, reply, streamed = usedStreaming };
             }
             catch (OperationCanceledException) when (timeoutCts.IsCancellationRequested)
             {
@@ -154,17 +177,14 @@ namespace KokonoeAssistant.Services
                     error = "Немає відповіді від провайдера за 120 секунд. Перевір API key і URL у Settings.",
                     errorType = "timeout"
                 });
-                throw;
             }
             catch (OperationCanceledException)
             {
                 _bridge.Publish("chat.canceled", new { streamId });
-                throw;
             }
             catch (Exception ex)
             {
                 _bridge.Publish("chat.error", new { streamId, error = ex.Message });
-                throw;
             }
         }
 
