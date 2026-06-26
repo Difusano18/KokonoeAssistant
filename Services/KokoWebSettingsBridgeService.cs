@@ -209,6 +209,8 @@ namespace KokonoeAssistant.Services
                 changed);
             ApplyInt(values, "maxTokens", 256, 16384, settings.MaxTokens,
                 value => settings.MaxTokens = value, changed);
+            ApplyBool(values, "unlimitedResponse", settings.UnlimitedResponse,
+                value => settings.UnlimitedResponse = value, changed);
 
             var wearBridgeBefore = settings.WearBridgeEnabled;
             ApplyBool(values, "wearBridgeEnabled", settings.WearBridgeEnabled,
@@ -291,7 +293,8 @@ namespace KokonoeAssistant.Services
                 lmUrl = settings.LmUrl,
                 lmModel = settings.Model,
                 claudeModel = settings.ClaudeModel,
-                maxTokens = settings.MaxTokens
+                maxTokens = settings.MaxTokens,
+                unlimitedResponse = settings.UnlimitedResponse
             },
             credentials = new
             {

@@ -55,11 +55,16 @@ namespace KokonoeAssistant
         // exact "cursor with no reply" failure this default was causing.
         public string LlmProvider { get; set; } = "ollama-cloud";
 
-        // Caps reply length across providers — see LlmService.MainMaxTokens. Lowered from
-        // 4096 for faster default replies; only affects fresh installs, since this is a
-        // property initializer and existing settings.json files already have their own
-        // persisted value regardless of this default.
-        public int MaxTokens { get; set; } = 2048;
+        // Caps reply length across providers — see LlmService.MainMaxTokens. Only affects
+        // fresh installs, since this is a property initializer and existing settings.json
+        // files already have their own persisted value regardless of this default.
+        public int MaxTokens { get; set; } = 8192;
+
+        // When true, the local Ollama Cloud proxy path sends options.num_predict=-1 (no
+        // limit) instead of MaxTokens, and omits max_tokens entirely so nothing competes
+        // with it. Other providers (Claude/Groq/LM Studio) don't support an unbounded
+        // value here, so this only ever changes behavior for ollama-cloud-proxy.
+        public bool UnlimitedResponse { get; set; } = false;
 
         // LM Studio
         public string LmUrl   { get; set; } = "http://localhost:1234/v1/chat/completions";

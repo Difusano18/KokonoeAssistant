@@ -379,7 +379,19 @@ namespace KokonoeAssistant.Services
             if (!isOllamaProxy)
                 return reqBody;
             var body = JObject.FromObject(reqBody);
-            body["options"] = new JObject { ["num_predict"] = maxTokens, ["num_ctx"] = numCtx };
+            if (AppSettings.Load().UnlimitedResponse)
+            {
+                // Drop max_tokens entirely rather than leaving it alongside num_predict=-1 -
+                // there's no documented guarantee Ollama's OpenAI-compat shim ignores a
+                // competing max_tokens cap when options.num_predict is also present, and
+                // "unlimited" should mean unlimited, not "whatever the smaller of the two is."
+                body.Remove("max_tokens");
+                body["options"] = new JObject { ["num_predict"] = -1, ["num_ctx"] = numCtx };
+            }
+            else
+            {
+                body["options"] = new JObject { ["num_predict"] = maxTokens, ["num_ctx"] = numCtx };
+            }
             return body;
         }
 

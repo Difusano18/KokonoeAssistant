@@ -6042,8 +6042,10 @@ Insight: bridge stability and pulse quality are linked.
         var request = new KokoAgentChatRequest();
         AssertTrue(request.PreferStreaming, "chat runtime must prefer streaming by default");
 
-        AssertEqual(2048, new AppSettings().MaxTokens,
-            "ordinary chat must not reserve a 16k completion by default");
+        AssertEqual(8192, new AppSettings().MaxTokens,
+            "fresh-install default should allow a generous reply without hitting the 16384 ceiling");
+        AssertTrue(!new AppSettings().UnlimitedResponse,
+            "unlimited response must be an explicit opt-in, not a fresh-install default");
     }
 
     private static void WebBridgeCompletesPingPongRoundTrip()

@@ -67,8 +67,10 @@ export class SettingsPanelController {
     browserEnabled: "browser-enabled", browserHeadless: "browser-headless",
     voiceInputEnabled: "voice-enabled", ttsEnabled: "tts-enabled", wearBridgeEnabled: "wear-enabled",
     wearBridgeIncludePromptContext: "wear-context", minimizeToTray: "tray-enabled",
-    maxTokens: "max-tokens"
+    maxTokens: "max-tokens", unlimitedResponse: "s-unlimited"
   };
+  private readonly maxTokensInput = document.getElementById("max-tokens") as HTMLInputElement;
+  private readonly unlimitedToggle = document.getElementById("s-unlimited") as HTMLInputElement;
 
   constructor() {
     this.segment.addEventListener("click", event => {
@@ -95,6 +97,9 @@ export class SettingsPanelController {
     this.wireSecretReveal(this.ollamaCloudProxyKey, this.ollamaCloudProxyKeyReveal, "ollamaCloudProxy");
     this.wireSecretReveal(this.claudeKey, this.claudeKeyReveal, "claude");
     this.wireSecretReveal(this.tavilyKey, this.tavilyKeyReveal, "tavily");
+    this.unlimitedToggle.addEventListener("change", () => {
+      this.maxTokensInput.disabled = this.unlimitedToggle.checked;
+    });
   }
 
   // Toggling type back to "password" alone would leave the real fetched value sitting in
@@ -244,6 +249,7 @@ export class SettingsPanelController {
       if (input.type === "checkbox") input.checked = Boolean(values[name]);
       else input.value = String(values[name] ?? "");
     }
+    this.maxTokensInput.disabled = this.unlimitedToggle.checked;
     this.setProvider(String(values.llmProvider ?? "ollama-cloud"));
     this.lmUrl.value = String(values.lmUrl ?? "");
     this.lmModel.value = String(values.lmModel ?? "");

@@ -843,6 +843,11 @@
                 <label for="max-tokens">Max tokens</label>
                 <input id="max-tokens" type="number" min="256" max="16384" step="256">
               </div>
+              <div class="setting-row">
+                <label for="s-unlimited">Без ліміту довжини</label>
+                <input id="s-unlimited" type="checkbox">
+              </div>
+              <p class="setting-hint">Працює тільки для Ollama Cloud (local proxy): num_predict=-1, модель генерує доки сама не зупиниться. Інші провайдери завжди потребують реального max_tokens.</p>
             </section>
             <section class="settings-group">
               <h3>Web search</h3>
