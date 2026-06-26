@@ -1074,7 +1074,11 @@ namespace KokonoeAssistant.Services
 
         private void ExtractAndRememberFacts(string userMsg)
         {
-            var policy = MemoryWritePolicy.EvaluateAsync(userMsg, DateTime.Now, Memory, Emotion).GetAwaiter().GetResult();
+            // Task.Run before the blocking wait: this method's only live caller already
+            // wraps it in Task.Run, but blocking here directly (without it) would capture
+            // whatever SynchronizationContext the caller is on - UI-thread deadlock risk if
+            // a future caller ever invokes this synchronously from the UI thread.
+            var policy = Task.Run(() => MemoryWritePolicy.EvaluateAsync(userMsg, DateTime.Now, Memory, Emotion)).GetAwaiter().GetResult();
             if (policy.Action is "ignore" or "daily_log" or "review" or "reinforce_existing")
                 return;
 
@@ -1264,7 +1268,11 @@ namespace KokonoeAssistant.Services
 
         private KokoMemoryWriteDecision RecordMemoryPolicyAndContinuity(string userText, DateTime now)
         {
-            var decision = MemoryWritePolicy.EvaluateAsync(userText, now, Memory, Emotion).GetAwaiter().GetResult();
+            // ProcessUserMessage (the only caller) runs synchronously from the legacy WPF
+            // chat send handler and Telegram message handlers - blocking directly here would
+            // capture whichever SynchronizationContext that caller is on. Task.Run moves the
+            // wait onto a thread-pool thread with none, removing the UI-thread deadlock risk.
+            var decision = Task.Run(() => MemoryWritePolicy.EvaluateAsync(userText, now, Memory, Emotion)).GetAwaiter().GetResult();
             _state.LastMemoryPolicyDecision = decision.TraceLine;
             _state.LastMemoryPolicyAt = now;
             _state.MemoryPolicyLog.Add(decision.TraceLine);

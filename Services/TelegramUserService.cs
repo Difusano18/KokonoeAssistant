@@ -106,8 +106,14 @@ namespace KokonoeAssistant.Services
 
         private string AskSync(string prompt)
         {
+            // WTelegramClient's Config delegate is synchronous by contract (Func<string,
+            // string>), so this bridge to the async AskForInput has to block somewhere.
+            // Task.Run keeps the wait off whatever SynchronizationContext called Config -
+            // LoginUserIfNeeded can reach this mid-await on a UI-originated chain, and
+            // AskForInput's implementation may itself need to get back onto the UI thread
+            // to show a prompt, so blocking directly here would risk a classic deadlock.
             if (AskForInput == null) throw new InvalidOperationException("AskForInput не встановлено");
-            return AskForInput(prompt).GetAwaiter().GetResult();
+            return Task.Run(() => AskForInput(prompt)).GetAwaiter().GetResult();
         }
 
         // ── Preload dialogs ────────────────────────────────────────
