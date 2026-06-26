@@ -1157,6 +1157,24 @@ namespace KokonoeAssistant.Services
             }
         }
 
+        // The neural governor is a full extra LLM round-trip (NeuralGovernorTimeoutMs, up to
+        // 6s) before the actual reply even starts generating - the dominant latency cost on
+        // every single message, including "привіт". Short, tool-free messages skip straight
+        // to the existing heuristic ResponsePlanner.Build fallback below, which still carries
+        // social/emotional/subconscious/temporal context - only the network round-trip is cut,
+        // not Kokonoe's continuity.
+        private static bool IsSimpleChatTurn(string userText)
+        {
+            if (string.IsNullOrWhiteSpace(userText) || userText.Length > 120)
+                return false;
+            string[] toolWords =
+            {
+                "браузер", "знайди", "файл", "агент", "створи", "відкрий",
+                "проскануй", "задач", "browser", "search", "vault", "нотат"
+            };
+            return !toolWords.Any(w => userText.Contains(w, StringComparison.OrdinalIgnoreCase));
+        }
+
         private KokoResponsePlanFrame BuildGovernedResponsePlan(string userText, DateTime now)
         {
             var social = BuildSocialFrame(userText, now);
@@ -1166,7 +1184,7 @@ namespace KokonoeAssistant.Services
             var emotional = EmotionalMemory.BuildPromptBlock(_state, recentForPlanning, now, userText);
             var rawHydration = EmotionalMemory.BuildRawHydrationBlock(_state, recentForPlanning, now);
             var settings = AppSettings.Load();
-            if (settings.NeuralGovernorEnabled && ServiceContainer.IsInitialized)
+            if (settings.NeuralGovernorEnabled && ServiceContainer.IsInitialized && !IsSimpleChatTurn(userText))
             {
                 try
                 {
