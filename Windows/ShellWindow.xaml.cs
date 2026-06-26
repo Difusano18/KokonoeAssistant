@@ -24,7 +24,6 @@ namespace KokonoeAssistant.Windows
         private KokoWebBrowserBridgeService? _browserBridge;
         private KokoWebArtifactBridgeService? _artifactBridge;
         private Action<string, string>? _brainMessageHandler;
-        private bool _preserveServicesOnClose;
 
         public event Action<string>? InitializationFailed;
 
@@ -55,16 +54,10 @@ namespace KokonoeAssistant.Windows
                 _chatBridge?.Dispose();
                 _bridge?.Dispose();
                 WebView.Dispose();
-                if (!_preserveServicesOnClose)
-                {
-                    try { ServiceContainer.BrainEngine.RecordClose(); } catch (Exception ex) { KokoSystemLog.Write("WEB-SHELL", "record close failed: " + ex.Message); }
-                    ServiceContainer.Disposing();
-                }
+                try { ServiceContainer.BrainEngine.RecordClose(); } catch (Exception ex) { KokoSystemLog.Write("WEB-SHELL", "record close failed: " + ex.Message); }
+                ServiceContainer.Disposing();
             };
         }
-
-        public void TransferServiceLifetimeToFallback()
-            => _preserveServicesOnClose = true;
 
         private async void OnLoaded(object sender, RoutedEventArgs e)
         {

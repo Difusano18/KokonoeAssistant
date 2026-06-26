@@ -78,20 +78,27 @@ namespace KokonoeAssistant
             }
 
             var shell = new ShellWindow();
-            shell.InitializationFailed += error => Dispatcher.Invoke(() => FallBackToLegacy(shell, error));
+            shell.InitializationFailed += error => Dispatcher.Invoke(() => ShowWebShellFailure(error));
             ShowAsMainWindow(shell);
         }
 
-        private void FallBackToLegacy(ShellWindow shell, string error)
+        // Used to silently fall back to the legacy WPF MainWindow, which had its own
+        // Settings panel with only 4 hardcoded providers (no ollama-cloud-proxy) - saving
+        // through it would silently downgrade the active provider out from under the user.
+        // Removed instead of patched: maintaining two independent settings UIs is exactly
+        // how that drifted out of sync in the first place.
+        private void ShowWebShellFailure(string error)
         {
-            if (!ReferenceEquals(MainWindow, shell))
-                return;
-
-            KokoSystemLog.Write("UI-STARTUP", "Web shell failed; activating frozen WPF fallback: " + error);
-            shell.TransferServiceLifetimeToFallback();
-            var legacy = new MainWindow();
-            ShowAsMainWindow(legacy);
-            shell.Close();
+            KokoSystemLog.Write("UI-STARTUP", "Web shell failed to initialize: " + error);
+            WMsgBox.Show(
+                "WebView2 не вдалося ініціалізувати.\n\n" +
+                "Встанови WebView2 Runtime:\n" +
+                "https://go.microsoft.com/fwlink/p/?LinkId=2124703\n\n" +
+                "Деталі: " + error + "\n\n" +
+                "Застосунок закриється.",
+                "Kokonoe — помилка запуску",
+                MessageBoxButton.OK, MessageBoxImage.Error);
+            Shutdown();
         }
 
         private void ShowAsMainWindow(Window window)
