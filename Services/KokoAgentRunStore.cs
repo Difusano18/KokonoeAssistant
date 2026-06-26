@@ -51,7 +51,8 @@ namespace KokonoeAssistant.Services
                 }
                 finally
                 {
-                    try { if (File.Exists(temp)) File.Delete(temp); } catch { }
+                    try { if (File.Exists(temp)) File.Delete(temp); }
+                    catch (Exception ex) { KokoSystemLog.Write("AGENT-STORE", $"temp cleanup failed: {ex.Message}"); }
                 }
             }
         }

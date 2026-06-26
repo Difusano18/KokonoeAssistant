@@ -162,7 +162,7 @@ namespace KokonoeAssistant
         // VAULT SIDEBAR
         // ------------------------------------------------------------
 
-        private void LoadVaultSidebar()
+        private void LoadVaultSidebar(string? filter = null)
         {
             try
             {
@@ -172,14 +172,23 @@ namespace KokonoeAssistant
                 var root = new DirectoryInfo(vault);
                 if (!root.Exists) return;
 
+                var hasFilter = !string.IsNullOrWhiteSpace(filter);
+
                 foreach (var dir in root.GetDirectories().Where(d => !d.Name.StartsWith(".")))
                 {
+                    var files = dir.GetFiles("*.md")
+                        .Where(f => !hasFilter || f.Name.Contains(filter!, StringComparison.OrdinalIgnoreCase))
+                        .Take(20)
+                        .ToList();
+                    if (hasFilter && files.Count == 0 && !dir.Name.Contains(filter!, StringComparison.OrdinalIgnoreCase))
+                        continue;
+
                     var node = new TreeViewItem
                     {
                         Header = $"📁 {dir.Name}",
                         Tag = dir.FullName
                     };
-                    foreach (var file in dir.GetFiles("*.md").Take(20))
+                    foreach (var file in files)
                     {
                         node.Items.Add(new TreeViewItem
                         {
@@ -190,7 +199,9 @@ namespace KokonoeAssistant
                     VaultTree.Items.Add(node);
                 }
 
-                foreach (var file in root.GetFiles("*.md").Take(20))
+                foreach (var file in root.GetFiles("*.md")
+                    .Where(f => !hasFilter || f.Name.Contains(filter!, StringComparison.OrdinalIgnoreCase))
+                    .Take(20))
                 {
                     VaultTree.Items.Add(new TreeViewItem
                     {
@@ -219,8 +230,7 @@ namespace KokonoeAssistant
         private void VaultSearch_Changed(object sender, TextChangedEventArgs e)
         {
             var q = VaultSearchBox.Text.Trim();
-            if (q.Length < 2) { LoadVaultSidebar(); return; }
-            // TODO: filter tree
+            LoadVaultSidebar(q.Length < 2 ? null : q);
         }
 
         // ------------------------------------------------------------
