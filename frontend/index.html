@@ -195,6 +195,31 @@
     .empty strong { display: block; margin-bottom: 8px; font-size: 15px; color: var(--text); }
     .empty span { color: var(--text-3); font-size: 12px; }
 
+    /* ---------- activity feed ---------- */
+    .activity-feed {
+      margin: 0 22px; padding: 10px 14px;
+      border-left: 2px solid var(--accent);
+      background: color-mix(in srgb, var(--accent) 4%, transparent);
+      border-radius: 0 8px 8px 0;
+      display: flex; flex-direction: column; gap: 6px;
+      max-width: 600px;
+    }
+    .activity-row {
+      display: flex; align-items: center; gap: 8px;
+      font: 11px "IBM Plex Mono", Consolas, monospace;
+      color: var(--text-3);
+    }
+    .activity-icon { width: 14px; height: 14px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
+    .activity-row.running .activity-icon::before {
+      content: ""; width: 7px; height: 7px; border-radius: 50%;
+      background: var(--accent); animation: activity-pulse 1s ease-in-out infinite;
+    }
+    .activity-row.done .activity-icon::before   { content: "✓"; color: var(--accent); font-size: 11px; }
+    .activity-row.failed .activity-icon::before { content: "✗"; color: #d96570; font-size: 11px; }
+    .activity-row.done { color: var(--text-4); }
+    .activity-detail { color: var(--text-4); font-size: 10px; margin-left: auto; }
+    @keyframes activity-pulse { 0%,100% { opacity: .4; transform: scale(.8); } 50% { opacity: 1; transform: scale(1.1); } }
+
     /* ---------- composer ---------- */
     .composer { display: flex; align-items: flex-end; gap: 10px; padding: 14px 22px 18px; border-top: 1px solid var(--line); background: color-mix(in srgb, var(--surface) 80%, transparent); backdrop-filter: blur(8px); }
     .composer-field { position: relative; flex: 1; min-width: 0; }
@@ -953,6 +978,7 @@
           </div>
         </div>
       </section>
+      <div id="activity-feed" class="activity-feed" style="display:none"></div>
       <form id="chat-form" class="composer">
         <div class="composer-field">
           <input id="chat-input" aria-label="Message" placeholder="Message Kokonoe" autocomplete="off" disabled>

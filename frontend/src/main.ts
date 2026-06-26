@@ -23,7 +23,8 @@ const chat = new ChatController(
   required<HTMLButtonElement>("chat-send"),
   required("messages"),
   required("chat-scroll"),
-  required("chat-status")
+  required("chat-status"),
+  required("activity-feed")
 );
 const agents = new AgentBoardController();
 const agentsPage = new AgentsPage();

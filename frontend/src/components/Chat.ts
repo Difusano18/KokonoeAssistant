@@ -52,6 +52,14 @@ type ChatSendAck = {
   streamId: string;
 };
 
+type ActivityEvent = {
+  kind: string;
+  label: string;
+  detail?: string;
+  status: "running" | "done" | "failed";
+  at: string;
+};
+
 function formatClock(date: Date): string {
   const pad = (n: number) => String(n).padStart(2, "0");
   return `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
@@ -64,6 +72,8 @@ export class ChatController {
   private busy = false;
   private responseTimerHandle = 0;
   private responseStartedAt = 0;
+  private readonly activityRows = new Map<string, HTMLElement>();
+  private activityClearHandle = 0;
 
   constructor(
     form: HTMLFormElement,
@@ -71,7 +81,8 @@ export class ChatController {
     private readonly send: HTMLButtonElement,
     private readonly messages: HTMLElement,
     private readonly scroll: HTMLElement,
-    private readonly status: HTMLElement
+    private readonly status: HTMLElement,
+    private readonly activityFeed: HTMLElement
   ) {
     form.addEventListener("submit", event => {
       event.preventDefault();
@@ -86,6 +97,41 @@ export class ChatController {
     window.koko.on("chat.external", payload => this.onExternal(payload as ChatEvent));
     window.koko.on("artifact.new", payload => this.onArtifact(payload as ArtifactSummary));
     window.koko.on("mission.started", payload => this.onMissionStarted(payload as ChatEvent));
+    window.koko.on("koko.activity", payload => this.onActivity(payload as ActivityEvent));
+  }
+
+  private onActivity(event: ActivityEvent): void {
+    window.clearTimeout(this.activityClearHandle);
+    this.activityFeed.style.display = "flex";
+    const key = `${event.kind}-${event.label}`;
+    let row = this.activityRows.get(key);
+    if (!row) {
+      row = document.createElement("div");
+      const icon = document.createElement("span");
+      icon.className = "activity-icon";
+      const label = document.createElement("span");
+      label.className = "activity-label";
+      label.textContent = event.label;
+      row.append(icon, label);
+      if (event.detail) {
+        const detail = document.createElement("span");
+        detail.className = "activity-detail";
+        detail.textContent = event.detail;
+        row.append(detail);
+      }
+      this.activityFeed.appendChild(row);
+      this.activityRows.set(key, row);
+    }
+    row.className = `activity-row ${event.status}`;
+  }
+
+  private clearActivityFeedSoon(): void {
+    window.clearTimeout(this.activityClearHandle);
+    this.activityClearHandle = window.setTimeout(() => {
+      this.activityFeed.style.display = "none";
+      this.activityFeed.innerHTML = "";
+      this.activityRows.clear();
+    }, 2000);
   }
 
   setAvailable(available: boolean): void {
@@ -177,6 +223,7 @@ export class ChatController {
     this.scrollToEnd();
     this.setBusy(false);
     this.input.focus();
+    this.clearActivityFeedSoon();
   }
 
   private onCanceled(event: ChatEvent): void {
@@ -189,6 +236,7 @@ export class ChatController {
     this.activeBody.closest(".message")?.classList.remove("streaming");
     this.setBusy(false);
     this.input.focus();
+    this.clearActivityFeedSoon();
   }
 
   private onError(event: ChatEvent): void {
@@ -315,6 +363,7 @@ export class ChatController {
     messageElement?.classList.add("error");
     this.setBusy(false);
     this.input.focus();
+    this.clearActivityFeedSoon();
   }
 
   private setBusy(value: boolean): void {
