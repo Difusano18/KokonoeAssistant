@@ -83,7 +83,10 @@ namespace KokonoeAssistant.Services
         public void Dispose()
         {
             Stop();
-            try { SaveAsync().GetAwaiter().GetResult(); }
+            // Same Task.Run guard as the other sync-over-async spots in this cleanup pass:
+            // Dispose() can run on the UI thread during app shutdown, and blocking directly
+            // on SaveAsync() would capture that SynchronizationContext.
+            try { Task.Run(SaveAsync).GetAwaiter().GetResult(); }
             catch (Exception ex) { Debug.WriteLine($"[Heart] final save failed: {ex}"); }
         }
 
