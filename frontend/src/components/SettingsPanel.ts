@@ -36,15 +36,19 @@ export class SettingsPanelController {
   private readonly ollamaUrl = document.getElementById("ollama-url") as HTMLInputElement;
   private readonly ollamaKey = document.getElementById("ollama-key") as HTMLInputElement;
   private readonly ollamaKeyClear = document.getElementById("ollama-key-clear") as HTMLButtonElement;
+  private readonly ollamaKeyReveal = document.getElementById("ollama-key-reveal") as HTMLButtonElement;
   private readonly ollamaModel = document.getElementById("ollama-model") as HTMLInputElement;
   private readonly ollamaCloudProxyModel = document.getElementById("ollama-cloud-proxy-model") as HTMLSelectElement;
   private readonly ollamaCloudProxyKey = document.getElementById("ollama-cloud-proxy-key") as HTMLInputElement;
   private readonly ollamaCloudProxyKeyClear = document.getElementById("ollama-cloud-proxy-key-clear") as HTMLButtonElement;
+  private readonly ollamaCloudProxyKeyReveal = document.getElementById("ollama-cloud-proxy-key-reveal") as HTMLButtonElement;
   private readonly claudeKey = document.getElementById("claude-key") as HTMLInputElement;
   private readonly claudeKeyClear = document.getElementById("claude-key-clear") as HTMLButtonElement;
+  private readonly claudeKeyReveal = document.getElementById("claude-key-reveal") as HTMLButtonElement;
   private readonly claudeModel = document.getElementById("claude-model") as HTMLInputElement;
   private readonly tavilyKey = document.getElementById("tavily-key") as HTMLInputElement;
   private readonly tavilyKeyClear = document.getElementById("tavily-key-clear") as HTMLButtonElement;
+  private readonly tavilyKeyReveal = document.getElementById("tavily-key-reveal") as HTMLButtonElement;
   private readonly responseStyle = document.getElementById("response-style") as HTMLSelectElement;
   private readonly color = document.getElementById("matrix-color") as HTMLInputElement;
   private readonly colorText = document.getElementById("matrix-color-text")!;
@@ -87,6 +91,43 @@ export class SettingsPanelController {
     this.wireSecretClear(this.ollamaCloudProxyKey, this.ollamaCloudProxyKeyClear, "залиш порожнім — auth через ollama signin");
     this.wireSecretClear(this.claudeKey, this.claudeKeyClear, "sk-ant-...");
     this.wireSecretClear(this.tavilyKey, this.tavilyKeyClear, "tvly-...");
+    this.wireSecretReveal(this.ollamaKey, this.ollamaKeyReveal, "ollama");
+    this.wireSecretReveal(this.ollamaCloudProxyKey, this.ollamaCloudProxyKeyReveal, "ollamaCloudProxy");
+    this.wireSecretReveal(this.claudeKey, this.claudeKeyReveal, "claude");
+    this.wireSecretReveal(this.tavilyKey, this.tavilyKeyReveal, "tavily");
+  }
+
+  // Toggling type back to "password" alone would leave the real fetched value sitting in
+  // the input - secretState() can't tell that apart from a real edit and would save it
+  // as a literal "replace" on next Save. Always clearing back to "" on hide keeps the
+  // unchanged/replace/clear contract exactly as it was before reveal was ever clicked.
+  private wireSecretReveal(input: HTMLInputElement, button: HTMLButtonElement, which: string): void {
+    button.addEventListener("click", () => void this.toggleReveal(input, button, which));
+  }
+
+  private async toggleReveal(input: HTMLInputElement, button: HTMLButtonElement, which: string): Promise<void> {
+    if (input.type === "text") {
+      input.type = "password";
+      input.value = "";
+      delete input.dataset.cleared;
+      button.classList.remove("active");
+      return;
+    }
+    if (input.value.trim() !== "") {
+      // Unsaved typed value - just reveal what's already there, no fetch needed.
+      input.type = "text";
+      button.classList.add("active");
+      return;
+    }
+    try {
+      const r = await window.koko.call<{ key: string; value: string }>("secrets.reveal", { key: which });
+      if (!r.value) return;
+      input.type = "text";
+      input.value = r.value;
+      button.classList.add("active");
+    } catch (error) {
+      console.error("secrets.reveal failed:", error);
+    }
   }
 
   // Pending-clear is tracked via data-cleared rather than sent immediately so the user can

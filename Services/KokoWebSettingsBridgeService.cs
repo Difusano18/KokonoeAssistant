@@ -51,6 +51,41 @@ namespace KokonoeAssistant.Services
             _bridge.Register("settings.update", HandleUpdateAsync);
             _bridge.Register("load_settings", HandleGetAsync);
             _bridge.Register("save_settings", HandleUpdateAsync);
+            _bridge.Register("secrets.reveal", HandleRevealAsync);
+        }
+
+        // The plaintext value already sits in settings.json on disk, which the user can
+        // open directly - this doesn't expose anything beyond what's already readable
+        // there. WebView2's bridge is in-process postMessage only, not network-exposed.
+        private async Task<object?> HandleRevealAsync(JToken? payload, CancellationToken ct)
+        {
+            await Task.Yield();
+            ct.ThrowIfCancellationRequested();
+            ThrowIfDisposed();
+
+            var settings = _load();
+            var which = payload?["key"]?.ToString() ?? "";
+            var value = which switch
+            {
+                "ollama" => settings.OllamaApiKey,
+                "ollamaCloudProxy" => settings.OllamaCloudProxyApiKey,
+                "claude" => settings.ClaudeApiKey,
+                "tavily" => settings.TavilyApiKey,
+                _ => ""
+            } ?? "";
+
+            // LlmService.ResolveOllamaKey checks the OllamaKeys pool before the legacy
+            // single OllamaApiKey field - if that field is empty but the pool has entries,
+            // reveal the one actually in use so this doesn't show "empty" for a key that's
+            // really set.
+            if (which == "ollama" && string.IsNullOrEmpty(value) && (settings.OllamaKeys?.Count ?? 0) > 0)
+            {
+                var idx = Math.Clamp(settings.OllamaActiveKeyIndex, 0, settings.OllamaKeys!.Count - 1);
+                value = settings.OllamaKeys[idx].Key;
+            }
+
+            KokoSystemLog.Write("SECRET", $"{which} revealed by user");
+            return new { key = which, value };
         }
 
         private async Task<object?> HandleGetAsync(JToken? payload, CancellationToken ct)

@@ -26,6 +26,7 @@ export class AgentsPage {
     document.getElementById("agent-form-close")?.addEventListener("click", () => this.closeForm());
     document.getElementById("af-save-btn")?.addEventListener("click", () => void this.saveAgent());
     document.getElementById("af-test-btn")?.addEventListener("click", () => void this.testAgent());
+    document.getElementById("af-key-reveal")?.addEventListener("click", () => void this.toggleKeyReveal());
     document.querySelectorAll<HTMLButtonElement>(".chip[data-url]").forEach(chip => {
       chip.addEventListener("click", () => {
         (document.getElementById("af-url") as HTMLInputElement).value = chip.dataset.url ?? "";
@@ -136,6 +137,9 @@ export class AgentsPage {
 
   private openForm(id: string | null): void {
     const overlay = document.getElementById("agent-form-overlay")!;
+    const keyInput = document.getElementById("af-key") as HTMLInputElement;
+    keyInput.type = "password";
+    document.getElementById("af-key-reveal")?.classList.remove("active");
     if (id) {
       window.koko.call<AgentSummary[]>("agents.list").then(agents => {
         const a = agents.find(x => x.id === id);
@@ -191,6 +195,33 @@ export class AgentsPage {
     if (!window.confirm("Видалити агента?")) return;
     await window.koko.call("agents.delete", { id });
     await this.loadAgents();
+  }
+
+  private async toggleKeyReveal(): Promise<void> {
+    const input = document.getElementById("af-key") as HTMLInputElement;
+    const button = document.getElementById("af-key-reveal") as HTMLButtonElement;
+    if (input.type === "text") {
+      input.type = "password";
+      input.value = "";
+      button.classList.remove("active");
+      return;
+    }
+    const id = (document.getElementById("af-id") as HTMLInputElement).value;
+    if (input.value.trim() !== "") {
+      input.type = "text";
+      button.classList.add("active");
+      return;
+    }
+    if (!id) return;
+    try {
+      const r = await window.koko.call<{ id: string; value: string }>("agents.revealKey", { id });
+      if (!r.value) return;
+      input.type = "text";
+      input.value = r.value;
+      button.classList.add("active");
+    } catch (error) {
+      console.error("agents.revealKey failed:", error);
+    }
   }
 
   private async testAgent(): Promise<void> {

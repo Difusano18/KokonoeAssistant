@@ -19,6 +19,16 @@ namespace KokonoeAssistant.Services
             bridge.Register("agents.save", HandleSaveAsync);
             bridge.Register("agents.delete", HandleDeleteAsync);
             bridge.Register("agents.test", HandleTestAsync);
+            bridge.Register("agents.revealKey", HandleRevealKeyAsync);
+        }
+
+        private async Task<object?> HandleRevealKeyAsync(JToken? payload, CancellationToken ct)
+        {
+            await Task.Yield();
+            ct.ThrowIfCancellationRequested();
+            var id = payload?["id"]?.ToString() ?? "";
+            var agent = AppSettings.Load().AgentPool.FirstOrDefault(a => a.Id == id);
+            return new { id, value = agent?.ApiKey ?? "" };
         }
 
         private async Task<object?> HandleListAsync(JToken? payload, CancellationToken ct)

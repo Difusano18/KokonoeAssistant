@@ -475,6 +475,12 @@
       background: var(--card-2); color: var(--text-3); cursor: pointer; font: 13px/1 "IBM Plex Mono", monospace;
     }
     .key-clear-btn:hover { color: var(--text); border-color: var(--accent-border); }
+    .reveal-btn {
+      flex: none; width: 34px; height: 34px; border: 1px solid var(--line-2); border-radius: 7px;
+      background: var(--card-2); color: var(--text-3); cursor: pointer; font: 13px/1 "IBM Plex Mono", monospace;
+    }
+    .reveal-btn:hover { color: var(--accent); border-color: var(--accent-border); }
+    .reveal-btn.active { color: var(--accent); border-color: var(--accent-border); }
     .settings-locked-url {
       display: block; width: 100%; height: 34px; padding: 0 11px; box-sizing: border-box;
       font: 12px/34px "IBM Plex Mono", monospace; color: var(--text-3);
@@ -795,6 +801,7 @@
                 <label for="ollama-key">API Key</label>
                 <div class="key-input-row">
                   <input id="ollama-key" type="password" placeholder="sk-..." autocomplete="off">
+                  <button type="button" id="ollama-key-reveal" class="reveal-btn" data-reveal="ollama" title="Показати ключ">👁</button>
                   <button type="button" id="ollama-key-clear" class="key-clear-btn" title="Очистити ключ">✕</button>
                 </div>
               </div>
@@ -806,6 +813,7 @@
                 <label for="claude-key">API Key</label>
                 <div class="key-input-row">
                   <input id="claude-key" type="password" placeholder="sk-ant-..." autocomplete="off">
+                  <button type="button" id="claude-key-reveal" class="reveal-btn" data-reveal="claude" title="Показати ключ">👁</button>
                   <button type="button" id="claude-key-clear" class="key-clear-btn" title="Очистити ключ">✕</button>
                 </div>
               </div>
@@ -826,6 +834,7 @@
                 <label for="ollama-cloud-proxy-key">API Key (опціонально)</label>
                 <div class="key-input-row">
                   <input id="ollama-cloud-proxy-key" type="password" placeholder="залиш порожнім — auth через ollama signin" autocomplete="off">
+                  <button type="button" id="ollama-cloud-proxy-key-reveal" class="reveal-btn" data-reveal="ollamaCloudProxy" title="Показати ключ">👁</button>
                   <button type="button" id="ollama-cloud-proxy-key-clear" class="key-clear-btn" title="Очистити ключ">✕</button>
                 </div>
                 <p class="setting-hint">Локальний Ollama зазвичай ігнорує цей заголовок (авторизація через <code>ollama signin</code>). Заповни лише якщо твій setup використовує <code>OLLAMA_API_KEY</code>.</p>
@@ -841,6 +850,7 @@
                 <label for="tavily-key">Tavily API key</label>
                 <div class="key-input-row">
                   <input id="tavily-key" type="password" placeholder="tvly-..." autocomplete="off">
+                  <button type="button" id="tavily-key-reveal" class="reveal-btn" data-reveal="tavily" title="Показати ключ">👁</button>
                   <button type="button" id="tavily-key-clear" class="key-clear-btn" title="Очистити ключ">✕</button>
                 </div>
               </div>
@@ -944,7 +954,10 @@
               </div>
               <div class="form-field">
                 <label for="af-key">API Key</label>
-                <input type="password" id="af-key" placeholder="sk-... (залиш порожнім щоб не змінювати)">
+                <div class="key-input-row">
+                  <input type="password" id="af-key" placeholder="sk-... (залиш порожнім щоб не змінювати)">
+                  <button type="button" id="af-key-reveal" class="reveal-btn" title="Показати ключ">👁</button>
+                </div>
               </div>
               <div class="form-field">
                 <label for="af-model">Модель</label>
