@@ -94,6 +94,8 @@ namespace KokonoeAssistant.Services
 
             var watch = Stopwatch.StartNew();
             KokoSystemLog.Write("TOOL-GATEWAY", $"start id={call.Id} tool={call.Name} confirmed={call.Confirmed}");
+            var label = HumanLabel(call.Name);
+            KokoActivityBus.Emit(new KokoActivity { Kind = "tool", Label = label, Detail = call.Name, Status = "running" });
             try
             {
                 var result = await handler.ExecuteAsync(call, ct).ConfigureAwait(false);
@@ -101,21 +103,48 @@ namespace KokonoeAssistant.Services
                 result.ToolName = call.Name;
                 result.DurationMs = watch.ElapsedMilliseconds;
                 KokoSystemLog.Write("TOOL-GATEWAY", $"finish id={call.Id} tool={call.Name} success={result.Success} verified={result.Verified} confirmation={result.RequiresConfirmation} ms={result.DurationMs} reason={result.Reason}");
+                KokoActivityBus.Emit(new KokoActivity { Kind = "tool", Label = label, Detail = call.Name, Status = result.Success ? "done" : "failed" });
                 return result;
             }
             catch (OperationCanceledException)
             {
                 KokoSystemLog.Write("TOOL-GATEWAY", $"cancel id={call.Id} tool={call.Name}");
+                KokoActivityBus.Emit(new KokoActivity { Kind = "tool", Label = label, Detail = call.Name, Status = "failed" });
                 throw;
             }
             catch (Exception ex)
             {
                 KokoSystemLog.Write("TOOL-GATEWAY", $"failure id={call.Id} tool={call.Name}: {ex}");
+                KokoActivityBus.Emit(new KokoActivity { Kind = "tool", Label = label, Detail = call.Name, Status = "failed" });
                 var result = Failure(call, ex.Message);
                 result.DurationMs = watch.ElapsedMilliseconds;
                 return result;
             }
         }
+
+        // Real tool name strings, confirmed against each handler's own Name property -
+        // browser.* and artifact.save use dots, fs_*/pc_*/web_search/delegate_to_agent use
+        // underscores. Mixed convention already in this codebase, not a typo here.
+        private static string HumanLabel(string tool) => tool switch
+        {
+            "browser.navigate"   => "Відкриваю сторінку",
+            "browser.extract"    => "Читаю сторінку",
+            "browser.screenshot" => "Дивлюся на екран браузера",
+            "browser.click"      => "Клікаю",
+            "browser.type"       => "Вводжу текст",
+            "browser.scroll"     => "Гортаю сторінку",
+            "browser.wait_for"   => "Чекаю завантаження",
+            "browser.close"      => "Закриваю браузер",
+            "web_search"         => "Шукаю в інтернеті",
+            "delegate_to_agent"  => "Делегую агенту",
+            "codeact_python"     => "Виконую код",
+            "artifact.save"      => "Зберігаю результат",
+            "pc_confirm"         => "Підтверджую дію",
+            "pc_cancel"          => "Скасовую дію",
+            "pc_action"          => "Виконую дію на ПК",
+            var t when t.StartsWith("fs_", StringComparison.Ordinal) => "Працюю з файлами",
+            _ => $"Виконую {tool}"
+        };
 
         public async Task<IReadOnlyList<KokoToolResult>> ExecutePlanAsync(IEnumerable<KokoToolCall> calls, CancellationToken ct = default)
         {

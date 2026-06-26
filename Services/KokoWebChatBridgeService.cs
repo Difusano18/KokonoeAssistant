@@ -65,6 +65,20 @@ namespace KokonoeAssistant.Services
             _bridge.Register("chat.send", HandleSendAsync);
             _bridge.Register("send_message", HandleSendAsync);
             _bridge.Register("chat.clear_history", HandleClearHistoryAsync);
+            KokoActivityBus.OnActivity += OnActivity;
+        }
+
+        private void OnActivity(KokoActivity a)
+        {
+            if (_disposed) return;
+            _bridge.Publish("koko.activity", new
+            {
+                kind = a.Kind,
+                label = a.Label,
+                detail = a.Detail,
+                status = a.Status,
+                at = a.At.ToString("HH:mm:ss")
+            });
         }
 
         private async Task<object?> HandleSendAsync(JToken? payload, CancellationToken ct)
@@ -118,9 +132,12 @@ namespace KokonoeAssistant.Services
                 // just re-post the continuation back onto the same UI thread's queue. The context
                 // builder does vault scans / embedding lookups that take real seconds, so it needs
                 // an actual ThreadPool hop (same pattern as MainWindow's BuildContext callers).
+                KokoActivityBus.Emit(new KokoActivity { Kind = "context", Label = "Збираю контекст", Status = "running" });
                 var context = await Task.Run(() => _contextBuilder(text), effectiveCt).ConfigureAwait(false);
+                KokoActivityBus.Emit(new KokoActivity { Kind = "context", Label = "Збираю контекст", Status = "done" });
                 _bridge.Publish("chat.started", new { streamId });
 
+                KokoActivityBus.Emit(new KokoActivity { Kind = "thinking", Label = "Генерую відповідь", Status = "running" });
                 var streamed = await _stream(text, context, chunk =>
                 {
                     if (string.IsNullOrEmpty(chunk))
@@ -163,14 +180,17 @@ namespace KokonoeAssistant.Services
                 reply ??= "";
                 if (IsProviderError(reply))
                 {
+                    KokoActivityBus.Emit(new KokoActivity { Kind = "thinking", Label = "Генерую відповідь", Status = "failed" });
                     _bridge.Publish("chat.error", new { streamId, error = reply, errorType = "provider" });
                     return;
                 }
 
+                KokoActivityBus.Emit(new KokoActivity { Kind = "thinking", Label = "Генерую відповідь", Status = "done" });
                 _bridge.Publish("chat.completed", new { streamId, reply, streamed = usedStreaming });
             }
             catch (OperationCanceledException) when (timeoutCts.IsCancellationRequested)
             {
+                KokoActivityBus.Emit(new KokoActivity { Kind = "thinking", Label = "Генерую відповідь", Status = "failed" });
                 _bridge.Publish("chat.error", new
                 {
                     streamId,
@@ -180,10 +200,12 @@ namespace KokonoeAssistant.Services
             }
             catch (OperationCanceledException)
             {
+                KokoActivityBus.Emit(new KokoActivity { Kind = "thinking", Label = "Генерую відповідь", Status = "failed" });
                 _bridge.Publish("chat.canceled", new { streamId });
             }
             catch (Exception ex)
             {
+                KokoActivityBus.Emit(new KokoActivity { Kind = "thinking", Label = "Генерую відповідь", Status = "failed" });
                 _bridge.Publish("chat.error", new { streamId, error = ex.Message });
             }
         }
@@ -216,6 +238,7 @@ namespace KokonoeAssistant.Services
         public void Dispose()
         {
             _disposed = true;
+            KokoActivityBus.OnActivity -= OnActivity;
         }
 
         // LlmService.SendAsync can't change its return type to a richer result without

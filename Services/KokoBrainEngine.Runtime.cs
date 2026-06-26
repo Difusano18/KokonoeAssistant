@@ -411,6 +411,18 @@ namespace KokonoeAssistant.Services
             sb.AppendLine($"presence: {presence.SummaryUk}");
             sb.AppendLine($"screen_mode: {NullDash(_state.LastScreenAwarenessMode)}");
             sb.AppendLine($"screen: {NullDash(_state.LastScreenAwarenessSummary)}");
+            if (!string.IsNullOrWhiteSpace(_state.LastScreenAwarenessSummary))
+            {
+                var screenDetail = _state.LastScreenAwarenessSummary.Trim();
+                if (screenDetail.Length > 80) screenDetail = screenDetail[..80] + "...";
+                KokoActivityBus.Emit(new KokoActivity
+                {
+                    Kind = "source",
+                    Label = "Дивлюся на твій екран",
+                    Detail = screenDetail,
+                    Status = "done"
+                });
+            }
             sb.AppendLine($"last_activity: {NullDash(_state.LastKnownUserActivity)}");
             sb.AppendLine($"active_intents: {(active.Length == 0 ? "none" : string.Join("; ", active))}");
             try { sb.AppendLine(Emotion.BuildEmotionalContextBlock(BuildNarrativeThreadSummary(now))); } catch (Exception ex) { KokoSystemLog.Write("BRAIN-CATCH", "BuildUnifiedExternalContext failed near source line 6778: " + ex); }
@@ -434,7 +446,9 @@ namespace KokonoeAssistant.Services
             }
             if (responsePlan?.RequiresVaultRead == true || responsePlan?.Capability == "vault_memory")
             {
+                KokoActivityBus.Emit(new KokoActivity { Kind = "source", Label = "Читаю vault", Detail = "Obsidian", Status = "running" });
                 var preflight = new ObsidianPreflightContextService(_obsidian).Build(userText, now, 3200);
+                KokoActivityBus.Emit(new KokoActivity { Kind = "source", Label = "Читаю vault", Detail = "Obsidian", Status = "done" });
                 if (!string.IsNullOrWhiteSpace(preflight))
                 {
                     sb.AppendLine();
