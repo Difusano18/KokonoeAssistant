@@ -109,6 +109,14 @@ export class SettingsPanelController {
     return { op: "replace", value };
   }
 
+  // A blanked-after-save secret field shows a placeholder like "sk-..." to mean "leave
+  // blank to keep". Nothing stops someone from literally typing that placeholder back in
+  // thinking it's a mask rather than a real new value - secretState() can't tell the
+  // difference, so it gets saved as the literal key. This is the one place that can.
+  private looksLikePlaceholder(value: string): boolean {
+    return /^\.{2,}$/.test(value) || /^\*+$/.test(value) || /^[a-z]+-\.{2,}$/i.test(value);
+  }
+
   setAvailable(value: boolean): void {
     this.available = value;
     this.save.disabled = !value;
@@ -144,6 +152,21 @@ export class SettingsPanelController {
   }
 
   private async persist(): Promise<void> {
+    const suspicious = [
+      { input: this.ollamaKey, label: "Ollama API Key" },
+      { input: this.ollamaCloudProxyKey, label: "Ollama Cloud Proxy API Key" },
+      { input: this.claudeKey, label: "Claude API Key" },
+      { input: this.tavilyKey, label: "Tavily API Key" }
+    ].filter(({ input }) => this.looksLikePlaceholder(input.value.trim()));
+    if (suspicious.length > 0) {
+      const names = suspicious.map(s => s.label).join(", ");
+      const proceed = window.confirm(
+        `Поле "${names}" виглядає як заглушка (наприклад "..."), а не реальний ключ.\n` +
+        `Зберегти це значення буквально як ключ?`
+      );
+      if (!proceed) return;
+    }
+
     this.save.disabled = true;
     this.status.textContent = "Saving...";
     try {

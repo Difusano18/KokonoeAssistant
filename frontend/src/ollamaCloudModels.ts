@@ -2,6 +2,12 @@ export interface OllamaCloudModel {
   id: string;
   name: string;
   tags: string;
+  // Confirmed by directly POSTing each model to the local Ollama proxy on a free-tier
+  // account: gated ones return {"error":"this model requires a subscription, upgrade for
+  // access..."} rather than any kind of auth or not-found error. A 403/404 here can mean
+  // "needs a paid plan" just as easily as "broken config" - this flag exists so the
+  // dropdown doesn't let someone walk into that blind a second time.
+  requiresSubscription?: boolean;
 }
 
 // Every id here has been individually verified against its ollama.com/library/<model>/tags
@@ -23,16 +29,18 @@ export const OLLAMA_CLOUD_MODELS: OllamaCloudModel[] = [
   { id: "gemma3:12b-cloud",          name: "Gemma 3 12B",        tags: "fast · vision · chat" },
   { id: "gemma3:4b-cloud",           name: "Gemma 3 4B",         tags: "very fast · vision" },
   { id: "qwen3-coder:480b-cloud",    name: "Qwen3 Coder 480B",   tags: "code · large" },
-  { id: "deepseek-v3.1:671b-cloud",  name: "DeepSeek V3.1 671B", tags: "chat · large" },
-  { id: "deepseek-v4-flash:cloud",   name: "DeepSeek V4 Flash",  tags: "fast · 1M context" },
-  { id: "glm-5.2:cloud",             name: "GLM 5.2",            tags: "huge context · 976K" }
+  { id: "deepseek-v3.1:671b-cloud",  name: "DeepSeek V3.1 671B", tags: "chat · large", requiresSubscription: true },
+  { id: "deepseek-v4-flash:cloud",   name: "DeepSeek V4 Flash",  tags: "fast · 1M context", requiresSubscription: true },
+  { id: "glm-5.2:cloud",             name: "GLM 5.2",            tags: "huge context · 976K", requiresSubscription: true }
 ];
 
 export function populateOllamaCloudModelSelect(select: HTMLSelectElement, currentModel: string): void {
   select.replaceChildren(...OLLAMA_CLOUD_MODELS.map(m => {
     const option = document.createElement("option");
     option.value = m.id;
-    option.textContent = `${m.name} · ${m.tags}`;
+    option.textContent = m.requiresSubscription
+      ? `${m.name} · ${m.tags} · ⭐ subscription`
+      : `${m.name} · ${m.tags}`;
     return option;
   }));
   select.value = OLLAMA_CLOUD_MODELS.some(m => m.id === currentModel)
