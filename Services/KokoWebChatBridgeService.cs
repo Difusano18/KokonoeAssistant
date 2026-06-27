@@ -119,9 +119,17 @@ namespace KokonoeAssistant.Services
 
         private async Task RunChatPipelineAsync(string text, string streamId, CancellationToken ct)
         {
-            using var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(120));
-            using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(ct, timeoutCts.Token);
-            var effectiveCt = linkedCts.Token;
+            // Two separate budgets instead of one 120s deadline for the whole turn: a real
+            // multi-round tool loop (browser/web_search/delegate, several round trips) can
+            // legitimately run past 120s while still making progress, and the old single
+            // deadline killed it mid-flight with a misleading "no response from provider"
+            // error. The frontend (Chat.ts) has no client-side watchdog of its own for the
+            // turn duration — it just waits on chat.started/chunk/completed/error/canceled —
+            // so widening the generation budget is the whole fix; no heartbeat event needed.
+            using var contextTimeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+            using var contextLinkedCts = CancellationTokenSource.CreateLinkedTokenSource(ct, contextTimeoutCts.Token);
+            using var genTimeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(300));
+            using var genLinkedCts = CancellationTokenSource.CreateLinkedTokenSource(ct, genTimeoutCts.Token);
 
             var sequence = 0;
             var emittedChunks = 0;
@@ -133,10 +141,11 @@ namespace KokonoeAssistant.Services
                 // builder does vault scans / embedding lookups that take real seconds, so it needs
                 // an actual ThreadPool hop (same pattern as MainWindow's BuildContext callers).
                 KokoActivityBus.Emit(new KokoActivity { Kind = "context", Label = "Збираю контекст", Status = "running" });
-                var context = await Task.Run(() => _contextBuilder(text), effectiveCt).ConfigureAwait(false);
+                var context = await Task.Run(() => _contextBuilder(text), contextLinkedCts.Token).ConfigureAwait(false);
                 KokoActivityBus.Emit(new KokoActivity { Kind = "context", Label = "Збираю контекст", Status = "done" });
                 _bridge.Publish("chat.started", new { streamId });
 
+                var effectiveCt = genLinkedCts.Token;
                 KokoActivityBus.Emit(new KokoActivity { Kind = "thinking", Label = "Генерую відповідь", Status = "running" });
                 var streamed = await _stream(text, context, chunk =>
                 {
@@ -188,13 +197,23 @@ namespace KokonoeAssistant.Services
                 KokoActivityBus.Emit(new KokoActivity { Kind = "thinking", Label = "Генерую відповідь", Status = "done" });
                 _bridge.Publish("chat.completed", new { streamId, reply, streamed = usedStreaming });
             }
-            catch (OperationCanceledException) when (timeoutCts.IsCancellationRequested)
+            catch (OperationCanceledException) when (contextTimeoutCts.IsCancellationRequested)
+            {
+                KokoActivityBus.Emit(new KokoActivity { Kind = "context", Label = "Збираю контекст", Status = "failed" });
+                _bridge.Publish("chat.error", new
+                {
+                    streamId,
+                    error = "Збір контексту зайняв надто довго (20с).",
+                    errorType = "timeout"
+                });
+            }
+            catch (OperationCanceledException) when (genTimeoutCts.IsCancellationRequested)
             {
                 KokoActivityBus.Emit(new KokoActivity { Kind = "thinking", Label = "Генерую відповідь", Status = "failed" });
                 _bridge.Publish("chat.error", new
                 {
                     streamId,
-                    error = "Немає відповіді від провайдера за 120 секунд. Перевір API key і URL у Settings.",
+                    error = "Немає відповіді від провайдера за 300 секунд. Перевір API key і URL у Settings.",
                     errorType = "timeout"
                 });
             }
