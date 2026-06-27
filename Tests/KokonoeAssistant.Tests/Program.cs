@@ -374,6 +374,9 @@ internal static class Program
             Run("Conversation stagnation prompt expires", ConversationStagnationPromptExpires);
             Run("Natural synthesis detects source reporting", NaturalSynthesisDetectsSourceReporting);
             Run("Emotion style constrains irritated replies", EmotionStyleConstrainsIrritatedReplies);
+            Run("Persona guard directive allows mature tone without dropping character", PersonaGuardDirectiveAllowsMatureToneWithoutDroppingCharacter);
+            Run("Bot phrase detection still works after dedup", BotPhraseDetectionStillWorksAfterDedup);
+            Run("Persona inference defaults are sane", PersonaInferenceDefaultsAreSane);
             Run("Sandbox executor cleans timed out scripts", SandboxExecutorCleansTimedOutScripts);
             Run("Agent task service plans self review and system control", AgentTaskServicePlansSelfReviewAndSystemControl);
             Run("Observation service parses schedule", ObservationServiceParsesSchedule);
@@ -9393,6 +9396,40 @@ Persistent Obsidian context is now a core project requirement.
         var directive = KokoResponseStyleEngine.BuildEmotionLengthDirective(KokoEmotionEngine.EmotionState.Irritated);
         AssertTrue(directive.Contains("1-2", StringComparison.OrdinalIgnoreCase), "irritated style should be short");
         AssertTrue(directive.Contains("sharp", StringComparison.OrdinalIgnoreCase), "irritated style should be sharper");
+    }
+
+    private static void PersonaGuardDirectiveAllowsMatureToneWithoutDroppingCharacter()
+    {
+        var directive = KokoPersonaGuardDirective.Compact;
+        AssertTrue(directive.Contains("private one-on-one companion", StringComparison.OrdinalIgnoreCase),
+            "directive should establish this is a private companion role, not a public assistant");
+        AssertTrue(directive.Contains("mature/adult life topics", StringComparison.OrdinalIgnoreCase),
+            "directive should explicitly permit mature-topic conversation");
+        AssertTrue(directive.Contains("Don't default to disclaimers", StringComparison.OrdinalIgnoreCase),
+            "directive should discourage corporate-style refusals on merely edgy topics");
+        AssertTrue(directive.Contains("Genuine crisis content already routes through a separate dedicated path", StringComparison.OrdinalIgnoreCase),
+            "directive should note the crisis path is untouched, not removed");
+        AssertTrue(directive.Contains("Keep the Kokonoe edge", StringComparison.OrdinalIgnoreCase),
+            "the existing character-consistency rule must still be present, not replaced");
+    }
+
+    private static void BotPhraseDetectionStillWorksAfterDedup()
+    {
+        AssertTrue(KokoPersonaEngine.LooksBotLike("Я розумію, що це важливо. Чим я можу допомогти?"),
+            "a corporate-sounding reply must still be flagged after removing the duplicate phrase list");
+        AssertTrue(KokoPersonaEngine.LooksBotLike("Як штучний інтелект, я не можу про це говорити."),
+            "an explicit AI/refusal phrase must still be flagged");
+        AssertTrue(!KokoPersonaEngine.LooksBotLike("Ну й тупо ти це зробив. Показуй код, подивимось наскільки погано."),
+            "an ordinary in-character reply must not be flagged as bot-like");
+    }
+
+    private static void PersonaInferenceDefaultsAreSane()
+    {
+        var settings = new AppSettings();
+        AssertEqual(0.92, settings.PersonaTopP, "PersonaTopP default should match the documented value");
+        AssertEqual(1.15, settings.PersonaRepeatPenalty, "PersonaRepeatPenalty default should match the documented value");
+        AssertTrue(settings.PersonaTopP > 0 && settings.PersonaTopP <= 1, "top_p must stay in Ollama's valid 0-1 range");
+        AssertTrue(settings.PersonaRepeatPenalty >= 1.0, "repeat_penalty below 1.0 would encourage repetition, not discourage it");
     }
 
     private static void ObsidianSelfHealingMemoryWritesReport()
