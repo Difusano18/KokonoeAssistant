@@ -848,6 +848,15 @@
                 <input id="s-unlimited" type="checkbox">
               </div>
               <p class="setting-hint">Працює тільки для Ollama Cloud (local proxy): num_predict=-1, модель генерує доки сама не зупиниться. Інші провайдери завжди потребують реального max_tokens.</p>
+              <div class="setting-row">
+                <label for="persona-top-p">top_p</label>
+                <input id="persona-top-p" type="number" min="0.1" max="1" step="0.01">
+              </div>
+              <div class="setting-row">
+                <label for="persona-repeat-penalty">repeat_penalty</label>
+                <input id="persona-repeat-penalty" type="number" min="1" max="2" step="0.01">
+              </div>
+              <p class="setting-hint">Теж тільки Ollama Cloud (local proxy). top_p нижче за 1 — менш випадково; repeat_penalty вище за 1 — менше повторів-кліше.</p>
             </section>
             <section class="settings-group">
               <h3>Web search</h3>

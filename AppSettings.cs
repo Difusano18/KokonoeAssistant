@@ -66,6 +66,14 @@ namespace KokonoeAssistant
         // value here, so this only ever changes behavior for ollama-cloud-proxy.
         public bool UnlimitedResponse { get; set; } = false;
 
+        // Ollama-native generation params for the proxy path (see LlmService.
+        // AttachOllamaOptions). Not temperature - that's already mood/agent-profile driven
+        // (DynamicTemperature, per-agent Temperature overrides like coder=0.35) and adding a
+        // second, static "persona temperature" here would just fight that. top_p/
+        // repeat_penalty don't have an existing equivalent, so they're new.
+        public double PersonaTopP { get; set; } = 0.92;
+        public double PersonaRepeatPenalty { get; set; } = 1.15;
+
         // LM Studio
         public string LmUrl   { get; set; } = "http://localhost:1234/v1/chat/completions";
         public string Model   { get; set; } = "google/gemma-4-26b-a4b";

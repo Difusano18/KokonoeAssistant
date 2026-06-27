@@ -67,7 +67,8 @@ export class SettingsPanelController {
     browserEnabled: "browser-enabled", browserHeadless: "browser-headless",
     voiceInputEnabled: "voice-enabled", ttsEnabled: "tts-enabled", wearBridgeEnabled: "wear-enabled",
     wearBridgeIncludePromptContext: "wear-context", minimizeToTray: "tray-enabled",
-    maxTokens: "max-tokens", unlimitedResponse: "s-unlimited"
+    maxTokens: "max-tokens", unlimitedResponse: "s-unlimited",
+    personaTopP: "persona-top-p", personaRepeatPenalty: "persona-repeat-penalty"
   };
   private readonly maxTokensInput = document.getElementById("max-tokens") as HTMLInputElement;
   private readonly unlimitedToggle = document.getElementById("s-unlimited") as HTMLInputElement;

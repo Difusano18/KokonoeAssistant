@@ -378,20 +378,32 @@ namespace KokonoeAssistant.Services
         {
             if (!isOllamaProxy)
                 return reqBody;
+            var settings = AppSettings.Load();
             var body = JObject.FromObject(reqBody);
-            if (AppSettings.Load().UnlimitedResponse)
+            // top_p/repeat_penalty are general-purpose "less repetitive, more natural" knobs,
+            // not context-specific like temperature (which already has its own dynamic/
+            // per-agent-profile system) - applied uniformly rather than threading a separate
+            // chat-vs-agent flag through every AttachOllamaOptions call site.
+            var options = new JObject
+            {
+                ["top_p"] = settings.PersonaTopP,
+                ["repeat_penalty"] = settings.PersonaRepeatPenalty,
+                ["num_ctx"] = numCtx
+            };
+            if (settings.UnlimitedResponse)
             {
                 // Drop max_tokens entirely rather than leaving it alongside num_predict=-1 -
                 // there's no documented guarantee Ollama's OpenAI-compat shim ignores a
                 // competing max_tokens cap when options.num_predict is also present, and
                 // "unlimited" should mean unlimited, not "whatever the smaller of the two is."
                 body.Remove("max_tokens");
-                body["options"] = new JObject { ["num_predict"] = -1, ["num_ctx"] = numCtx };
+                options["num_predict"] = -1;
             }
             else
             {
-                body["options"] = new JObject { ["num_predict"] = maxTokens, ["num_ctx"] = numCtx };
+                options["num_predict"] = maxTokens;
             }
+            body["options"] = options;
             return body;
         }
 

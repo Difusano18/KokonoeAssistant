@@ -211,6 +211,10 @@ namespace KokonoeAssistant.Services
                 value => settings.MaxTokens = value, changed);
             ApplyBool(values, "unlimitedResponse", settings.UnlimitedResponse,
                 value => settings.UnlimitedResponse = value, changed);
+            ApplyDouble(values, "personaTopP", 0.1, 1.0, settings.PersonaTopP,
+                value => settings.PersonaTopP = value, changed);
+            ApplyDouble(values, "personaRepeatPenalty", 1.0, 2.0, settings.PersonaRepeatPenalty,
+                value => settings.PersonaRepeatPenalty = value, changed);
 
             var wearBridgeBefore = settings.WearBridgeEnabled;
             ApplyBool(values, "wearBridgeEnabled", settings.WearBridgeEnabled,
@@ -294,7 +298,9 @@ namespace KokonoeAssistant.Services
                 lmModel = settings.Model,
                 claudeModel = settings.ClaudeModel,
                 maxTokens = settings.MaxTokens,
-                unlimitedResponse = settings.UnlimitedResponse
+                unlimitedResponse = settings.UnlimitedResponse,
+                personaTopP = settings.PersonaTopP,
+                personaRepeatPenalty = settings.PersonaRepeatPenalty
             },
             credentials = new
             {
@@ -340,6 +346,25 @@ namespace KokonoeAssistant.Services
             if (token == null || !int.TryParse(token.ToString(), out var value) || value < min || value > max)
                 throw new InvalidOperationException($"{name} must be between {min} and {max}.");
             if (value == current)
+                return;
+            assign(value);
+            changed.Add(name);
+        }
+
+        private static void ApplyDouble(
+            JObject source,
+            string name,
+            double min,
+            double max,
+            double current,
+            Action<double> assign,
+            ICollection<string> changed)
+        {
+            if (!source.TryGetValue(name, StringComparison.OrdinalIgnoreCase, out var token))
+                return;
+            if (token == null || !double.TryParse(token.ToString(), System.Globalization.CultureInfo.InvariantCulture, out var value) || value < min || value > max)
+                throw new InvalidOperationException($"{name} must be between {min} and {max}.");
+            if (Math.Abs(value - current) < 0.0001)
                 return;
             assign(value);
             changed.Add(name);
