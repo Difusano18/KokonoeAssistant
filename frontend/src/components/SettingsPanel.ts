@@ -102,6 +102,17 @@ export class SettingsPanelController {
     });
   }
 
+  // fill() already set the correct permanent placeholder ("•••• configured..." or the raw
+  // hint if still unset) before this runs - capture that as the restore target instead of
+  // hardcoding it, so this works whichever state the field landed in.
+  private flashSavedPlaceholder(input: HTMLInputElement): void {
+    const restoreTo = input.placeholder;
+    input.placeholder = "✓ збережено — натисни 👁 щоб переглянути";
+    window.setTimeout(() => {
+      if (input.value === "") input.placeholder = restoreTo;
+    }, 3000);
+  }
+
   // Toggling type back to "password" alone would leave the real fetched value sitting in
   // the input - secretState() can't tell that apart from a real edit and would save it
   // as a literal "replace" on next Save. Always clearing back to "" on hide keeps the
@@ -213,11 +224,23 @@ export class SettingsPanelController {
       if (!proceed) return;
     }
 
+    // Captured before read()/fill() so we know which fields were an actual replace (not
+    // unchanged/clear) - only those should flash "saved", since fill() blanks every secret
+    // field's value the same way regardless of which op actually ran.
+    const replacedSecrets = [
+      { input: this.ollamaKey, name: "ollamaApiKey" },
+      { input: this.ollamaCloudProxyKey, name: "ollamaCloudProxyApiKey" },
+      { input: this.claudeKey, name: "claudeApiKey" },
+      { input: this.tavilyKey, name: "tavilyApiKey" }
+    ].filter(({ input }) => this.secretState(input).op === "replace");
+
     this.save.disabled = true;
     this.status.textContent = "Saving...";
     try {
       const result = await window.koko.call("settings.update", this.read()) as SettingsUpdateResult;
       this.fill(result.settings);
+      for (const { input, name } of replacedSecrets)
+        if (result.changed.includes(name)) this.flashSavedPlaceholder(input);
       this.status.textContent = result.restartRequired ? "Saved. Restart required for device service changes." : "Saved.";
     } catch (error) {
       this.status.textContent = error instanceof Error ? error.message : String(error);
