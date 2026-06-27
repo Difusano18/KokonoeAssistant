@@ -398,10 +398,14 @@ tags: [{SanitizeTagsLine(tagsLine)}]
                 .Where(f => !f.Contains("kokonoe-data"))
                 .ToList();
 
-            var index = GetNoteIndex();
-            var emptyNotes   = new List<string>();
-            var orphanNotes  = new List<string>();
-            var filledNotes  = new List<string>();
+            var emptyNotes      = new List<string>();
+            var filledNotes     = new List<string>();
+            // path -> raw [[link]] targets this note links out to, collected in one pass
+            // instead of GetBacklinks() re-scanning every file in the vault per note (was
+            // O(n^2) file reads — 560 notes meant ~224k reads and a multi-minute hang on
+            // every chat turn that touched the vault).
+            var outgoingByPath  = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+            var linkedTitles    = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
             foreach (var file in allFiles)
             {
@@ -421,14 +425,22 @@ tags: [{SanitizeTagsLine(tagsLine)}]
                     emptyNotes.Add(rel);
                 else
                     filledNotes.Add(rel);
+
+                var targets = System.Text.RegularExpressions.Regex.Matches(content, @"\[\[([^\]|#]+)")
+                    .Select(m => m.Groups[1].Value.Trim())
+                    .Where(t => t.Length > 0)
+                    .ToList();
+                outgoingByPath[rel] = targets;
+                foreach (var t in targets) linkedTitles.Add(t);
             }
 
             // Orphan = нотатка без жодного incoming або outgoing [[link]]
+            var orphanNotes = new List<string>();
             foreach (var rel in filledNotes)
             {
-                var outgoing  = GetOutgoingLinks(rel);
-                var backlinks = GetBacklinks(rel);
-                if (outgoing.Count == 0 && backlinks.Count == 0)
+                var hasOutgoing = outgoingByPath.TryGetValue(rel, out var own) && own.Count > 0;
+                var hasBacklink = linkedTitles.Contains(Path.GetFileNameWithoutExtension(rel));
+                if (!hasOutgoing && !hasBacklink)
                     orphanNotes.Add(rel);
             }
 
