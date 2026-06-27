@@ -558,6 +558,15 @@ namespace KokonoeAssistant.Services
         private string BuildPersonalityInjection()
         {
             var sb = new StringBuilder();
+
+            // ЯДРО ОСОБИСТОСТІ — завжди першим, незмінне. Усе нижче (настрій, емоції,
+            // близькість) модулює ЦЕ ядро; без нього модель бачить лише "поточний стан"
+            // без базової ідентичності і за замовчуванням зʼїжджає в безликого асистента.
+            sb.AppendLine(KokoCharacterCore.Core);
+            sb.AppendLine();
+            sb.AppendLine(KokoCharacterCore.VoiceExamples);
+            sb.AppendLine();
+
             sb.AppendLine("=== KOKONOE ЗАРАЗ ===");
 
             // Настрій дня
