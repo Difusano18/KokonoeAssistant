@@ -2075,7 +2075,7 @@ namespace KokonoeAssistant.Services
                         await using var responseStream = await resp.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
                         var streamed = await KokoOpenAiStreamParser.ReadTextAsync(responseStream, onChunk, ct).ConfigureAwait(false);
                         if (streamed.ToolCallsDetected)
-                            throw new InvalidOperationException("Final no-tools stream unexpectedly returned tool calls.");
+                            KokoSystemLog.Write("LLM", "final no-tools stream returned tool calls anyway — using whatever text it produced instead of failing the turn");
                         var streamedText = streamed.Text;
                         if (string.IsNullOrWhiteSpace(streamedText) && !string.IsNullOrWhiteSpace(streamed.Reasoning))
                         {
