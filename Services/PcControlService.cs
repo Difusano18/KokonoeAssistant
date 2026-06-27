@@ -921,7 +921,15 @@ namespace KokonoeAssistant.Services
             var sw = Stopwatch.StartNew();
             foreach (var p in Process.GetProcesses())
             {
+                // Protected/system processes (Registry, Secure System, csrss, ...) always deny
+                // TotalProcessorTime without elevated privileges — that's expected on every
+                // call, not a failure. Logging it here used to write a full stack trace per
+                // process per call, from a method invoked by several background timers, which
+                // ran the log file to multiple gigabytes and serialized every other thread
+                // behind KokoSystemLog's lock.
                 try { first[p.Id] = p.TotalProcessorTime; }
+                catch (System.ComponentModel.Win32Exception) { }
+                catch (InvalidOperationException) { }
                 catch (Exception suppressedEx925) { KokoSystemLog.Write("PCCONTROLSERVICE-CATCH", "CaptureTopProcessResources failed near source line 925: " + suppressedEx925); }
                 finally { try { p.Dispose(); } catch (Exception suppressedEx926) { KokoSystemLog.Write("PCCONTROLSERVICE-CATCH", "CaptureTopProcessResources failed near source line 926: " + suppressedEx926); } }
             }
@@ -952,6 +960,8 @@ namespace KokonoeAssistant.Services
                         CpuPercent = cpu
                     });
                 }
+                catch (System.ComponentModel.Win32Exception) { }
+                catch (InvalidOperationException) { }
                 catch (Exception suppressedEx955) { KokoSystemLog.Write("PCCONTROLSERVICE-CATCH", "CaptureTopProcessResources failed near source line 955: " + suppressedEx955); }
                 finally { try { p.Dispose(); } catch (Exception suppressedEx956) { KokoSystemLog.Write("PCCONTROLSERVICE-CATCH", "CaptureTopProcessResources failed near source line 956: " + suppressedEx956); } }
             }
