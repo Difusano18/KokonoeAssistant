@@ -90,7 +90,10 @@ namespace KokonoeAssistant.Services
                 return Failure(call, "tool name is empty");
 
             if (!_registry.TryResolve(call.Name, out var handler) || handler == null)
-                return Failure(call, $"tool is not registered: {call.Name}");
+            {
+                KokoSystemLog.Write("TOOL-GATEWAY", $"no handler for '{call.Name}' — returning error, not hanging");
+                return Failure(call, $"Інструмент '{call.Name}' недоступний. Спробуй інший підхід або відповідай напряму, без цього tool.");
+            }
 
             var watch = Stopwatch.StartNew();
             KokoSystemLog.Write("TOOL-GATEWAY", $"start id={call.Id} tool={call.Name} confirmed={call.Confirmed}");

@@ -5783,7 +5783,7 @@ Insight: bridge stability and pulse quality are linked.
         AssertTrue(!confirmation.Success && !confirmation.Verified, "unconfirmed write must not report success");
 
         var unknown = gateway.ExecuteAsync(new KokoToolCall { Name = "not_registered" }).GetAwaiter().GetResult();
-        AssertTrue(!unknown.Success && unknown.Reason.Contains("not registered", StringComparison.OrdinalIgnoreCase), "unknown tool must return explicit failure");
+        AssertTrue(!unknown.Success && unknown.Reason.Contains("недоступний", StringComparison.OrdinalIgnoreCase), "unknown tool must return explicit failure");
     }
 
     private static void ToolGatewayStopsExecutionPlanAfterFailure()
