@@ -257,6 +257,7 @@ internal static class Program
             Run("Action directive router generalizes local artifacts", ActionDirectiveRouterGeneralizesLocalArtifacts);
             Run("Action directive router sends non artifact tasks to agents", ActionDirectiveRouterSendsNonArtifactTasksToAgents);
             Run("LLM guard blocks unverified action claims", LlmGuardBlocksUnverifiedActionClaims);
+            Run("Detect best tool picks fs tools for disk requests", DetectBestToolPicksFsToolsForDiskRequests);
             Run("Action directive router handles inflected targets", ActionDirectiveRouterHandlesInflectedTargets);
             Run("Generated content route stays separate from surprise scan", GeneratedContentRouteStaysSeparateFromSurpriseScan);
             Run("Chat runtime defaults to streaming with bounded token budget", ChatRuntimeDefaultsToStreamingWithBoundedTokenBudget);
@@ -6041,6 +6042,30 @@ Insight: bridge stability and pulse quality are linked.
             "conversation must not be treated as a failed action");
     }
 
+    private static void DetectBestToolPicksFsToolsForDiskRequests()
+    {
+        // "посортуй фотки і все ... в завантаженні" used to fall through every check in
+        // DetectBestTool to the append_to_note catch-all - a vault tool forced onto a disk
+        // request with no vault involved at all. fs_list_directory is the sane default first
+        // step for an unspecific sort/cleanup ask: you inspect a folder before moving anything.
+        AssertEqual("fs_list_directory", LlmService.DetectBestTool("посортуй фотки і все ... в завантаженні"),
+            "unspecific disk sort/cleanup request should default to listing the folder first");
+
+        AssertEqual("fs_delete", LlmService.DetectBestTool("видали файл з завантажень"),
+            "delete-flavored disk request should force fs_delete");
+
+        AssertEqual("fs_create_directory", LlmService.DetectBestTool("створи папку Software_Docs в завантаженнях"),
+            "create-folder-flavored disk request should force fs_create_directory, not the vault create_folder tool");
+
+        AssertEqual("fs_move", LlmService.DetectBestTool("перенеси фото в нову папку"),
+            "move-flavored disk request should force fs_move");
+
+        // Vault-note requests must still resolve to Obsidian tools, not get hijacked by the
+        // disk-flavored checks just because they happen to mention an unrelated word.
+        AssertEqual("create_note", LlmService.DetectBestTool("створи нову нотатку в vault"),
+            "explicit vault/note request must stay on the Obsidian tool path");
+    }
+
     private static void GeneratedContentRouteStaysSeparateFromSurpriseScan()
     {
         var generated = new[]
@@ -8149,17 +8174,10 @@ type: creator-profile
 
     private static void LlmVaultToolRoutingAvoidsAccidentalWrites()
     {
-        var method = typeof(LlmService).GetMethod(
-            "DetectBestTool",
-            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
-        AssertTrue(method != null, "DetectBestTool should exist for routing tests");
-
-        string Detect(string text) => (string)method!.Invoke(null, new object[] { text })!;
-
-        AssertEqual("list_notes", Detect("покажи список нотаток у vault"), "note list request should not default to append");
-        AssertEqual("list_folders", Detect("покажи список папок"), "folder list request should not create a folder");
-        AssertEqual("create_folder", Detect("створи папку Kokonoe/Review"), "folder creation should still create folders when explicitly requested");
-        AssertEqual("read_note", Detect("прочитай Kokonoe/Memory/Facts"), "read request should stay read-only");
+        AssertEqual("list_notes", LlmService.DetectBestTool("покажи список нотаток у vault"), "note list request should not default to append");
+        AssertEqual("list_folders", LlmService.DetectBestTool("покажи список папок"), "folder list request should not create a folder");
+        AssertEqual("create_folder", LlmService.DetectBestTool("створи папку Kokonoe/Review"), "folder creation should still create folders when explicitly requested");
+        AssertEqual("read_note", LlmService.DetectBestTool("прочитай Kokonoe/Memory/Facts"), "read request should stay read-only");
     }
 
     private static void ObsidianMemoryQualityAndTaskQueue()

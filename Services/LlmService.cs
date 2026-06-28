@@ -1954,8 +1954,13 @@ namespace KokonoeAssistant.Services
                         isClaude);
                     var forceNoTools = round >= 6 || streamFinalAfterTools;
 
-                    // Детектуємо чи запит вимагає vault-операції
+                    // Детектуємо чи запит вимагає vault- або filesystem-операції
                     // якщо так — підштовхуємо модель через tool_choice
+                    // "сортуй фотки в завантаженні" used to fall through this entirely - none of
+                    // the original (vault-note-specific) keywords match "sort"/"photo"/"downloads"
+                    // phrasing, so round 0 left tool_choice on "auto" and the model just narrated
+                    // intent in prose instead of calling fs_list_directory/fs_move. The fs_* disk
+                    // tools (VX12) were never added to this list when they shipped.
                     bool looksLikeVaultOp = !string.IsNullOrEmpty(userText) && (
                         userText.Contains("створ", StringComparison.OrdinalIgnoreCase) ||
                         userText.Contains("папк", StringComparison.OrdinalIgnoreCase) ||
@@ -1970,7 +1975,19 @@ namespace KokonoeAssistant.Services
                         userText.Contains("запам'ят", StringComparison.OrdinalIgnoreCase) ||
                         userText.Contains("додай до", StringComparison.OrdinalIgnoreCase) ||
                         userText.Contains("список нотат", StringComparison.OrdinalIgnoreCase) ||
-                        userText.Contains("список пап", StringComparison.OrdinalIgnoreCase));
+                        userText.Contains("список пап", StringComparison.OrdinalIgnoreCase) ||
+                        userText.Contains("сортуй", StringComparison.OrdinalIgnoreCase) ||
+                        userText.Contains("сортув", StringComparison.OrdinalIgnoreCase) ||
+                        userText.Contains("фотк", StringComparison.OrdinalIgnoreCase) ||
+                        userText.Contains("фото", StringComparison.OrdinalIgnoreCase) ||
+                        userText.Contains("файл", StringComparison.OrdinalIgnoreCase) ||
+                        userText.Contains("завантаж", StringComparison.OrdinalIgnoreCase) ||
+                        userText.Contains("перемісти", StringComparison.OrdinalIgnoreCase) ||
+                        userText.Contains("перенес", StringComparison.OrdinalIgnoreCase) ||
+                        userText.Contains("видали", StringComparison.OrdinalIgnoreCase) ||
+                        userText.Contains("почисти", StringComparison.OrdinalIgnoreCase) ||
+                        userText.Contains("розклад", StringComparison.OrdinalIgnoreCase) ||
+                        userText.Contains("прибери", StringComparison.OrdinalIgnoreCase));
                     var targetUrl = agentTarget.Url;
                     var targetModel = NormalizeOllamaCloudModelName(agentTarget.Model, isOllamaCloud);
                     if (isImageRequest && string.IsNullOrWhiteSpace(agentId) && !string.IsNullOrWhiteSpace(_visionModel))
@@ -3454,9 +3471,30 @@ namespace KokonoeAssistant.Services
         }
 
         // Визначає найбільш підходящий інструмент на основі тексту запиту
-        private static string DetectBestTool(string text)
+        // public so this is directly unit-testable instead of only reachable through a live SendAsync round.
+        public static string DetectBestTool(string text)
         {
             var t = RepairMojibake(text).ToLowerInvariant();
+
+            // fs_* disk tools (VX12) post-date this heuristic and were never added here -
+            // disk-flavored requests ("\u0441\u043e\u0440\u0442\u0443\u0439 \u0444\u043e\u0442\u043a\u0438 \u0432 \u0437\u0430\u0432\u0430\u043d\u0442\u0430\u0436\u0435\u043d\u043d\u0456") used to fall through every
+            // check below to the append_to_note catch-all, forcing the wrong (Obsidian) tool.
+            // Check disk signals first so they don't get caught by the vault-only patterns below.
+            var mentionsDisk = t.Contains("\u0437\u0430\u0432\u0430\u043d\u0442\u0430\u0436") || t.Contains("downloads") || t.Contains("desktop")
+                             || t.Contains("\u0440\u043e\u0431\u043e\u0447") || t.Contains("\u0444\u043e\u0442") || t.Contains("photo");
+            var mentionsNote = t.Contains("\u043d\u043e\u0442\u0430\u0442") || t.Contains("note") || t.Contains("vault") || t.Contains("obsidian");
+            if (mentionsDisk && !mentionsNote)
+            {
+                if (t.Contains("\u0432\u0438\u0434\u0430\u043b\u0438") || t.Contains("\u0443\u0434\u0430\u043b\u0438") || t.Contains("delete"))
+                    return "fs_delete";
+                if ((t.Contains("\u0441\u0442\u0432\u043e\u0440") || t.Contains("create") || t.Contains("new")) &&
+                    (t.Contains("\u043f\u0430\u043f\u043a") || t.Contains("folder") || t.Contains("directory")))
+                    return "fs_create_directory";
+                if (t.Contains("\u043f\u0435\u0440\u0435\u043d\u0435\u0441") || t.Contains("\u043f\u0435\u0440\u0435\u043c\u0456\u0441\u0442\u0438") || t.Contains("move"))
+                    return "fs_move";
+                return "fs_list_directory";
+            }
+
             if ((t.Contains("\u0441\u043f\u0438\u0441") || t.Contains("list")) && (t.Contains("\u043d\u043e\u0442\u0430\u0442") || t.Contains("note")))
                 return "list_notes";
             if ((t.Contains("\u0441\u043f\u0438\u0441") || t.Contains("list")) && (t.Contains("\u043f\u0430\u043f") || t.Contains("folder")))
