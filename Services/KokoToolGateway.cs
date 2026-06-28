@@ -98,7 +98,7 @@ namespace KokonoeAssistant.Services
             var watch = Stopwatch.StartNew();
             KokoSystemLog.Write("TOOL-GATEWAY", $"start id={call.Id} tool={call.Name} confirmed={call.Confirmed}");
             var label = HumanLabel(call);
-            KokoActivityBus.Emit(new KokoActivity { Kind = "tool", Label = label, Detail = call.Name, Status = "running" });
+            KokoActivityBus.Emit(new KokoActivity { Kind = "tool", Label = label, Status = "running" });
             try
             {
                 var result = await handler.ExecuteAsync(call, ct).ConfigureAwait(false);
@@ -106,23 +106,34 @@ namespace KokonoeAssistant.Services
                 result.ToolName = call.Name;
                 result.DurationMs = watch.ElapsedMilliseconds;
                 KokoSystemLog.Write("TOOL-GATEWAY", $"finish id={call.Id} tool={call.Name} success={result.Success} verified={result.Verified} confirmation={result.RequiresConfirmation} ms={result.DurationMs} reason={result.Reason}");
-                KokoActivityBus.Emit(new KokoActivity { Kind = "tool", Label = label, Detail = call.Name, Status = result.Success ? "done" : "failed" });
+                // Detail used to just repeat call.Name - the same string already in the
+                // KokoToolGateway log line above was never surfaced to the UI. result.Reason
+                // is the actual outcome ("500 entries in C:\...", or the failure cause) and is
+                // far more useful in a live step list than the tool name showing up twice.
+                KokoActivityBus.Emit(new KokoActivity { Kind = "tool", Label = label, Detail = TrimDetail(result.Reason), Status = result.Success ? "done" : "failed" });
                 return result;
             }
             catch (OperationCanceledException)
             {
                 KokoSystemLog.Write("TOOL-GATEWAY", $"cancel id={call.Id} tool={call.Name}");
-                KokoActivityBus.Emit(new KokoActivity { Kind = "tool", Label = label, Detail = call.Name, Status = "failed" });
+                KokoActivityBus.Emit(new KokoActivity { Kind = "tool", Label = label, Detail = "Скасовано", Status = "failed" });
                 throw;
             }
             catch (Exception ex)
             {
                 KokoSystemLog.Write("TOOL-GATEWAY", $"failure id={call.Id} tool={call.Name}: {ex}");
-                KokoActivityBus.Emit(new KokoActivity { Kind = "tool", Label = label, Detail = call.Name, Status = "failed" });
+                KokoActivityBus.Emit(new KokoActivity { Kind = "tool", Label = label, Detail = TrimDetail(ex.Message), Status = "failed" });
                 var result = Failure(call, ex.Message);
                 result.DurationMs = watch.ElapsedMilliseconds;
                 return result;
             }
+        }
+
+        private static string TrimDetail(string? text)
+        {
+            if (string.IsNullOrWhiteSpace(text)) return "";
+            var trimmed = text.Trim().Replace("\r", " ").Replace("\n", " ");
+            return trimmed.Length > 90 ? trimmed[..90] + "…" : trimmed;
         }
 
         // Real tool name strings, confirmed against each handler's own Name property -

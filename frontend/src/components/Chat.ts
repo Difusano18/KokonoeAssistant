@@ -167,22 +167,45 @@ export class ChatController {
     let row = rows.get(key);
     if (!row) {
       row = document.createElement("div");
+      row.dataset.startedAt = String(performance.now());
+      const index = document.createElement("span");
+      index.className = "activity-index";
+      index.textContent = String(rows.size + 1).padStart(2, "0");
       const icon = document.createElement("span");
       icon.className = "activity-icon";
       const label = document.createElement("span");
       label.className = "activity-label";
       label.textContent = event.label;
-      row.append(icon, label);
-      if (event.detail) {
-        const detail = document.createElement("span");
-        detail.className = "activity-detail";
-        detail.textContent = event.detail;
-        row.append(detail);
-      }
+      row.append(index, icon, label);
       container.appendChild(row);
       rows.set(key, row);
     }
+    // The same key can arrive again with a different detail (e.g. "running" with no
+    // result yet, then "done" with the actual outcome) - update the existing span
+    // instead of only ever keeping whatever text came with the very first event.
+    let detail = row.querySelector<HTMLElement>(".activity-detail");
+    if (event.detail) {
+      if (!detail) {
+        detail = document.createElement("span");
+        detail.className = "activity-detail";
+        row.appendChild(detail);
+      }
+      detail.textContent = event.detail;
+    } else {
+      detail?.remove();
+    }
+    const wasRunning = row.classList.contains("running");
     row.className = `activity-row ${event.status}`;
+    if (wasRunning && event.status !== "running" && row.dataset.startedAt) {
+      const elapsedSec = (performance.now() - Number(row.dataset.startedAt)) / 1000;
+      let duration = row.querySelector<HTMLElement>(".activity-duration");
+      if (!duration) {
+        duration = document.createElement("span");
+        duration.className = "activity-duration";
+        row.appendChild(duration);
+      }
+      duration.textContent = `${elapsedSec.toFixed(1)}s`;
+    }
   }
 
   private clearActivityFeedSoon(): void {

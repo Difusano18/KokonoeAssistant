@@ -209,6 +209,7 @@
       font: 11px "IBM Plex Mono", Consolas, monospace;
       color: var(--text-3);
     }
+    .activity-index { font: 10px "IBM Plex Mono", Consolas, monospace; color: var(--text-4); min-width: 16px; flex-shrink: 0; }
     .activity-icon { width: 14px; height: 14px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
     .activity-row.running .activity-icon::before {
       content: ""; width: 7px; height: 7px; border-radius: 50%;
@@ -217,7 +218,8 @@
     .activity-row.done .activity-icon::before   { content: "✓"; color: var(--accent); font-size: 11px; }
     .activity-row.failed .activity-icon::before { content: "✗"; color: #d96570; font-size: 11px; }
     .activity-row.done { color: var(--text-4); }
-    .activity-detail { color: var(--text-4); font-size: 10px; margin-left: auto; }
+    .activity-detail { color: var(--text-4); font-size: 10px; margin-left: auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 320px; }
+    .activity-duration { color: var(--text-4); font-size: 9.5px; margin-left: 8px; flex-shrink: 0; opacity: .7; }
     @keyframes activity-pulse { 0%,100% { opacity: .4; transform: scale(.8); } 50% { opacity: 1; transform: scale(1.1); } }
 
     /* ---------- composer ---------- */

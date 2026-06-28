@@ -2979,7 +2979,7 @@ namespace KokonoeAssistant.Services
             // activity feed - this fills that gap without double-emitting for the gateway path.
             var vaultLabel = DescribeVaultToolForActivity(name, args);
             if (vaultLabel != null)
-                KokoActivityBus.Emit(new KokoActivity { Kind = "tool", Label = vaultLabel, Detail = name, Status = "running" });
+                KokoActivityBus.Emit(new KokoActivity { Kind = "tool", Label = vaultLabel, Status = "running" });
 
             try
             {
@@ -3006,15 +3006,25 @@ namespace KokonoeAssistant.Services
                     result = await Task.Run(() => ExecuteTool(name, args), ct).ConfigureAwait(false);
 
                 if (vaultLabel != null)
-                    KokoActivityBus.Emit(new KokoActivity { Kind = "tool", Label = vaultLabel, Detail = name, Status = "done" });
+                    // Detail used to just repeat the tool name a second time - a one-line
+                    // snippet of the actual result (e.g. how many notes, what was written) is
+                    // far more useful in a live step list than that.
+                    KokoActivityBus.Emit(new KokoActivity { Kind = "tool", Label = vaultLabel, Detail = TrimActivityDetail(result), Status = "done" });
                 return result;
             }
             catch (Exception ex)
             {
                 if (vaultLabel != null)
-                    KokoActivityBus.Emit(new KokoActivity { Kind = "tool", Label = vaultLabel, Detail = name, Status = "failed" });
+                    KokoActivityBus.Emit(new KokoActivity { Kind = "tool", Label = vaultLabel, Detail = TrimActivityDetail(ex.Message), Status = "failed" });
                 return $"Tool error {name}: {ex.Message}";
             }
+        }
+
+        private static string TrimActivityDetail(string? text)
+        {
+            if (string.IsNullOrWhiteSpace(text)) return "";
+            var trimmed = text.Trim().Replace("\r", " ").Replace("\n", " ");
+            return trimmed.Length > 90 ? trimmed[..90] + "…" : trimmed;
         }
 
         // Mirrors KokoToolGateway's HumanLabel for the tool names that never reach the
