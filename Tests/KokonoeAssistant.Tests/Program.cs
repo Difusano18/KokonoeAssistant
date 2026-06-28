@@ -6612,23 +6612,30 @@ Insight: bridge stability and pulse quality are linked.
     {
         // Used to fire the instant completedRounds > 0, forcing interactive chat to stop and
         // summarize after a single batch of tool calls even mid multi-step task. Now only
-        // fires once toolRoundsCompleted is near the round loop's own hard cap (default 6),
-        // so a task that genuinely needs several rounds of real tool calls gets to use them
-        // instead of being cut off after the first round that happened to succeed.
-        AssertTrue(!KokoLlmStreamingPolicy.ShouldStreamFinalAfterTools(true, 1, false, false),
+        // fires once toolRoundsCompleted is near the round loop's own hard cap (default 22,
+        // raised from 6 after a real "create 20 files" task showed the model needs close to
+        // one round per file), so a task that genuinely needs many rounds of real tool calls
+        // gets to use them instead of being cut off after the first round that happened to
+        // succeed. Tests pass an explicit threshold so they don't depend on whatever the
+        // current default happens to be.
+        AssertTrue(!KokoLlmStreamingPolicy.ShouldStreamFinalAfterTools(true, 1, false, false, maxToolRounds: 6),
             "one completed tool round must not yet force a stop-and-summarize turn");
-        AssertTrue(!KokoLlmStreamingPolicy.ShouldStreamFinalAfterTools(true, 5, false, false),
+        AssertTrue(!KokoLlmStreamingPolicy.ShouldStreamFinalAfterTools(true, 5, false, false, maxToolRounds: 6),
             "still under the round cap - more tool rounds must remain available");
-        AssertTrue(KokoLlmStreamingPolicy.ShouldStreamFinalAfterTools(true, 6, false, false),
+        AssertTrue(KokoLlmStreamingPolicy.ShouldStreamFinalAfterTools(true, 6, false, false, maxToolRounds: 6),
             "at the round cap, the final round must stream a text-only wrap-up");
-        AssertTrue(!KokoLlmStreamingPolicy.ShouldStreamFinalAfterTools(false, 6, false, false),
+        AssertTrue(!KokoLlmStreamingPolicy.ShouldStreamFinalAfterTools(false, 6, false, false, maxToolRounds: 6),
             "background callers without a chunk sink must remain atomic");
-        AssertTrue(!KokoLlmStreamingPolicy.ShouldStreamFinalAfterTools(true, 0, false, false),
+        AssertTrue(!KokoLlmStreamingPolicy.ShouldStreamFinalAfterTools(true, 0, false, false, maxToolRounds: 6),
             "initial tool decision must remain atomic");
-        AssertTrue(!KokoLlmStreamingPolicy.ShouldStreamFinalAfterTools(true, 6, true, false),
+        AssertTrue(!KokoLlmStreamingPolicy.ShouldStreamFinalAfterTools(true, 6, true, false, maxToolRounds: 6),
             "vision responses must remain atomic");
-        AssertTrue(!KokoLlmStreamingPolicy.ShouldStreamFinalAfterTools(true, 6, false, true),
+        AssertTrue(!KokoLlmStreamingPolicy.ShouldStreamFinalAfterTools(true, 6, false, true, maxToolRounds: 6),
             "Claude response framing is not OpenAI SSE and must remain atomic");
+        AssertTrue(KokoLlmStreamingPolicy.ShouldStreamFinalAfterTools(true, 22, false, false),
+            "default threshold (22) must match the round loop's own hard cap");
+        AssertTrue(!KokoLlmStreamingPolicy.ShouldStreamFinalAfterTools(true, 21, false, false),
+            "one round under the default threshold must still allow more tool rounds");
     }
 
     private static void WebChatBridgePublishesProactiveBrainMessages()
