@@ -94,6 +94,10 @@ namespace KokonoeAssistant.Windows
                         ServiceContainer.LlmService.ReloadSettings();
                     });
                 _telegramBridge = new KokoWebTelegramBridgeService(_bridge, ServiceContainer.TelegramStatus);
+                // KokoWebTelegramBridgeService only reports status - this is what actually
+                // starts the bot's polling loop, the equivalent of MainWindow.InitTelegram()'s
+                // StartReceiving call that never runs in the web shell.
+                ServiceContainer.TelegramReceiver.Start();
                 _personaBridge = new KokoWebPersonaBridgeService(_bridge, ServiceContainer.EmotionEngine);
                 _runtimeBridge = new KokoWebRuntimeBridgeService(_bridge);
                 _wearBridge = new KokoWebWearBridgeService(_bridge, ServiceContainer.WearableTelemetry, ServiceContainer.WearableBridge);

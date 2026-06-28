@@ -35,6 +35,7 @@ namespace KokonoeAssistant
         private static ChatLogger?          _chatLogger;
         private static TelegramUserService? _tgUser;
         private static KokoTelegramRuntimeStatusService? _telegramStatus;
+        private static KokoTelegramReceiverService? _telegramReceiver;
         private static PcControlService?      _pcControl;
         private static KokoEmbeddingService?   _embedding;
         private static KokoPredictorService?   _predictor;
@@ -708,6 +709,14 @@ namespace KokonoeAssistant
             get { lock (_lock) { return _telegramStatus ??= new KokoTelegramRuntimeStatusService(); } }
         }
 
+        // Web shell's UI startup path (ShellWindow) never constructs MainWindow, so
+        // MainWindow.TelegramBot.cs's InitTelegram()/StartReceiving never runs there. This is
+        // the UI-independent equivalent ShellWindow.xaml.cs's OnLoaded calls .Start() on.
+        public static KokoTelegramReceiverService TelegramReceiver
+        {
+            get { lock (_lock) { return _telegramReceiver ??= new KokoTelegramReceiverService(LlmService, TelegramStatus); } }
+        }
+
         public static KokoBrainEngine BrainEngine
         {
             get
@@ -763,6 +772,8 @@ namespace KokonoeAssistant
                     _goals = null; _habits = null;
                     _emotion = null; _kokoMemory = null; _kokoPatterns = null;
                     _chatLogger = null;
+                    _telegramReceiver?.Dispose();
+                    _telegramReceiver = null;
                     _telegramStatus?.MarkBotState("stopped");
                     _telegramStatus?.MarkUserState("stopped");
                     _tgUser?.Dispose(); _tgUser = null;
