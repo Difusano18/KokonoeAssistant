@@ -3893,8 +3893,17 @@ namespace KokonoeAssistant.Services
             };
             foreach (var marker in markers)
                 score += System.Text.RegularExpressions.Regex.Matches(text, System.Text.RegularExpressions.Regex.Escape(marker)).Count;
-            score += System.Text.RegularExpressions.Regex.Matches(text, @"\u0420\p{IsCyrillic}").Count;
-            score += System.Text.RegularExpressions.Regex.Matches(text, @"\u0421\p{IsCyrillic}").Count;
+            // Removed: \u0420\p{IsCyrillic} / \u0421\p{IsCyrillic} ("\u0420" or "\u0421" followed by any
+            // Cyrillic letter). Those two letters start a huge fraction of ordinary Ukrainian/
+            // Russian words (\u0420\u0456\u0437\u043a\u0430, \u0421\u0435\u043a\u0442\u043e\u0440, \u0421\u0430\u043c\u0430, ...) and are followed by another Cyrillic
+            // letter essentially every time a word continues - this scored ANY normal Cyrillic
+            // paragraph as mojibake (KokoCharacterCore.Core + VoiceExamples, ~3600 chars of
+            // clean Ukrainian, scored well over the >=3 threshold). RepairMojibake then "fixed"
+            // it via a cp1251-encode/UTF8-decode round-trip, which for genuinely clean text
+            // mangles real Cyrillic bytes into invalid UTF-8 sequences - turning ~70% of the
+            // character core into literal U+FFFD replacement characters before every request.
+            // The other markers above are specific multi-character mojibake signatures, not a
+            // single common letter, and stay; this is the one rule that fired on normal prose.
             return score;
         }
 
@@ -4262,7 +4271,7 @@ namespace KokonoeAssistant.Services
 
         // ===================================================================
         // TELEGRAM ISOLATED MODE
-        // ????????? ????? ??? ??????? ?? ??????, ???'??, ????????? ?????
+        // 
         // ===================================================================
 
         private const string TG_SYSTEM_PROMPT = @"Ти — Kokonoe у Telegram-режимі: публічна, стримана, практична версія.

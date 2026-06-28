@@ -392,6 +392,7 @@ internal static class Program
             Run("Reminder parser handles relative and vague time", ReminderParserHandlesRelativeAndVagueTime);
             Run("Reminder parser handles wake and absolute time", ReminderParserHandlesWakeAndAbsoluteTime);
             Run("Reminder parser ignores later continuation status", ReminderParserIgnoresLaterContinuationStatus);
+            Run("Repair mojibake must not mangle clean character core", RepairMojibakeMustNotMangleCleanCharacterCore);
 
             if (!string.IsNullOrWhiteSpace(_filter) && _selected == 0)
                 throw new InvalidOperationException($"FAIL: no tests matched filter '{_filter}'.");
@@ -404,6 +405,24 @@ internal static class Program
             Console.Error.WriteLine(ex.Message);
             return 1;
         }
+    }
+
+    private static void RepairMojibakeMustNotMangleCleanCharacterCore()
+    {
+        // Production bug: ScoreMojibake's Р\p{IsCyrillic}/С\p{IsCyrillic} check fired on
+        // ordinary Cyrillic prose (any word starting with Р or С followed by another letter -
+        // most of them), so the entire character core got cp1251-round-tripped into ~70%
+        // U+FFFD garbage before every single request. This is the exact real text that was
+        // getting destroyed - assert it survives intact now.
+        var input = KokoCharacterCore.Core + "\n\n" + KokoCharacterCore.VoiceExamples;
+        var output = LlmService.RepairMojibake(input);
+        AssertEqual(input, output, "clean Ukrainian character core must pass through RepairMojibake unchanged");
+        AssertTrue(!output.Contains('�'), "must not introduce replacement characters into clean text");
+
+        // Genuine garbage (literal U+FFFD, e.g. from a real upstream encoding failure) must
+        // still get stripped, not preserved.
+        var garbage = "��� Yasu ���";
+        AssertTrue(!LlmService.RepairMojibake(garbage).Contains('�'), "literal replacement characters must still be stripped");
     }
 
     private static void ReminderParserHandlesRelativeAndVagueTime()
