@@ -195,6 +195,7 @@ namespace KokonoeAssistant.Services
                 "fs_create_directory" => KokoFileOperationKind.CreateDirectory,
                 "fs_delete" => KokoFileOperationKind.Delete,
                 "fs_move" => KokoFileOperationKind.Move,
+                "fs_list_directory" => KokoFileOperationKind.ListDirectory,
                 _ => throw new InvalidOperationException("Unsupported file handler: " + Name)
             };
             var request = new KokoFileOperationRequest
@@ -250,6 +251,8 @@ namespace KokonoeAssistant.Services
                 case KokoFileOperationKind.Move:
                     var destination = _fileSystem.ResolvePath(request.DestinationPath);
                     return ((!File.Exists(path) && !Directory.Exists(path)) && (File.Exists(destination) || Directory.Exists(destination)), "move source/destination state mismatch");
+                case KokoFileOperationKind.ListDirectory:
+                    return (Directory.Exists(path), "listed directory does not exist");
                 default:
                     return (false, "unsupported verification");
             }

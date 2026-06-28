@@ -99,11 +99,12 @@ namespace KokonoeAssistant.Services
 
         public static KokoToolDescriptor InferDescriptor(string name) => name switch
         {
-            "fs_read_text" => Descriptor(name, "Read UTF-8 text from the isolated agent workspace.", "filesystem", KokoToolRisk.ReadOnly, false, new[] { "path" }, "files", "vault-read", "code", "sandbox"),
-            "fs_write_text" => Descriptor(name, "Write UTF-8 text inside the isolated agent workspace.", "filesystem", KokoToolRisk.Write, true, new[] { "path", "content" }, "files", "vault-write", "code"),
-            "fs_create_directory" => Descriptor(name, "Create a directory inside the isolated agent workspace.", "filesystem", KokoToolRisk.Write, false, new[] { "path" }, "files", "vault-write", "code"),
-            "fs_move" => Descriptor(name, "Move a path inside the isolated agent workspace.", "filesystem", KokoToolRisk.Destructive, true, new[] { "path", "destinationPath" }, "files", "vault-write", "maintenance"),
-            "fs_delete" => Descriptor(name, "Delete a path inside the isolated agent workspace.", "filesystem", KokoToolRisk.Destructive, true, new[] { "path" }, "files", "maintenance"),
+            "fs_read_text" => Descriptor(name, "Read UTF-8 text from any path on disk.", "filesystem", KokoToolRisk.ReadOnly, false, new[] { "path" }, "files", "vault-read", "code", "sandbox"),
+            "fs_write_text" => Descriptor(name, "Write UTF-8 text to any path on disk.", "filesystem", KokoToolRisk.Write, true, new[] { "path", "content" }, "files", "vault-write", "code"),
+            "fs_create_directory" => Descriptor(name, "Create a directory anywhere on disk.", "filesystem", KokoToolRisk.Write, false, new[] { "path" }, "files", "vault-write", "code"),
+            "fs_move" => Descriptor(name, "Move a path anywhere on disk.", "filesystem", KokoToolRisk.Destructive, true, new[] { "path", "destinationPath" }, "files", "vault-write", "maintenance"),
+            "fs_delete" => Descriptor(name, "Delete a path anywhere on disk.", "filesystem", KokoToolRisk.Destructive, true, new[] { "path" }, "files", "maintenance"),
+            "fs_list_directory" => Descriptor(name, "List files and subdirectories at a given path on disk.", "filesystem", KokoToolRisk.ReadOnly, false, new[] { "path" }, "files", "vault-read", "code"),
             "pc_action" => Descriptor(name, "Execute a policy-checked local PC action plan.", "pc", KokoToolRisk.Privileged, false, new[] { "payload:PcActionPlan" }, "processes", "maintenance", "permission-protocol"),
             "pc_confirm" => Descriptor(name, "Confirm and execute a pending PC action.", "pc", KokoToolRisk.Privileged, true, new[] { "actionId", "confirmationText" }, "processes", "maintenance", "permission-protocol"),
             "pc_cancel" => Descriptor(name, "Cancel a pending PC action.", "pc", KokoToolRisk.Write, false, new[] { "actionId", "reason" }, "processes", "maintenance", "permission-protocol"),

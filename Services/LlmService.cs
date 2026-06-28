@@ -485,7 +485,7 @@ namespace KokonoeAssistant.Services
             sb.AppendLine("Available capabilities when the host exposes them:");
             sb.AppendLine("- Obsidian/Vault tools: list, search, read, write, append notes, daily notes, backlinks, graph and vault maintenance.");
             sb.AppendLine("- Sandbox: execute short Python probes for calculations or safe local checks.");
-            sb.AppendLine("- File tools (fs_read_text/fs_write_text/fs_create_directory/fs_move/fs_delete): real disk access, any absolute path. Relative paths default to the agent workspace. Write/move/delete require confirmed=true after the user has actually confirmed.");
+            sb.AppendLine("- File tools (fs_list_directory/fs_read_text/fs_write_text/fs_create_directory/fs_move/fs_delete): real disk access, any absolute path. Relative paths default to the agent workspace. Use fs_list_directory before any task that needs to know what's actually in a folder - never guess filenames. Write/move/delete require confirmed=true after the user has actually confirmed.");
             sb.AppendLine("- pc_action/pc_confirm/pc_cancel: open apps, control volume, focus/arrange windows, kill processes, run PowerShell, sleep/lock/shutdown/restart. Risky actions return a pending id - confirm or cancel it.");
             sb.AppendLine("- web_search: search the web for current information.");
             sb.AppendLine("- browser.navigate/click/type/extract/screenshot/scroll/wait_for/close: drive a real visible Chromium browser, when enabled.");
@@ -844,6 +844,16 @@ namespace KokonoeAssistant.Services
                         confirmed = new { type = "boolean", description = "Must be true after user confirmation." }
                     },
                     required = new[] { "path", "confirmed" }
+                }),
+
+            Tool("fs_list_directory",
+                "List files and subdirectories at a path on disk (e.g. Downloads, Desktop). Use this before any file operation that needs to know what's actually there - never guess filenames.",
+                new {
+                    type = "object",
+                    properties = new {
+                        path = new { type = "string", description = "Absolute path, or relative to the agent workspace." }
+                    },
+                    required = new[] { "path" }
                 }),
         };
 
@@ -2202,7 +2212,10 @@ namespace KokonoeAssistant.Services
                         }
                         var streamedReply = CleanGarbage(streamedText);
                         if (IsBadFinalReply(streamedReply))
+                        {
+                            KokoSystemLog.Write("LLM-BADREPLY", $"tool_final_stream rejected: {streamedReply[..Math.Min(300, streamedReply.Length)]}");
                             streamedReply = BuildCleanFallbackReply(userText, toolCallsAttempted: true);
+                        }
                         lock (_histLock)
                         {
                             _history.Add(new HistoryEntry("assistant", streamedReply));
@@ -2323,18 +2336,22 @@ namespace KokonoeAssistant.Services
                             }
                             continue;
                         }
-                        if (IsBadFinalReply(reply) && round < 7)
-                        {
-                            lock (_histLock)
-                            {
-                                _history.Add(new HistoryEntry(
-                                    "user",
-                                    "SYSTEM CHECK: The previous final answer was empty, garbled, or too short. Regenerate a complete Ukrainian answer now. Do not use tool calls unless strictly necessary."));
-                            }
-                            continue;
-                        }
                         if (IsBadFinalReply(reply))
+                        {
+                            if (round < 7)
+                            {
+                                KokoSystemLog.Write("LLM-BADREPLY", $"round={round} retry: {reply[..Math.Min(300, reply.Length)]}");
+                                lock (_histLock)
+                                {
+                                    _history.Add(new HistoryEntry(
+                                        "user",
+                                        "SYSTEM CHECK: The previous final answer was empty, garbled, or too short. Regenerate a complete Ukrainian answer now. Do not use tool calls unless strictly necessary."));
+                                }
+                                continue;
+                            }
+                            KokoSystemLog.Write("LLM-BADREPLY", $"round={round} giving up, fallback used: {reply[..Math.Min(300, reply.Length)]}");
                             reply = BuildCleanFallbackReply(userText, toolCallsAttempted: round > 0);
+                        }
 
                         lock (_histLock)
                         {
@@ -2864,7 +2881,7 @@ namespace KokonoeAssistant.Services
                 if (name is "create_agent_task" or "get_agent_board" or "sync_agent_backlog")
                     return ExecuteAgentTaskTool(name, args);
 
-                if (name is "fs_read_text" or "fs_write_text" or "fs_create_directory" or "fs_move" or "fs_delete")
+                if (name is "fs_read_text" or "fs_write_text" or "fs_create_directory" or "fs_move" or "fs_delete" or "fs_list_directory")
                     return await ExecuteFileToolAsync(name, args, ct).ConfigureAwait(false);
 
                 if (name is "web_search" or "delegate_to_agent" || name.StartsWith("browser.", StringComparison.Ordinal))

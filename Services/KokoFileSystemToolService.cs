@@ -14,7 +14,8 @@ namespace KokonoeAssistant.Services
         WriteText,
         CreateDirectory,
         Delete,
-        Move
+        Move,
+        ListDirectory
     }
 
     public sealed class KokoFileOperationRequest
@@ -66,7 +67,8 @@ namespace KokonoeAssistant.Services
             "fs_write_text",
             "fs_create_directory",
             "fs_delete",
-            "fs_move"
+            "fs_move",
+            "fs_list_directory"
         };
 
         public string ResolvePath(string path) => ResolveFullPath(path);
@@ -108,6 +110,19 @@ namespace KokonoeAssistant.Services
                     case KokoFileOperationKind.CreateDirectory:
                         Directory.CreateDirectory(path);
                         return Ok("", $"Created directory: {path}");
+
+                    case KokoFileOperationKind.ListDirectory:
+                        if (!Directory.Exists(path))
+                            return Fail($"Directory not found: {path}");
+                        var entries = new DirectoryInfo(path).EnumerateFileSystemInfos()
+                            .OrderByDescending(e => e is FileInfo)
+                            .ThenByDescending(e => e.LastWriteTime)
+                            .Take(500)
+                            .Select(e => e is DirectoryInfo
+                                ? $"[dir]  {e.Name}"
+                                : $"[file] {e.Name}  {((FileInfo)e).Length / 1024.0:F0}KB  {e.LastWriteTime:yyyy-MM-dd HH:mm}")
+                            .ToList();
+                        return Ok(string.Join("\n", entries), $"{entries.Count} entries in {path}");
 
                     case KokoFileOperationKind.Delete:
                         if (Directory.Exists(path))
