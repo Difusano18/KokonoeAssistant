@@ -839,6 +839,61 @@ namespace KokonoeAssistant.Services
                 function = new { name, description, parameters }
             };
 
+        // web_search/delegate_to_agent/browser.* are registered on ServiceContainer.ToolGateway
+        // but that gateway was wired up for the autonomous agent-task runner, not live chat —
+        // TOOLS never carried their schemas, so the model could never call them here even though
+        // ExecuteToolAsync's dispatch (and the prompt text) implied it could. Appended dynamically
+        // (rather than folded into the static TOOLS array) so BrowserEnabled can gate browser.*
+        // per request without rebuilding the rest of the list.
+        private static object[] BuildToolsForRequest()
+        {
+            var tools = new List<object>(TOOLS)
+            {
+                Tool("web_search",
+                    "Search the web for current information. Use for recent events, facts you're unsure of, or anything needing up-to-date sources.",
+                    new {
+                        type = "object",
+                        properties = new {
+                            query = new { type = "string", description = "Search query." }
+                        },
+                        required = new[] { "query" }
+                    }),
+                Tool("delegate_to_agent",
+                    "Delegate a sub-task to a specialist agent from the agent pool. Use for parallel work or specialized capabilities.",
+                    new {
+                        type = "object",
+                        properties = new {
+                            agentId = new { type = "string", description = "Target agent id from the agent pool." },
+                            systemPrompt = new { type = "string", description = "System prompt for the specialist agent (optional)." },
+                            userMessage = new { type = "string", description = "Task/message to hand off to the agent." }
+                        },
+                        required = new[] { "agentId", "userMessage" }
+                    }),
+            };
+
+            if (AppSettings.Load().BrowserEnabled)
+            {
+                tools.Add(Tool("browser.navigate", "Open a URL in the real Chromium browser. The window is visible to the user.",
+                    new { type = "object", properties = new { url = new { type = "string", description = "URL to open." } }, required = new[] { "url" } }));
+                tools.Add(Tool("browser.click", "Click an element by CSS selector or Playwright text=... selector.",
+                    new { type = "object", properties = new { selector = new { type = "string", description = "CSS selector or text=... selector." } }, required = new[] { "selector" } }));
+                tools.Add(Tool("browser.type", "Type text into an input field by CSS selector.",
+                    new { type = "object", properties = new { selector = new { type = "string" }, text = new { type = "string" } }, required = new[] { "selector", "text" } }));
+                tools.Add(Tool("browser.extract", "Extract visible text from the page, or from a specific selector. Omit selector for the whole page.",
+                    new { type = "object", properties = new { selector = new { type = "string", description = "Optional CSS selector." } }, required = Array.Empty<string>() }));
+                tools.Add(Tool("browser.screenshot", "Capture a screenshot of the current page and return its file path.",
+                    new { type = "object", properties = new { }, required = Array.Empty<string>() }));
+                tools.Add(Tool("browser.scroll", "Scroll the page up or down by a pixel amount.",
+                    new { type = "object", properties = new { direction = new { type = "string" }, pixels = new { type = "integer" } }, required = Array.Empty<string>() }));
+                tools.Add(Tool("browser.wait_for", "Wait for an element to appear, e.g. after a click triggers loading.",
+                    new { type = "object", properties = new { selector = new { type = "string" }, timeoutMs = new { type = "integer" } }, required = new[] { "selector" } }));
+                tools.Add(Tool("browser.close", "Close the browser session.",
+                    new { type = "object", properties = new { }, required = Array.Empty<string>() }));
+            }
+
+            return tools.ToArray();
+        }
+
         public IReadOnlyList<string> GetAvailableToolNames()
         {
             return TOOLS
@@ -1370,7 +1425,7 @@ namespace KokonoeAssistant.Services
                     }
                     else if (useTools && Obsidian != null && round < 4)
                         reqBody = AttachOllamaOptions(
-                            new { model = sysModel, messages, tools = TOOLS, tool_choice = "auto", max_tokens = maxTokens, temperature = target.Temperature, stream = false },
+                            new { model = sysModel, messages, tools = BuildToolsForRequest(), tool_choice = "auto", max_tokens = maxTokens, temperature = target.Temperature, stream = false },
                             sysIsOllamaCloudProxy, maxTokens);
                     else
                         reqBody = AttachOllamaOptions(
@@ -1859,7 +1914,7 @@ namespace KokonoeAssistant.Services
                                 : "auto";
                             // intentional: structured tool-decision round must be parsed atomically
                             reqBody = AttachOllamaOptions(
-                                new { model = targetModel, messages, tools = TOOLS, tool_choice = toolChoice, max_tokens = maxTokens, temperature = agentTarget.Temperature, stream = false },
+                                new { model = targetModel, messages, tools = BuildToolsForRequest(), tool_choice = toolChoice, max_tokens = maxTokens, temperature = agentTarget.Temperature, stream = false },
                                 isOllamaCloudProxy, maxTokens);
                         }
                         else
@@ -2750,6 +2805,9 @@ namespace KokonoeAssistant.Services
                 if (name is "fs_read_text" or "fs_write_text" or "fs_create_directory" or "fs_move" or "fs_delete")
                     return await ExecuteFileToolAsync(name, args, ct).ConfigureAwait(false);
 
+                if (name is "web_search" or "delegate_to_agent" || name.StartsWith("browser.", StringComparison.Ordinal))
+                    return await ExecuteGatewayToolAsync(name, args, ct).ConfigureAwait(false);
+
                 return await Task.Run(() => ExecuteTool(name, args), ct).ConfigureAwait(false);
             }
             catch (Exception ex)
@@ -2921,6 +2979,21 @@ namespace KokonoeAssistant.Services
                     ["destinationPath"] = args["destinationPath"]?.ToString() ?? "",
                     ["content"] = args["content"]?.ToString() ?? ""
                 }
+            };
+            var result = await ServiceContainer.ToolGateway.ExecuteAsync(call, ct).ConfigureAwait(false);
+            return result.ToLlmText();
+        }
+
+        // web_search / delegate_to_agent / browser.* each take different argument shapes,
+        // so unlike ExecuteFileToolAsync this just forwards every arg the model supplied —
+        // the gateway handler for that specific tool name knows which keys it needs.
+        private static async Task<string> ExecuteGatewayToolAsync(string name, JObject args, CancellationToken ct)
+        {
+            var call = new KokoToolCall
+            {
+                Name = name,
+                Arguments = args.Properties()
+                    .ToDictionary(p => p.Name, p => p.Value?.ToString() ?? "", StringComparer.OrdinalIgnoreCase)
             };
             var result = await ServiceContainer.ToolGateway.ExecuteAsync(call, ct).ConfigureAwait(false);
             return result.ToLlmText();
@@ -3627,7 +3700,7 @@ namespace KokonoeAssistant.Services
             {
                 reqBody = useTools
                     ? AttachOllamaOptions(
-                        new { model = streamModel, messages = BuildMessages(systemContent), tools = TOOLS,
+                        new { model = streamModel, messages = BuildMessages(systemContent), tools = BuildToolsForRequest(),
                               tool_choice = "auto", max_tokens = maxTokens, temperature = target.Temperature, stream = true },
                         streamIsOllamaCloudProxy, maxTokens)
                     : AttachOllamaOptions(
