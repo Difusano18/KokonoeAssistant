@@ -141,9 +141,10 @@ internal static class Program
             Run("PC intent router full context uses context v2", PcIntentRouterFullContextUsesContextV2);
             Run("PC action executor confirms exact pending action id", PcActionExecutorConfirmsExactPendingActionId);
             Run("PC action executor rejects expired pending action", PcActionExecutorRejectsExpiredPendingAction);
-            Run("PC action executor rejects generic yes", PcActionExecutorRejectsGenericYes);
-            Run("PC action executor rejects target-only confirmation", PcActionExecutorRejectsTargetOnlyConfirmation);
-            Run("PC action executor rejects bare confirm action id", PcActionExecutorRejectsBareConfirmActionId);
+            Run("PC action executor accepts generic yes with correct id", PcActionExecutorAcceptsGenericYesWithCorrectId);
+            Run("PC action executor accepts target-only confirmation", PcActionExecutorAcceptsTargetOnlyConfirmation);
+            Run("PC action executor accepts bare confirm action id", PcActionExecutorAcceptsBareConfirmActionId);
+            Run("PC action executor confirms without id when only one pending", PcActionExecutorConfirmsWithoutIdWhenOnlyOnePending);
             Run("PC action executor cancel prevents later confirmation", PcActionExecutorCancelPreventsLaterConfirmation);
             Run("PC action executor keeps severe shell blocked after confirmation attempt", PcActionExecutorKeepsSevereShellBlockedAfterConfirmationAttempt);
             Run("PC intent router blocks unsafe shell chain by policy", PcIntentRouterBlocksUnsafeShellChainByPolicy);
@@ -3365,7 +3366,16 @@ Insight: bridge stability and pulse quality are linked.
         AssertTrue(File.ReadAllText(journal.JournalPath).Contains("Expired", StringComparison.OrdinalIgnoreCase), "action journal should record expired state");
     }
 
-    private static void PcActionExecutorRejectsGenericYes()
+    // ConfirmationMatches used to require the action-type/target restated in confirmationText
+    // and explicitly rejected a bare "так"/"yes" as "generic" - action types with no entry in
+    // its hardcoded keyword list (CreateDirectory, OpenApp, ...) had no phrase that could ever
+    // match, making them practically unconfirmable, and that brittleness was the actual
+    // friction users hit, not real safety: the original proposal (with id, action, and target)
+    // was already shown in full before any confirmation reply. A resolved pending action plus
+    // any non-empty confirmation text now executes; PcActionExecutorRejectsExpiredPendingAction
+    // and the hash-mismatch/no-id-with-multiple-pending cases still cover the safety properties
+    // that are real (can't confirm an expired or silently mutated plan).
+    private static void PcActionExecutorAcceptsGenericYesWithCorrectId()
     {
         var dir = Path.Combine(Path.GetTempPath(), "KokonoeAssistant.Tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(dir);
@@ -3376,18 +3386,17 @@ Insight: bridge stability and pulse quality are linked.
         plan.Actions[0].Arguments["dryRun"] = "true";
 
         var first = executor.ExecuteAsync(plan, new PcContextSnapshotV2()).GetAwaiter().GetResult();
-        var rejected = executor
+        var confirmed = executor
             .ConfirmAndExecuteAsync(first.PendingActionId, "yes", new PcContextSnapshotV2())
             .GetAwaiter()
             .GetResult();
 
-        AssertTrue(rejected.Blocked, "generic yes must not confirm a risky action");
-        AssertTrue(!rejected.Succeeded, "generic yes must not execute");
-        AssertEqual(1, store.Count, "rejected confirmation should leave the action pending until explicit confirmation or expiry");
-        AssertTrue(File.ReadAllText(journal.JournalPath).Contains("Rejected", StringComparison.OrdinalIgnoreCase), "rejected state should be journaled");
+        AssertTrue(confirmed.Succeeded, "a bare yes against the correct pending id should confirm");
+        AssertEqual(0, store.Count, "confirmed action should be removed from pending store");
+        AssertTrue(File.ReadAllText(journal.JournalPath).Contains("Confirmed", StringComparison.OrdinalIgnoreCase), "confirmed state should be journaled");
     }
 
-    private static void PcActionExecutorRejectsTargetOnlyConfirmation()
+    private static void PcActionExecutorAcceptsTargetOnlyConfirmation()
     {
         var dir = Path.Combine(Path.GetTempPath(), "KokonoeAssistant.Tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(dir);
@@ -3398,18 +3407,16 @@ Insight: bridge stability and pulse quality are linked.
         plan.Actions[0].Arguments["dryRun"] = "true";
 
         var first = executor.ExecuteAsync(plan, new PcContextSnapshotV2()).GetAwaiter().GetResult();
-        var rejected = executor
+        var confirmed = executor
             .ConfirmAndExecuteAsync(first.PendingActionId, $"pc:{first.PendingActionId} chrome", new PcContextSnapshotV2())
             .GetAwaiter()
             .GetResult();
 
-        AssertTrue(rejected.Blocked, "target-only text with action id must not execute a risky action");
-        AssertTrue(!rejected.Succeeded, "target-only confirmation must not execute");
-        AssertEqual(1, store.Count, "target-only rejection should leave pending action available for an explicit confirmation");
-        AssertTrue(File.ReadAllText(journal.JournalPath).Contains("Rejected", StringComparison.OrdinalIgnoreCase), "target-only rejection should be journaled");
+        AssertTrue(confirmed.Succeeded, "target-only text against the correct pending id should confirm");
+        AssertEqual(0, store.Count, "confirmed action should be removed from pending store");
     }
 
-    private static void PcActionExecutorRejectsBareConfirmActionId()
+    private static void PcActionExecutorAcceptsBareConfirmActionId()
     {
         var dir = Path.Combine(Path.GetTempPath(), "KokonoeAssistant.Tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(dir);
@@ -3420,15 +3427,35 @@ Insight: bridge stability and pulse quality are linked.
         plan.Actions[0].Arguments["dryRun"] = "true";
 
         var first = executor.ExecuteAsync(plan, new PcContextSnapshotV2()).GetAwaiter().GetResult();
-        var rejected = executor
+        var confirmed = executor
             .ConfirmAndExecuteAsync(first.PendingActionId, $"confirm pc:{first.PendingActionId}", new PcContextSnapshotV2())
             .GetAwaiter()
             .GetResult();
 
-        AssertTrue(rejected.Blocked, "bare confirm plus action id must not execute without the action intent");
-        AssertTrue(!rejected.Succeeded, "bare confirm action id must not execute");
-        AssertEqual(1, store.Count, "bare-confirm rejection should leave pending action available for an explicit confirmation");
-        AssertTrue(File.ReadAllText(journal.JournalPath).Contains("Rejected", StringComparison.OrdinalIgnoreCase), "bare-confirm rejection should be journaled");
+        AssertTrue(confirmed.Succeeded, "bare confirm plus the correct action id should execute");
+        AssertEqual(0, store.Count, "confirmed action should be removed from pending store");
+    }
+
+    private static void PcActionExecutorConfirmsWithoutIdWhenOnlyOnePending()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "KokonoeAssistant.Tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        var journal = new PcActionJournal(Path.Combine(dir, "journal.jsonl"));
+        var store = new PcPendingActionStore(Path.Combine(dir, "pending.jsonl"));
+        var executor = new PcActionExecutor(journal: journal, pending: store);
+        var plan = PcActionPlan.Single("close browser dry run", "KillProcess", "chrome", PcActionRiskTier.RiskyLocal);
+        plan.Actions[0].Arguments["dryRun"] = "true";
+
+        executor.ExecuteAsync(plan, new PcContextSnapshotV2()).GetAwaiter().GetResult();
+        // No id at all (the exact friction the user hit - the model dropped/truncated it)
+        // but exactly one pending action exists, so it's unambiguous which one this is.
+        var confirmed = executor
+            .ConfirmAndExecuteAsync(null, "так, виконай", new PcContextSnapshotV2())
+            .GetAwaiter()
+            .GetResult();
+
+        AssertTrue(confirmed.Succeeded, "with exactly one pending action, a missing id should still resolve and confirm");
+        AssertEqual(0, store.Count, "confirmed action should be removed from pending store");
     }
 
     private static void PcActionExecutorCancelPreventsLaterConfirmation()
@@ -3546,7 +3573,10 @@ Insight: bridge stability and pulse quality are linked.
         var plan = PcActionPlan.Single("close browser dry run", "KillProcess", "chrome", PcActionRiskTier.RiskyLocal);
         plan.Actions[0].Arguments["dryRun"] = "true";
         var first = executor.ExecuteAsync(plan, new PcContextSnapshotV2()).GetAwaiter().GetResult();
-        _ = executor.ConfirmAndExecuteAsync(first.PendingActionId, "yes", new PcContextSnapshotV2()).GetAwaiter().GetResult();
+        // Blank confirmation text is the one case ConfirmationMatches still rejects outright -
+        // everything else (bare "yes", target-only, ...) now confirms, see
+        // PcActionExecutorAccepts*Confirmation above.
+        _ = executor.ConfirmAndExecuteAsync(first.PendingActionId, "", new PcContextSnapshotV2()).GetAwaiter().GetResult();
         _ = executor.ConfirmAndExecuteAsync(first.PendingActionId, $"confirm pc:{first.PendingActionId} kill chrome", new PcContextSnapshotV2()).GetAwaiter().GetResult();
 
         var expiringPlan = PcActionPlan.Single("close editor dry run", "KillProcess", "code", PcActionRiskTier.RiskyLocal);
@@ -5813,7 +5843,7 @@ Insight: bridge stability and pulse quality are linked.
             var gateway = new KokoToolGateway(new KokoFileSystemToolService(workspace), new PcActionExecutor());
             gateway.Register(new KokoCodeActToolHandler(workspace));
 
-            AssertEqual(9, gateway.Tools.Count, "registry must describe every executable gateway handler");
+            AssertEqual(10, gateway.Tools.Count, "registry must describe every executable gateway handler");
             var delete = gateway.Tools.Single(tool => tool.Name == "fs_delete");
             AssertEqual(KokoToolRisk.Destructive, delete.Risk, "delete must be classified as destructive");
             AssertTrue(delete.RequiresConfirmation, "delete descriptor must advertise confirmation");

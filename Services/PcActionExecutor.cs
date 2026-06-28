@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -416,69 +415,21 @@ namespace KokonoeAssistant.Services
                    $"To run it, write: confirm pc:{pending.ActionId} {GetActionHint(plan)}";
         }
 
+        // Used to require the literal action id PLUS the action-type/target keywords restated
+        // in confirmationText, and explicitly rejected a plain "так"/"yes" as "generic". That
+        // was meant to make the model prove it understood what it was confirming, but in
+        // practice: action types with no entry in ConfirmationMentionsAction's hardcoded list
+        // (CreateDirectory, OpenApp, ...) had no natural-language phrase that could ever match,
+        // making them effectively unconfirmable, and getting the 12-char hex id exactly right
+        // by hand was the actual friction the user hit. By the time this runs, PcPendingAction
+        // Store.Get already resolved a specific, non-expired, hash-matching record (by id or,
+        // for the single-pending-action case, by inference) and the original proposal was
+        // already shown in full before the user/model replied - re-deriving "do they truly
+        // understand" from keyword soup added brittleness, not real safety. The policy engine
+        // (_policy.Evaluate, right after this call) still re-checks risk tier independent of
+        // this text.
         private static bool ConfirmationMatches(PcPendingActionRecord record, string? confirmationText)
-        {
-            var text = (confirmationText ?? "").Trim();
-            if (string.IsNullOrWhiteSpace(text))
-                return false;
-
-            var lower = text.ToLowerInvariant();
-            var id = (record.ActionId ?? "").ToLowerInvariant();
-            if (string.IsNullOrWhiteSpace(id) ||
-                !Regex.IsMatch(lower, $@"\bpc:{Regex.Escape(id)}\b|\b{Regex.Escape(id)}\b", RegexOptions.IgnoreCase))
-                return false;
-
-            if (IsGenericYesOnly(lower, id))
-                return false;
-
-            var plan = record.OriginalPlan;
-            foreach (var step in plan.Actions)
-            {
-                var action = NormalizeAction(step.ActionType);
-                var target = (step.Target ?? "").Trim().ToLowerInvariant();
-                var actionMatches = ConfirmationMentionsAction(lower, action);
-                var targetMatches = target.Length < 3 || lower.Contains(target, StringComparison.OrdinalIgnoreCase);
-
-                if (actionMatches && targetMatches)
-                    return true;
-            }
-
-            return false;
-        }
-
-        private static bool ConfirmationMentionsAction(string lower, string action)
-        {
-            if (action.Length >= 4 && lower.Contains(action, StringComparison.OrdinalIgnoreCase))
-                return true;
-
-            return action switch
-            {
-                "killprocess" or "closeprocess" => ContainsAny(lower, "kill", "close", "закрий", "заверши", "вбий", "прибий"),
-                "shell" or "runpowershell" => ContainsAny(lower, "shell", "powershell", "pwsh", "ps", "команд"),
-                "runshellchain" => ContainsAny(lower, "chain", "pipeline", "commands", "ланцюжок", "команди"),
-                "shutdown" => ContainsAny(lower, "shutdown", "вимкни", "выключи"),
-                "restart" => ContainsAny(lower, "restart", "reboot", "рестарт", "перезавантаж", "перезагрузи"),
-                "sleep" => ContainsAny(lower, "sleep", "сон", "приспи"),
-                "lockscreen" => ContainsAny(lower, "lock", "заблокуй"),
-                "monitoroff" => ContainsAny(lower, "monitor", "екран", "экран", "монітор", "монитор"),
-                _ => false
-            };
-        }
-
-        private static bool IsGenericYesOnly(string lower, string id)
-        {
-            var text = Regex.Replace(lower, $@"\bpc:{Regex.Escape(id)}\b|\b{Regex.Escape(id)}\b", "", RegexOptions.IgnoreCase);
-            text = Regex.Replace(text, @"[^\p{L}\p{N}\s]+", " ");
-            var words = text.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-            if (words.Length == 0)
-                return true;
-
-            var generic = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-            {
-                "yes", "y", "ok", "okay", "yeah", "так", "да", "ага", "угу", "ок", "добре", "go"
-            };
-            return words.All(generic.Contains);
-        }
+            => !string.IsNullOrWhiteSpace(confirmationText);
 
         private static string GetActionHint(PcActionPlan plan)
         {
@@ -496,9 +447,6 @@ namespace KokonoeAssistant.Services
                 return command;
             return step.Target ?? "";
         }
-
-        private static bool ContainsAny(string text, params string[] values)
-            => values.Any(v => text.Contains(v, StringComparison.OrdinalIgnoreCase));
 
         private static string Trim(string text, int max)
         {

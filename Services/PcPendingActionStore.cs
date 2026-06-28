@@ -84,11 +84,19 @@ namespace KokonoeAssistant.Services
         {
             EnsureLoaded();
             var id = NormalizeActionId(actionId);
-            if (string.IsNullOrWhiteSpace(id))
-                return PcPendingActionLookupResult.Missing(id);
 
             lock (_lock)
             {
+                // No id (or a typo'd/truncated one that doesn't match anything) and exactly
+                // one pending action: assume that's the one being confirmed instead of forcing
+                // the model to echo a 12-char hex id back verbatim. Two or more pending at once
+                // is rare and stays ambiguous on purpose - that case still needs the real id.
+                if ((string.IsNullOrWhiteSpace(id) || !_pending.ContainsKey(id)) && _pending.Count == 1)
+                    id = _pending.Keys.First();
+
+                if (string.IsNullOrWhiteSpace(id))
+                    return PcPendingActionLookupResult.Missing(id);
+
                 if (!_pending.TryGetValue(id, out var record))
                     return PcPendingActionLookupResult.Missing(id);
 
