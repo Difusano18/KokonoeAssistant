@@ -3547,7 +3547,37 @@ namespace KokonoeAssistant.Services
             if (lower.Contains("чекаю наступного запиту") && (dotRuns >= 2 || dotCount > 12))
                 return true;
 
+            if (LooksLikeLeakedReasoning(trimmed, lower)) return true;
+
             return false;
+        }
+
+        // gpt-oss/"harmony"-style reasoning models stream their internal analysis as
+        // reasoning_content alongside a separate final-channel content field — but when that
+        // separation breaks down (proxy/provider quirk, or the model just narrates instead of
+        // answering), the analysis prose lands directly in the visible reply: well-formed
+        // English sentences like "The user is repeatedly asking..." or "Let's choose X", not
+        // garbled text the other checks above catch. The app is Ukrainian-only by design, so
+        // a reply that's mostly Latin letters AND reads like task narration is a strong signal
+        // either way - this feeds into the same retry-then-fallback path IsBadFinalReply
+        // already has, not a new code path.
+        private static readonly string[] ReasoningLeakPhrases =
+        {
+            "the user is", "the user asked", "the user wants", "the user said", "the user repeated",
+            "we should", "we can comply", "we must ensure", "let's choose", "let's navigate",
+            "the policy", "i should respond", "the assistant has", "the assistant opened",
+            "should we", "we'll navigate", "no disallowed content"
+        };
+
+        private static bool LooksLikeLeakedReasoning(string trimmed, string lower)
+        {
+            var letters = trimmed.Count(char.IsLetter);
+            if (letters < 20) return false;
+
+            var cyrillic = trimmed.Count(c => c is >= 'Ѐ' and <= 'ӿ');
+            if (cyrillic > letters * 0.15) return false;
+
+            return ReasoningLeakPhrases.Count(p => lower.Contains(p)) >= 2;
         }
 
         private static string BuildCleanFallbackReply(string userText, bool toolCallsAttempted)

@@ -496,6 +496,18 @@ namespace KokonoeAssistant.Services
             try
             {
                 var psi = new ProcessStartInfo(target) { UseShellExecute = true };
+                // Launching "chrome" with no arguments and multiple profiles on the machine
+                // makes Chrome show its own profile picker instead of opening anything - the
+                // user has a Chrome profile literally named "Kokonoe" for this. Resolve its
+                // internal directory (Chrome profiles are stored as "Profile 1", "Profile 7",
+                // etc. - the display name only lives inside Local State) and launch straight
+                // into it; falls back to the unchanged bare launch if that profile isn't found.
+                if (target.Equals("chrome", StringComparison.OrdinalIgnoreCase))
+                {
+                    var profileDir = ResolveChromeProfileDirectory("Kokonoe");
+                    if (!string.IsNullOrEmpty(profileDir))
+                        psi.Arguments = $"--profile-directory=\"{profileDir}\"";
+                }
                 Process.Start(psi);
                 return (true, $"Відкрила: {target}");
             }
@@ -503,6 +515,34 @@ namespace KokonoeAssistant.Services
             {
                 return (false, $"Не змогла відкрити '{target}': {ex.Message}");
             }
+        }
+
+        private static string? ResolveChromeProfileDirectory(string profileDisplayName)
+        {
+            try
+            {
+                var localStatePath = Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                    "Google", "Chrome", "User Data", "Local State");
+                if (!File.Exists(localStatePath))
+                    return null;
+
+                var json = Newtonsoft.Json.Linq.JObject.Parse(File.ReadAllText(localStatePath));
+                if (json["profile"]?["info_cache"] is not Newtonsoft.Json.Linq.JObject infoCache)
+                    return null;
+
+                foreach (var entry in infoCache.Properties())
+                {
+                    var name = entry.Value["name"]?.ToString();
+                    if (string.Equals(name, profileDisplayName, StringComparison.OrdinalIgnoreCase))
+                        return entry.Name;
+                }
+            }
+            catch (Exception ex)
+            {
+                KokoSystemLog.Write("PCCONTROLSERVICE-CATCH", "ResolveChromeProfileDirectory failed: " + ex.Message);
+            }
+            return null;
         }
 
         // ── Shell commands ───────────────────────────────────────────

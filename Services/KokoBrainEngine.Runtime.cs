@@ -461,6 +461,17 @@ namespace KokonoeAssistant.Services
                     sb.AppendLine(preflight);
                 }
             }
+
+            // BuildContextAsync (desktop's context builder) appends agent-pool/browser/
+            // artifact sections via BuildStaticContextBlockAsync, cached with its own TTL.
+            // This method (web chat's context builder) never called it at all, so the model
+            // never saw the user's actual agent-pool entries (name/id/description) and had no
+            // way to use delegate_to_agent meaningfully — it could only claim the capability
+            // existed in the abstract. GetAwaiter().GetResult() is fine here: the block is
+            // TTL-cached, so only the first call per refresh window blocks on real work.
+            try { sb.AppendLine(BuildStaticContextBlockAsync().GetAwaiter().GetResult()); }
+            catch (Exception ex) { KokoSystemLog.Write("BRAIN-CATCH", "BuildUnifiedExternalContext static block failed: " + ex); }
+
             return sb.ToString();
         }
 
