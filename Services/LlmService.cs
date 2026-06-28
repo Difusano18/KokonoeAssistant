@@ -2179,8 +2179,18 @@ namespace KokonoeAssistant.Services
                             RecordLlmFailure(diagProvider, diagModel, diagChannel, (int)resp.StatusCode, err, diagWatch, "vision_500");
                             return BuildVisionUnavailableReply(userText);
                         }
-                        if (isOllamaCloud && !isImageRequest && IsTransientServerError((int)resp.StatusCode))
+                        var isContextOverflow = LooksLikeContextOverflow(err);
+                        if (isOllamaCloud && !isImageRequest && (IsTransientServerError((int)resp.StatusCode) || isContextOverflow))
                         {
+                            if (isContextOverflow)
+                            {
+                                // A 400 here isn't transient - the same bloated history will hit the
+                                // same wall on the very next turn too. Clearing it is the only way
+                                // a normal (non-compact) request succeeds again afterward; the compact
+                                // retry below still answers THIS turn in the meantime.
+                                lock (_histLock) { _history.Clear(); }
+                                KokoSystemLog.Write("LLM", $"history cleared after context overflow: {err[..Math.Min(200, err.Length)]}");
+                            }
                             var compactReply = await TryOllamaCloudCompactRetryAsync(targetUrl, targetModel, userText, agentTarget.Temperature, ct, agentId);
                             if (!string.IsNullOrWhiteSpace(compactReply))
                             {
@@ -2447,6 +2457,16 @@ namespace KokonoeAssistant.Services
         {
             return statusCode == 500 || statusCode == 502 || statusCode == 503 || statusCode == 504;
         }
+
+        // A 510k-token request against a 262k-token model isn't a server hiccup, it's
+        // _history (capped by entry COUNT, not by size) plus the system prompt's accumulated
+        // sections finally tipping over - a real, deterministic 400, not the 5xx transient
+        // class IsTransientServerError covers. Detected by message rather than status code
+        // alone since 400 covers other client errors too.
+        private static bool LooksLikeContextOverflow(string error) =>
+            error.Contains("maximum context length", StringComparison.OrdinalIgnoreCase) ||
+            error.Contains("prompt is too long", StringComparison.OrdinalIgnoreCase) ||
+            error.Contains("context_length_exceeded", StringComparison.OrdinalIgnoreCase);
 
         private static string BuildCompactSystemContent()
         {
