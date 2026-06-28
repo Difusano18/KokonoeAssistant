@@ -2035,7 +2035,13 @@ namespace KokonoeAssistant.Services
 
                     // Для Ollama Cloud — retry-loop по живих ключах при 429.
                     // Один повний цикл по пулу; якщо всі впали — дружня помилка з cooldown.
-                    int ollamaAttempts = isOllamaCloud ? GetOllamaAttemptCount(agentId) : 1;
+                    // ollama-cloud-proxy has no key pool to rotate through (auth is the local
+                    // `ollama signin` session, not Settings' optional key) - but main chat and
+                    // agent-pool profiles share that same localhost:11434 account, so a 429
+                    // there is plausibly just a transient burst from concurrent callers, not a
+                    // hard account-level wall. A couple of short delayed retries costs little
+                    // and replaces an immediate, often-wrong-looking failure with success.
+                    int ollamaAttempts = isOllamaCloud ? GetOllamaAttemptCount(agentId) : isOllamaCloudProxy ? 3 : 1;
                     HttpResponseMessage? resp = null;
                     string? usedOllamaKey = null;
 
@@ -2077,6 +2083,14 @@ namespace KokonoeAssistant.Services
                         {
                             resp.Dispose();
                             resp = null;
+                            continue;
+                        }
+
+                        if (isOllamaCloudProxy && (int)resp.StatusCode == 429 && attempt < ollamaAttempts - 1)
+                        {
+                            resp.Dispose();
+                            resp = null;
+                            await Task.Delay(TimeSpan.FromSeconds(4), ct);
                             continue;
                         }
 
@@ -2240,7 +2254,7 @@ namespace KokonoeAssistant.Services
                         }
 
                         RecordLlmFailure(diagProvider, diagModel, diagChannel, (int)resp.StatusCode, err, diagWatch, "friendly_error");
-                        return BuildFriendlyLlmError((int)resp.StatusCode, err, isOllamaCloud ? "Ollama Cloud" : targetModel);
+                        return BuildFriendlyLlmError((int)resp.StatusCode, err, isOllamaCloud ? "Ollama Cloud" : isOllamaCloudProxy ? "Ollama (local proxy)" : targetModel);
                     }
 
                     if (streamFinalAfterTools)
@@ -2504,7 +2518,16 @@ namespace KokonoeAssistant.Services
                 return $"Сервер моделі впав з HTTP {statusCode}. Ні, це не твій сон зламався, це {provider} подавився запитом. Я вже пробувала легший fallback; не вийшло. Повтори запит або перемкни модель у Settings. Деталь: {shortError}";
 
             if (statusCode == 429)
-                return $"Ліміт запитів з'їдений. {provider} повернув HTTP 429. Почекай reset або перемкни ключ у Settings.";
+            {
+                // ollama-cloud-proxy authorizes via the local `ollama signin` session, not the
+                // optional API-key field in Settings - telling the user to "switch the key"
+                // there does nothing for this provider, the rate limit is on the signed-in
+                // ollama.com account itself, shared across every local call (main chat AND any
+                // agent-pool profile pointed at the same localhost:11434).
+                return provider == "Ollama (local proxy)"
+                    ? "Ліміт запитів з'їдений на твоєму ollama-акаунті (підписаний через `ollama signin` локально) — не на ключі з Settings, той тут другорядний. Це загальний ліміт для всього, що йде через localhost:11434, включно з agent pool. Почекай reset або перемкни модель/провайдера в Settings."
+                    : $"Ліміт запитів з'їдений. {provider} повернув HTTP 429. Почекай reset або перемкни ключ у Settings.";
+            }
 
             return $"LLM-запит відхилено: HTTP {statusCode}. Деталь: {shortError}";
         }
@@ -3894,7 +3917,7 @@ namespace KokonoeAssistant.Services
 
             // Для Ollama Cloud — retry-loop по живих ключах при 429 (тільки на стадії headers,
             // mid-stream retry неможливий технічно).
-            int ollamaAttempts = streamIsOllamaCloud ? GetOllamaAttemptCount(agentId) : 1;
+            int ollamaAttempts = streamIsOllamaCloud ? GetOllamaAttemptCount(agentId) : streamIsOllamaCloudProxy ? 3 : 1;
             HttpResponseMessage? resp = null;
             string? usedOllamaKey = null;
 
@@ -3932,6 +3955,13 @@ namespace KokonoeAssistant.Services
                     {
                         resp.Dispose();
                         resp = null;
+                        continue;
+                    }
+                    if (streamIsOllamaCloudProxy && (int)resp.StatusCode == 429 && attempt < ollamaAttempts - 1)
+                    {
+                        resp.Dispose();
+                        resp = null;
+                        await Task.Delay(TimeSpan.FromSeconds(4), ct);
                         continue;
                     }
                     break;
@@ -4263,7 +4293,7 @@ namespace KokonoeAssistant.Services
                     }
 
                     RecordLlmFailure(diagProvider, targetModel, diagChannel, (int)res.StatusCode, raw, diagWatch, "tg_friendly_error");
-                    return BuildFriendlyLlmError((int)res.StatusCode, raw, isOllamaCloud ? "Ollama Cloud" : targetModel);
+                    return BuildFriendlyLlmError((int)res.StatusCode, raw, isOllamaCloud ? "Ollama Cloud" : isOllamaCloudProxy ? "Ollama (local proxy)" : targetModel);
                 }
 
                 var json = JObject.Parse(raw);
