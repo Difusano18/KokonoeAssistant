@@ -258,6 +258,7 @@ internal static class Program
             Run("Action directive router sends non artifact tasks to agents", ActionDirectiveRouterSendsNonArtifactTasksToAgents);
             Run("LLM guard blocks unverified action claims", LlmGuardBlocksUnverifiedActionClaims);
             Run("Detect best tool picks fs tools for disk requests", DetectBestToolPicksFsToolsForDiskRequests);
+            Run("Truncate note for tool result caps oversized notes", TruncateNoteForToolResultCapsOversizedNotes);
             Run("Action directive router handles inflected targets", ActionDirectiveRouterHandlesInflectedTargets);
             Run("Generated content route stays separate from surprise scan", GeneratedContentRouteStaysSeparateFromSurpriseScan);
             Run("Chat runtime defaults to streaming with bounded token budget", ChatRuntimeDefaultsToStreamingWithBoundedTokenBudget);
@@ -6064,6 +6065,22 @@ Insight: bridge stability and pulse quality are linked.
         // disk-flavored checks just because they happen to mention an unrelated word.
         AssertEqual("create_note", LlmService.DetectBestTool("створи нову нотатку в vault"),
             "explicit vault/note request must stay on the Obsidian tool path");
+    }
+
+    private static void TruncateNoteForToolResultCapsOversizedNotes()
+    {
+        // The actual trigger logged in production: a real 18593-char consolidated facts
+        // note read back as a tool result, with nothing capping it, left a modest model no
+        // budget to produce a visible answer on the forced final summary round.
+        var oversized = new string('a', 18593);
+        var truncated = LlmService.TruncateNoteForToolResult(oversized, "Kokonoe/Memory/Facts.md");
+        AssertTrue(truncated.Length < oversized.Length, "oversized note must be shortened, not passed through whole");
+        AssertTrue(truncated.Contains("truncated"), "truncated note must say so, not silently drop content");
+        AssertTrue(truncated.Contains("Kokonoe/Memory/Facts.md"), "truncation notice should name the file so a follow-up read targets it");
+
+        var small = "short note content";
+        AssertEqual(small, LlmService.TruncateNoteForToolResult(small, "whatever.md"),
+            "a note under the cap must pass through unchanged");
     }
 
     private static void GeneratedContentRouteStaysSeparateFromSurpriseScan()

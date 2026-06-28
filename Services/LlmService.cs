@@ -2288,61 +2288,28 @@ namespace KokonoeAssistant.Services
 
                     if (streamFinalAfterTools)
                     {
-                        string streamedReply = "";
-                        for (int finalAttempt = 0; finalAttempt < 2; finalAttempt++)
+                        await using var responseStream = await resp.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
+                        var streamed = await KokoOpenAiStreamParser.ReadTextAsync(responseStream, onChunk, ct).ConfigureAwait(false);
+                        if (streamed.ToolCallsDetected)
+                            KokoSystemLog.Write("LLM", "final no-tools stream returned tool calls anyway — using whatever text it produced instead of failing the turn");
+                        var streamedText = streamed.Text;
+                        if (string.IsNullOrWhiteSpace(streamedText) && !string.IsNullOrWhiteSpace(streamed.Reasoning))
                         {
-                            var currentResp = resp;
-                            if (finalAttempt > 0)
-                            {
-                                // Empty completion on the forced final summary round - genuinely
-                                // nothing to relay, not a guard rewriting real output (there's no
-                                // real output here to rewrite). This isn't theoretical: it's hit
-                                // the user twice now with two different triggers (an oversized
-                                // fs_list_directory dump, then a couple of long vault notes read
-                                // back as tool results) - both just overload a modest model's
-                                // attention on the summary step. A plain retry of the identical
-                                // request is cheap and often just works on the second roll.
-                                KokoSystemLog.Write("LLM", $"empty final completion after tools, retrying once: provider={diagProvider} model={targetModel} round={round} historyLen={_history.Count}");
-                                var retryContent = new StringContent(json, Encoding.UTF8, "application/json");
-                                using var retryReq = new HttpRequestMessage(HttpMethod.Post, targetUrl) { Content = retryContent };
-                                if (isClaude)
-                                {
-                                    retryReq.Headers.Add("x-api-key", _claudeApiKey);
-                                    retryReq.Headers.Add("anthropic-version", "2023-06-01");
-                                }
-                                else if (isOllamaCloud && !string.IsNullOrEmpty(usedOllamaKey))
-                                    retryReq.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", usedOllamaKey);
-                                else if (isOllamaCloudProxy && !string.IsNullOrWhiteSpace(_ollamaCloudProxyApiKey))
-                                    retryReq.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _ollamaCloudProxyApiKey);
-                                currentResp = await _http.SendAsync(retryReq, HttpCompletionOption.ResponseHeadersRead, ct);
-                                if (!currentResp.IsSuccessStatusCode)
-                                {
-                                    currentResp.Dispose();
-                                    break;
-                                }
-                            }
-
-                            await using var responseStream = await currentResp.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
-                            var streamed = await KokoOpenAiStreamParser.ReadTextAsync(responseStream, onChunk, ct).ConfigureAwait(false);
-                            if (streamed.ToolCallsDetected)
-                                KokoSystemLog.Write("LLM", "final no-tools stream returned tool calls anyway — using whatever text it produced instead of failing the turn");
-                            var streamedText = streamed.Text;
-                            if (string.IsNullOrWhiteSpace(streamedText) && !string.IsNullOrWhiteSpace(streamed.Reasoning))
-                            {
-                                streamedText = ExtractResponseFromReasoning(streamed.Reasoning);
-                                if (!string.IsNullOrWhiteSpace(streamedText))
-                                    onChunk?.Invoke(streamedText);
-                            }
-                            streamedReply = CleanGarbage(streamedText);
-                            if (finalAttempt > 0)
-                                currentResp.Dispose();
-                            if (!string.IsNullOrWhiteSpace(streamedReply))
-                                break;
+                            streamedText = ExtractResponseFromReasoning(streamed.Reasoning);
+                            if (!string.IsNullOrWhiteSpace(streamedText))
+                                onChunk?.Invoke(streamedText);
                         }
-
+                        var streamedReply = CleanGarbage(streamedText);
                         if (string.IsNullOrWhiteSpace(streamedReply))
-                            KokoSystemLog.Write("LLM", $"empty final completion after tools, retry also empty: provider={diagProvider} model={targetModel} round={round} historyLen={_history.Count}");
-
+                        {
+                            // No retry here on purpose - retrying just burns another full request
+                            // on the same bloated prompt instead of fixing why it went blank. Real
+                            // fix is upstream: tool results that can blow out the final summary
+                            // round (oversized directory listings, full vault notes) get capped
+                            // before they ever reach history - see ListDirectory's Take(100) and
+                            // TruncateNoteForToolResult. This stays a log, not a patch.
+                            KokoSystemLog.Write("LLM", $"empty final completion after tools: provider={diagProvider} model={targetModel} round={round} historyLen={_history.Count}");
+                        }
                         lock (_histLock)
                         {
                             _history.Add(new HistoryEntry("assistant", streamedReply));
@@ -3118,8 +3085,9 @@ namespace KokonoeAssistant.Services
 
                     "list_folders" => FormatList(Obsidian.ListFolders()),
 
-                    "read_note" => Obsidian.ReadNote(Req(args, "path"))
-                                   ?? $"Нотатка не знайдена: {args["path"]}",
+                    "read_note" => Obsidian.ReadNote(Req(args, "path")) is { } noteContent
+                                   ? TruncateNoteForToolResult(noteContent, Req(args, "path"))
+                                   : $"Нотатка не знайдена: {args["path"]}",
 
                     "write_note" => WriteAndLink(
                         () => Obsidian.WriteNote(Req(args, "path"), Req(args, "content")),
@@ -3300,6 +3268,21 @@ namespace KokonoeAssistant.Services
 
         private static string FormatList(List<string> items) =>
             items.Count == 0 ? "(порожньо)" : string.Join("\n", items);
+
+        // Root cause of the empty-final-answer bug, not a symptom patch: read_note fed the
+        // full file back as a tool-result message with zero size limit - a single 18KB
+        // consolidated facts note plus the system prompt plus history was enough to leave a
+        // modest model nothing to work with on the forced final summary round, producing a
+        // visible-text-free completion (see "empty final completion after tools" in the log).
+        // Capped here, same approach as ListDirectory's Take(100): big enough to actually
+        // answer most "what's interesting in here" asks, small enough to leave real budget
+        // for the model to write an answer instead of just holding the file in its context.
+        public static string TruncateNoteForToolResult(string content, string path)
+        {
+            const int cap = 3000;
+            if (content.Length <= cap) return content;
+            return content[..cap] + $"\n\n[...truncated, {content.Length - cap} more characters. Ask to read a specific heading/section of {path} if you need more of it.]";
+        }
 
         private static string FormatSearch(List<SearchResult> results) =>
             results.Count == 0
