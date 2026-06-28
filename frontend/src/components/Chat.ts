@@ -123,6 +123,12 @@ export class ChatController {
         if (file && file.type.startsWith("image/")) void this.setPendingAttachment(file);
       });
     }
+    this.input.addEventListener("paste", event => {
+      const file = Array.from(event.clipboardData?.items ?? [])
+        .find(item => item.type.startsWith("image/"))
+        ?.getAsFile();
+      if (file) void this.setPendingAttachment(file);
+    });
     window.koko.on("chat.started", payload => this.onStarted(payload as ChatEvent));
     window.koko.on("chat.chunk", payload => this.onChunk(payload as ChatEvent));
     window.koko.on("chat.reset", payload => this.onReset(payload as ChatEvent));
