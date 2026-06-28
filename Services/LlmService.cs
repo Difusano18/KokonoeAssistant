@@ -2288,25 +2288,61 @@ namespace KokonoeAssistant.Services
 
                     if (streamFinalAfterTools)
                     {
-                        await using var responseStream = await resp.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
-                        var streamed = await KokoOpenAiStreamParser.ReadTextAsync(responseStream, onChunk, ct).ConfigureAwait(false);
-                        if (streamed.ToolCallsDetected)
-                            KokoSystemLog.Write("LLM", "final no-tools stream returned tool calls anyway — using whatever text it produced instead of failing the turn");
-                        var streamedText = streamed.Text;
-                        if (string.IsNullOrWhiteSpace(streamedText) && !string.IsNullOrWhiteSpace(streamed.Reasoning))
+                        string streamedReply = "";
+                        for (int finalAttempt = 0; finalAttempt < 2; finalAttempt++)
                         {
-                            streamedText = ExtractResponseFromReasoning(streamed.Reasoning);
-                            if (!string.IsNullOrWhiteSpace(streamedText))
-                                onChunk?.Invoke(streamedText);
+                            var currentResp = resp;
+                            if (finalAttempt > 0)
+                            {
+                                // Empty completion on the forced final summary round - genuinely
+                                // nothing to relay, not a guard rewriting real output (there's no
+                                // real output here to rewrite). This isn't theoretical: it's hit
+                                // the user twice now with two different triggers (an oversized
+                                // fs_list_directory dump, then a couple of long vault notes read
+                                // back as tool results) - both just overload a modest model's
+                                // attention on the summary step. A plain retry of the identical
+                                // request is cheap and often just works on the second roll.
+                                KokoSystemLog.Write("LLM", $"empty final completion after tools, retrying once: provider={diagProvider} model={targetModel} round={round} historyLen={_history.Count}");
+                                var retryContent = new StringContent(json, Encoding.UTF8, "application/json");
+                                using var retryReq = new HttpRequestMessage(HttpMethod.Post, targetUrl) { Content = retryContent };
+                                if (isClaude)
+                                {
+                                    retryReq.Headers.Add("x-api-key", _claudeApiKey);
+                                    retryReq.Headers.Add("anthropic-version", "2023-06-01");
+                                }
+                                else if (isOllamaCloud && !string.IsNullOrEmpty(usedOllamaKey))
+                                    retryReq.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", usedOllamaKey);
+                                else if (isOllamaCloudProxy && !string.IsNullOrWhiteSpace(_ollamaCloudProxyApiKey))
+                                    retryReq.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _ollamaCloudProxyApiKey);
+                                currentResp = await _http.SendAsync(retryReq, HttpCompletionOption.ResponseHeadersRead, ct);
+                                if (!currentResp.IsSuccessStatusCode)
+                                {
+                                    currentResp.Dispose();
+                                    break;
+                                }
+                            }
+
+                            await using var responseStream = await currentResp.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
+                            var streamed = await KokoOpenAiStreamParser.ReadTextAsync(responseStream, onChunk, ct).ConfigureAwait(false);
+                            if (streamed.ToolCallsDetected)
+                                KokoSystemLog.Write("LLM", "final no-tools stream returned tool calls anyway — using whatever text it produced instead of failing the turn");
+                            var streamedText = streamed.Text;
+                            if (string.IsNullOrWhiteSpace(streamedText) && !string.IsNullOrWhiteSpace(streamed.Reasoning))
+                            {
+                                streamedText = ExtractResponseFromReasoning(streamed.Reasoning);
+                                if (!string.IsNullOrWhiteSpace(streamedText))
+                                    onChunk?.Invoke(streamedText);
+                            }
+                            streamedReply = CleanGarbage(streamedText);
+                            if (finalAttempt > 0)
+                                currentResp.Dispose();
+                            if (!string.IsNullOrWhiteSpace(streamedReply))
+                                break;
                         }
-                        var streamedReply = CleanGarbage(streamedText);
+
                         if (string.IsNullOrWhiteSpace(streamedReply))
-                        {
-                            // No guard rewriting this - there's genuinely nothing to relay. Logged
-                            // so the next blank turn is traceable instead of silently vanishing
-                            // (this is what was happening invisibly before this line existed).
-                            KokoSystemLog.Write("LLM", $"empty final completion after tools: provider={diagProvider} model={targetModel} round={round} historyLen={_history.Count}");
-                        }
+                            KokoSystemLog.Write("LLM", $"empty final completion after tools, retry also empty: provider={diagProvider} model={targetModel} round={round} historyLen={_history.Count}");
+
                         lock (_histLock)
                         {
                             _history.Add(new HistoryEntry("assistant", streamedReply));
