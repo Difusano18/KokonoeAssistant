@@ -2,11 +2,23 @@ namespace KokonoeAssistant.Services
 {
     public static class KokoLlmStreamingPolicy
     {
+        // Used to fire as soon as completedRounds > 0 - the chat UI forced a streamed
+        // text-only wrap-up the moment a SINGLE round of tool calls succeeded, regardless of
+        // whether the task actually needed more steps. That made multi-step work ("list,
+        // then create three folders, then move everything, then verify") stop after one
+        // batch every time, reporting back and waiting for the user to say "continue" again -
+        // exactly the Manus-style continuous-execution behavior the user kept asking for was
+        // structurally impossible here. Background/agent callers never had this limit (they
+        // already use the full round budget); this brings interactive chat in line with them.
+        // maxToolRounds matches the round loop's own hard cap (round >= 6 forces no-tools
+        // regardless) so this only starts mattering once that cap is genuinely close, not the
+        // instant any tool succeeds.
         public static bool ShouldStreamFinalAfterTools(
             bool hasChunkSink,
             int completedRounds,
             bool isImageRequest,
-            bool isClaude)
-            => hasChunkSink && completedRounds > 0 && !isImageRequest && !isClaude;
+            bool isClaude,
+            int maxToolRounds = 6)
+            => hasChunkSink && completedRounds >= maxToolRounds && !isImageRequest && !isClaude;
     }
 }

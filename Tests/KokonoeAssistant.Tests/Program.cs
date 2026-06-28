@@ -6591,15 +6591,24 @@ Insight: bridge stability and pulse quality are linked.
 
     private static void LlmStreamingPolicyLimitsToolFinalStreaming()
     {
-        AssertTrue(KokoLlmStreamingPolicy.ShouldStreamFinalAfterTools(true, 1, false, false),
-            "user-visible OpenAI-compatible tool result should stream after one completed round");
-        AssertTrue(!KokoLlmStreamingPolicy.ShouldStreamFinalAfterTools(false, 1, false, false),
+        // Used to fire the instant completedRounds > 0, forcing interactive chat to stop and
+        // summarize after a single batch of tool calls even mid multi-step task. Now only
+        // fires once toolRoundsCompleted is near the round loop's own hard cap (default 6),
+        // so a task that genuinely needs several rounds of real tool calls gets to use them
+        // instead of being cut off after the first round that happened to succeed.
+        AssertTrue(!KokoLlmStreamingPolicy.ShouldStreamFinalAfterTools(true, 1, false, false),
+            "one completed tool round must not yet force a stop-and-summarize turn");
+        AssertTrue(!KokoLlmStreamingPolicy.ShouldStreamFinalAfterTools(true, 5, false, false),
+            "still under the round cap - more tool rounds must remain available");
+        AssertTrue(KokoLlmStreamingPolicy.ShouldStreamFinalAfterTools(true, 6, false, false),
+            "at the round cap, the final round must stream a text-only wrap-up");
+        AssertTrue(!KokoLlmStreamingPolicy.ShouldStreamFinalAfterTools(false, 6, false, false),
             "background callers without a chunk sink must remain atomic");
         AssertTrue(!KokoLlmStreamingPolicy.ShouldStreamFinalAfterTools(true, 0, false, false),
             "initial tool decision must remain atomic");
-        AssertTrue(!KokoLlmStreamingPolicy.ShouldStreamFinalAfterTools(true, 1, true, false),
+        AssertTrue(!KokoLlmStreamingPolicy.ShouldStreamFinalAfterTools(true, 6, true, false),
             "vision responses must remain atomic");
-        AssertTrue(!KokoLlmStreamingPolicy.ShouldStreamFinalAfterTools(true, 1, false, true),
+        AssertTrue(!KokoLlmStreamingPolicy.ShouldStreamFinalAfterTools(true, 6, false, true),
             "Claude response framing is not OpenAI SSE and must remain atomic");
     }
 

@@ -1950,15 +1950,14 @@ namespace KokonoeAssistant.Services
                     var useTools = Obsidian != null && !toolsFailedFallback && !isImageRequest;
 
                     // На останніх раундах примушуємо модель відповісти текстом без tool_calls
-                    // User-visible fallback: after a real tool round, force a final text response and stream it.
-                    // Background/tool-only callers keep the full multi-round tool loop.
-                    // toolRoundsCompleted (not the raw round index) - round 0 producing zero
-                    // tool_calls (model ignored a forced tool_choice, or just stalled in prose)
-                    // used to make round 1 force a no-tools text-only completion regardless,
-                    // which meant a SYSTEM CHECK retry nudge landed in a round that could never
-                    // act on it: tools/tool_choice get stripped from the request body entirely
-                    // once forceNoTools is true. Only lock into the final-summary mode after a
-                    // tool genuinely ran at least once.
+                    // toolRoundsCompleted (not the raw round index) - same reasoning as before:
+                    // a stalled round 0 (model ignored a forced tool_choice, or just talked)
+                    // must not lock round 1 out of tools too. KokoLlmStreamingPolicy now only
+                    // forces the streamed text-only wrap-up once toolRoundsCompleted is near
+                    // the round loop's own hard cap (>=6), not the instant any tool succeeds -
+                    // interactive chat gets the same multi-step room background/agent callers
+                    // already had, instead of stopping after one batch of tool calls and
+                    // making the user say "continue" for every following step of a task.
                     var streamFinalAfterTools = KokoLlmStreamingPolicy.ShouldStreamFinalAfterTools(
                         onChunk != null,
                         toolRoundsCompleted,
