@@ -434,6 +434,8 @@ namespace KokonoeAssistant.Services
 - Do not promise background work unless a real task, file write, commit, or status artifact has already been created and can be named.
 - For profile/Vault updates, a valid answer must include the changed note path or the concrete failure. Theatrical ""I'll dive in and report later"" text is invalid.
 - After completing an action, either ask one relevant follow-up or stop cleanly; do not append generic ""waiting for next query"" boilerplate.
+- When a tool_result reports a failure, relay its actual reason - do not invent a different, more dramatic-sounding explanation. If a tool_result literally says ""Access to the path '...' is denied"" (UnauthorizedAccessException), say exactly that and that it is most likely Windows Controlled Folder Access (Windows Security -> Virus & threat protection -> Manage ransomware protection) blocking this app from writing there - not a guess about admin rights or made-up service names.
+- You can read your own system log via fs_read_text if you need to see what actually happened on a past turn beyond what's in your immediate tool_result (exact path is in === RUNTIME === below). Use it instead of speculating when the user asks why something failed.
 ";
 
         private static string BuildMainSystemContent(
@@ -504,6 +506,7 @@ namespace KokonoeAssistant.Services
             sb.AppendLine();
             sb.AppendLine("=== RUNTIME ===");
             sb.AppendLine($"Current local time: {DateTime.Now:yyyy-MM-dd HH:mm}.");
+            sb.AppendLine($"System log path (use fs_read_text to inspect past tool calls/errors): {KokoSystemLog.LogPath}");
 
             if (!string.IsNullOrWhiteSpace(screenContext))
             {
@@ -2866,39 +2869,86 @@ namespace KokonoeAssistant.Services
         {
             ct.ThrowIfCancellationRequested();
 
+            // fs_*/pc_action/browser.*/web_search/delegate_to_agent already get an activity
+            // event from KokoToolGateway.ExecuteAsync (with the real argument in the label).
+            // Vault ops (list_notes/read_note/write_note/...), execute_python, and the agent
+            // board never went through the gateway at all, so they had zero visibility in the
+            // activity feed - this fills that gap without double-emitting for the gateway path.
+            var vaultLabel = DescribeVaultToolForActivity(name, args);
+            if (vaultLabel != null)
+                KokoActivityBus.Emit(new KokoActivity { Kind = "tool", Label = vaultLabel, Detail = name, Status = "running" });
+
             try
             {
+                string result;
                 if (name == "execute_python")
                 {
-                    return await new KokoSandboxExecutor(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "kokonoe-data", "agent-runtime-sandbox"))
+                    result = await new KokoSandboxExecutor(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "kokonoe-data", "agent-runtime-sandbox"))
                         .ExecutePythonAsync(Req(args, "code"), ct: ct)
                         .ConfigureAwait(false);
                 }
+                else if (name == "codeact_python")
+                    result = await ExecuteCodeActToolAsync(args, ct).ConfigureAwait(false);
+                else if (name is "create_agent_task" or "get_agent_board" or "sync_agent_backlog")
+                    result = ExecuteAgentTaskTool(name, args);
+                else if (name is "fs_read_text" or "fs_write_text" or "fs_create_directory" or "fs_move" or "fs_delete" or "fs_list_directory")
+                    result = await ExecuteFileToolAsync(name, args, ct).ConfigureAwait(false);
+                else if (name is "web_search" or "delegate_to_agent" || name.StartsWith("browser.", StringComparison.Ordinal))
+                    result = await ExecuteGatewayToolAsync(name, args, ct).ConfigureAwait(false);
+                else if (name == "pc_action")
+                    result = await ExecutePcActionToolAsync(args, ct).ConfigureAwait(false);
+                else if (name is "pc_confirm" or "pc_cancel")
+                    result = await ExecuteGatewayToolAsync(name, args, ct).ConfigureAwait(false);
+                else
+                    result = await Task.Run(() => ExecuteTool(name, args), ct).ConfigureAwait(false);
 
-                if (name == "codeact_python")
-                    return await ExecuteCodeActToolAsync(args, ct).ConfigureAwait(false);
-
-                if (name is "create_agent_task" or "get_agent_board" or "sync_agent_backlog")
-                    return ExecuteAgentTaskTool(name, args);
-
-                if (name is "fs_read_text" or "fs_write_text" or "fs_create_directory" or "fs_move" or "fs_delete" or "fs_list_directory")
-                    return await ExecuteFileToolAsync(name, args, ct).ConfigureAwait(false);
-
-                if (name is "web_search" or "delegate_to_agent" || name.StartsWith("browser.", StringComparison.Ordinal))
-                    return await ExecuteGatewayToolAsync(name, args, ct).ConfigureAwait(false);
-
-                if (name == "pc_action")
-                    return await ExecutePcActionToolAsync(args, ct).ConfigureAwait(false);
-
-                if (name is "pc_confirm" or "pc_cancel")
-                    return await ExecuteGatewayToolAsync(name, args, ct).ConfigureAwait(false);
-
-                return await Task.Run(() => ExecuteTool(name, args), ct).ConfigureAwait(false);
+                if (vaultLabel != null)
+                    KokoActivityBus.Emit(new KokoActivity { Kind = "tool", Label = vaultLabel, Detail = name, Status = "done" });
+                return result;
             }
             catch (Exception ex)
             {
+                if (vaultLabel != null)
+                    KokoActivityBus.Emit(new KokoActivity { Kind = "tool", Label = vaultLabel, Detail = name, Status = "failed" });
                 return $"Tool error {name}: {ex.Message}";
             }
+        }
+
+        // Mirrors KokoToolGateway's HumanLabel for the tool names that never reach the
+        // gateway (vault ops dispatch straight to Obsidian.* calls in ExecuteTool). Returns
+        // null for anything the gateway already covers, so callers don't double-emit.
+        private static string? DescribeVaultToolForActivity(string name, JObject args)
+        {
+            string? PathArg() => args["path"]?.ToString();
+            return name switch
+            {
+                "list_notes" => "Дивлюся список нотаток",
+                "list_folders" => "Дивлюся список папок",
+                "read_note" => $"Читаю нотатку: {PathArg()}",
+                "write_note" => $"Записую нотатку: {PathArg()}",
+                "create_note" => $"Створюю нотатку: {args["title"]}",
+                "append_to_note" => $"Дописую в нотатку: {PathArg()}",
+                "delete_note" => $"Видаляю нотатку: {PathArg()}",
+                "search_notes" => $"Шукаю в vault: {args["query"]}",
+                "get_daily_note" => "Відкриваю денник",
+                "append_to_daily_note" => "Дописую в денник",
+                "rebuild_links" => "Перебудовую посилання vault",
+                "get_outgoing_links" => $"Дивлюся посилання з: {PathArg()}",
+                "get_backlinks" => $"Дивлюся посилання на: {PathArg()}",
+                "vault_status" => "Перевіряю стан vault",
+                "cleanup_empty_notes" => "Чищу порожні нотатки",
+                "cleanup_memory_duplicates" => "Чищу дублікати пам'яті",
+                "init_brain_vault" => "Перевіряю стан мозку",
+                "maintain_vault_architecture" => "Підтримую архітектуру vault",
+                "get_vault_tree" => "Дивлюся дерево vault",
+                "move_note" => $"Переміщую нотатку: {PathArg()}",
+                "consolidate_notes" => "Об'єдную нотатки",
+                "create_folder" => $"Створюю папку: {args["folder_path"]}",
+                "save_architecture_plan" => "Зберігаю план архітектури",
+                "create_agent_task" or "get_agent_board" or "sync_agent_backlog" => "Працюю з agent board",
+                "execute_python" => "Виконую Python",
+                _ => null
+            };
         }
 
         private string ExecuteTool(string name, JObject args)

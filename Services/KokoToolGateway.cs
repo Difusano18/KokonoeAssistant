@@ -97,7 +97,7 @@ namespace KokonoeAssistant.Services
 
             var watch = Stopwatch.StartNew();
             KokoSystemLog.Write("TOOL-GATEWAY", $"start id={call.Id} tool={call.Name} confirmed={call.Confirmed}");
-            var label = HumanLabel(call.Name);
+            var label = HumanLabel(call);
             KokoActivityBus.Emit(new KokoActivity { Kind = "tool", Label = label, Detail = call.Name, Status = "running" });
             try
             {
@@ -128,26 +128,39 @@ namespace KokonoeAssistant.Services
         // Real tool name strings, confirmed against each handler's own Name property -
         // browser.* and artifact.save use dots, fs_*/pc_*/web_search/delegate_to_agent use
         // underscores. Mixed convention already in this codebase, not a typo here.
-        private static string HumanLabel(string tool) => tool switch
+        // Includes the actual argument (path/query/selector/...) instead of just the tool
+        // name, so the activity feed can show "Читаю файл: C:\...\x.jpg" instead of a generic
+        // "Працюю з файлами" - the whole point of surfacing this in the UI is knowing exactly
+        // which file/directory/url/query she's touching right now, Manus-style.
+        private static string HumanLabel(KokoToolCall call) => call.Name switch
         {
-            "browser.navigate"   => "Відкриваю сторінку",
-            "browser.extract"    => "Читаю сторінку",
-            "browser.screenshot" => "Дивлюся на екран браузера",
-            "browser.click"      => "Клікаю",
-            "browser.type"       => "Вводжу текст",
-            "browser.scroll"     => "Гортаю сторінку",
-            "browser.wait_for"   => "Чекаю завантаження",
-            "browser.close"      => "Закриваю браузер",
-            "web_search"         => "Шукаю в інтернеті",
-            "delegate_to_agent"  => "Делегую агенту",
-            "codeact_python"     => "Виконую код",
-            "artifact.save"      => "Зберігаю результат",
-            "pc_confirm"         => "Підтверджую дію",
-            "pc_cancel"          => "Скасовую дію",
-            "pc_action"          => "Виконую дію на ПК",
+            "browser.navigate"    => $"Відкриваю сторінку: {Arg(call, "url")}",
+            "browser.extract"     => "Читаю сторінку",
+            "browser.screenshot"  => "Дивлюся на екран браузера",
+            "browser.click"       => $"Клікаю: {Arg(call, "selector")}",
+            "browser.type"        => $"Вводжу текст: {Arg(call, "selector")}",
+            "browser.scroll"      => "Гортаю сторінку",
+            "browser.wait_for"    => $"Чекаю: {Arg(call, "selector")}",
+            "browser.close"       => "Закриваю браузер",
+            "web_search"          => $"Шукаю в інтернеті: {Arg(call, "query")}",
+            "delegate_to_agent"   => $"Делегую агенту: {Arg(call, "agentId")}",
+            "codeact_python"      => "Виконую код",
+            "artifact.save"       => "Зберігаю результат",
+            "pc_confirm"          => $"Підтверджую дію: {Arg(call, "actionId")}",
+            "pc_cancel"           => $"Скасовую дію: {Arg(call, "actionId")}",
+            "pc_action"           => $"PC дія: {Arg(call, "actionType")} {Arg(call, "target")}".TrimEnd(),
+            "fs_read_text"        => $"Читаю файл: {Arg(call, "path")}",
+            "fs_write_text"       => $"Записую файл: {Arg(call, "path")}",
+            "fs_create_directory" => $"Створюю папку: {Arg(call, "path")}",
+            "fs_move"             => $"Переміщую: {Arg(call, "path")} -> {Arg(call, "destinationPath")}",
+            "fs_delete"           => $"Видаляю: {Arg(call, "path")}",
+            "fs_list_directory"   => $"Дивлюся в папку: {Arg(call, "path")}",
             var t when t.StartsWith("fs_", StringComparison.Ordinal) => "Працюю з файлами",
-            _ => $"Виконую {tool}"
+            _ => $"Виконую {call.Name}"
         };
+
+        private static string Arg(KokoToolCall call, string key)
+            => call.Arguments.TryGetValue(key, out var value) ? value ?? "" : "";
 
         public async Task<IReadOnlyList<KokoToolResult>> ExecutePlanAsync(IEnumerable<KokoToolCall> calls, CancellationToken ct = default)
         {
