@@ -1931,6 +1931,11 @@ namespace KokonoeAssistant.Services
                 var systemContent = BuildMainSystemContent(agentId, safeContext, ScreenCtx, PersonalityHint);
 
                 // Tool-calling loop (max 8 rounds to avoid infinite loops)
+                // Counts rounds where a tool actually executed, separately from the raw round
+                // index - see its use below for why round 0 producing no tool call (a stall,
+                // forced tool_choice ignored by the model, or a SYSTEM CHECK nudge) must not
+                // immediately lock the very next round out of tools too.
+                int toolRoundsCompleted = 0;
                 for (int round = 0; round < 8; round++)
                 {
                     var messages = BuildMessages(systemContent);
@@ -1947,9 +1952,16 @@ namespace KokonoeAssistant.Services
                     // На останніх раундах примушуємо модель відповісти текстом без tool_calls
                     // User-visible fallback: after a real tool round, force a final text response and stream it.
                     // Background/tool-only callers keep the full multi-round tool loop.
+                    // toolRoundsCompleted (not the raw round index) - round 0 producing zero
+                    // tool_calls (model ignored a forced tool_choice, or just stalled in prose)
+                    // used to make round 1 force a no-tools text-only completion regardless,
+                    // which meant a SYSTEM CHECK retry nudge landed in a round that could never
+                    // act on it: tools/tool_choice get stripped from the request body entirely
+                    // once forceNoTools is true. Only lock into the final-summary mode after a
+                    // tool genuinely ran at least once.
                     var streamFinalAfterTools = KokoLlmStreamingPolicy.ShouldStreamFinalAfterTools(
                         onChunk != null,
-                        round,
+                        toolRoundsCompleted,
                         isImageRequest,
                         isClaude);
                     var forceNoTools = round >= 6 || streamFinalAfterTools;
@@ -2455,6 +2467,7 @@ namespace KokonoeAssistant.Services
 
                         lock (_histLock) { _history.Add(new HistoryEntry("tool", result, ToolCallId: callId, Name: funcName)); }
                     }
+                    toolRoundsCompleted++;
                 }
 
                 // Loop exhausted — rollback to checkpoint
