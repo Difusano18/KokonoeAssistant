@@ -80,6 +80,14 @@ export class ChatController {
   private responseStartedAt = 0;
   private readonly activityRows = new Map<string, HTMLElement>();
   private activityClearHandle = 0;
+  // Manus-style live step list anchored inside the mission banner itself (a permanent
+  // part of the conversation transcript) rather than only the transient activity-feed
+  // strip near the composer, which auto-clears 2s after the reply and isn't part of the
+  // message history - the user explicitly wants a persistent record of what ran.
+  private missionStepsEl: HTMLElement | null = null;
+  private readonly missionStepRows = new Map<string, HTMLElement>();
+  private missionTitleEl: HTMLElement | null = null;
+  private missionActive = false;
   private pendingAttachment: PendingAttachment | null = null;
   private readonly attachBtn = document.getElementById("chat-attach-btn") as HTMLButtonElement;
   private readonly attachInput = document.getElementById("chat-attach-input") as HTMLInputElement;
@@ -144,8 +152,19 @@ export class ChatController {
   private onActivity(event: ActivityEvent): void {
     window.clearTimeout(this.activityClearHandle);
     this.activityFeed.style.display = "flex";
+    this.renderActivityRow(event, this.activityFeed, this.activityRows);
+
+    // Mirror tool steps into the active mission banner too, so what ran stays visible
+    // in the conversation transcript instead of only the transient strip above, which
+    // clears 2s after the reply finishes. Only "tool" kind - context/thinking fire on
+    // every turn regardless of whether a mission is running and would just be noise here.
+    if (this.missionActive && this.missionStepsEl && event.kind === "tool")
+      this.renderActivityRow(event, this.missionStepsEl, this.missionStepRows);
+  }
+
+  private renderActivityRow(event: ActivityEvent, container: HTMLElement, rows: Map<string, HTMLElement>): void {
     const key = `${event.kind}-${event.label}`;
-    let row = this.activityRows.get(key);
+    let row = rows.get(key);
     if (!row) {
       row = document.createElement("div");
       const icon = document.createElement("span");
@@ -160,8 +179,8 @@ export class ChatController {
         detail.textContent = event.detail;
         row.append(detail);
       }
-      this.activityFeed.appendChild(row);
-      this.activityRows.set(key, row);
+      container.appendChild(row);
+      rows.set(key, row);
     }
     row.className = `activity-row ${event.status}`;
   }
@@ -312,6 +331,7 @@ export class ChatController {
     this.setBusy(false);
     this.input.focus();
     this.clearActivityFeedSoon();
+    this.finishMission("Місію завершено");
   }
 
   private onCanceled(event: ChatEvent): void {
@@ -325,11 +345,14 @@ export class ChatController {
     this.setBusy(false);
     this.input.focus();
     this.clearActivityFeedSoon();
+    this.finishMission("Місію скасовано");
   }
 
   private onError(event: ChatEvent): void {
-    if (event.streamId === this.activeStreamId)
+    if (event.streamId === this.activeStreamId) {
       this.fail(event.error ?? "Chat failed.", event.errorType === "timeout" || event.errorType === "provider");
+      this.finishMission("Місія провалена");
+    }
   }
 
   private onExternal(event: ChatEvent): void {
@@ -347,6 +370,8 @@ export class ChatController {
     if (event.streamId !== this.activeStreamId || !this.activeBody) return;
     const banner = document.createElement("div");
     banner.className = "mission-banner";
+    const head = document.createElement("div");
+    head.className = "mission-banner-head";
     const dot = document.createElement("div");
     dot.className = "mission-dot";
     const text = document.createElement("div");
@@ -355,7 +380,10 @@ export class ChatController {
     const goal = document.createElement("span");
     goal.textContent = event.goal ?? "";
     text.append(title, goal);
-    banner.append(dot, text);
+    head.append(dot, text);
+    const steps = document.createElement("div");
+    steps.className = "mission-steps";
+    banner.append(head, steps);
     // The assistant's (empty/typing) bubble already exists by the time this
     // fires — it was created synchronously when the message was sent, while
     // this event only arrives once the server-side stream attempt has
@@ -363,7 +391,18 @@ export class ChatController {
     // message row instead of appending, so the banner still reads as
     // preceding the reply rather than trailing whatever's already there.
     this.activeBody.closest(".message")?.before(banner);
+    this.missionStepsEl = steps;
+    this.missionStepRows.clear();
+    this.missionTitleEl = title;
+    this.missionActive = true;
     this.scrollToEnd();
+  }
+
+  private finishMission(label: string): void {
+    if (!this.missionActive) return;
+    this.missionActive = false;
+    if (this.missionTitleEl) this.missionTitleEl.textContent = label;
+    this.missionStepsEl = null;
   }
 
   private appendMessage(role: "user" | "assistant" | "system", text: string, streaming = false): HTMLElement {
