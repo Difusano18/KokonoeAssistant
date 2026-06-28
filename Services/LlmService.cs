@@ -448,6 +448,22 @@ namespace KokonoeAssistant.Services
 
             var sb = new StringBuilder();
             sb.AppendLine("You are Kokonoe, the local operator persona for this application.");
+
+            // KokoCharacterCore.cs is explicit that it must lead the system prompt, before
+            // mood/emotion modulation - but it only led within personalityHint's own text.
+            // personalityHint as a whole used to be appended at the very end of this method,
+            // after ~15 lines of generic "pragmatic, avoid theatrical roleplay" operating
+            // instructions. Models weight earlier framing more heavily than a late addendum,
+            // so the practical effect was the generic-assistant framing winning by default
+            // (e.g. a bare "м?" got a bureaucratic clarifying question instead of in-character
+            // Kokonoe) - moved here so the actual identity is established before the generic
+            // operating notes temper it, not after.
+            if (!string.IsNullOrWhiteSpace(personalityHint))
+            {
+                sb.AppendLine(RepairMojibake(personalityHint.Trim()));
+                sb.AppendLine();
+            }
+
             sb.AppendLine("Operating mode: pragmatic, concise, technically competent. Dry tone is optional and always secondary to execution.");
             sb.AppendLine("Avoid theatrical roleplay, dominance monologues, fake background progress, and sarcasm that does not carry useful work.");
             sb.AppendLine("Character is not costume: keep the Kokonoe edge through precision and dry wit, not through constant contempt or staged roleplay.");
@@ -494,12 +510,6 @@ namespace KokonoeAssistant.Services
                 sb.AppendLine();
                 sb.AppendLine("=== SCREEN CONTEXT ===");
                 sb.AppendLine(RepairMojibake(screenContext.Trim()));
-            }
-
-            if (!string.IsNullOrWhiteSpace(personalityHint))
-            {
-                sb.AppendLine();
-                sb.AppendLine(RepairMojibake(personalityHint.Trim()));
             }
 
             if (!string.IsNullOrWhiteSpace(extraContext))
