@@ -442,6 +442,7 @@ namespace KokonoeAssistant.Services
 - For reversible/local actions, act without a permission ritual. Ask only for destructive, privacy-sensitive, or externally expensive actions. Creating, writing, or overwriting files the user asked for (even many of them) is reversible and routine - never ask ""confirm?"" or ""please confirm"" before doing it, in Ukrainian or any other language. That phrasing is a permission ritual even when it isn't literally ""Shall I..."".
 - When a task means doing the same tool call many times (create/write N files, process a list of items), emit ALL of them as separate tool_calls in the SAME response when you already know every target (e.g. file 1..20) - one round with 20 tool_calls, not 20 rounds with one call each. Only spread it across multiple rounds when a later call genuinely depends on an earlier result you don't have yet. Do not stop after one or two calls and report partial work as if it were the whole task, and do not announce a total you have not actually reached yet - keep going (in this response or the next round) until the count matches what was asked, or a tool result reports a real failure.
 - Before constructing a repeated file path (file 1, file 2, ... file N), build the full path the same way every time including the parent folder. A bare drive root like ""C:\"" is never a valid file target - if a constructed path looks like that, that's a bug in the construction, not a request to write there.
+- Once a tool result confirms something (a file was moved, a count of entries in a folder, a note was written), that fact is settled for this turn - do not call the same tool with the same arguments again to re-check it. Calling the exact same tool+arguments a second time produces the identical result and means you should have stopped and answered already, not kept verifying. If you genuinely catch yourself about to repeat an identical call, that is the signal to write the final answer now.
 - Never output raw tool-call markup, private planning, or waiting/debug filler as the final reply. Final text must be a finished answer or a concise failure with the next concrete operation.
 - When the user asks for critique, improvement, architecture, or judgement, include the real tradeoff or flaw before proposing the better version.
 - Do not answer by quoting the user's wording as a scaffold. Convert it into intent, then respond in your own words.
@@ -1947,6 +1948,15 @@ namespace KokonoeAssistant.Services
                 // handful, to actually finish instead of stopping partway and misreporting
                 // the total as done.
                 int toolRoundsCompleted = 0;
+                // Real failure this round cap raise enabled: a "move one file" task that
+                // actually finished by round ~6 (file moved, note written, Desktop listed once
+                // to confirm) kept going, calling fs_list_directory on the same path 3 times in
+                // a row with the identical result, until it burned all the way to round 22 and
+                // produced nothing. Detect an exact repeat (same tool, same arguments) within
+                // this turn and short-circuit it - skip executing it again, tell the model
+                // plainly it already has this result, so it stops "re-verifying" instead of
+                // spending its whole round budget proving the same fact to itself.
+                var seenToolCalls = new Dictionary<string, string>(StringComparer.Ordinal);
                 for (int round = 0; round < 26; round++)
                 {
                     var messages = BuildMessages(systemContent);
@@ -2480,7 +2490,18 @@ namespace KokonoeAssistant.Services
                         System.Diagnostics.Debug.WriteLine($"[LlmService] Round {round}: tool={funcName} args={argsRaw[..Math.Min(200, argsRaw.Length)]}");
                         OnProgress?.Invoke("tool", $"Виконую {funcName}...");
 
-                        var result = await ExecuteToolAsync(funcName, args, ct).ConfigureAwait(false);
+                        var callSignature = funcName + ":" + args.ToString(Formatting.None);
+                        string result;
+                        if (seenToolCalls.TryGetValue(callSignature, out var cachedResult))
+                        {
+                            result = $"(SYSTEM: identical call already made earlier this turn - not re-executed. Same result as before: {cachedResult})";
+                            KokoSystemLog.Write("LLM", $"skipped duplicate tool call: round={round} tool={funcName} args={argsRaw[..Math.Min(150, argsRaw.Length)]}");
+                        }
+                        else
+                        {
+                            result = await ExecuteToolAsync(funcName, args, ct).ConfigureAwait(false);
+                            seenToolCalls[callSignature] = result;
+                        }
 
                         lock (_histLock) { _history.Add(new HistoryEntry("tool", result, ToolCallId: callId, Name: funcName)); }
                     }
