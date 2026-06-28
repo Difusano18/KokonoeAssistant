@@ -2271,6 +2271,13 @@ namespace KokonoeAssistant.Services
                                 onChunk?.Invoke(streamedText);
                         }
                         var streamedReply = CleanGarbage(streamedText);
+                        if (string.IsNullOrWhiteSpace(streamedReply))
+                        {
+                            // No guard rewriting this - there's genuinely nothing to relay. Logged
+                            // so the next blank turn is traceable instead of silently vanishing
+                            // (this is what was happening invisibly before this line existed).
+                            KokoSystemLog.Write("LLM", $"empty final completion after tools: provider={diagProvider} model={targetModel} round={round} historyLen={_history.Count}");
+                        }
                         lock (_histLock)
                         {
                             _history.Add(new HistoryEntry("assistant", streamedReply));
@@ -2381,6 +2388,8 @@ namespace KokonoeAssistant.Services
                         }
 
                         var reply = CleanGarbage(rawContent);
+                        if (string.IsNullOrWhiteSpace(reply))
+                            KokoSystemLog.Write("LLM", $"empty final completion (non-streaming): provider={diagProvider} model={targetModel} round={round} historyLen={_history.Count}");
                         if (round == 0 && useTools && !forceNoTools && LooksLikeUnverifiedActionClaim(reply, userText))
                         {
                             lock (_histLock)

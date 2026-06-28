@@ -114,15 +114,25 @@ namespace KokonoeAssistant.Services
                     case KokoFileOperationKind.ListDirectory:
                         if (!Directory.Exists(path))
                             return Fail($"Directory not found: {path}");
-                        var entries = new DirectoryInfo(path).EnumerateFileSystemInfos()
+                        var allEntries = new DirectoryInfo(path).EnumerateFileSystemInfos()
                             .OrderByDescending(e => e is FileInfo)
                             .ThenByDescending(e => e.LastWriteTime)
-                            .Take(500)
+                            .ToList();
+                        // 500 entries fed back as a single tool-result message is ~20-25k chars -
+                        // on the forced no-tools final round (a smaller model, no extra reasoning
+                        // budget) that's big enough to push the visible answer to empty with no
+                        // error anywhere, just a blank reply. 100 is enough to reason about a
+                        // folder's shape; ask again with a narrower path for more.
+                        var entries = allEntries
+                            .Take(100)
                             .Select(e => e is DirectoryInfo
                                 ? $"[dir]  {e.Name}"
                                 : $"[file] {e.Name}  {((FileInfo)e).Length / 1024.0:F0}KB  {e.LastWriteTime:yyyy-MM-dd HH:mm}")
                             .ToList();
-                        return Ok(string.Join("\n", entries), $"{entries.Count} entries in {path}");
+                        var listingSummary = allEntries.Count > entries.Count
+                            ? $"{entries.Count} of {allEntries.Count} entries in {path} (showing newest first - ask again with a subfolder for the rest)"
+                            : $"{entries.Count} entries in {path}";
+                        return Ok(string.Join("\n", entries), listingSummary);
 
                     case KokoFileOperationKind.Delete:
                         if (Directory.Exists(path))
