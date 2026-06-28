@@ -407,6 +407,30 @@ namespace KokonoeAssistant.Services
             return body;
         }
 
+        // bin\Debug\net8.0-windows\ -> walk up looking for the .csproj next to the actual
+        // source files, so the model can point fs_read_text/fs_list_directory at its own code
+        // instead of being told in the abstract that "self-inspection" exists with no path to
+        // do it from. Null (not a guess) for a publish/install layout with no source nearby.
+        private static string? _ownSourceRootCache;
+        private static string? FindOwnSourceRoot()
+        {
+            if (_ownSourceRootCache != null) return _ownSourceRootCache;
+            try
+            {
+                var dir = new DirectoryInfo(AppDomain.CurrentDomain.BaseDirectory);
+                for (var i = 0; i < 6 && dir != null; i++, dir = dir.Parent)
+                {
+                    if (dir.GetFiles("*.csproj").Length > 0)
+                    {
+                        _ownSourceRootCache = dir.FullName;
+                        return _ownSourceRootCache;
+                    }
+                }
+            }
+            catch (Exception ex) { KokoSystemLog.Write("LLM", "FindOwnSourceRoot failed: " + ex.Message); }
+            return null;
+        }
+
         private static string BuildCriticalThinkingPrompt() => @"
 
 === CRITICAL THINKING / AGENCY LAYER ===
@@ -507,6 +531,15 @@ namespace KokonoeAssistant.Services
             sb.AppendLine("=== RUNTIME ===");
             sb.AppendLine($"Current local time: {DateTime.Now:yyyy-MM-dd HH:mm}.");
             sb.AppendLine($"System log path (use fs_read_text to inspect past tool calls/errors): {KokoSystemLog.LogPath}");
+            // 'Yasu' is the persona's name for the user in conversation, not necessarily his
+            // real Windows account - a real session guessed "C:\Users\Yasu\Desktop" for a
+            // file write/CreateDirectory and got a real, confusing UnauthorizedAccessException
+            // because the actual folder is named differently. These are the ground-truth values;
+            // use them (or fs_list_directory to double check) instead of guessing from the name.
+            sb.AppendLine($"Real Windows account name: {Environment.UserName}. Real Desktop folder: {Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory)}. Real Downloads folder is usually {Environment.GetFolderPath(Environment.SpecialFolder.UserProfile)}\\Downloads (no SpecialFolder enum value for it). Do not assume the user's persona name is their account folder name.");
+            var sourceRoot = FindOwnSourceRoot();
+            if (sourceRoot != null)
+                sb.AppendLine($"Your own application source code (fs_read_text/fs_list_directory if asked how something works, to self-diagnose a bug, or to read your own logic): {sourceRoot}");
 
             if (!string.IsNullOrWhiteSpace(screenContext))
             {
@@ -2224,11 +2257,6 @@ namespace KokonoeAssistant.Services
                                 onChunk?.Invoke(streamedText);
                         }
                         var streamedReply = CleanGarbage(streamedText);
-                        if (IsBadFinalReply(streamedReply))
-                        {
-                            KokoSystemLog.Write("LLM-BADREPLY", $"tool_final_stream rejected: {streamedReply[..Math.Min(300, streamedReply.Length)]}");
-                            streamedReply = BuildCleanFallbackReply(userText, toolCallsAttempted: true);
-                        }
                         lock (_histLock)
                         {
                             _history.Add(new HistoryEntry("assistant", streamedReply));
@@ -2349,23 +2377,6 @@ namespace KokonoeAssistant.Services
                             }
                             continue;
                         }
-                        if (IsBadFinalReply(reply))
-                        {
-                            if (round < 7)
-                            {
-                                KokoSystemLog.Write("LLM-BADREPLY", $"round={round} retry: {reply[..Math.Min(300, reply.Length)]}");
-                                lock (_histLock)
-                                {
-                                    _history.Add(new HistoryEntry(
-                                        "user",
-                                        "SYSTEM CHECK: The previous final answer was empty, garbled, or too short. Regenerate a complete Ukrainian answer now. Do not use tool calls unless strictly necessary."));
-                                }
-                                continue;
-                            }
-                            KokoSystemLog.Write("LLM-BADREPLY", $"round={round} giving up, fallback used: {reply[..Math.Min(300, reply.Length)]}");
-                            reply = BuildCleanFallbackReply(userText, toolCallsAttempted: round > 0);
-                        }
-
                         lock (_histLock)
                         {
                             // Замінюємо image_url entry на text-only перед збереженням відповіді
@@ -3558,18 +3569,6 @@ namespace KokonoeAssistant.Services
             return result;
         }
 
-        private static bool IsBadFinalReply(string text)
-        {
-            if (LooksLikeBrokenVisibleText(text)) return true;
-            var trimmed = text.Trim();
-            if (trimmed.Length < 24) return true;
-
-            var letters = trimmed.Count(char.IsLetter);
-            if (letters < 12) return true;
-
-            return false;
-        }
-
         public static bool LooksLikeUnverifiedActionClaim(string? reply, string? userText)
         {
             if (string.IsNullOrWhiteSpace(reply))
@@ -3656,8 +3655,12 @@ namespace KokonoeAssistant.Services
         // English sentences like "The user is repeatedly asking..." or "Let's choose X", not
         // garbled text the other checks above catch. The app is Ukrainian-only by design, so
         // a reply that's mostly Latin letters AND reads like task narration is a strong signal
-        // either way - this feeds into the same retry-then-fallback path IsBadFinalReply
-        // already has, not a new code path.
+        // either way - still wired into LooksLikeBrokenVisibleText/CleanGarbage, not the
+        // per-turn retry/fallback substitution layer (removed per explicit user request: it
+        // kept replacing genuinely-successful turns with a generic "I rejected your answer"
+        // message whenever only the final summary text broke, which is the actual user
+        // visible behavior - CleanGarbage returning "" here is the much narrower fallback
+        // that's left).
         private static readonly string[] ReasoningLeakPhrases =
         {
             "the user is", "the user asked", "the user wants", "the user said", "the user repeated",
@@ -3675,22 +3678,6 @@ namespace KokonoeAssistant.Services
             if (cyrillic > letters * 0.15) return false;
 
             return ReasoningLeakPhrases.Count(p => lower.Contains(p)) >= 2;
-        }
-
-        private static string BuildCleanFallbackReply(string userText, bool toolCallsAttempted)
-        {
-            var lower = userText.ToLowerInvariant();
-            if (lower.Contains("vault") || lower.Contains("пам") || lower.Contains("проєкт") || lower.Contains("проект"))
-            {
-                var toolLine = toolCallsAttempted
-                    ? "Я спробувала пройти через Vault/tool-loop, але фінальний текст моделі вийшов пошкодженим, тому не буду показувати тобі кашу з крапок."
-                    : "Доступного чистого Vault-контексту для цієї відповіді не вистачило.";
-                return toolLine + "\n\nЩо реально відомо з поточного запуску: проєкт називається KokonoeAssistant, він підключений до Obsidian Vault, активний провайдер Ollama Cloud, а runtime має маршрути для Vault, sandbox і відповіді. Наступна дія: прогнати окремий Vault-індексатор і вивести сирі назви файлів/нот до того, як модель почне їх переказувати. Так ми відділимо факт від фантазії. Неймовірно, але це називається діагностика.";
-            }
-
-            return toolCallsAttempted
-                ? "Дію виконала — дивись що саме в activity feed вище, там реальний слід (файл/сторінка/команда). А от підсумувати це одним зв'язним текстом модель щойно не змогла, відповідь вийшла обрізаною кашею, тож я її не показую. Питай конкретику, якщо з activity не зрозуміло що сталось."
-                : "Відповідь моделі вийшла пошкодженою або занадто короткою, тож я її відкинула. Наступна дія: повторити запит чистим проходом без tool-loop або з меншим контекстом. Показувати тобі сміття я не збираюся, це не виставка поламаного Unicode.";
         }
 
         private static string BuildReminderScheduledReply(ReminderCommand reminder, string entryId)
