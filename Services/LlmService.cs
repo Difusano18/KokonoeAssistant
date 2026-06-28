@@ -3616,10 +3616,14 @@ namespace KokonoeAssistant.Services
             if (string.IsNullOrWhiteSpace(reply))
                 return false;
 
-            var directive = KokoActionDirectiveRouter.Analyze(userText);
-            if (!directive.IsAction)
-                return false;
-
+            // Used to gate on KokoActionDirectiveRouter.Analyze(userText).IsAction - but that
+            // classifies the LATEST message in isolation, so a short continuation/confirmation
+            // ("ok, go ahead") on an already-established file-sorting task reads as pure
+            // conversation and skipped this check entirely, even though the reply right below
+            // ("Починаю створювати папки та переносити файли. Не заважай...") was exactly the
+            // unverified claim this exists to catch. The reply-content checks below (verb +
+            // artifact noun + no negation + no tool_result marker) are specific enough on their
+            // own; gating on the triggering message's own phrasing was the actual gap.
             var lower = reply.ToLowerInvariant();
             if (ContainsAnyText(lower,
                     "не створ", "не созд", "не запис", "не збереж", "не сохран", "не залиш", "не остав",
@@ -3629,7 +3633,9 @@ namespace KokonoeAssistant.Services
 
             var actionClaim = ContainsAnyText(lower,
                 "створ", "созд", "запис", "збереж", "сохран", "залиш", "остав", "поклав", "поклала",
-                "created", "saved", "wrote", "written", "left", "dropped", "placed");
+                "перенос", "переніс", "перенесл", "перемісти", "перемещ", "видали", "удали",
+                "сортувала", "розсортувала", "розклала",
+                "created", "saved", "wrote", "written", "left", "dropped", "placed", "moved", "deleted", "sorted");
 
             if (!actionClaim)
                 return false;
