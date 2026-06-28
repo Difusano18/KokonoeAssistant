@@ -248,6 +248,16 @@
     .composer button#chat-send:not(:disabled):hover { border-color: #a98d52; background: #2c2618; box-shadow: 0 0 0 3px rgba(199,166,107,.1); }
     .composer button#chat-send:not(:disabled):active { transform: translateY(1px); }
     .composer button#chat-send:disabled { opacity: .42; }
+    .composer.drag-over .composer-field input { border-color: var(--accent-border); background: #0d141d; }
+    .chat-attach-preview {
+      display: flex; align-items: center; gap: 8px; margin: 0 0 8px; padding: 6px 10px;
+      border: 1px solid var(--line-2); border-radius: 8px; background: var(--card-2);
+      font-size: 12px; color: var(--text-3); width: max-content; max-width: 100%;
+    }
+    .chat-attach-preview img { width: 28px; height: 28px; object-fit: cover; border-radius: 5px; }
+    .chat-attach-preview span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .chat-attach-preview button { border: none; background: transparent; color: var(--text-4); cursor: pointer; font-size: 15px; line-height: 1; padding: 0 2px; }
+    .chat-attach-preview button:hover { color: var(--text-2); }
 
     /* ---------- aside ---------- */
     aside { min-width: 0; overflow-y: auto; padding: 20px 18px; border-left: 1px solid var(--line-2); background: var(--surface); }
@@ -1006,10 +1016,16 @@
         </div>
       </section>
       <div id="activity-feed" class="activity-feed" style="display:none"></div>
+      <div id="chat-attach-preview" class="chat-attach-preview" style="display:none">
+        <img id="chat-attach-thumb" alt="attachment preview">
+        <span id="chat-attach-name"></span>
+        <button id="chat-attach-remove" type="button" aria-label="Remove attachment">×</button>
+      </div>
       <form id="chat-form" class="composer">
         <div class="composer-field">
           <input id="chat-input" aria-label="Message" placeholder="Message Kokonoe" autocomplete="off" disabled>
-          <button class="composer-attach" type="button" title="Attach" aria-label="Attach" tabindex="-1">
+          <input id="chat-attach-input" type="file" accept="image/*" style="display:none">
+          <button id="chat-attach-btn" class="composer-attach" type="button" title="Attach" aria-label="Attach" tabindex="-1">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11.5 12.5 19a4.5 4.5 0 0 1-6.4-6.4l7.6-7.6a3 3 0 0 1 4.2 4.2l-7.6 7.6a1.5 1.5 0 0 1-2.1-2.1l7-7"/></svg>
           </button>
         </div>

@@ -65,6 +65,12 @@ function formatClock(date: Date): string {
   return `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
 }
 
+interface PendingAttachment {
+  mime: string;
+  base64: string;
+  name: string;
+}
+
 export class ChatController {
   private activeStreamId = "";
   private activeBody: HTMLElement | null = null;
@@ -74,6 +80,13 @@ export class ChatController {
   private responseStartedAt = 0;
   private readonly activityRows = new Map<string, HTMLElement>();
   private activityClearHandle = 0;
+  private pendingAttachment: PendingAttachment | null = null;
+  private readonly attachBtn = document.getElementById("chat-attach-btn") as HTMLButtonElement;
+  private readonly attachInput = document.getElementById("chat-attach-input") as HTMLInputElement;
+  private readonly attachPreview = document.getElementById("chat-attach-preview") as HTMLElement;
+  private readonly attachThumb = document.getElementById("chat-attach-thumb") as HTMLImageElement;
+  private readonly attachName = document.getElementById("chat-attach-name") as HTMLElement;
+  private readonly attachRemove = document.getElementById("chat-attach-remove") as HTMLButtonElement;
 
   constructor(
     form: HTMLFormElement,
@@ -88,6 +101,28 @@ export class ChatController {
       event.preventDefault();
       void this.submit();
     });
+    this.attachBtn.addEventListener("click", () => this.attachInput.click());
+    this.attachInput.addEventListener("change", () => {
+      const file = this.attachInput.files?.[0];
+      if (file) void this.setPendingAttachment(file);
+      this.attachInput.value = "";
+    });
+    this.attachRemove.addEventListener("click", () => this.clearPendingAttachment());
+    // "Скидати" (drop) was the literal complaint - drag-and-drop onto either the message
+    // viewport or the composer strip, both are reasonable drop targets for an image.
+    for (const target of [form, this.scroll]) {
+      target.addEventListener("dragover", event => {
+        event.preventDefault();
+        form.classList.add("drag-over");
+      });
+      target.addEventListener("dragleave", () => form.classList.remove("drag-over"));
+      target.addEventListener("drop", event => {
+        event.preventDefault();
+        form.classList.remove("drag-over");
+        const file = event.dataTransfer?.files?.[0];
+        if (file && file.type.startsWith("image/")) void this.setPendingAttachment(file);
+      });
+    }
     window.koko.on("chat.started", payload => this.onStarted(payload as ChatEvent));
     window.koko.on("chat.chunk", payload => this.onChunk(payload as ChatEvent));
     window.koko.on("chat.reset", payload => this.onReset(payload as ChatEvent));
@@ -157,13 +192,40 @@ export class ChatController {
     this.status.className = available ? "ok" : "pending";
   }
 
+  private async setPendingAttachment(file: File): Promise<void> {
+    if (!file.type.startsWith("image/")) return;
+    if (file.size > 10 * 1024 * 1024) {
+      this.fail("Зображення занадто велике (максимум 10MB).");
+      return;
+    }
+    const dataUrl = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = () => reject(reader.error);
+      reader.readAsDataURL(file);
+    });
+    this.pendingAttachment = { mime: file.type || "image/jpeg", base64: dataUrl.split(",", 2)[1] ?? "", name: file.name };
+    this.attachThumb.src = dataUrl;
+    this.attachName.textContent = file.name;
+    this.attachPreview.style.display = "flex";
+  }
+
+  private clearPendingAttachment(): void {
+    this.pendingAttachment = null;
+    this.attachPreview.style.display = "none";
+    this.attachThumb.src = "";
+  }
+
   private async submit(): Promise<void> {
     const text = this.input.value.trim();
-    if (!text || this.busy) return;
+    if ((!text && !this.pendingAttachment) || this.busy) return;
+    const attachment = this.pendingAttachment;
+    this.clearPendingAttachment();
+    const effectiveText = text || "Подивись на це зображення.";
     this.busy = true;
     this.stopResponseTimer();
     this.activeStreamId = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}`;
-    this.appendMessage("user", text);
+    this.appendMessage("user", effectiveText);
     this.activeRawText = "";
     this.activeBody = this.appendMessage("assistant", "", true);
     this.input.value = "";
@@ -174,7 +236,11 @@ export class ChatController {
       // A short timeout here only guards against the RPC itself not getting
       // through; it no longer has to cover however long the model takes to reply,
       // which is what made a slow-but-working response look like a dead bridge.
-      await window.koko.call<ChatSendAck>("chat.send", { text, streamId: this.activeStreamId }, 10000);
+      await window.koko.call<ChatSendAck>("chat.send", {
+        text: effectiveText,
+        streamId: this.activeStreamId,
+        ...(attachment ? { image: { mime: attachment.mime, base64: attachment.base64 } } : {})
+      }, 10000);
     } catch (error) {
       // fail() resets busy/focus itself; only call it if chat.error hasn't already
       // (which also resets busy/focus) to avoid stepping on a more specific message.

@@ -14,6 +14,11 @@ namespace KokonoeAssistant.Services
         private readonly Func<string, string?> _contextBuilder;
         private readonly Action _resetHistory;
         private readonly Func<bool> _wasToolCallFallback;
+        // Only populated by the real-LlmService constructor (the delegate-injected test
+        // constructors have no vision-capable backend to call) - SendStreamingAsync has no
+        // image parameter at all, so an attached image always skips streaming and goes
+        // straight through here instead of _stream/_fallback.
+        private readonly Func<string, byte[], string, string?, Action<string>, CancellationToken, Task<string>>? _sendWithImage;
         private bool _disposed;
 
         public KokoWebChatBridgeService(
@@ -28,6 +33,8 @@ namespace KokonoeAssistant.Services
                 llm.ClearHistory,
                 () => llm.GetDiagnosticsSnapshot().LastFallback == "tool_call_fallback")
         {
+            _sendWithImage = (text, imgBytes, imgMime, context, onChunk, ct) =>
+                llm.SendAsync(text, imgBytes, imgMime, context, ct, onChunk: onChunk);
         }
 
         public KokoWebChatBridgeService(
@@ -97,6 +104,17 @@ namespace KokonoeAssistant.Services
             if (text.Length > 32_000)
                 throw new InvalidOperationException("Chat message exceeds 32000 characters.");
 
+            byte[]? imageBytes = null;
+            var imageMime = payload?["image"]?["mime"]?.ToString();
+            var imageBase64 = payload?["image"]?["base64"]?.ToString();
+            if (!string.IsNullOrWhiteSpace(imageBase64))
+            {
+                if (imageBase64.Length > 15_000_000)
+                    throw new InvalidOperationException("Attached image is too large.");
+                try { imageBytes = Convert.FromBase64String(imageBase64); }
+                catch (FormatException) { throw new InvalidOperationException("Attached image is not valid base64."); }
+            }
+
             // chat.send used to block the whole RPC until the reply (and a possible fallback
             // call) finished — a slow first token or a multi-round tool loop just past the
             // bridge's client-side timeout looked identical to a dead bridge, even though
@@ -107,7 +125,7 @@ namespace KokonoeAssistant.Services
             {
                 try
                 {
-                    await RunChatPipelineAsync(text, streamId, CancellationToken.None).ConfigureAwait(false);
+                    await RunChatPipelineAsync(text, streamId, imageBytes, imageMime, CancellationToken.None).ConfigureAwait(false);
                 }
                 catch (Exception ex)
                 {
@@ -119,7 +137,7 @@ namespace KokonoeAssistant.Services
             return new { accepted = true, streamId };
         }
 
-        private async Task RunChatPipelineAsync(string text, string streamId, CancellationToken ct)
+        private async Task RunChatPipelineAsync(string text, string streamId, byte[]? imageBytes, string? imageMime, CancellationToken ct)
         {
             // Two separate budgets instead of one 120s deadline for the whole turn: a real
             // multi-round tool loop (browser/web_search/delegate, several round trips) can
@@ -149,43 +167,64 @@ namespace KokonoeAssistant.Services
 
                 var effectiveCt = genLinkedCts.Token;
                 KokoActivityBus.Emit(new KokoActivity { Kind = "thinking", Label = "Генерую відповідь", Status = "running" });
-                var streamed = await _stream(text, context, chunk =>
-                {
-                    if (string.IsNullOrEmpty(chunk))
-                        return;
-                    emittedChunks++;
-                    _bridge.Publish("chat.chunk", new { streamId, sequence = sequence++, chunk });
-                }, effectiveCt).ConfigureAwait(false);
 
-                var usedStreaming = streamed != null;
-                var reply = streamed;
-                if (reply == null)
+                string? reply;
+                bool usedStreaming;
+                if (imageBytes != null && _sendWithImage != null)
                 {
-                    // A null stream result means either a genuine tool-call (a real mission)
-                    // or a streaming HTTP/connection failure (not one) — both used to be
-                    // treated as a mission here. _wasToolCallFallback checks the diagnostics
-                    // tag LlmService.SendStreamingAsync now records at each return-null point
-                    // to tell them apart.
-                    if (_wasToolCallFallback())
-                    {
-                        _bridge.Publish("mission.started", new
-                        {
-                            streamId,
-                            goal = Trim(text, 100),
-                            startedAt = DateTimeOffset.UtcNow
-                        });
-                    }
-                    if (emittedChunks > 0)
-                        _bridge.Publish("chat.reset", new { streamId, reason = "tool_fallback" });
-                    var fallbackChunks = 0;
-                    reply = await _fallback(text, context, chunk =>
+                    // SendStreamingAsync has no image parameter at all, so an attached image
+                    // always goes straight to the vision-capable SendAsync path - no streaming
+                    // attempt, no tool-fallback mission banner.
+                    var imageChunks = 0;
+                    reply = await _sendWithImage(text, imageBytes, imageMime ?? "image/jpeg", context, chunk =>
                     {
                         if (string.IsNullOrEmpty(chunk))
                             return;
-                        fallbackChunks++;
+                        imageChunks++;
                         _bridge.Publish("chat.chunk", new { streamId, sequence = sequence++, chunk });
                     }, effectiveCt).ConfigureAwait(false);
-                    usedStreaming = fallbackChunks > 0;
+                    usedStreaming = imageChunks > 0;
+                }
+                else
+                {
+                    var streamed = await _stream(text, context, chunk =>
+                    {
+                        if (string.IsNullOrEmpty(chunk))
+                            return;
+                        emittedChunks++;
+                        _bridge.Publish("chat.chunk", new { streamId, sequence = sequence++, chunk });
+                    }, effectiveCt).ConfigureAwait(false);
+
+                    usedStreaming = streamed != null;
+                    reply = streamed;
+                    if (reply == null)
+                    {
+                        // A null stream result means either a genuine tool-call (a real mission)
+                        // or a streaming HTTP/connection failure (not one) — both used to be
+                        // treated as a mission here. _wasToolCallFallback checks the diagnostics
+                        // tag LlmService.SendStreamingAsync now records at each return-null point
+                        // to tell them apart.
+                        if (_wasToolCallFallback())
+                        {
+                            _bridge.Publish("mission.started", new
+                            {
+                                streamId,
+                                goal = Trim(text, 100),
+                                startedAt = DateTimeOffset.UtcNow
+                            });
+                        }
+                        if (emittedChunks > 0)
+                            _bridge.Publish("chat.reset", new { streamId, reason = "tool_fallback" });
+                        var fallbackChunks = 0;
+                        reply = await _fallback(text, context, chunk =>
+                        {
+                            if (string.IsNullOrEmpty(chunk))
+                                return;
+                            fallbackChunks++;
+                            _bridge.Publish("chat.chunk", new { streamId, sequence = sequence++, chunk });
+                        }, effectiveCt).ConfigureAwait(false);
+                        usedStreaming = fallbackChunks > 0;
+                    }
                 }
 
                 reply ??= "";
