@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 using KokonoeAssistant;
 using KokonoeAssistant.Services;
 using Microsoft.Extensions.DependencyInjection;
@@ -234,6 +235,9 @@ namespace KokonoeAssistant
                         // Ensure BrainEngine is initialized to wire up Emotion, Memory, Patterns
                         // This ensures all LlmService dependencies are properly set
                         var brain = BrainEngine;
+                        _llm.SeedHistory(ChatRepository.GetMessages(20)
+                            .Where(m => m.Role is "user" or "assistant")
+                            .Select(m => (m.Role, m.Content)));
                     }
                     return _llm;
                 }

@@ -1359,6 +1359,23 @@ namespace KokonoeAssistant.Services
 
         public void ClearHistory() { lock (_histLock) { _history.Clear(); } }
 
+        // Web chat never persisted anything and _history is purely in-memory, so every app
+        // restart wiped both the visible transcript and whatever the model actually
+        // remembered. Called once at startup (ServiceContainer.LlmService) with recent
+        // ChatRepository rows so the model has real continuity, not just a fresh blank slate
+        // that happens to render old bubbles in the UI.
+        public void SeedHistory(IEnumerable<(string Role, string Content)> messages)
+        {
+            lock (_histLock)
+            {
+                foreach (var (role, content) in messages)
+                {
+                    if (string.IsNullOrWhiteSpace(content)) continue;
+                    _history.Add(new HistoryEntry(role, content));
+                }
+            }
+        }
+
         private void CompressHistoryLocked()
         {
             if (_history.Count <= MAX_HISTORY_ENTRIES)

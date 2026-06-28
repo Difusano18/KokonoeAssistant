@@ -26,6 +26,7 @@ const chat = new ChatController(
   required("chat-status"),
   required("activity-feed")
 );
+void chat.loadHistory();
 const agents = new AgentBoardController();
 const agentsPage = new AgentsPage();
 const artifactsPanel = new ArtifactsPanelController();

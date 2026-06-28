@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
@@ -65,6 +66,7 @@ namespace KokonoeAssistant.Services
             _bridge.Register("chat.send", HandleSendAsync);
             _bridge.Register("send_message", HandleSendAsync);
             _bridge.Register("chat.clear_history", HandleClearHistoryAsync);
+            _bridge.Register("chat.history", HandleGetHistoryAsync);
             KokoActivityBus.OnActivity += OnActivity;
         }
 
@@ -195,6 +197,7 @@ namespace KokonoeAssistant.Services
                 }
 
                 KokoActivityBus.Emit(new KokoActivity { Kind = "thinking", Label = "Генерую відповідь", Status = "done" });
+                PersistExchange(text, reply);
                 _bridge.Publish("chat.completed", new { streamId, reply, streamed = usedStreaming });
             }
             catch (OperationCanceledException) when (contextTimeoutCts.IsCancellationRequested)
@@ -238,6 +241,17 @@ namespace KokonoeAssistant.Services
             return new { ok = true, clearedAt = DateTimeOffset.UtcNow };
         }
 
+        private async Task<object?> HandleGetHistoryAsync(JToken? payload, CancellationToken ct)
+        {
+            await Task.Yield();
+            ct.ThrowIfCancellationRequested();
+            var limit = payload?["limit"]?.Value<int>() ?? 50;
+            var messages = ServiceContainer.ChatRepository.GetMessages(Math.Clamp(limit, 1, 200))
+                .Select(m => new { role = m.Role, content = m.Content, at = m.Timestamp })
+                .ToArray();
+            return new { messages };
+        }
+
         public void PublishExternalMessage(string role, string content)
         {
             if (_disposed || string.IsNullOrWhiteSpace(content))
@@ -258,6 +272,35 @@ namespace KokonoeAssistant.Services
         {
             _disposed = true;
             KokoActivityBus.OnActivity -= OnActivity;
+        }
+
+        // Web chat never wrote to ChatRepository at all (unlike MainWindow.Chat.cs), so the
+        // transcript and LlmService's in-memory history both started blank on every app
+        // restart. Persisted here so ServiceContainer.LlmService can seed history from it at
+        // startup and so a future chat.history endpoint has something to read.
+        private static void PersistExchange(string userText, string reply)
+        {
+            try
+            {
+                ServiceContainer.ChatRepository.InsertMessage(new ChatRepository.ChatMessage
+                {
+                    Content = userText,
+                    Role = "user",
+                    Author = Environment.UserName,
+                    Timestamp = DateTime.Now
+                });
+                ServiceContainer.ChatRepository.InsertMessage(new ChatRepository.ChatMessage
+                {
+                    Content = reply,
+                    Role = "assistant",
+                    Author = "Kokonoe",
+                    Timestamp = DateTime.Now
+                });
+            }
+            catch (Exception ex)
+            {
+                KokoSystemLog.Write("WEB-CHAT", $"PersistExchange failed: {ex.Message}");
+            }
         }
 
         // LlmService.SendAsync can't change its return type to a richer result without

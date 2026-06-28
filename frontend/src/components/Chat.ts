@@ -134,6 +134,22 @@ export class ChatController {
     }, 2000);
   }
 
+  async loadHistory(): Promise<void> {
+    try {
+      const result = await window.koko.call<{ messages: { role: string; content: string }[] }>(
+        "chat.history",
+        { limit: 30 },
+        10000
+      );
+      for (const m of result.messages) {
+        if (!m.content) continue;
+        this.appendMessage(m.role === "user" ? "user" : "assistant", m.content);
+      }
+    } catch (error) {
+      console.error("[chat] failed to load history", error);
+    }
+  }
+
   setAvailable(available: boolean): void {
     this.input.disabled = !available;
     this.send.disabled = !available;
