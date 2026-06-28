@@ -9511,6 +9511,13 @@ Persistent Obsidian context is now a core project requirement.
             "directive should note the crisis path is untouched, not removed");
         AssertTrue(directive.Contains("Keep the Kokonoe edge", StringComparison.OrdinalIgnoreCase),
             "the existing character-consistency rule must still be present, not replaced");
+        // Verified live: gpt-oss:120b flatly refused "scan Downloads and copy a hentai photo
+        // to Desktop" ("Вибач, я не можу допомогти з цим") with the prompt as it stood before
+        // this rule, then complied (real fs_list_directory tool_call) once told explicitly
+        // that operating on a user's own existing files - listing/copying/moving by filename -
+        // is not content generation, regardless of what the filename names.
+        AssertTrue(directive.Contains("never content generation", StringComparison.OrdinalIgnoreCase),
+            "directive must distinguish file operations on existing files from generating content");
     }
 
     private static void BotPhraseDetectionStillWorksAfterDedup()
