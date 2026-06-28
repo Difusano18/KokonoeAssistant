@@ -390,6 +390,12 @@ namespace KokonoeAssistant.Services
 
         public string BuildUnifiedExternalContext(string channel = "external", string? userText = null)
         {
+            // MainWindow.Chat.cs refreshes this separately (fire-and-forget, before its own
+            // context build) for the desktop path. Web chat's context builder is exactly this
+            // method and had no equivalent call, so LlmService.PersonalityHint stayed at its
+            // "" default for any session that only ever used the web shell — character core
+            // (KokoCharacterCore) never reached the prompt, answers came out generic-assistant.
+            RefreshPersonalityHint();
             var now = DateTime.Now;
             RefreshTemporalState(now, channel);
             var autonomyLevel = Math.Clamp(AppSettings.Load().ProactiveAutonomyLevel, 0, 3);
