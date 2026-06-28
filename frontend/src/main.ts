@@ -3,6 +3,7 @@ import { AgentBoardController } from "./components/AgentBoard";
 import { AgentsPage } from "./components/AgentsPage";
 import { ArtifactsPanelController } from "./components/ArtifactsPanel";
 import { ChatController } from "./components/Chat";
+import { DevPanelController } from "./components/DevPanel";
 import { MotionController } from "./components/MotionController";
 import { initPlexus } from "./components/Plexus";
 import { SettingsPanelController } from "./components/SettingsPanel";
@@ -33,6 +34,7 @@ const artifactsPanel = new ArtifactsPanelController();
 const vault = new VaultPanelController();
 const settings = new SettingsPanelController();
 const telegram = new TelegramPanelController();
+const devPanel = new DevPanelController(required("dev-feed"), required<HTMLButtonElement>("dev-clear"));
 const motion = new MotionController();
 const workspacePanels = new WorkspacePanelsController();
 initPlexus();
@@ -174,6 +176,7 @@ const panels: Record<string, HTMLElement | null> = {
   artifacts: document.getElementById("panel-artifacts"),
   memory: document.getElementById("panel-memory"),
   telemetry: document.getElementById("panel-telemetry"),
+  dev: document.getElementById("panel-dev"),
   settings: document.getElementById("panel-settings"),
 };
 const composer = required<HTMLFormElement>("chat-form");
@@ -188,6 +191,7 @@ function switchPanel(id: string): void {
   document.querySelectorAll<HTMLButtonElement>(".rail button[data-panel]").forEach(button => {
     button.classList.toggle("active", button.dataset.panel === target);
   });
+  if (target === "dev") void devPanel.ensureLoaded();
 }
 
 document.querySelectorAll<HTMLButtonElement>(".rail button[data-panel]").forEach(button => {

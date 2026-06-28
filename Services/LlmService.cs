@@ -2071,6 +2071,7 @@ namespace KokonoeAssistant.Services
                     }
 
                     var json = JsonConvert.SerializeObject(reqBody);
+                    KokoDevLogBus.Emit("llm_request", $"round {round} → {targetModel}", json);
 
                     // Для Ollama Cloud — retry-loop по живих ключах при 429.
                     // Один повний цикл по пулу; якщо всі впали — дружня помилка з cooldown.
@@ -2310,6 +2311,8 @@ namespace KokonoeAssistant.Services
                                 onChunk?.Invoke(streamedText);
                         }
                         var streamedReply = CleanGarbage(streamedText);
+                        KokoDevLogBus.Emit("llm_response", $"round {round} ← {targetModel} (streamed final)",
+                            $"text: {streamedText}\n\nreasoning: {streamed.Reasoning}\n\ntoolCallsDetected: {streamed.ToolCallsDetected}");
                         if (string.IsNullOrWhiteSpace(streamedReply))
                         {
                             // No retry here on purpose - retrying just burns another full request
@@ -2331,6 +2334,7 @@ namespace KokonoeAssistant.Services
                     }
 
                     var respText = await resp.Content.ReadAsStringAsync(ct);
+                    KokoDevLogBus.Emit("llm_response", $"round {round} ← {targetModel} ({(int)resp.StatusCode})", respText);
                     var respObj  = JObject.Parse(respText);
 
                     // Парсинг відповіді залежно від провайдера
@@ -2984,6 +2988,7 @@ namespace KokonoeAssistant.Services
         private async Task<string> ExecuteToolAsync(string name, JObject args, CancellationToken ct)
         {
             ct.ThrowIfCancellationRequested();
+            KokoDevLogBus.Emit("tool_call", $"{name} →", args.ToString(Formatting.None));
 
             // fs_*/pc_action/browser.*/web_search/delegate_to_agent already get an activity
             // event from KokoToolGateway.ExecuteAsync (with the real argument in the label).
@@ -3023,12 +3028,14 @@ namespace KokonoeAssistant.Services
                     // snippet of the actual result (e.g. how many notes, what was written) is
                     // far more useful in a live step list than that.
                     KokoActivityBus.Emit(new KokoActivity { Kind = "tool", Label = vaultLabel, Detail = TrimActivityDetail(result), Status = "done" });
+                KokoDevLogBus.Emit("tool_call", $"{name} ←", result);
                 return result;
             }
             catch (Exception ex)
             {
                 if (vaultLabel != null)
                     KokoActivityBus.Emit(new KokoActivity { Kind = "tool", Label = vaultLabel, Detail = TrimActivityDetail(ex.Message), Status = "failed" });
+                KokoDevLogBus.Emit("tool_call", $"{name} ← ERROR", ex.Message);
                 return $"Tool error {name}: {ex.Message}";
             }
         }
@@ -4039,6 +4046,7 @@ namespace KokonoeAssistant.Services
             }
 
             var json = JsonConvert.SerializeObject(reqBody);
+            KokoDevLogBus.Emit("llm_request", $"stream → {streamModel}", json);
 
             // Для Ollama Cloud — retry-loop по живих ключах при 429 (тільки на стадії headers,
             // mid-stream retry неможливий технічно).
@@ -4131,6 +4139,7 @@ namespace KokonoeAssistant.Services
                     }
                 }
 
+                KokoDevLogBus.Emit("llm_response", $"stream ← {streamModel}", $"text: {rawText}\n\ntoolCallsDetected: {toolCallsDetected}");
                 if (toolCallsDetected)
                 {
                     RecordLlmSuccess(diagProvider, diagModel, diagChannel, diagWatch, "tool_call_fallback");

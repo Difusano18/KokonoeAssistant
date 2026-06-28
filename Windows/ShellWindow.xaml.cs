@@ -23,6 +23,7 @@ namespace KokonoeAssistant.Windows
         private KokoWebAgentPoolBridgeService? _agentPoolBridge;
         private KokoWebBrowserBridgeService? _browserBridge;
         private KokoWebArtifactBridgeService? _artifactBridge;
+        private KokoWebDevBridgeService? _devBridge;
         private Action<string, string>? _brainMessageHandler;
 
         public event Action<string>? InitializationFailed;
@@ -47,6 +48,7 @@ namespace KokonoeAssistant.Windows
                 _wearBridge?.Dispose();
                 _browserBridge?.Dispose();
                 _artifactBridge?.Dispose();
+                _devBridge?.Dispose();
                 _settingsBridge?.Dispose();
                 _memoryBridge?.Dispose();
                 _vaultBridge?.Dispose();
@@ -104,6 +106,7 @@ namespace KokonoeAssistant.Windows
                 _agentPoolBridge = new KokoWebAgentPoolBridgeService(_bridge, ServiceContainer.AgentPool);
                 _browserBridge = new KokoWebBrowserBridgeService(_bridge, ServiceContainer.BrowserOperator);
                 _artifactBridge = new KokoWebArtifactBridgeService(_bridge, ServiceContainer.Artifacts);
+                _devBridge = new KokoWebDevBridgeService(_bridge);
                 _systemBridge = new KokoWebSystemBridgeService(_bridge, ServiceContainer.SystemOverlord);
                 _brainMessageHandler = (role, content) => _chatBridge?.PublishExternalMessage(role, content);
                 ServiceContainer.BrainEngine.OnNewMessage = _brainMessageHandler;

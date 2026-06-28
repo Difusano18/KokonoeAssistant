@@ -323,6 +323,28 @@
     .mission-steps:empty { display: none; }
     .mission-steps .activity-detail { margin-left: 6px; }
 
+    /* ---------- dev panel (temporary debug tab) ---------- */
+    .dev-feed { display: flex; flex-direction: column-reverse; gap: 8px; margin-top: 12px; }
+    .dev-entry { border: 1px solid var(--line-2); border-radius: 8px; background: var(--card); overflow: hidden; }
+    .dev-entry-head {
+      display: flex; align-items: center; gap: 8px; padding: 8px 12px; cursor: pointer;
+      font: 11px "IBM Plex Mono", Consolas, monospace; color: var(--text-3); user-select: none;
+    }
+    .dev-entry-head:hover { background: var(--card-2); }
+    .dev-kind { padding: 1px 6px; border-radius: 4px; font-size: 9.5px; text-transform: uppercase; letter-spacing: .4px; flex-shrink: 0; }
+    .dev-kind.llm_request  { color: var(--gold); background: var(--gold-soft); border: 1px solid var(--gold-border); }
+    .dev-kind.llm_response { color: var(--accent); background: var(--accent-soft); border: 1px solid var(--accent-border); }
+    .dev-kind.tool_call    { color: var(--text-2); background: var(--card-2); border: 1px solid var(--line-2); }
+    .dev-entry-time { color: var(--text-4); flex-shrink: 0; }
+    .dev-entry-label { color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+    .dev-entry-content {
+      margin: 0; padding: 10px 12px; border-top: 1px solid var(--line-2);
+      font: 11px "IBM Plex Mono", Consolas, monospace; color: var(--text-2);
+      white-space: pre-wrap; word-break: break-all; max-height: 360px; overflow-y: auto;
+      display: none;
+    }
+    .dev-entry.open .dev-entry-content { display: block; }
+
     /* ---------- artifact cards ---------- */
     .artifact-card {
       border: 1px solid var(--accent-border); border-radius: 8px;
@@ -705,6 +727,9 @@
       <button title="Telemetry" aria-label="Telemetry" data-panel="telemetry">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l2.5-6 5 14L17 12h4"/></svg>
       </button>
+      <button title="Developer (raw LLM/tool traffic)" aria-label="Developer" data-panel="dev">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><polyline points="8 6 2 12 8 18"/><polyline points="16 6 22 12 16 18"/></svg>
+      </button>
       <span class="rail-div bottom" aria-hidden="true"></span>
       <button id="settings-open" title="Settings" aria-label="Settings" data-panel="settings">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/></svg>
@@ -793,6 +818,17 @@
           <div id="system-feed" class="workspace-feed"><p class="agent-empty">No system snapshot yet.</p></div>
           <p class="eyebrow">Service heartbeat</p>
           <div id="runtime-feed" class="workspace-feed"><p class="agent-empty">No runtime snapshot yet.</p></div>
+        </div>
+      </section>
+      <section id="panel-dev" class="workspace" style="display:none" aria-live="polite">
+        <div class="workspace-board">
+          <p class="eyebrow">Developer</p>
+          <h1 style="margin:0 0 4px">Сирий трафік LLM/інструментів</h1>
+          <p class="agent-empty" style="margin-bottom:10px">Тимчасова вкладка для дебагу: повні system prompt / request / response, аргументи й результати tool_calls. Не для продукту.</p>
+          <div class="panel-actions">
+            <button id="dev-clear" class="action-button" type="button">Очистити</button>
+          </div>
+          <div id="dev-feed" class="dev-feed"></div>
         </div>
       </section>
       <section id="panel-settings" class="workspace" style="display:none" aria-live="polite">
