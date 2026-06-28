@@ -43,8 +43,11 @@ namespace KokonoeAssistant.Services
 
     public sealed class KokoFileSystemToolService : IKokoFileSystemToolService
     {
+        // Relative paths still resolve against this so "notes.txt" goes somewhere sane, but
+        // absolute paths are no longer confined to it - confirmed with the user that the agent
+        // should have real disk access (Desktop, arbitrary paths), not just its own workspace.
+        // Delete/Move/WriteText still require Confirmed=true (RequiresConfirmation below).
         private readonly string _workspaceRoot;
-        private readonly string _workspaceRootWithSeparator;
 
         public KokoFileSystemToolService(string workspaceRoot)
         {
@@ -53,7 +56,6 @@ namespace KokonoeAssistant.Services
 
             _workspaceRoot = Path.GetFullPath(workspaceRoot)
                 .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-            _workspaceRootWithSeparator = _workspaceRoot + Path.DirectorySeparatorChar;
 
             Directory.CreateDirectory(_workspaceRoot);
         }
@@ -67,7 +69,7 @@ namespace KokonoeAssistant.Services
             "fs_move"
         };
 
-        public string ResolvePath(string path) => ResolveInsideWorkspace(path);
+        public string ResolvePath(string path) => ResolveFullPath(path);
 
         public async Task<KokoFileOperationResult> ExecuteAsync(KokoFileOperationRequest request, CancellationToken ct = default)
         {
@@ -75,10 +77,10 @@ namespace KokonoeAssistant.Services
 
             ct.ThrowIfCancellationRequested();
 
-            var path = ResolveInsideWorkspace(request.Path);
+            var path = ResolveFullPath(request.Path);
             var destination = string.IsNullOrWhiteSpace(request.DestinationPath)
                 ? ""
-                : ResolveInsideWorkspace(request.DestinationPath);
+                : ResolveFullPath(request.DestinationPath);
 
             if (RequiresConfirmation(request.Kind) && !request.Confirmed)
             {
@@ -143,28 +145,14 @@ namespace KokonoeAssistant.Services
             }
         }
 
-        private string ResolveInsideWorkspace(string path)
+        private string ResolveFullPath(string path)
         {
             if (string.IsNullOrWhiteSpace(path))
                 throw new ArgumentException("Path is empty.", nameof(path));
 
-            var combined = Path.IsPathRooted(path)
+            return Path.IsPathRooted(path)
                 ? Path.GetFullPath(path)
                 : Path.GetFullPath(Path.Combine(_workspaceRoot, path));
-
-            if (!IsInsideWorkspace(combined))
-                throw new InvalidOperationException($"Path escapes agent workspace: {combined}");
-
-            return combined;
-        }
-
-        private bool IsInsideWorkspace(string fullPath)
-        {
-            var normalized = Path.GetFullPath(fullPath)
-                .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-
-            return string.Equals(normalized, _workspaceRoot, StringComparison.OrdinalIgnoreCase) ||
-                   normalized.StartsWith(_workspaceRootWithSeparator, StringComparison.OrdinalIgnoreCase);
         }
 
         private static bool RequiresConfirmation(KokoFileOperationKind kind) =>

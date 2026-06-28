@@ -469,7 +469,11 @@ namespace KokonoeAssistant.Services
             sb.AppendLine("Available capabilities when the host exposes them:");
             sb.AppendLine("- Obsidian/Vault tools: list, search, read, write, append notes, daily notes, backlinks, graph and vault maintenance.");
             sb.AppendLine("- Sandbox: execute short Python probes for calculations or safe local checks.");
-            sb.AppendLine("- File workspace tools: read/write/delete only inside the allowed agent file workspace.");
+            sb.AppendLine("- File tools (fs_read_text/fs_write_text/fs_create_directory/fs_move/fs_delete): real disk access, any absolute path. Relative paths default to the agent workspace. Write/move/delete require confirmed=true after the user has actually confirmed.");
+            sb.AppendLine("- pc_action/pc_confirm/pc_cancel: open apps, control volume, focus/arrange windows, kill processes, run PowerShell, sleep/lock/shutdown/restart. Risky actions return a pending id - confirm or cancel it.");
+            sb.AppendLine("- web_search: search the web for current information.");
+            sb.AppendLine("- browser.navigate/click/type/extract/screenshot/scroll/wait_for/close: drive a real visible Chromium browser, when enabled.");
+            sb.AppendLine("- delegate_to_agent: hand a sub-task to a specialist agent from the pool.");
             sb.AppendLine("- Agent board: create and inspect autonomous tasks when the user asks for planning, follow-up, critique, or multi-step work.");
             sb.AppendLine("- Vision and PC context: inspect attached images, local screenshots, foreground window, browser-window titles, visible windows, CPU/RAM, and top processes when the host provides them.");
             sb.AppendLine("- Full desktop context scan: active window, browser-window titles, visible windows, CPU/RAM, volume, and top processes. Use it for 'scan everything', 'what do you see', and 'what is new' style requests.");
@@ -778,21 +782,21 @@ namespace KokonoeAssistant.Services
                 }),
 
             Tool("fs_read_text",
-                "Read a UTF-8 text file inside the Kokonoe agent file workspace.",
+                "Read a UTF-8 text file anywhere on disk (e.g. Desktop, any absolute path).",
                 new {
                     type = "object",
                     properties = new {
-                        path = new { type = "string", description = "Relative path inside the agent file workspace." }
+                        path = new { type = "string", description = "Absolute path, or relative to the agent workspace." }
                     },
                     required = new[] { "path" }
                 }),
 
             Tool("fs_write_text",
-                "Write a UTF-8 text file inside the Kokonoe agent file workspace. Requires confirmed=true.",
+                "Write a UTF-8 text file anywhere on disk (e.g. Desktop, any absolute path). Requires confirmed=true after the user has actually confirmed.",
                 new {
                     type = "object",
                     properties = new {
-                        path = new { type = "string", description = "Relative path inside the agent file workspace." },
+                        path = new { type = "string", description = "Absolute path, or relative to the agent workspace." },
                         content = new { type = "string", description = "New file content." },
                         confirmed = new { type = "boolean", description = "Must be true after user confirmation." }
                     },
@@ -800,33 +804,33 @@ namespace KokonoeAssistant.Services
                 }),
 
             Tool("fs_create_directory",
-                "Create a directory inside the Kokonoe agent file workspace. The gateway verifies that it exists.",
+                "Create a directory anywhere on disk. The gateway verifies that it exists.",
                 new {
                     type = "object",
                     properties = new {
-                        path = new { type = "string", description = "Relative directory path inside the agent file workspace." }
+                        path = new { type = "string", description = "Absolute path, or relative to the agent workspace." }
                     },
                     required = new[] { "path" }
                 }),
 
             Tool("fs_move",
-                "Move a file or directory inside the Kokonoe agent file workspace. Requires confirmed=true.",
+                "Move/rename a file or directory anywhere on disk. Requires confirmed=true after the user has actually confirmed.",
                 new {
                     type = "object",
                     properties = new {
-                        path = new { type = "string", description = "Source path inside the agent file workspace." },
-                        destinationPath = new { type = "string", description = "Destination path inside the same workspace." },
+                        path = new { type = "string", description = "Absolute source path, or relative to the agent workspace." },
+                        destinationPath = new { type = "string", description = "Absolute destination path, or relative to the agent workspace." },
                         confirmed = new { type = "boolean", description = "Must be true after user confirmation." }
                     },
                     required = new[] { "path", "destinationPath", "confirmed" }
                 }),
 
             Tool("fs_delete",
-                "Delete a file or directory inside the Kokonoe agent file workspace. Requires confirmed=true.",
+                "Delete a file or directory anywhere on disk. Requires confirmed=true after the user has actually confirmed.",
                 new {
                     type = "object",
                     properties = new {
-                        path = new { type = "string", description = "Relative path inside the agent file workspace." },
+                        path = new { type = "string", description = "Absolute path, or relative to the agent workspace." },
                         confirmed = new { type = "boolean", description = "Must be true after user confirmation." }
                     },
                     required = new[] { "path", "confirmed" }

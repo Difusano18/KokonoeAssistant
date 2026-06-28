@@ -189,24 +189,28 @@ public sealed class KokoFileSystemToolServiceTests
     }
 
     [Fact]
-    public async Task ExecuteAsync_WhenRelativePathEscapesWorkspace_ThrowsInvalidOperationException()
+    public async Task ExecuteAsync_WhenRelativePathHasNoMatchingFile_ReportsNotFoundNotAnEscape()
     {
+        // The workspace sandbox was removed by design (full disk access, confirmed with the
+        // user) - a path outside the old workspace root is no longer special-cased, it's just
+        // a path that may or may not exist.
         var request = new KokoFileOperationRequest
         {
             Kind = KokoFileOperationKind.ReadText,
             Path = "../outside.txt"
         };
 
-        Func<Task> act = () => _service.ExecuteAsync(request);
+        var result = await _service.ExecuteAsync(request);
 
-        await act.Should().ThrowAsync<InvalidOperationException>()
-            .WithMessage("Path escapes agent workspace:*");
+        result.Success.Should().BeFalse();
+        result.Message.Should().StartWith("File not found:");
     }
 
     [Fact]
-    public async Task ExecuteAsync_WhenAbsolutePathEscapesWorkspace_ThrowsInvalidOperationException()
+    public async Task ExecuteAsync_WhenAbsolutePathIsOutsideWorkspace_ReadsItAnyway()
     {
         var outsidePath = Path.Combine(Path.GetTempPath(), "kokonoe-outside-" + Guid.NewGuid().ToString("N") + ".txt");
+        await File.WriteAllTextAsync(outsidePath, "real disk access");
 
         var request = new KokoFileOperationRequest
         {
@@ -214,14 +218,16 @@ public sealed class KokoFileSystemToolServiceTests
             Path = outsidePath
         };
 
-        Func<Task> act = () => _service.ExecuteAsync(request);
+        var result = await _service.ExecuteAsync(request);
 
-        await act.Should().ThrowAsync<InvalidOperationException>()
-            .WithMessage("Path escapes agent workspace:*");
+        result.Success.Should().BeTrue();
+        result.Output.Should().Be("real disk access");
+
+        File.Delete(outsidePath);
     }
 
     [Fact]
-    public async Task ExecuteAsync_WhenSiblingDirectorySharesWorkspacePrefix_StillBlocksAccess()
+    public async Task ExecuteAsync_WhenSiblingDirectorySharesWorkspacePrefix_StillReadsIt()
     {
         var sibling = _workspaceRoot + "Sibling";
         Directory.CreateDirectory(sibling);
@@ -234,10 +240,10 @@ public sealed class KokoFileSystemToolServiceTests
             Path = siblingFile
         };
 
-        Func<Task> act = () => _service.ExecuteAsync(request);
+        var result = await _service.ExecuteAsync(request);
 
-        await act.Should().ThrowAsync<InvalidOperationException>()
-            .WithMessage("Path escapes agent workspace:*");
+        result.Success.Should().BeTrue();
+        result.Output.Should().Be("sample");
     }
 
     [Fact]
