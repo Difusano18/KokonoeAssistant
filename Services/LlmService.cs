@@ -3271,15 +3271,16 @@ namespace KokonoeAssistant.Services
 
         // Root cause of the empty-final-answer bug, not a symptom patch: read_note fed the
         // full file back as a tool-result message with zero size limit - a single 18KB
-        // consolidated facts note plus the system prompt plus history was enough to leave a
-        // modest model nothing to work with on the forced final summary round, producing a
+        // consolidated facts note plus the system prompt plus history was enough to leave
+        // gemma4:31b nothing to work with on the forced final summary round, producing a
         // visible-text-free completion (see "empty final completion after tools" in the log).
-        // Capped here, same approach as ListDirectory's Take(100): big enough to actually
-        // answer most "what's interesting in here" asks, small enough to leave real budget
-        // for the model to write an answer instead of just holding the file in its context.
+        // Cap raised from the original 3000 now that the default chat model is gpt-oss:120b -
+        // a much larger context window genuinely needs less protection here, this still keeps
+        // a ceiling rather than removing it outright (some notes could still be large enough
+        // to matter, and "ask for a specific section" stays a fine fallback either way).
         public static string TruncateNoteForToolResult(string content, string path)
         {
-            const int cap = 3000;
+            const int cap = 12000;
             if (content.Length <= cap) return content;
             return content[..cap] + $"\n\n[...truncated, {content.Length - cap} more characters. Ask to read a specific heading/section of {path} if you need more of it.]";
         }

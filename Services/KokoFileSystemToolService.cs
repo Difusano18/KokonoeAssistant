@@ -118,13 +118,13 @@ namespace KokonoeAssistant.Services
                             .OrderByDescending(e => e is FileInfo)
                             .ThenByDescending(e => e.LastWriteTime)
                             .ToList();
-                        // 500 entries fed back as a single tool-result message is ~20-25k chars -
-                        // on the forced no-tools final round (a smaller model, no extra reasoning
-                        // budget) that's big enough to push the visible answer to empty with no
-                        // error anywhere, just a blank reply. 100 is enough to reason about a
-                        // folder's shape; ask again with a narrower path for more.
+                        // Capped (was 500, see git history) because a smaller model choked on
+                        // the resulting tool-result size with no error, just a blank final reply.
+                        // Raised from the original fix's 100 now that the default chat model is
+                        // gpt-oss:120b - still a ceiling, not removed outright, since "ask again
+                        // with a narrower path" is a reasonable fallback either way.
                         var entries = allEntries
-                            .Take(100)
+                            .Take(300)
                             .Select(e => e is DirectoryInfo
                                 ? $"[dir]  {e.Name}"
                                 : $"[file] {e.Name}  {((FileInfo)e).Length / 1024.0:F0}KB  {e.LastWriteTime:yyyy-MM-dd HH:mm}")
