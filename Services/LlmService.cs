@@ -869,6 +869,37 @@ namespace KokonoeAssistant.Services
                         },
                         required = new[] { "agentId", "userMessage" }
                     }),
+                Tool("pc_action",
+                    "Perform a PC-level system action: open an application, focus or arrange windows, control volume, take a screenshot, kill a process, run a PowerShell command, sleep/lock/shutdown/restart. Safe actions (e.g. OpenApp, VolumeSet, TakeScreenshot) execute immediately; riskier ones return a pending action id - call pc_confirm or pc_cancel next.",
+                    new {
+                        type = "object",
+                        properties = new {
+                            actionType = new { type = "string", description = "OpenApp, KillProcess, VolumeUp, VolumeDown, VolumeMute, VolumeSet, FocusWindow, ArrangeWindows, TakeScreenshot, SystemInfo, Processes, RunPowerShell, LockScreen, Sleep, MonitorOff, Shutdown, Restart." },
+                            target = new { type = "string", description = "Target of the action: app/process name, volume number, or shell command. Empty for actions that need none." },
+                            intent = new { type = "string", description = "Short human-readable reason for the action." }
+                        },
+                        required = new[] { "actionType" }
+                    }),
+                Tool("pc_confirm",
+                    "Confirm and execute a pending PC action that pc_action flagged as needing confirmation.",
+                    new {
+                        type = "object",
+                        properties = new {
+                            actionId = new { type = "string", description = "Pending action id returned by pc_action." },
+                            confirmationText = new { type = "string", description = "User's confirmation text, e.g. what they said to approve it." }
+                        },
+                        required = new[] { "actionId" }
+                    }),
+                Tool("pc_cancel",
+                    "Cancel a pending PC action instead of confirming it.",
+                    new {
+                        type = "object",
+                        properties = new {
+                            actionId = new { type = "string", description = "Pending action id to cancel." },
+                            reason = new { type = "string", description = "Why it's being cancelled." }
+                        },
+                        required = new[] { "actionId" }
+                    }),
             };
 
             if (AppSettings.Load().BrowserEnabled)
@@ -2808,6 +2839,12 @@ namespace KokonoeAssistant.Services
                 if (name is "web_search" or "delegate_to_agent" || name.StartsWith("browser.", StringComparison.Ordinal))
                     return await ExecuteGatewayToolAsync(name, args, ct).ConfigureAwait(false);
 
+                if (name == "pc_action")
+                    return await ExecutePcActionToolAsync(args, ct).ConfigureAwait(false);
+
+                if (name is "pc_confirm" or "pc_cancel")
+                    return await ExecuteGatewayToolAsync(name, args, ct).ConfigureAwait(false);
+
                 return await Task.Run(() => ExecuteTool(name, args), ct).ConfigureAwait(false);
             }
             catch (Exception ex)
@@ -2995,6 +3032,21 @@ namespace KokonoeAssistant.Services
                 Arguments = args.Properties()
                     .ToDictionary(p => p.Name, p => p.Value?.ToString() ?? "", StringComparer.OrdinalIgnoreCase)
             };
+            var result = await ServiceContainer.ToolGateway.ExecuteAsync(call, ct).ConfigureAwait(false);
+            return result.ToLlmText();
+        }
+
+        // pc_action's gateway handler requires a PcActionPlan as KokoToolCall.Payload (not just
+        // Arguments) - PcActionPolicyEngine.Evaluate(plan, ...) inside PcActionExecutor still does
+        // the real risk classification/confirmation gating from the step's ActionType, same as the
+        // desktop path (PcIntentRouter) and the autonomous agent runner already get for free.
+        private static async Task<string> ExecutePcActionToolAsync(JObject args, CancellationToken ct)
+        {
+            var actionType = Req(args, "actionType");
+            var target = args["target"]?.ToString() ?? "";
+            var intent = args["intent"]?.ToString() ?? actionType;
+            var plan = PcActionPlan.Single(intent, actionType, target);
+            var call = new KokoToolCall { Name = "pc_action", Payload = plan };
             var result = await ServiceContainer.ToolGateway.ExecuteAsync(call, ct).ConfigureAwait(false);
             return result.ToLlmText();
         }
@@ -3664,21 +3716,13 @@ namespace KokonoeAssistant.Services
             var contextPart   = string.IsNullOrEmpty(extraContext)    ? "" : "\n\n=== CONTEXT ===\n" + extraContext;
             var systemContent = BuildMainSystemContent(agentId, SanitizeContext(extraContext), ScreenCtx, PersonalityHint);
 
-            var looksLikeVaultOp = !string.IsNullOrEmpty(userText) && (
-                userText.Contains("створ", StringComparison.OrdinalIgnoreCase) ||
-                userText.Contains("папк", StringComparison.OrdinalIgnoreCase) ||
-                userText.Contains("перевір", StringComparison.OrdinalIgnoreCase) ||
-                userText.Contains("провір", StringComparison.OrdinalIgnoreCase) ||
-                userText.Contains("запиш", StringComparison.OrdinalIgnoreCase) ||
-                userText.Contains("збереж", StringComparison.OrdinalIgnoreCase) ||
-                userText.Contains("нотатк", StringComparison.OrdinalIgnoreCase) ||
-                userText.Contains("vault", StringComparison.OrdinalIgnoreCase) ||
-                userText.Contains("obsidian", StringComparison.OrdinalIgnoreCase) ||
-                userText.Contains("щоденник", StringComparison.OrdinalIgnoreCase) ||
-                userText.Contains("запам'ят", StringComparison.OrdinalIgnoreCase) ||
-                userText.Contains("додай до", StringComparison.OrdinalIgnoreCase) ||
-                userText.Contains("список", StringComparison.OrdinalIgnoreCase));
-            var useTools = Obsidian != null && looksLikeVaultOp;
+            // Used to gate useTools on a vault-keyword heuristic, so anything outside that
+            // wordlist (PC control, browser, "open Steam") never got a tools array attached
+            // here at all - the model had zero affordance to call pc_action/browser.*, so it
+            // just narrated a plausible-sounding text answer ("Браузер відкрито.") with nothing
+            // behind it. SendAsync's multi-round path never had this gate; this brings the fast
+            // streaming path in line with it instead of keyword-matching every possible action.
+            var useTools = Obsidian != null;
             var streamIsOllamaCloud = target.Provider.Equals("ollama-cloud", StringComparison.OrdinalIgnoreCase);
             var streamIsOllamaCloudProxy = target.Provider.Equals("ollama-cloud-proxy", StringComparison.OrdinalIgnoreCase);
             var streamUrl = isClaude ? CLAUDE_API_URL : target.Url;
