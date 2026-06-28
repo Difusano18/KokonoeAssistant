@@ -1514,7 +1514,7 @@ namespace KokonoeAssistant.Services
                     var sysIsOllamaCloud = sysProvider.Equals("ollama-cloud", StringComparison.OrdinalIgnoreCase);
                     var sysIsOllamaCloudProxy = sysProvider.Equals("ollama-cloud-proxy", StringComparison.OrdinalIgnoreCase);
                     var sysIsClaude = sysProvider.Equals("claude", StringComparison.OrdinalIgnoreCase);
-                    var sysModel = target.Model;
+                    var sysModel = NormalizeOllamaCloudModelName(target.Model, sysIsOllamaCloud);
                     var sysUrl = target.Url;
 
                     object reqBody;
@@ -1672,7 +1672,7 @@ namespace KokonoeAssistant.Services
                     imageBlock
                 };
 
-                var targetModel = target.Model;
+                var targetModel = NormalizeOllamaCloudModelName(target.Model, visionIsOllamaCloud);
                 var targetUrl = target.Url;
                 if (string.IsNullOrWhiteSpace(agentId) && !string.IsNullOrWhiteSpace(_visionModel))
                     targetModel = _visionModel;
@@ -1972,7 +1972,7 @@ namespace KokonoeAssistant.Services
                         userText.Contains("список нотат", StringComparison.OrdinalIgnoreCase) ||
                         userText.Contains("список пап", StringComparison.OrdinalIgnoreCase));
                     var targetUrl = agentTarget.Url;
-                    var targetModel = agentTarget.Model;
+                    var targetModel = NormalizeOllamaCloudModelName(agentTarget.Model, isOllamaCloud);
                     if (isImageRequest && string.IsNullOrWhiteSpace(agentId) && !string.IsNullOrWhiteSpace(_visionModel))
                         targetModel = !string.IsNullOrWhiteSpace(visionModelOverride)
                             ? visionModelOverride
@@ -2477,6 +2477,16 @@ namespace KokonoeAssistant.Services
         }
 
         // ---- Build messages list for API ----
+
+        // ollama-cloud-proxy's catalog (and everything stored/displayed) uses "-cloud"
+        // suffixed tags (gemma4:31b-cloud) because that's what the local daemon's model store
+        // expects. The real direct API (ollama-cloud, see DefaultOllamaCloudUrl) takes the
+        // bare tag (gemma4:31b) - stripped here so one stored model name works for both
+        // providers without a second catalog or a settings migration.
+        private static string NormalizeOllamaCloudModelName(string model, bool isOllamaCloud) =>
+            isOllamaCloud && model.EndsWith("-cloud", StringComparison.OrdinalIgnoreCase)
+                ? model[..^"-cloud".Length]
+                : model;
 
         private static bool IsTransientServerError(int statusCode)
         {
@@ -3886,7 +3896,7 @@ namespace KokonoeAssistant.Services
             var streamIsOllamaCloud = target.Provider.Equals("ollama-cloud", StringComparison.OrdinalIgnoreCase);
             var streamIsOllamaCloudProxy = target.Provider.Equals("ollama-cloud-proxy", StringComparison.OrdinalIgnoreCase);
             var streamUrl = isClaude ? CLAUDE_API_URL : target.Url;
-            var streamModel = target.Model;
+            var streamModel = NormalizeOllamaCloudModelName(target.Model, streamIsOllamaCloud);
             var maxTokens = ResolveMaxTokens(maxTokensOverride, MainMaxTokens);
 
             object reqBody;
@@ -4202,7 +4212,7 @@ namespace KokonoeAssistant.Services
             var isOllamaCloud = target.Provider.Equals("ollama-cloud", StringComparison.OrdinalIgnoreCase);
             var isOllamaCloudProxy = target.Provider.Equals("ollama-cloud-proxy", StringComparison.OrdinalIgnoreCase);
             var targetUrl = target.Url;
-            var targetModel = target.Model;
+            var targetModel = NormalizeOllamaCloudModelName(target.Model, isOllamaCloud);
             var diagProvider = string.IsNullOrWhiteSpace(agentId) ? ActiveProviderLabel() : $"{target.Provider}:{agentId}";
             var diagChannel = "telegram";
             RecordLlmRequest(diagProvider, targetModel, diagChannel);

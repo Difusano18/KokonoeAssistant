@@ -34,19 +34,21 @@ namespace KokonoeAssistant
     public class AppSettings
     {
         private static readonly object SettingsIoLock = new();
-        // "https://ollama.com/v1/chat/completions" was never a working API endpoint — it's
-        // Ollama's marketing site, not their cloud API. Hitting it returns a fast non-2xx
-        // (or a connection-level reset), which LlmService.SendAsync's catch-all then turns
-        // into the literal hardcoded string "[скасовано]" as the chat reply. Groq is an
-        // OpenAI-compatible endpoint with a real free tier — known-working default instead.
-        public const string DefaultOllamaCloudUrl = "https://api.groq.com/openai/v1/chat/completions";
-        public const string DefaultOllamaCloudModel = "llama-3.3-70b-versatile";
-        // Vision still points at the old (broken) model/provider — VisionUrl is empty by
-        // default, so image requests fall through to OllamaUrl, which is now Groq. Groq has
-        // no model named "gemma4:31b-cloud", so vision will start failing clean (and L2 will
-        // surface that failure as readable text) instead of silently. Left unfixed here: no
-        // verified-current Groq vision model name to put in its place without repeating the
-        // same "guessed model id" mistake this fix exists to correct.
+        // A past session concluded "https://ollama.com/v1/chat/completions" didn't work and
+        // pointed this at Groq instead - re-verified live (curl-equivalent PowerShell request
+        // with a real account's API key) on 2026-06-28 and it returned a real 200 with a real
+        // completion. The actual problem that test must have hit: Ollama Cloud's REAL identity
+        // model for billing/rate-limits is whichever account ran `ollama signin` on the local
+        // machine - that's separate from this API key entirely, and only applies to
+        // ollama-cloud-proxy (localhost:11434, the local daemon). This provider (ollama-cloud)
+        // talks to ollama.com directly over HTTPS with this API key as the real auth/billing
+        // identity, no local daemon involved - which is what actually lets a specific account's
+        // key (and LlmService's existing OllamaKeys multi-key pool/rotation, built for this
+        // provider but previously routed to Groq where it didn't apply) control quota.
+        // Model names here must NOT have the "-cloud" suffix (that's proxy-only catalog
+        // formatting) - LlmService strips it before sending when isOllamaCloud is true.
+        public const string DefaultOllamaCloudUrl = "https://ollama.com/v1/chat/completions";
+        public const string DefaultOllamaCloudModel = "gemma3:27b";
         public const string DefaultVisionModel = "gemma4:31b-cloud";
         public const string FallbackVisionModel = "";
 
@@ -400,23 +402,20 @@ namespace KokonoeAssistant
                 changed = true;
             }
 
-            if (string.IsNullOrWhiteSpace(settings.OllamaModel) ||
-                settings.OllamaModel.Equals("gpt-oss:120b-cloud", StringComparison.OrdinalIgnoreCase) ||
-                settings.OllamaModel.Equals("gemma4:31b-cloud", StringComparison.OrdinalIgnoreCase))
+            if (string.IsNullOrWhiteSpace(settings.OllamaModel))
             {
                 settings.OllamaModel = DefaultOllamaCloudModel;
                 changed = true;
             }
 
-            // "https://ollama.com/v1/chat/completions" is Ollama's website, not a working
-            // API endpoint — see DefaultOllamaCloudUrl comment above for the failure chain.
-            if (settings.OllamaUrl.Equals("https://ollama.com/v1/chat/completions", StringComparison.OrdinalIgnoreCase) ||
-                settings.OllamaUrl.Equals("https://ollama.com/v1/", StringComparison.OrdinalIgnoreCase) ||
-                settings.OllamaUrl.Equals("https://ollama.com/v1", StringComparison.OrdinalIgnoreCase))
+            // Groq was a past session's workaround for a since-disproven belief that
+            // ollama.com's direct API didn't work (see DefaultOllamaCloudUrl) - migrate
+            // existing installs that picked up that default back to the real endpoint.
+            if (settings.OllamaUrl.Equals("https://api.groq.com/openai/v1/chat/completions", StringComparison.OrdinalIgnoreCase))
             {
                 settings.OllamaUrl = DefaultOllamaCloudUrl;
                 changed = true;
-                KokoSystemLog.Write("SETTINGS", "Migrated invalid Ollama URL to Groq default.");
+                KokoSystemLog.Write("SETTINGS", "Migrated Ollama URL from Groq workaround back to the real ollama.com API.");
             }
 
             if (string.IsNullOrWhiteSpace(settings.VisionModel) ||
