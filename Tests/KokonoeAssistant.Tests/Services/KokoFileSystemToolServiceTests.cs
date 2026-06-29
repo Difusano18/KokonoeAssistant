@@ -43,7 +43,8 @@ public sealed class KokoFileSystemToolServiceTests
             "fs_write_text",
             "fs_create_directory",
             "fs_delete",
-            "fs_move"
+            "fs_move",
+            "fs_list_directory"
         }, options => options.WithStrictOrdering());
     }
 
@@ -149,6 +150,26 @@ public sealed class KokoFileSystemToolServiceTests
 
         result.Success.Should().BeTrue();
         Directory.Exists(Path.Combine(_workspaceRoot, "vault", "daily", "2026")).Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task ListDirectory_WhenDirectoryExists_ReturnsEntriesWithoutConfirmation()
+    {
+        Directory.CreateDirectory(Path.Combine(_workspaceRoot, "notes"));
+        Directory.CreateDirectory(Path.Combine(_workspaceRoot, "notes", "archive"));
+        await File.WriteAllTextAsync(Path.Combine(_workspaceRoot, "notes", "today.md"), "stable memory");
+
+        var result = await _service.ExecuteAsync(new KokoFileOperationRequest
+        {
+            Kind = KokoFileOperationKind.ListDirectory,
+            Path = "notes"
+        });
+
+        result.Success.Should().BeTrue();
+        result.RequiresConfirmation.Should().BeFalse();
+        result.Message.Should().Contain("entries in");
+        result.Output.Should().Contain("[dir]  archive");
+        result.Output.Should().Contain("[file] today.md");
     }
 
     [Fact]

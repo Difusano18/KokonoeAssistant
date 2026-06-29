@@ -170,6 +170,7 @@ namespace KokonoeAssistant
         public bool SpontaneousEnabled      { get; set; } = true;
         public int  SpontaneousIntervalMins { get; set; } = 25;
         public int  ProactiveAutonomyLevel  { get; set; } = 2; // 0=тихо, 1=обережно, 2=нормально, 3=живий режим
+        public int  AgentMaxParallel        { get; set; } = 4;
 
         public bool NeuralGovernorEnabled   { get; set; } = true;
         public int  NeuralGovernorTimeoutMs { get; set; } = 1800;
@@ -438,6 +439,13 @@ namespace KokonoeAssistant
             if (settings.ProactiveAutonomyLevel != normalizedAutonomy)
             {
                 settings.ProactiveAutonomyLevel = normalizedAutonomy;
+                changed = true;
+            }
+
+            var normalizedAgentMaxParallel = Math.Clamp(settings.AgentMaxParallel, 1, 10);
+            if (settings.AgentMaxParallel != normalizedAgentMaxParallel)
+            {
+                settings.AgentMaxParallel = normalizedAgentMaxParallel;
                 changed = true;
             }
 

@@ -74,12 +74,29 @@ namespace KokonoeAssistant.Services
         public string StepId { get; set; } = "";
     }
 
+    public sealed class KokoAgentActiveLane
+    {
+        public int Slot { get; set; }
+        public string TaskId { get; set; } = "";
+        public string StepId { get; set; } = "";
+        public string Objective { get; set; } = "";
+        public string StepTitle { get; set; } = "";
+        public KokoAgentStepKind Kind { get; set; }
+        public DateTime StartedAt { get; set; } = DateTime.Now;
+        public double ElapsedSeconds { get; set; }
+    }
+
     public sealed class KokoAgentTaskSnapshot
     {
         public DateTime TakenAt { get; set; } = DateTime.Now;
         public int MaxParallel { get; set; }
         public int RunningSteps { get; set; }
+        public int PendingTasks { get; set; }
+        public int CompletedTasks { get; set; }
+        public int FailedTasks { get; set; }
+        public int CanceledTasks { get; set; }
         public KokoAgentActivitySnapshot Activity { get; set; } = new();
+        public List<KokoAgentActiveLane> ActiveLanes { get; set; } = new();
         public List<KokoAgentTask> Tasks { get; set; } = new();
     }
 
@@ -135,6 +152,7 @@ namespace KokonoeAssistant.Services
         private readonly KokoSandboxExecutor _sandbox;
         private readonly KokoObservationService _observation;
         private readonly List<KokoAgentTask> _tasks = new();
+        private readonly Dictionary<string, KokoAgentActiveLane> _activeLanes = new();
         private KokoAgentActivitySnapshot _activity = new();
         private CancellationTokenSource? _runnerCts;
         private int _runningSteps;
@@ -153,8 +171,8 @@ namespace KokonoeAssistant.Services
 
         public int MaxParallel
         {
-            get => _maxParallel;
-            set => _maxParallel = Math.Clamp(value, 1, 10);
+            get { lock (_lock) { return _maxParallel; } }
+            set { lock (_lock) { _maxParallel = Math.Clamp(value, 1, 10); } }
         }
         public bool IsRunnerActive
         {
@@ -166,6 +184,31 @@ namespace KokonoeAssistant.Services
         public bool AutoStartOnAdd { get; set; } = true;
         public event Action<KokoAgentActivitySnapshot>? ActivityChanged;
         public event Action<KokoAgentTask, KokoAgentCompletionNotice>? TaskCompleted;
+
+        public IReadOnlyList<KokoAgentTask> AddBatch(string objectiveBlock, int priority = 5)
+        {
+            var objectives = SplitBatchObjectives(objectiveBlock).ToList();
+            if (objectives.Count == 0)
+                throw new ArgumentException("Objective is empty.", nameof(objectiveBlock));
+
+            var tasks = new List<KokoAgentTask>();
+            foreach (var objective in objectives)
+                tasks.Add(AddTask(objective, priority));
+            return tasks;
+        }
+
+        public int ConfigureMaxParallel(int value)
+        {
+            int configured;
+            lock (_lock)
+            {
+                _maxParallel = Math.Clamp(value, 1, 10);
+                configured = _maxParallel;
+            }
+
+            EmitActivity("plan", "runner", $"Concurrency set to {configured}.", $"Parallel lanes: {configured}.");
+            return configured;
+        }
 
         public KokoAgentTask AddTask(string objective, int priority = 5)
         {
@@ -226,9 +269,17 @@ namespace KokonoeAssistant.Services
             {
                 return new KokoAgentTaskSnapshot
                 {
-                    MaxParallel = MaxParallel,
+                    MaxParallel = _maxParallel,
                     RunningSteps = _runningSteps,
+                    PendingTasks = _tasks.Count(t => t.Status == KokoAgentTaskStatus.Pending),
+                    CompletedTasks = _tasks.Count(t => t.Status == KokoAgentTaskStatus.Completed),
+                    FailedTasks = _tasks.Count(t => t.Status == KokoAgentTaskStatus.Failed),
+                    CanceledTasks = _tasks.Count(t => t.Status == KokoAgentTaskStatus.Canceled),
                     Activity = CloneActivity(_activity),
+                    ActiveLanes = _activeLanes.Values
+                        .OrderBy(l => l.Slot)
+                        .Select(CloneLane)
+                        .ToList(),
                     Tasks = _tasks.Select(Clone).ToList()
                 };
             }
@@ -251,14 +302,7 @@ namespace KokonoeAssistant.Services
             {
                 _runnerCts?.Cancel();
                 _runnerCts = null;
-                foreach (var task in _tasks.Where(t => t.Status == KokoAgentTaskStatus.Running))
-                {
-                    task.Status = KokoAgentTaskStatus.Pending;
-                    task.UpdatedAt = DateTime.Now;
-                }
-                foreach (var step in _tasks.SelectMany(t => t.Steps).Where(s => s.Status == KokoAgentTaskStatus.Running))
-                    step.Status = KokoAgentTaskStatus.Pending;
-                EmitActivity("idle", "runner", "Runner stopped.", "Paused. No autonomous steps are executing.");
+                EmitActivity("idle", "runner", "Runner stopped.", "No new autonomous steps will launch; in-flight lanes are canceling.");
                 SaveLocked();
             }
         }
@@ -299,6 +343,37 @@ namespace KokonoeAssistant.Services
             return planned.Select(CloneStep).ToList();
         }
 
+        public static IReadOnlyList<string> SplitBatchObjectives(string? objectiveBlock)
+        {
+            var raw = (objectiveBlock ?? "").Replace("\r", "\n");
+            var lines = raw
+                .Split('\n', StringSplitOptions.RemoveEmptyEntries)
+                .Select(line => line.Trim())
+                .Where(line => line.Length > 0)
+                .ToList();
+
+            if (lines.Count < 2)
+                return string.IsNullOrWhiteSpace(objectiveBlock)
+                    ? Array.Empty<string>()
+                    : new[] { objectiveBlock.Trim() };
+
+            var cleaned = lines
+                .Select(CleanBatchLine)
+                .Where(item => item.IsBatchItem && item.Text.Length > 0)
+                .Select(item => item.Text)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Take(20)
+                .ToList();
+
+            if (cleaned.Count >= 2)
+                return cleaned;
+
+            var normalizedSingle = string.Join("\n", lines).Trim();
+            return string.IsNullOrWhiteSpace(normalizedSingle)
+                ? Array.Empty<string>()
+                : new[] { normalizedSingle };
+        }
+
         public string RenderBoard()
         {
             var snap = GetSnapshot();
@@ -328,7 +403,7 @@ namespace KokonoeAssistant.Services
                 var launches = new List<(string TaskId, string StepId)>();
                 lock (_lock)
                 {
-                    while (_runningSteps < MaxParallel)
+                    while (_runningSteps < _maxParallel)
                     {
                         var (task, step) = FindNextStepLocked();
                         if (task != null && step != null)
@@ -338,6 +413,16 @@ namespace KokonoeAssistant.Services
                             step.Status = KokoAgentTaskStatus.Running;
                             step.StartedAt = DateTime.Now;
                             _runningSteps++;
+                            _activeLanes[step.Id] = new KokoAgentActiveLane
+                            {
+                                Slot = AllocateLaneSlotLocked(),
+                                TaskId = task.Id,
+                                StepId = step.Id,
+                                Objective = task.Objective,
+                                StepTitle = step.Title,
+                                Kind = step.Kind,
+                                StartedAt = step.StartedAt.Value
+                            };
                             launches.Add((task.Id, step.Id));
                             continue;
                         }
@@ -363,6 +448,9 @@ namespace KokonoeAssistant.Services
                          .OrderByDescending(t => t.Priority)
                          .ThenBy(t => t.CreatedAt))
             {
+                if (task.Steps.Any(s => s.Status == KokoAgentTaskStatus.Running))
+                    continue;
+
                 var step = task.Steps.OrderBy(s => s.Order).FirstOrDefault(s =>
                     s.Status == KokoAgentTaskStatus.Pending &&
                     task.Steps.Where(prev => prev.Order < s.Order).All(prev => prev.Status == KokoAgentTaskStatus.Completed));
@@ -449,7 +537,11 @@ namespace KokonoeAssistant.Services
             }
             finally
             {
-                lock (_lock) { _runningSteps = Math.Max(0, _runningSteps - 1); }
+                lock (_lock)
+                {
+                    _activeLanes.Remove(stepId);
+                    _runningSteps = _activeLanes.Count;
+                }
             }
         }
 
@@ -1371,6 +1463,20 @@ Objective: {task.Objective}
             Kind = kind
         };
 
+        private static (bool IsBatchItem, string Text) CleanBatchLine(string line)
+        {
+            if (string.IsNullOrWhiteSpace(line))
+                return (false, "");
+
+            var match = System.Text.RegularExpressions.Regex.Match(
+                line.Trim(),
+                @"^(?:[-*+]|\d{1,2}[.)]|[a-zA-Z][.)]|\[[ xX]\])\s+(?<text>.+)$");
+            if (!match.Success)
+                return (false, line.Trim());
+
+            return (true, match.Groups["text"].Value.Trim());
+        }
+
         private static KokoAgentStep CloneStep(KokoAgentStep step) => new()
         {
             Id = step.Id,
@@ -1384,6 +1490,22 @@ Objective: {task.Objective}
             FinishedAt = step.FinishedAt
         };
 
+        private int AllocateLaneSlotLocked()
+        {
+            var used = _activeLanes.Values.Select(l => l.Slot).ToHashSet();
+            for (var slot = 1; slot <= Math.Max(_maxParallel, 1); slot++)
+                if (!used.Contains(slot))
+                    return slot;
+            return used.Count + 1;
+        }
+
+        private static KokoAgentActiveLane CloneLane(KokoAgentActiveLane lane)
+        {
+            var clone = JsonConvert.DeserializeObject<KokoAgentActiveLane>(JsonConvert.SerializeObject(lane)) ?? lane;
+            clone.ElapsedSeconds = Math.Max(0, (DateTime.Now - clone.StartedAt).TotalSeconds);
+            return clone;
+        }
+
         private void Load()
         {
             try
@@ -1393,8 +1515,33 @@ Objective: {task.Objective}
                 if (loaded == null) return;
                 _tasks.Clear();
                 _tasks.AddRange(loaded);
+                if (ResetStaleRunningWork())
+                    SaveLocked();
             }
             catch (Exception suppressedEx1236) { KokoSystemLog.Write("AGENTTASKSERVICE-CATCH", "Load failed near source line 1236: " + suppressedEx1236); }
+        }
+
+        private bool ResetStaleRunningWork()
+        {
+            var changed = false;
+            foreach (var task in _tasks)
+            {
+                if (task.Status == KokoAgentTaskStatus.Running)
+                {
+                    task.Status = KokoAgentTaskStatus.Pending;
+                    task.UpdatedAt = DateTime.Now;
+                    changed = true;
+                }
+
+                foreach (var step in task.Steps.Where(s => s.Status == KokoAgentTaskStatus.Running))
+                {
+                    step.Status = KokoAgentTaskStatus.Pending;
+                    step.StartedAt = null;
+                    step.FinishedAt = null;
+                    changed = true;
+                }
+            }
+            return changed;
         }
 
         private void SaveLocked()

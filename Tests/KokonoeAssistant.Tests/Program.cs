@@ -282,6 +282,7 @@ internal static class Program
             Run("Web agent bridge returns camel case snapshot", WebAgentBridgeReturnsCamelCaseSnapshot);
             Run("Web agent bridge exposes task evidence fields", WebAgentBridgeExposesTaskEvidenceFields);
             Run("Web agent bridge creates task from shell", WebAgentBridgeCreatesTaskFromShell);
+            Run("Web agent bridge creates batch from shell", WebAgentBridgeCreatesBatchFromShell);
             Run("Web agent bridge cancels task from shell", WebAgentBridgeCancelsTaskFromShell);
             Run("Web agent bridge controls runner", WebAgentBridgeControlsRunner);
             Run("Web agent bridge publishes live activity", WebAgentBridgePublishesLiveActivity);
@@ -6312,7 +6313,7 @@ Insight: bridge stability and pulse quality are linked.
 
             var required = new[]
             {
-                "ping", "chat.send", "agent.snapshot", "agent.start", "agent.cancel",
+                "ping", "chat.send", "agent.snapshot", "agent.start", "agent.start_many", "agent.cancel",
                 "agent.runner.status", "agent.runner.start", "agent.runner.stop",
                 "settings.get", "settings.update",
                 "vault.status", "vault.refresh", "memory.snapshot", "memory.refresh", "telegram.status", "runtime.snapshot", "runtime.refresh",
@@ -6728,6 +6729,47 @@ Insight: bridge stability and pulse quality are linked.
             AssertTrue(response["result"]?["started"]?.Value<bool>() == false, "start=false must keep runner paused");
             AssertTrue(tasks.GetSnapshot().Tasks.Any(task => task.Objective == "Inspect bridge contract" && task.Priority == 8),
                 "web handler must create a real task in KokoAgentTaskService");
+        }
+        finally
+        {
+            TryDeleteDir(dir);
+        }
+    }
+
+    private static void WebAgentBridgeCreatesBatchFromShell()
+    {
+        var dir = TempDir();
+        try
+        {
+            var envelopes = new List<string>();
+            var tasks = new KokoAgentTaskService(dir) { AutoStartOnAdd = false };
+            using var bridge = new KokoWebBridgeService(envelopes.Add);
+            using var agent = new KokoWebAgentBridgeService(bridge, tasks);
+
+            var payload = new Newtonsoft.Json.Linq.JObject
+            {
+                ["type"] = "request",
+                ["id"] = "agent-batch",
+                ["method"] = "agent.start_many",
+                ["payload"] = new Newtonsoft.Json.Linq.JObject
+                {
+                    ["objective"] = "- Inspect runtime lanes\n- Verify task counters",
+                    ["priority"] = 7,
+                    ["start"] = false
+                }
+            };
+            bridge.HandleMessageAsync(payload.ToString(Newtonsoft.Json.Formatting.None))
+                .GetAwaiter().GetResult();
+
+            var response = envelopes.Select(Newtonsoft.Json.Linq.JObject.Parse)
+                .Single(x => x["id"]?.ToString() == "agent-batch");
+            AssertTrue(string.IsNullOrWhiteSpace(response["error"]?.ToString()), "agent.start_many must return a normal response");
+            AssertEqual("2", response["result"]?["count"]?.ToString(), "agent.start_many should report created count");
+            AssertTrue(response["result"]?["started"]?.Value<bool>() == false, "start=false must keep batch runner paused");
+            AssertTrue(tasks.GetSnapshot().Tasks.Any(task => task.Objective == "Inspect runtime lanes" && task.Priority == 7),
+                "batch handler must create first objective");
+            AssertTrue(tasks.GetSnapshot().Tasks.Any(task => task.Objective == "Verify task counters" && task.Priority == 7),
+                "batch handler must create second objective");
         }
         finally
         {

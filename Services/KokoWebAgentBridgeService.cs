@@ -20,11 +20,13 @@ namespace KokonoeAssistant.Services
             _bridge.Register("get_agent_tasks", HandleSnapshotAsync);
             _bridge.Register("agent.start", HandleStartAsync);
             _bridge.Register("start_agent_task", HandleStartAsync);
+            _bridge.Register("agent.start_many", HandleStartManyAsync);
             _bridge.Register("agent.cancel", HandleCancelAsync);
             _bridge.Register("cancel_agent_task", HandleCancelAsync);
             _bridge.Register("agent.runner.status", HandleRunnerStatusAsync);
             _bridge.Register("agent.runner.start", HandleRunnerStartAsync);
             _bridge.Register("agent.runner.stop", HandleRunnerStopAsync);
+            _bridge.Register("agent.runner.configure", HandleRunnerConfigureAsync);
             _bridge.Register("agent.clear_completed", HandleClearCompletedAsync);
             _tasks.ActivityChanged += OnActivityChanged;
             _tasks.TaskCompleted += OnTaskCompleted;
@@ -51,12 +53,56 @@ namespace KokonoeAssistant.Services
 
             var priority = Math.Clamp(payload?["priority"]?.Value<int?>() ?? 5, 1, 10);
             var start = payload?["start"]?.Value<bool?>() ?? true;
+            var autoBatch = payload?["autoBatch"]?.Value<bool?>() ?? false;
+            if (autoBatch)
+            {
+                var tasks = _tasks.AddBatch(objective, priority);
+                if (start)
+                    _tasks.Start();
+                return new
+                {
+                    taskId = tasks.FirstOrDefault()?.Id ?? "",
+                    taskIds = tasks.Select(t => t.Id).ToArray(),
+                    count = tasks.Count,
+                    started = start,
+                    snapshot = BuildSnapshotPayload()
+                };
+            }
+
             var task = _tasks.AddTask(objective, priority);
             if (start)
                 _tasks.Start();
             return new
             {
                 taskId = task.Id,
+                started = start,
+                snapshot = BuildSnapshotPayload()
+            };
+        }
+
+        private async Task<object?> HandleStartManyAsync(JToken? payload, CancellationToken ct)
+        {
+            await Task.Yield();
+            ct.ThrowIfCancellationRequested();
+            if (_disposed)
+                throw new ObjectDisposedException(nameof(KokoWebAgentBridgeService));
+
+            var objective = payload?["objective"]?.ToString()?.Trim() ?? "";
+            if (string.IsNullOrWhiteSpace(objective))
+                throw new InvalidOperationException("Agent objective is empty.");
+            if (objective.Length > 32_000)
+                throw new InvalidOperationException("Agent objective batch exceeds 32000 characters.");
+
+            var priority = Math.Clamp(payload?["priority"]?.Value<int?>() ?? 5, 1, 10);
+            var start = payload?["start"]?.Value<bool?>() ?? true;
+            var tasks = _tasks.AddBatch(objective, priority);
+            if (start)
+                _tasks.Start();
+
+            return new
+            {
+                taskIds = tasks.Select(t => t.Id).ToArray(),
+                count = tasks.Count,
                 started = start,
                 snapshot = BuildSnapshotPayload()
             };
@@ -155,6 +201,29 @@ namespace KokonoeAssistant.Services
             };
         }
 
+        private async Task<object?> HandleRunnerConfigureAsync(JToken? payload, CancellationToken ct)
+        {
+            await Task.Yield();
+            ct.ThrowIfCancellationRequested();
+            if (_disposed)
+                throw new ObjectDisposedException(nameof(KokoWebAgentBridgeService));
+
+            var requested = payload?["maxParallel"]?.Value<int?>() ?? payload?["value"]?.Value<int?>() ?? _tasks.MaxParallel;
+            var configured = _tasks.ConfigureMaxParallel(requested);
+            var settings = AppSettings.Load();
+            if (settings.AgentMaxParallel != configured)
+            {
+                settings.AgentMaxParallel = configured;
+                settings.Save();
+            }
+            return new
+            {
+                maxParallel = configured,
+                active = _tasks.IsRunnerActive,
+                snapshot = BuildSnapshotPayload()
+            };
+        }
+
         private void OnActivityChanged(KokoAgentActivitySnapshot activity)
         {
             if (_disposed)
@@ -192,8 +261,13 @@ namespace KokonoeAssistant.Services
                 takenAt = snapshot.TakenAt,
                 maxParallel = snapshot.MaxParallel,
                 runningSteps = snapshot.RunningSteps,
+                pendingTasks = snapshot.PendingTasks,
+                completedTasks = snapshot.CompletedTasks,
+                failedTasks = snapshot.FailedTasks,
+                canceledTasks = snapshot.CanceledTasks,
                 runnerActive = _tasks.IsRunnerActive,
                 activity = ProjectActivity(snapshot.Activity),
+                activeLanes = snapshot.ActiveLanes.Select(ProjectLane).ToArray(),
                 taskCount = snapshot.Tasks.Count,
                 tasks = snapshot.Tasks.OrderByDescending(t => t.UpdatedAt).Take(50).Select(ProjectTask).ToArray()
             };
@@ -208,6 +282,18 @@ namespace KokonoeAssistant.Services
             thought = activity.Thought,
             taskId = activity.TaskId,
             stepId = activity.StepId
+        };
+
+        private static object ProjectLane(KokoAgentActiveLane lane) => new
+        {
+            slot = lane.Slot,
+            taskId = lane.TaskId,
+            stepId = lane.StepId,
+            objective = lane.Objective,
+            stepTitle = lane.StepTitle,
+            kind = lane.Kind.ToString(),
+            startedAt = lane.StartedAt,
+            elapsedSeconds = lane.ElapsedSeconds
         };
 
         private static object ProjectTask(KokoAgentTask task) => new
