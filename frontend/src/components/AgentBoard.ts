@@ -198,6 +198,17 @@ export class AgentBoardController {
       return;
     }
 
+    const retryButton = (event.target as HTMLElement).closest<HTMLButtonElement>("button[data-agent-retry]");
+    if (retryButton) {
+      event.preventDefault();
+      const taskId = retryButton.dataset.agentRetry ?? "";
+      if (!taskId)
+        return;
+      retryButton.disabled = true;
+      void this.retryTask(taskId);
+      return;
+    }
+
     const taskCard = (event.target as HTMLElement).closest<HTMLElement>("[data-agent-task]");
     if (!taskCard)
       return;
@@ -228,6 +239,23 @@ export class AgentBoardController {
       );
       this.render(result.snapshot);
       this.setTaskStatus(`Canceled ${result.taskId}.`);
+    } catch (error) {
+      this.setTaskStatus(error instanceof Error ? error.message : String(error));
+      await this.refresh().catch(() => undefined);
+    }
+  }
+
+  private async retryTask(taskId: string): Promise<void> {
+    this.setTaskStatus(`Retrying ${taskId}...`);
+    try {
+      const result = await window.koko.call<{ taskId: string; snapshot: AgentSnapshot }>(
+        "agent.retry",
+        { taskId, start: true },
+        10000
+      );
+      this.selectedTaskId = result.taskId;
+      this.render(result.snapshot);
+      this.setTaskStatus(`Queued retry ${result.taskId}.`);
     } catch (error) {
       this.setTaskStatus(error instanceof Error ? error.message : String(error));
       await this.refresh().catch(() => undefined);
@@ -396,6 +424,16 @@ export class AgentBoardController {
       cancel.dataset.agentCancel = task.id;
       head.append(cancel);
     }
+    if (task.status === "Failed" || task.status === "Canceled" || task.status === "Completed") {
+      const retry = document.createElement("button");
+      retry.className = "agent-task-retry";
+      retry.type = "button";
+      retry.textContent = task.status === "Completed" ? "rerun" : "retry";
+      retry.title = `${retry.textContent} ${task.id}`;
+      retry.ariaLabel = `${retry.textContent} task ${task.id}`;
+      retry.dataset.agentRetry = task.id;
+      head.append(retry);
+    }
     const steps = document.createElement("div");
     steps.className = "agent-steps";
     for (const step of task.steps)
@@ -444,7 +482,18 @@ export class AgentBoardController {
     copy.className = "agent-inspector-copy";
     copy.dataset.copyReport = task.id;
     copy.textContent = "Copy report";
-    head.append(title, copy);
+    const actions = document.createElement("div");
+    actions.className = "task-inspector-actions";
+    actions.append(copy);
+    if (task.status === "Failed" || task.status === "Canceled" || task.status === "Completed") {
+      const retry = document.createElement("button");
+      retry.type = "button";
+      retry.className = "agent-inspector-copy";
+      retry.dataset.agentRetry = task.id;
+      retry.textContent = task.status === "Completed" ? "Rerun" : "Retry";
+      actions.append(retry);
+    }
+    head.append(title, actions);
 
     const metrics = document.createElement("div");
     metrics.className = "task-inspector-metrics";
@@ -527,6 +576,16 @@ export class AgentBoardController {
   }
 
   private handleInspectorClick(event: Event): void {
+    const retryButton = (event.target as HTMLElement).closest<HTMLButtonElement>("button[data-agent-retry]");
+    if (retryButton) {
+      const taskId = retryButton.dataset.agentRetry ?? "";
+      if (!taskId)
+        return;
+      retryButton.disabled = true;
+      void this.retryTask(taskId);
+      return;
+    }
+
     const button = (event.target as HTMLElement).closest<HTMLButtonElement>("button[data-copy-report]");
     if (!button)
       return;

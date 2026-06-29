@@ -23,6 +23,7 @@ namespace KokonoeAssistant.Services
             _bridge.Register("agent.start_many", HandleStartManyAsync);
             _bridge.Register("agent.cancel", HandleCancelAsync);
             _bridge.Register("cancel_agent_task", HandleCancelAsync);
+            _bridge.Register("agent.retry", HandleRetryAsync);
             _bridge.Register("agent.runner.status", HandleRunnerStatusAsync);
             _bridge.Register("agent.runner.start", HandleRunnerStartAsync);
             _bridge.Register("agent.runner.stop", HandleRunnerStopAsync);
@@ -145,6 +146,35 @@ namespace KokonoeAssistant.Services
                 taskId,
                 canceled,
                 snapshot
+            };
+        }
+
+        private async Task<object?> HandleRetryAsync(JToken? payload, CancellationToken ct)
+        {
+            await Task.Yield();
+            ct.ThrowIfCancellationRequested();
+            if (_disposed)
+                throw new ObjectDisposedException(nameof(KokoWebAgentBridgeService));
+
+            var taskId = payload?["taskId"]?.ToString()?.Trim();
+            if (string.IsNullOrWhiteSpace(taskId))
+                taskId = payload?["id"]?.ToString()?.Trim();
+            if (string.IsNullOrWhiteSpace(taskId))
+                throw new InvalidOperationException("Agent task id is empty.");
+
+            var task = _tasks.RetryTask(taskId);
+            if (task == null)
+                throw new InvalidOperationException("Agent task was not found: " + taskId);
+
+            var start = payload?["start"]?.Value<bool?>() ?? true;
+            if (start)
+                _tasks.Start();
+
+            return new
+            {
+                taskId = task.Id,
+                started = start,
+                snapshot = BuildSnapshotPayload()
             };
         }
 

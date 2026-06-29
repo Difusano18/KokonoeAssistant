@@ -323,6 +323,37 @@ namespace KokonoeAssistant.Services
             }
         }
 
+        public KokoAgentTask? RetryTask(string id)
+        {
+            lock (_lock)
+            {
+                var task = _tasks.FirstOrDefault(t => t.Id == id);
+                if (task == null)
+                    return null;
+                if (_activeLanes.Values.Any(lane => lane.TaskId == task.Id))
+                    throw new InvalidOperationException("Task still has an active execution lane; wait for it to stop before retrying.");
+                if (task.Status == KokoAgentTaskStatus.Running)
+                    throw new InvalidOperationException("Task is already running.");
+
+                task.Status = KokoAgentTaskStatus.Pending;
+                task.UpdatedAt = DateTime.Now;
+                task.CompletionNotice = "";
+                task.NextQuestion = "";
+                foreach (var step in task.Steps)
+                {
+                    step.Status = KokoAgentTaskStatus.Pending;
+                    step.Result = "";
+                    step.Error = "";
+                    step.StartedAt = null;
+                    step.FinishedAt = null;
+                }
+
+                EmitActivity("plan", "runner", task.Objective, "Task reset for retry.", task.Id);
+                SaveLocked();
+                return Clone(task);
+            }
+        }
+
         public int ClearCompletedTasks(TimeSpan olderThan)
         {
             lock (_lock)

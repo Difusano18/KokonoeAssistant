@@ -84,6 +84,35 @@ public sealed class KokoAgentTaskServiceTests
     }
 
     [Fact]
+    public void RetryTask_WhenTaskWasCanceled_ResetsStepsAndEvidence()
+    {
+        var dataDir = NewTempDir();
+        try
+        {
+            var service = new KokoAgentTaskService(dataDir) { AutoStartOnAdd = false };
+            var task = service.AddTask("retry canceled work", priority: 6);
+
+            service.CancelTask(task.Id).Should().BeTrue();
+            var retried = service.RetryTask(task.Id);
+
+            retried.Should().NotBeNull();
+            retried!.Status.Should().Be(KokoAgentTaskStatus.Pending);
+            retried.CompletionNotice.Should().BeEmpty();
+            retried.NextQuestion.Should().BeEmpty();
+            retried.Steps.Should().OnlyContain(step =>
+                step.Status == KokoAgentTaskStatus.Pending &&
+                string.IsNullOrWhiteSpace(step.Result) &&
+                string.IsNullOrWhiteSpace(step.Error) &&
+                step.StartedAt == null &&
+                step.FinishedAt == null);
+        }
+        finally
+        {
+            TryDelete(dataDir);
+        }
+    }
+
+    [Fact]
     public void Load_WhenPersistedWorkWasRunning_ResetsItToPending()
     {
         var dataDir = NewTempDir();

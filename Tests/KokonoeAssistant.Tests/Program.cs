@@ -284,6 +284,7 @@ internal static class Program
             Run("Web agent bridge creates task from shell", WebAgentBridgeCreatesTaskFromShell);
             Run("Web agent bridge creates batch from shell", WebAgentBridgeCreatesBatchFromShell);
             Run("Web agent bridge cancels task from shell", WebAgentBridgeCancelsTaskFromShell);
+            Run("Web agent bridge retries task from shell", WebAgentBridgeRetriesTaskFromShell);
             Run("Web agent bridge controls runner", WebAgentBridgeControlsRunner);
             Run("Web agent bridge publishes live activity", WebAgentBridgePublishesLiveActivity);
             Run("Web vault bridge caches and refreshes status", WebVaultBridgeCachesAndRefreshesStatus);
@@ -6313,7 +6314,7 @@ Insight: bridge stability and pulse quality are linked.
 
             var required = new[]
             {
-                "ping", "chat.send", "agent.snapshot", "agent.start", "agent.start_many", "agent.cancel",
+                "ping", "chat.send", "agent.snapshot", "agent.start", "agent.start_many", "agent.cancel", "agent.retry",
                 "agent.runner.status", "agent.runner.start", "agent.runner.stop",
                 "settings.get", "settings.update",
                 "vault.status", "vault.refresh", "memory.snapshot", "memory.refresh", "telegram.status", "runtime.snapshot", "runtime.refresh",
@@ -6808,6 +6809,49 @@ Insight: bridge stability and pulse quality are linked.
                 "agent.cancel response snapshot must show the canceled task");
             AssertTrue(tasks.GetSnapshot().Tasks.Any(x => x.Id == task.Id && x.Status == KokoAgentTaskStatus.Canceled),
                 "agent.cancel must cancel the real service task");
+        }
+        finally
+        {
+            TryDeleteDir(dir);
+        }
+    }
+
+    private static void WebAgentBridgeRetriesTaskFromShell()
+    {
+        var dir = TempDir();
+        try
+        {
+            var envelopes = new List<string>();
+            var tasks = new KokoAgentTaskService(dir) { AutoStartOnAdd = false };
+            var task = tasks.AddTask("Retry this from WebView", priority: 5);
+            tasks.CancelTask(task.Id);
+            using var bridge = new KokoWebBridgeService(envelopes.Add);
+            using var agent = new KokoWebAgentBridgeService(bridge, tasks);
+
+            var request = new Newtonsoft.Json.Linq.JObject
+            {
+                ["type"] = "request",
+                ["id"] = "agent-retry",
+                ["method"] = "agent.retry",
+                ["payload"] = new Newtonsoft.Json.Linq.JObject
+                {
+                    ["taskId"] = task.Id,
+                    ["start"] = false
+                }
+            };
+
+            bridge.HandleMessageAsync(request.ToString(Newtonsoft.Json.Formatting.None))
+                .GetAwaiter().GetResult();
+
+            var response = envelopes.Select(Newtonsoft.Json.Linq.JObject.Parse)
+                .Single(x => x["id"]?.ToString() == "agent-retry");
+            AssertTrue(string.IsNullOrWhiteSpace(response["error"]?.ToString()), "agent.retry must return a normal response");
+            AssertTrue(response["result"]?["started"]?.Value<bool>() == false, "start=false must keep retry queued");
+            AssertTrue(response["result"]?["snapshot"]?["tasks"]?
+                    .Any(x => x?["id"]?.ToString() == task.Id && x?["status"]?.ToString() == "Pending") == true,
+                "agent.retry response snapshot must show the pending task");
+            AssertTrue(tasks.GetSnapshot().Tasks.Any(x => x.Id == task.Id && x.Status == KokoAgentTaskStatus.Pending),
+                "agent.retry must reset the real service task");
         }
         finally
         {

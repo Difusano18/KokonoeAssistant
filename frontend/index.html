@@ -291,9 +291,12 @@
     .agent-status.completed { color: var(--success); border-color: color-mix(in srgb, var(--success) 40%, var(--line-2)); }
     .agent-status.failed { color: var(--error); border-color: color-mix(in srgb, var(--error) 44%, var(--line-2)); }
     .agent-status.pending { color: var(--gold); border-color: var(--gold-border); background: var(--gold-soft); }
-    .agent-task-cancel { flex: 0 0 auto; min-width: 24px; height: 22px; border: 1px solid var(--line-2); border-radius: 5px; background: var(--card-2); color: var(--text-3); font: 11px/1 "IBM Plex Mono", monospace; }
+    .agent-task-cancel,
+    .agent-task-retry { flex: 0 0 auto; min-width: 24px; height: 22px; padding: 0 7px; border: 1px solid var(--line-2); border-radius: 5px; background: var(--card-2); color: var(--text-3); font: 10px/1 "IBM Plex Mono", monospace; text-transform: uppercase; }
     .agent-task-cancel:hover { border-color: color-mix(in srgb, var(--error) 50%, var(--line-2)); color: var(--error); }
-    .agent-task-cancel:disabled { opacity: .4; cursor: default; }
+    .agent-task-retry:hover { border-color: var(--accent-border); color: var(--accent); }
+    .agent-task-cancel:disabled,
+    .agent-task-retry:disabled { opacity: .4; cursor: default; }
     .agent-lanes {
       display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
       gap: 8px; margin: 12px 0 10px;
@@ -339,6 +342,7 @@
       background: var(--card-2); color: var(--text-3); font-size: 11px;
     }
     .agent-inspector-copy:hover { border-color: var(--accent-border); color: var(--accent); }
+    .task-inspector-actions { flex: 0 0 auto; display: flex !important; grid-auto-flow: column; grid-auto-columns: max-content; gap: 6px !important; }
     .task-inspector-metrics {
       display: grid; grid-template-columns: repeat(4, minmax(0, 1fr));
       gap: 8px; margin-top: 12px;
